@@ -127,21 +127,34 @@ class Stock_Image_Inserter {
      * Get a topic-relevant image URL.
      * Uses Pexels API if key is configured, falls back to Picsum.
      */
+    /** Track used image URLs to prevent duplicates within an article. */
+    private array $used_urls = [];
+
     private function get_image_url( string $keyword, string $heading, int $index ): string {
         $settings = get_option( 'seobetter_settings', [] );
         $pexels_key = $settings['pexels_api_key'] ?? '';
 
         if ( ! empty( $pexels_key ) ) {
-            $search = $this->build_search_terms( $keyword, $heading );
-            $url = $this->search_pexels( $search, $pexels_key, $index );
-            if ( $url ) {
-                return $url;
+            // Use different search terms per section for variety
+            $searches = [
+                $this->build_search_terms( $keyword, $heading ),
+                $keyword,
+                $this->build_search_terms( $keyword, '' ),
+            ];
+            foreach ( $searches as $search ) {
+                $url = $this->search_pexels( $search, $pexels_key, $index );
+                if ( $url && ! in_array( $url, $this->used_urls, true ) ) {
+                    $this->used_urls[] = $url;
+                    return $url;
+                }
             }
         }
 
-        // Fallback to Picsum with .jpg extension for compatibility
-        $seed = abs( crc32( $keyword . $heading . $index ) ) % 1000;
-        return 'https://picsum.photos/seed/' . $seed . '/' . self::IMAGE_WIDTH . '/' . self::IMAGE_HEIGHT . '.jpg';
+        // Fallback to Picsum — use different seeds to avoid duplicates
+        $seed = abs( crc32( $keyword . $heading . $index . 'unique' ) ) % 10000;
+        $url = 'https://picsum.photos/seed/' . $seed . '/' . self::IMAGE_WIDTH . '/' . self::IMAGE_HEIGHT . '.jpg';
+        $this->used_urls[] = $url;
+        return $url;
     }
 
     /**
@@ -187,8 +200,15 @@ class Stock_Image_Inserter {
             return '';
         }
 
-        // Pick image by index so each section gets a different one
-        return $cached[ $index % count( $cached ) ] ?? $cached[0];
+        // Find first unused image from results
+        foreach ( $cached as $url ) {
+            if ( ! in_array( $url, $this->used_urls, true ) ) {
+                return $url;
+            }
+        }
+
+        // All used — return empty so caller tries a different search term
+        return '';
     }
 
     /**
