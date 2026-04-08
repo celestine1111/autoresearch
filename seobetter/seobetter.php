@@ -585,6 +585,9 @@ final class SEOBetter {
             return new \WP_REST_Response( [ 'success' => false, 'error' => $post_id->get_error_message() ], 500 );
         }
 
+        // Set featured image — download from Picsum to media library
+        $this->set_featured_image( $post_id, sanitize_text_field( $request->get_param( 'keyword' ) ?? $title ) );
+
         // Store SEOBetter meta
         $keyword = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
         $meta_title = sanitize_text_field( $request->get_param( 'meta_title' ) ?? '' );
@@ -699,6 +702,50 @@ final class SEOBetter {
             $data['created'] = current_time( 'mysql' );
             $wpdb->insert( $table, $data );
         }
+    }
+
+    /**
+     * Download an image and set it as the post's featured image.
+     * Uses Lorem Picsum (1200x630 for OG/social sharing compatibility).
+     */
+    private function set_featured_image( int $post_id, string $keyword ): void {
+        // Need media functions
+        if ( ! function_exists( 'media_sideload_image' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+        }
+
+        // Skip if post already has a featured image
+        if ( has_post_thumbnail( $post_id ) ) {
+            return;
+        }
+
+        // Generate a consistent seed from keyword so the same keyword gets the same image
+        $seed = abs( crc32( $keyword . 'featured' ) ) % 1000;
+        $image_url = "https://picsum.photos/seed/{$seed}/1200/630";
+
+        // SEO-optimized alt text with keyword
+        $alt_text = ucwords( $keyword ) . ' — featured guide image';
+
+        // Download to media library
+        $image_id = media_sideload_image( $image_url, $post_id, $alt_text, 'id' );
+
+        if ( is_wp_error( $image_id ) ) {
+            return; // Silently fail — article still saves without featured image
+        }
+
+        // Set as featured image
+        set_post_thumbnail( $post_id, $image_id );
+
+        // Set SEO-optimized alt text on the attachment
+        update_post_meta( $image_id, '_wp_attachment_image_alt', $alt_text );
+
+        // Update attachment title to be keyword-rich
+        wp_update_post( [
+            'ID'         => $image_id,
+            'post_title' => ucwords( $keyword ) . ' Guide',
+        ] );
     }
 
     public function register_llms_txt_rewrite(): void {
