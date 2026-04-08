@@ -155,7 +155,7 @@ class Stock_Image_Inserter {
         $esc_alt = esc_attr( $alt );
         $esc_url = esc_url( $url );
 
-        return "<!-- wp:image {\"sizeSlug\":\"large\"} -->\n<figure class=\"wp-block-image size-large\"><img src=\"{$esc_url}\" alt=\"{$esc_alt}\"/></figure>\n<!-- /wp:image -->";
+        return "<!-- wp:image {\"align\":\"center\",\"sizeSlug\":\"large\"} -->\n<figure class=\"wp-block-image aligncenter size-large\"><img src=\"{$esc_url}\" alt=\"{$esc_alt}\"/></figure>\n<!-- /wp:image -->";
     }
 
     /**

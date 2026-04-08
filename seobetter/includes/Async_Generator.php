@@ -254,7 +254,8 @@ class Async_Generator {
         if ( ! empty( $secondary ) ) $kw_context .= "\nSecondary keywords: " . implode( ', ', $secondary );
         if ( ! empty( $lsi ) ) $kw_context .= "\nLSI keywords: " . implode( ', ', $lsi );
 
-        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- Target word count: {$total_words} words total\n- Target audience: " . ( $options['audience'] ?? 'general' ) . "\n- Domain: " . ( $options['domain'] ?? 'general' ) . "\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
+        $min_kw_headings = max( 1, round( $content_sections * 0.3 ) );
+        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the content H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. For example: \"What Is the Best {$keyword}?\", \"How to Choose {$keyword}\", \"{$keyword}: Complete Guide\"\n- Target word count: {$total_words} words total\n- Target audience: " . ( $options['audience'] ?? 'general' ) . "\n- Domain: " . ( $options['domain'] ?? 'general' ) . "\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
 
         $result = self::send_request( $prompt, 'You are an SEO content strategist. Return only the numbered list of headings.', [ 'max_tokens' => 500 ] );
 
@@ -318,7 +319,7 @@ class Async_Generator {
             $max = 800;
         } else {
             $trends_inject = ( $trends && $index <= 3 ) ? "\n\nREAL-TIME RESEARCH DATA (use these real statistics and sources — do NOT hallucinate numbers):\n{$trends}" : '';
-            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nYou MUST write at least {$words_per_section} words for this section. This is not optional — count your words.{$trends_inject}{$readability_rule}\n\nSTRUCTURE RULES:\n- Start with: ## {$heading}\n- First paragraph MUST be exactly 40-60 words and directly answer the heading question\n- Write 3-5 more paragraphs after that (each 50-80 words)\n- Include 1-2 statistics from the RESEARCH DATA above (if available). Use the exact numbers and source names provided. Do NOT invent statistics.\n- Include 1 expert quote if provided in the research data\n- When citing a source, use the exact URL from the research data as a Markdown link: [Source Name](https://real-url.com)\n- If the section compares things, add a Markdown comparison table\n- Use bullet lists where appropriate\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- Use **Bold** for important terms\n\nMinimum {$words_per_section} words. Output Markdown only.";
+            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nYou MUST write at least {$words_per_section} words for this section. This is not optional.{$trends_inject}{$readability_rule}\n\nKEYWORD RULES (CRITICAL):\n- The exact phrase \"{$keyword}\" MUST appear 2-3 times in this section\n- Include it in the first paragraph of this section\n- Use it naturally — don't force it where it sounds awkward\n- Also use variations like rearranging the words or adding connectors\n\nSTRUCTURE RULES:\n- Start with: ## {$heading}\n- First paragraph MUST be exactly 40-60 words, directly answer the heading, AND contain \"{$keyword}\"\n- Write 3-5 more paragraphs after that (each 50-80 words)\n- Include 1-2 statistics from the RESEARCH DATA above (if available). Do NOT invent statistics.\n- Include 1 expert quote if provided in the research data\n- When citing a source, use the exact URL from the research data as a Markdown link: [Source Name](https://real-url.com)\n- If the section compares things, add a Markdown comparison table\n- Use bullet lists where appropriate\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- Use **Bold** for \"{$keyword}\" on first mention in this section\n\nMinimum {$words_per_section} words. Output Markdown only.";
             $max = 4096;
         }
 
@@ -429,9 +430,16 @@ class Async_Generator {
     private static function get_system_prompt(): string {
         return "You are an expert SEO content writer. CRITICAL RULES you must follow:
 
-READABILITY: Write at a 6th-8th grade reading level. Use short sentences (under 20 words). Use simple, common words. Avoid jargon. If a simpler word exists, use it. Example: use 'use' not 'utilize', 'help' not 'facilitate', 'buy' not 'purchase'.
+KEYWORD DENSITY (MOST IMPORTANT FOR SEO):
+- The primary keyword MUST appear every 100-200 words (0.5%-1.5% density)
+- The primary keyword MUST appear in the first 1-2 sentences of the article
+- At least 30% of H2 headings must contain the primary keyword or a close variant
+- Use the EXACT keyword phrase naturally — do not split it or rearrange it
+- Also use natural variations (e.g., if keyword is 'reptile shop melbourne', also use 'melbourne reptile shop', 'reptile store in melbourne')
 
-WORD COUNT: Always write the FULL number of words requested. If asked for 300 words, write at least 300. Count your output. Padding with fluff is fine — being too short is NOT.
+READABILITY: Write at a 6th-8th grade reading level. Use short sentences (under 20 words). Use simple, common words. No jargon.
+
+WORD COUNT: Always write the FULL number of words requested. Being too short is a failure.
 
 STRUCTURE: Start every H2/H3 section with a 40-60 word paragraph that directly answers the heading. Never start paragraphs with pronouns (It, This, They, These).
 

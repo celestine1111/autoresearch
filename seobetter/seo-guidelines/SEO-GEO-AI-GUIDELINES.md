@@ -176,6 +176,52 @@ These are the specific content patterns that AI models extract and cite. Every a
 
 ---
 
+## 5A. KEYWORD PLACEMENT & DENSITY RULES (CRITICAL FOR SEO PLUGINS)
+
+These rules ensure articles pass AIOSEO, Yoast, and RankMath analysis on first publish. Every generated article MUST follow all of these.
+
+### 5A.1 Mandatory Keyword Placements
+The **exact primary keyword** (e.g., "reptile shop melbourne") MUST appear in ALL of these locations:
+
+| Location | Requirement | Why |
+|---|---|---|
+| **Meta title** | Keyword front-loaded in first half | SERP display, ranking signal |
+| **Meta description** | Keyword included naturally | Click-through rate, relevance |
+| **First paragraph** | Keyword in first 1-2 sentences | Topic clarity, SEO plugins check this |
+| **H1 title** | Keyword included | Primary ranking signal |
+| **30%+ of H2/H3 headings** | Keyword or close variant | Topical relevance, SEO plugin check |
+| **Last paragraph/conclusion** | Keyword mentioned | Content closure signal |
+| **Image alt text** | At least 1 image with keyword | Image SEO |
+| **URL slug** | Keyword in slug | URL relevance |
+
+### 5A.2 Keyword Density
+- **Target:** 0.5%-1.5% density (keyword appears every 100-200 words)
+- **Minimum:** 0.5% (AIOSEO flags below this)
+- **Maximum:** 2.0% (above this = keyword stuffing, -10% AI visibility)
+- **For a 1000-word article:** keyword should appear 5-15 times
+- **For a 2000-word article:** keyword should appear 10-30 times
+- **Use exact match AND natural variations** (e.g., "reptile shop melbourne" + "melbourne reptile shop" + "reptile store in melbourne")
+
+### 5A.3 Heading Keyword Rules
+- At least **30% of H2 headings** must contain the primary keyword or a close variant
+- The **first H2** after Key Takeaways SHOULD contain the keyword
+- Remaining headings use secondary/LSI keywords
+- Never force the keyword where it sounds unnatural
+
+### 5A.4 First Paragraph Rule
+The first paragraph of the article (after Key Takeaways) MUST:
+- Contain the **exact primary keyword** in the first 1-2 sentences
+- Be 40-60 words (GEO section opening rule)
+- Directly answer what the article is about
+- Example: "**Reptile shop Melbourne** owners need reliable supplies for their cold-blooded pets. Melbourne has over 15 specialist reptile stores offering..."
+
+### 5A.5 Meta Description Keyword Rule
+- Must contain the **exact primary keyword** naturally
+- 150-160 characters
+- Must read like compelling ad copy, not keyword-stuffed
+
+---
+
 ## 6. GEO SCORING RUBRIC (0-100)
 
 This is the scoring system used by `GEO_Analyzer.php`. Each check is weighted.

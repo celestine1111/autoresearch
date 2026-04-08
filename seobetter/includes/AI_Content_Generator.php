@@ -168,16 +168,17 @@ Article summary: {$summary}
 
 Return in this exact format:
 TITLE: [50-60 chars, keyword front-loaded, power word included]
-DESCRIPTION: [150-160 chars, includes keyword, has a call-to-action, reads like an ad]
+DESCRIPTION: [150-160 chars, MUST include the exact phrase \"{$keyword}\", has a call-to-action, reads like an ad]
 OG_TITLE: [60-90 chars, slightly more compelling than TITLE, can be longer]
 
 Rules:
-- Title MUST be 50-60 characters
-- Description MUST be 150-160 characters
-- Front-load the keyword in the title
+- Title MUST be 50-60 characters and contain \"{$keyword}\"
+- Description MUST be 150-160 characters and MUST contain the exact phrase \"{$keyword}\"
+- Front-load the keyword \"{$keyword}\" in the title (first half)
 - Include a number or year if relevant
 - Description should create urgency or curiosity
-- No clickbait, must be accurate to content";
+- No clickbait, must be accurate to content
+- CRITICAL: The exact phrase \"{$keyword}\" must appear in both TITLE and DESCRIPTION";
 
         $result = $this->send_ai_request( $prompt, 'You are an SEO meta tag specialist. Return only the requested format.', [ 'max_tokens' => 300 ] );
 
