@@ -298,16 +298,38 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                             </select>
                         </div>
                         <div class="sb-field">
-                            <label>Domain</label>
-                            <select name="domain">
-                                <option value="general">General</option>
+                            <label>Category <span style="color:#ef4444">*</span>
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text">Required. Pulls real-time data from free public APIs relevant to your topic for better citations and statistics.</span>
+                                </span>
+                            </label>
+                            <select name="domain" required>
+                                <option value="" disabled <?php selected( $_POST['domain'] ?? '', '' ); ?>>Select category...</option>
+                                <option value="general" <?php selected( $_POST['domain'] ?? '', 'general' ); ?>>General</option>
+                                <option value="animals" <?php selected( $_POST['domain'] ?? '', 'animals' ); ?>>Animals &amp; Pets</option>
+                                <option value="art_design" <?php selected( $_POST['domain'] ?? '', 'art_design' ); ?>>Art &amp; Design</option>
+                                <option value="blockchain" <?php selected( $_POST['domain'] ?? '', 'blockchain' ); ?>>Blockchain</option>
+                                <option value="books" <?php selected( $_POST['domain'] ?? '', 'books' ); ?>>Books &amp; Literature</option>
+                                <option value="business" <?php selected( $_POST['domain'] ?? '', 'business' ); ?>>Business</option>
+                                <option value="cryptocurrency" <?php selected( $_POST['domain'] ?? '', 'cryptocurrency' ); ?>>Cryptocurrency</option>
+                                <option value="currency" <?php selected( $_POST['domain'] ?? '', 'currency' ); ?>>Currency &amp; Forex</option>
                                 <option value="ecommerce" <?php selected( $_POST['domain'] ?? '', 'ecommerce' ); ?>>Ecommerce</option>
-                                <option value="health" <?php selected( $_POST['domain'] ?? '', 'health' ); ?>>Health / Veterinary</option>
-                                <option value="technology" <?php selected( $_POST['domain'] ?? '', 'technology' ); ?>>Technology</option>
-                                <option value="business" <?php selected( $_POST['domain'] ?? '', 'business' ); ?>>Business / Finance</option>
-                                <option value="science" <?php selected( $_POST['domain'] ?? '', 'science' ); ?>>Science</option>
                                 <option value="education" <?php selected( $_POST['domain'] ?? '', 'education' ); ?>>Education</option>
-                                <option value="law_government" <?php selected( $_POST['domain'] ?? '', 'law_government' ); ?>>Law / Government</option>
+                                <option value="entertainment" <?php selected( $_POST['domain'] ?? '', 'entertainment' ); ?>>Entertainment &amp; Movies</option>
+                                <option value="environment" <?php selected( $_POST['domain'] ?? '', 'environment' ); ?>>Environment &amp; Climate</option>
+                                <option value="finance" <?php selected( $_POST['domain'] ?? '', 'finance' ); ?>>Finance &amp; Economics</option>
+                                <option value="food" <?php selected( $_POST['domain'] ?? '', 'food' ); ?>>Food &amp; Drink</option>
+                                <option value="games" <?php selected( $_POST['domain'] ?? '', 'games' ); ?>>Games &amp; Gaming</option>
+                                <option value="government" <?php selected( $_POST['domain'] ?? '', 'government' ); ?>>Government &amp; Politics</option>
+                                <option value="health" <?php selected( $_POST['domain'] ?? '', 'health' ); ?>>Health &amp; Medical</option>
+                                <option value="law_government" <?php selected( $_POST['domain'] ?? '', 'law_government' ); ?>>Law &amp; Legal</option>
+                                <option value="music" <?php selected( $_POST['domain'] ?? '', 'music' ); ?>>Music</option>
+                                <option value="news" <?php selected( $_POST['domain'] ?? '', 'news' ); ?>>News &amp; Media</option>
+                                <option value="science" <?php selected( $_POST['domain'] ?? '', 'science' ); ?>>Science &amp; Space</option>
+                                <option value="sports" <?php selected( $_POST['domain'] ?? '', 'sports' ); ?>>Sports &amp; Fitness</option>
+                                <option value="technology" <?php selected( $_POST['domain'] ?? '', 'technology' ); ?>>Technology</option>
+                                <option value="transportation" <?php selected( $_POST['domain'] ?? '', 'transportation' ); ?>>Transportation &amp; Travel</option>
+                                <option value="weather" <?php selected( $_POST['domain'] ?? '', 'weather' ); ?>>Weather &amp; Climate</option>
                             </select>
                         </div>
                     </div>

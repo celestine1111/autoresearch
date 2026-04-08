@@ -150,7 +150,7 @@ class Async_Generator {
                     ? 'Researching real-time trends (Reddit, X, YouTube, Web)...'
                     : 'Researching recent trends...';
 
-                $research = Trend_Researcher::research( $keyword );
+                $research = Trend_Researcher::research( $keyword, $options['domain'] ?? 'general' );
                 $job['results']['trends'] = $research['for_prompt'] ?? '';
                 $job['results']['trend_source'] = $research['source'] ?? 'unknown';
 
@@ -285,7 +285,12 @@ class Async_Generator {
         $total_words = $options['word_count'] ?? 2000;
         $num_sections = max( 3, round( $total_words / 400 ) );
         $words_per_section = max( 150, round( $total_words / $num_sections ) );
-        $kw_context = '';
+        $tone = $options['tone'] ?? 'authoritative';
+        $audience = $options['audience'] ?? '';
+        $domain = $options['domain'] ?? 'general';
+        $kw_context = "\nTone: {$tone}";
+        if ( $audience ) $kw_context .= "\nTarget audience: {$audience}";
+        if ( $domain && $domain !== 'general' ) $kw_context .= "\nContent domain: {$domain}";
         if ( ! empty( $secondary ) ) $kw_context .= "\nSecondary keywords to include: " . implode( ', ', $secondary );
         if ( ! empty( $lsi ) ) $kw_context .= "\nLSI keywords to include: " . implode( ', ', $lsi );
 

@@ -56,7 +56,7 @@ class Trend_Researcher {
         }
 
         // 1. Try Vercel cloud endpoint (works everywhere, no Python needed)
-        $result = self::cloud_research( $keyword );
+        $result = self::cloud_research( $keyword, $type );
         if ( $result['success'] && ! empty( $result['for_prompt'] ) ) {
             set_transient( $cache_key, $result, self::CACHE_TTL );
             return $result;
@@ -83,13 +83,14 @@ class Trend_Researcher {
      * Call the Vercel cloud research endpoint.
      * Searches Reddit + HN in real-time via the SEOBetter Cloud API.
      */
-    private static function cloud_research( string $keyword ): array {
+    private static function cloud_research( string $keyword, string $domain = 'general' ): array {
         $cloud_url = Cloud_API::get_cloud_url();
         $settings = get_option( 'seobetter_settings', [] );
 
         $body = [
             'keyword'  => $keyword,
             'site_url' => home_url(),
+            'domain'   => $domain,
         ];
 
         // Pass Brave key for Pro users
