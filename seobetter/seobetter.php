@@ -585,11 +585,94 @@ final class SEOBetter {
             return new \WP_REST_Response( [ 'success' => false, 'error' => $post_id->get_error_message() ], 500 );
         }
 
+        // Store SEOBetter meta
+        $keyword = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
+        $meta_title = sanitize_text_field( $request->get_param( 'meta_title' ) ?? '' );
+        $meta_desc = sanitize_text_field( $request->get_param( 'meta_description' ) ?? '' );
+        $og_title = sanitize_text_field( $request->get_param( 'og_title' ) ?? '' );
+
+        if ( $keyword ) {
+            update_post_meta( $post_id, '_seobetter_focus_keyword', $keyword );
+        }
+        if ( $meta_title ) {
+            update_post_meta( $post_id, '_seobetter_meta_title', $meta_title );
+        }
+        if ( $meta_desc ) {
+            update_post_meta( $post_id, '_seobetter_meta_description', $meta_desc );
+        }
+
+        // Populate AIOSEO fields if the plugin is active
+        if ( defined( 'AIOSEO_VERSION' ) || function_exists( 'aioseo' ) ) {
+            $this->populate_aioseo( $post_id, $keyword, $meta_title ?: $title, $meta_desc, $og_title ?: $meta_title ?: $title );
+        }
+
+        // Also populate Yoast and RankMath if active (covers all SEO plugins)
+        if ( defined( 'WPSEO_VERSION' ) ) {
+            update_post_meta( $post_id, '_yoast_wpseo_title', $meta_title ?: $title );
+            update_post_meta( $post_id, '_yoast_wpseo_metadesc', $meta_desc );
+            update_post_meta( $post_id, '_yoast_wpseo_focuskw', $keyword );
+        }
+        if ( class_exists( 'RankMath' ) ) {
+            update_post_meta( $post_id, 'rank_math_title', $meta_title ?: $title );
+            update_post_meta( $post_id, 'rank_math_description', $meta_desc );
+            update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
+        }
+
         return new \WP_REST_Response( [
             'success' => true,
             'post_id' => $post_id,
             'edit_url' => get_edit_post_link( $post_id, 'raw' ),
         ] );
+    }
+
+    /**
+     * Populate AIOSEO fields for a post.
+     */
+    private function populate_aioseo( int $post_id, string $keyword, string $seo_title, string $meta_desc, string $og_title ): void {
+        global $wpdb;
+
+        // AIOSEO uses a custom table: {prefix}aioseo_posts
+        $table = $wpdb->prefix . 'aioseo_posts';
+
+        // Check if table exists
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" ) !== $table ) {
+            // Fall back to post meta if table doesn't exist
+            update_post_meta( $post_id, '_aioseo_title', $seo_title );
+            update_post_meta( $post_id, '_aioseo_description', $meta_desc );
+            update_post_meta( $post_id, '_aioseo_og_title', $og_title );
+            update_post_meta( $post_id, '_aioseo_og_description', $meta_desc );
+            update_post_meta( $post_id, '_aioseo_twitter_title', $og_title );
+            update_post_meta( $post_id, '_aioseo_twitter_description', $meta_desc );
+            return;
+        }
+
+        // Check if row exists for this post
+        $exists = $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$table} WHERE post_id = %d", $post_id
+        ) );
+
+        $data = [
+            'post_id'              => $post_id,
+            'title'                => $seo_title,
+            'description'          => $meta_desc,
+            'keyphrases'           => wp_json_encode( [
+                'focus'      => [ 'keyphrase' => $keyword ],
+                'additional' => [],
+            ] ),
+            'og_title'             => $og_title,
+            'og_description'       => $meta_desc,
+            'twitter_title'        => $og_title,
+            'twitter_description'  => $meta_desc,
+            'twitter_use_og'       => 1,
+            'updated'              => current_time( 'mysql' ),
+        ];
+
+        if ( $exists ) {
+            $wpdb->update( $table, $data, [ 'post_id' => $post_id ] );
+        } else {
+            $data['created'] = current_time( 'mysql' );
+            $wpdb->insert( $table, $data );
+        }
     }
 
     public function register_llms_txt_rewrite(): void {

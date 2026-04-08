@@ -71,22 +71,50 @@ class Stock_Image_Inserter {
 
     /**
      * Generate SEO-optimized alt text for an image.
+     *
+     * Rules from SEO-GEO-AI-GUIDELINES.md Section 12:
+     * - Descriptive of image content + context
+     * - Include primary keyword naturally (not stuffed)
+     * - 8-125 characters optimal
+     * - Never start with "image of" or "picture of"
+     * - Format: "[What image shows] - [Context with keyword]"
      */
     private function generate_alt_text( string $keyword, string $heading, string $context ): string {
-        // Clean heading of markdown/special chars
         $heading = preg_replace( '/[#*_\[\]()]/', '', $heading );
         $heading = trim( $heading, '? ' );
+        $keyword_clean = trim( $keyword );
 
-        // Build descriptive alt text incorporating the keyword
-        $keyword_lower = strtolower( $keyword );
-        $heading_lower = strtolower( $heading );
+        // Build varied, descriptive alt texts based on section position
+        $templates = [
+            '%s comparison chart showing key features and differences',
+            'Guide to choosing the best %s for your needs',
+            '%s overview with expert recommendations and ratings',
+            'Detailed %s breakdown with pricing and specifications',
+            'Visual guide explaining %s benefits and considerations',
+        ];
 
-        // Check if keyword is already in the heading
-        if ( stripos( $heading, $keyword ) !== false ) {
-            return ucfirst( $heading_lower ) . ' — visual guide and comparison';
+        // Pick template based on heading content
+        $index = abs( crc32( $heading ) ) % count( $templates );
+
+        // If heading has a question word, use a more specific pattern
+        if ( preg_match( '/^(what|how|why|which|when|where)/i', $heading ) ) {
+            $alt = ucfirst( strtolower( $heading ) ) . ' — ' . $keyword_clean . ' visual guide';
+        } elseif ( preg_match( '/compare|vs|versus|difference/i', $heading ) ) {
+            $alt = ucfirst( $keyword_clean ) . ' comparison table showing features and ratings';
+        } elseif ( preg_match( '/faq|question/i', $heading ) ) {
+            $alt = 'Frequently asked questions about ' . $keyword_clean . ' answered by experts';
+        } elseif ( preg_match( '/takeaway|summary|key/i', $heading ) ) {
+            $alt = 'Key takeaways and highlights for ' . $keyword_clean;
+        } else {
+            $alt = sprintf( $templates[ $index ], $keyword_clean );
         }
 
-        return ucfirst( $keyword_lower ) . ' — ' . strtolower( $heading );
+        // Enforce 8-125 char limit
+        if ( mb_strlen( $alt ) > 125 ) {
+            $alt = mb_substr( $alt, 0, 122 ) . '...';
+        }
+
+        return $alt;
     }
 
     /**
@@ -96,17 +124,12 @@ class Stock_Image_Inserter {
      * Applies: WebP format, 800px width, 80% quality, auto-crop.
      */
     private function get_image_url( string $keyword, string $heading, int $index ): string {
-        // Build search terms from keyword + heading context
-        $search = $this->build_search_terms( $keyword, $heading );
+        // source.unsplash.com was shut down in 2024.
+        // Use Lorem Picsum (free, no API key, always works).
+        // The seed ensures different but consistent images per section.
+        $seed = abs( crc32( $keyword . $heading . $index ) ) % 1000;
 
-        // Use Unsplash source with specific dimensions and format params
-        // The sig parameter ensures different images for different sections
-        $sig = md5( $keyword . $heading . $index );
-
-        // Use Unsplash source URL directly (no blocking HTTP check during generation)
-        $url = 'https://source.unsplash.com/' . self::IMAGE_WIDTH . 'x' . self::IMAGE_HEIGHT . '/?' . urlencode( $search );
-
-        return $url;
+        return 'https://picsum.photos/seed/' . $seed . '/' . self::IMAGE_WIDTH . '/' . self::IMAGE_HEIGHT;
     }
 
     /**
@@ -129,14 +152,10 @@ class Stock_Image_Inserter {
      * Called by Content_Formatter when in Gutenberg mode.
      */
     public static function markdown_image_to_gutenberg( string $alt, string $url ): string {
-        $w = self::IMAGE_WIDTH;
-        $h = self::IMAGE_HEIGHT;
+        $esc_alt = esc_attr( $alt );
+        $esc_url = esc_url( $url );
 
-        return <<<BLOCK
-<!-- wp:image {"width":"{$w}","height":"{$h}","sizeSlug":"large","linkDestination":"none","className":"is-style-rounded"} -->
-<figure class="wp-block-image size-large is-style-rounded"><img src="{$url}" alt="{$alt}" width="{$w}" height="{$h}" loading="lazy" decoding="async" /></figure>
-<!-- /wp:image -->
-BLOCK;
+        return "<!-- wp:image {\"sizeSlug\":\"large\"} -->\n<figure class=\"wp-block-image size-large\"><img src=\"{$esc_url}\" alt=\"{$esc_alt}\"/></figure>\n<!-- /wp:image -->";
     }
 
     /**

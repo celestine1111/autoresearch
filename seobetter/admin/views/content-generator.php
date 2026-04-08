@@ -871,7 +871,10 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             markdown: res.markdown || '',
             content: res.content || '',
             accent_color: accentVal,
-            keyword: res.keyword || ''
+            keyword: res.keyword || '',
+            meta_title: (res.meta && res.meta.title) || bestTitle || '',
+            meta_description: (res.meta && res.meta.description) || '',
+            og_title: (res.meta && res.meta.og_title) || bestTitle || ''
         };
 
         h += '<div style="margin-top:16px;display:flex;gap:12px;align-items:center">';
