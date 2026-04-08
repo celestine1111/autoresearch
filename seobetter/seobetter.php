@@ -631,39 +631,65 @@ final class SEOBetter {
     private function populate_aioseo( int $post_id, string $keyword, string $seo_title, string $meta_desc, string $og_title ): void {
         global $wpdb;
 
+        // Facebook Title (max 95 chars)
+        $fb_title = mb_strlen( $og_title ) > 95 ? mb_substr( $og_title, 0, 92 ) . '...' : $og_title;
+        // Facebook Description (max 200 chars)
+        $fb_desc = mb_strlen( $meta_desc ) > 200 ? mb_substr( $meta_desc, 0, 197 ) . '...' : $meta_desc;
+        // X Title (max 70 chars)
+        $tw_title = mb_strlen( $og_title ) > 70 ? mb_substr( $og_title, 0, 67 ) . '...' : $og_title;
+        // X Description (max 200 chars)
+        $tw_desc = mb_strlen( $meta_desc ) > 200 ? mb_substr( $meta_desc, 0, 197 ) . '...' : $meta_desc;
+
+        // Article Tags from keyword words + full keyword
+        $tags = array_filter( array_map( 'trim', explode( ' ', strtolower( $keyword ) ) ), fn( $t ) => strlen( $t ) > 2 );
+        $tags[] = strtolower( $keyword );
+        $tags = array_values( array_unique( $tags ) );
+
+        // Article Section from post category
+        $categories = wp_get_post_categories( $post_id, [ 'fields' => 'names' ] );
+        $article_section = ! empty( $categories ) ? $categories[0] : 'General';
+
         // AIOSEO uses a custom table: {prefix}aioseo_posts
         $table = $wpdb->prefix . 'aioseo_posts';
 
-        // Check if table exists
         if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" ) !== $table ) {
-            // Fall back to post meta if table doesn't exist
+            // Fallback to post meta
             update_post_meta( $post_id, '_aioseo_title', $seo_title );
             update_post_meta( $post_id, '_aioseo_description', $meta_desc );
-            update_post_meta( $post_id, '_aioseo_og_title', $og_title );
-            update_post_meta( $post_id, '_aioseo_og_description', $meta_desc );
-            update_post_meta( $post_id, '_aioseo_twitter_title', $og_title );
-            update_post_meta( $post_id, '_aioseo_twitter_description', $meta_desc );
+            update_post_meta( $post_id, '_aioseo_og_title', $fb_title );
+            update_post_meta( $post_id, '_aioseo_og_description', $fb_desc );
+            update_post_meta( $post_id, '_aioseo_twitter_title', $tw_title );
+            update_post_meta( $post_id, '_aioseo_twitter_description', $tw_desc );
             return;
         }
 
-        // Check if row exists for this post
         $exists = $wpdb->get_var( $wpdb->prepare(
             "SELECT id FROM {$table} WHERE post_id = %d", $post_id
         ) );
 
         $data = [
             'post_id'              => $post_id,
+            // SEO
             'title'                => $seo_title,
             'description'          => $meta_desc,
             'keyphrases'           => wp_json_encode( [
                 'focus'      => [ 'keyphrase' => $keyword ],
                 'additional' => [],
             ] ),
-            'og_title'             => $og_title,
-            'og_description'       => $meta_desc,
-            'twitter_title'        => $og_title,
-            'twitter_description'  => $meta_desc,
-            'twitter_use_og'       => 1,
+            // Facebook / Open Graph
+            'og_title'             => $fb_title,
+            'og_description'       => $fb_desc,
+            'og_object_type'       => 'article',
+            'og_image_type'        => 'featured',
+            'og_article_section'   => $article_section,
+            'og_article_tags'      => wp_json_encode( $tags ),
+            // X / Twitter
+            'twitter_title'        => $tw_title,
+            'twitter_description'  => $tw_desc,
+            'twitter_card'         => 'summary_large_image',
+            'twitter_image_type'   => 'featured',
+            'twitter_use_og'       => 0,
+            // Timestamp
             'updated'              => current_time( 'mysql' ),
         ];
 
