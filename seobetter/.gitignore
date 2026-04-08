@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build artifacts
+*.map
+*.min.js
+*.min.css
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+debug.log
+
+# Vercel
+.vercel

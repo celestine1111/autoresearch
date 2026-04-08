@@ -1,0 +1,315 @@
+{
+  "version": 1,
+  "skills": {
+    "ab-test-setup": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "7e2fe0f8cfac9d70ebdfe32a99aae391b7b5b6d491c7a2bc0107b8e77eb91d9a"
+    },
+    "ad-creative": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "5d8f869c7e683e4d4fc7aa7a2b0d370b0ad54a81d9cffb48736ffc47759b3f4d"
+    },
+    "ai-seo": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "0bda4a0839dbb8ecb19b40707299c2558ddc7b63164d1d8008209ce6d03772b7"
+    },
+    "alert-manager": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "c11dba91d3459d5b9d4c1ed48725caa27368fc1ae2d6be1a6e935ad5835c0256"
+    },
+    "analytics-tracking": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "3e66f9bc97873e9d18db5fb064cafd81228ea6532d6402d80fdd88a21432a4b1"
+    },
+    "backlink-analyzer": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "94e0195dfd712fe427c701a66e32193463639ad5b3f1506438c36434b5207a5b"
+    },
+    "churn-prevention": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "ce389baf7e32cc942143503ecba7068784ca2c790460824c1e5a306d83d1283f"
+    },
+    "ckm:banner-design": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "7bbf0f48704f5c40436e3466d7ef9bcbafe35a84eb8c3e9d0ab76408a57bac5c"
+    },
+    "ckm:brand": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "89c8579d232e6e14152a8b898d49eb94f59aa7288ed8ca103cd3b38cb082e00a"
+    },
+    "ckm:design": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "2020e511bb6fbc1dbc233d1da335ec7e8cb553d6e321d34cec4555efcc9ec8f1"
+    },
+    "ckm:design-system": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "49b8308dc428c66b0983f4b3d102c522c495f62538121064d1e82a040b1afd2c"
+    },
+    "ckm:slides": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "6d753831914ed6703b7222153f2710efc2f195f0ab24fd2119c76c2b6d1a6ba1"
+    },
+    "ckm:ui-styling": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "9ae38e4e201f338b6150e462b98a2db0f2ae7c180c77e8cfb1d33eba9d33bf33"
+    },
+    "cold-email": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "6b2c73ca8ee9f2104958476078f50f92ac61ab1b63880762b52816c968a6fea6"
+    },
+    "competitor-alternatives": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "fed933cf3a483c8553e98d54d19ca5565dd3fcc1aebb6ef8ea36aa68fb7f26f1"
+    },
+    "competitor-analysis": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "a176aaee3356cc2700e5c5ab00079d19857f6eacca89b2f5daf3e54566c12268"
+    },
+    "content-gap-analysis": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "37a09b9b1ecae65f8ef56c01beb125b90909684b2b5426caa97eb4e432ec1561"
+    },
+    "content-quality-auditor": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "fb9a9ff9de79be9408bd4968de68f18049ab89263b6c54c2f87bba729ab9ed63"
+    },
+    "content-refresher": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "8f14876aa54b46fff3c31d8ab993e18e3e926a9d08616439cd1502cea1e65ba7"
+    },
+    "content-strategy": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "e49701042afc0f6c8e035022322e95bd8b7922c063431ae86f08da5f4f771751"
+    },
+    "copy-editing": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "4e3260f053e87792b9732f0cab12f75548e979d93513f9652465e0f095af244b"
+    },
+    "copywriting": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "2e83eda2221e97166172a0798e9b0379e34080595e107e2fc0cf580e9b3bbf7b"
+    },
+    "customer-research": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "62fa7be6f387c021c2ced299b9b37b6a5dbfb938fd9325de461e31abd067ccbf"
+    },
+    "domain-authority-auditor": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "80243c8b3a1495616cc2b8cebf7e0696d089bb5a1b93a3fb34fe7c98d673a2bd"
+    },
+    "email-sequence": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "b8832ec7753aa114211f90425d4da75f323fe87f648a550828ade3037c145aca"
+    },
+    "entity-optimizer": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "e682bebf814f36d9ac33d729b86df83e16ea3053b3870a21b7ab9c851ea3c636"
+    },
+    "form-cro": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "e78c6098480ebb1d24985d7a16930868bc8d0962078182c8baa698e5def78774"
+    },
+    "free-tool-strategy": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "52dbcf576e0576e2985466e5162a2cd68d92f3ab7fc7441a3feb4263b1a241f7"
+    },
+    "geo-content-optimizer": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "924d32f867ca0b615f58bca730e0dad562494d226622cb65bdf17e2c3f5615d5"
+    },
+    "internal-linking-optimizer": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "dfb9d2efa2c2c4cefe8e0a42a0855d71926ca9d1ab957596f0881de40fdc7b67"
+    },
+    "keyword-research": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "be96cfa19109f138cf785e77bca22a8e6a5fd90108f5049b1a36c961112577ff"
+    },
+    "last30days": {
+      "source": "mvanhorn/last30days-skill",
+      "sourceType": "github",
+      "computedHash": "b9631a8cba9ff713d6f14a782129fdacd370486e7f145ea26d86d6f943fb8dfb"
+    },
+    "launch-strategy": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "bcf7c5690e6b274167c9cbb83386ff012112c480751ecc6b18495e5732159ff8"
+    },
+    "lead-magnets": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "b71ffc7be2d96e4887ccedf457d02c395f78e68723dab59bd8d6a2a9959ec6c4"
+    },
+    "marketing-ideas": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "9718cc39a861936b08ab18bd564a53e2182cff770baf747c34dcb3e3d7a32f5c"
+    },
+    "marketing-psychology": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "08b842bec992cf13ee61d4b1c206e8e6d9152cb0ba3a028ef875166be20c047b"
+    },
+    "memory-management": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "2ab76916d68a694f164ed173e5143a17ea7fd21efa29a1a066b8dfb91ecaeb82"
+    },
+    "meta-tags-optimizer": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "095d552b4159faab9be72e3d416ec31359e2a13c79b44c949877f22cd709cefd"
+    },
+    "on-page-seo-auditor": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "4febe44b70f4c824c5cc6a7978b4608add0cca22f099b75b0fd5fd4050195ded"
+    },
+    "onboarding-cro": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "9d935c024e0768c8b805852fbf9419c2e8c56be2b9e62e89d43a390008bd1229"
+    },
+    "page-cro": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "9505748dba2319487b285f8ab8c1e5417fce38a512d596e1c9e2e87b34b196e1"
+    },
+    "paid-ads": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "123e5727f01795dc41e1e0724ac1d2f94d9e2727c6b08b603242e75910bf0c48"
+    },
+    "paywall-upgrade-cro": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "90fd522fbdf87327beca0d1e0729ecad3acd833f90e52e1dd84f405dfe116441"
+    },
+    "performance-reporter": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "42ebf3847185ae0f685e2008e81e3f937afc0345a3945985f843881d764b59d5"
+    },
+    "popup-cro": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "d3a71fc81f4165b41c341ba0a2b45164475851f4a31951424b4c1e782fbe2073"
+    },
+    "pricing-strategy": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "4312095789cc328883428b1f9bd61549ca44b376aeda8d62bb977efad017e594"
+    },
+    "product-marketing-context": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "21dd05f970ba54406d7405f92240853f809d0fed09ef6ca2a9204abcdd21548a"
+    },
+    "programmatic-seo": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "a3ac098215969ccaa46d3704adde8c08a0b165adade4322668e0e56520f192f7"
+    },
+    "rank-tracker": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "2963115fd89ed6cca1545d017e49edff93c98c5d8cd924ef3325768a01d856c3"
+    },
+    "referral-program": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "69a33e610a0249ec7af65ce02092a55b723237bbbe9451ee74264634a4aae4ac"
+    },
+    "revops": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "3d80242e14a9824d2c33b9b5e957fc47c190f522f8f5f13c7cd9612784053a58"
+    },
+    "sales-enablement": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "7447155639ac2677bc23ef826b079bbf8e415ec35900f6a3c7b25c33e6ad856a"
+    },
+    "schema-markup": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "0e65991cfe75ce9623c6150fa49c3bafc54796920fae5b6a6875ab6c3732bbec"
+    },
+    "schema-markup-generator": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "479db037478bb08da3cb3eec5f1b28aaf8a2a2e2379e55a10944830c81bc8c02"
+    },
+    "seo-audit": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "e708ba7177775cb49e93ca9b624fba16ec4757e5740f1634279bd510418833f4"
+    },
+    "seo-content-writer": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "be1172a44a549939aa2d0ec19996095b9ddd1a1117c15df1e3790ecee81321ff"
+    },
+    "serp-analysis": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "e80857acd90f89985513818bdaee71fbe8f3856f0517e7e9ee1a4d49e72a53e5"
+    },
+    "signup-flow-cro": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "2098ed9b95efefb40b895f6302f08be202cd5acea915e39e32559d2adfa4970b"
+    },
+    "site-architecture": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "4cdfd1ba49925184462a7524586a5ec0b127668498e7bf2972ef0d4c112e9585"
+    },
+    "social-content": {
+      "source": "TheCraigHewitt/seomachine",
+      "sourceType": "github",
+      "computedHash": "3485991d7c3b97aae9dbce1bd9da575a36fa16621c90571d7391a6ef17754095"
+    },
+    "technical-seo-checker": {
+      "source": "aaron-he-zhu/seo-geo-claude-skills",
+      "sourceType": "github",
+      "computedHash": "3367ead0bab5a359e034bcdd8847a769ee00d5c5137db31ed9348460ecac89b1"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "0a413bf988d06481f69bb81df2070741c3ba12dd9f1be2706d57f259c905992d"
+    }
+  }
+}

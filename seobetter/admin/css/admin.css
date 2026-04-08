@@ -1,0 +1,766 @@
+/* ========================================
+   SEOBetter Admin Design System
+   Based on UI/UX Pro Max skill tokens
+   ======================================== */
+
+/* --- Design Tokens --- */
+:root {
+    --sb-primary: #764ba2;
+    --sb-primary-hover: #5a3580;
+    --sb-primary-light: #f3eef8;
+    --sb-bg: #f8fafc;
+    --sb-card: #ffffff;
+    --sb-border: #e2e8f0;
+    --sb-text: #1e293b;
+    --sb-text-secondary: #64748b;
+    --sb-text-muted: #94a3b8;
+    --sb-success: #059669;
+    --sb-success-bg: #ecfdf5;
+    --sb-warning: #d97706;
+    --sb-warning-bg: #fffbeb;
+    --sb-error: #dc2626;
+    --sb-error-bg: #fef2f2;
+    --sb-info: #2563eb;
+    --sb-info-bg: #eff6ff;
+    --sb-radius: 8px;
+    --sb-radius-sm: 4px;
+    --sb-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --sb-shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
+    --sb-transition: 150ms ease;
+}
+
+/* --- Base Layout --- */
+.seobetter-dashboard {
+    max-width: 1200px;
+}
+
+.seobetter-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 24px;
+    margin-top: 24px;
+}
+
+/* --- Cards --- */
+.seobetter-card {
+    background: var(--sb-card);
+    border: 1px solid var(--sb-border);
+    border-radius: var(--sb-radius);
+    padding: 24px;
+    box-shadow: var(--sb-shadow);
+}
+
+.seobetter-card h2 {
+    margin-top: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--sb-text);
+    line-height: 1.4;
+}
+
+.seobetter-card h3 {
+    margin-top: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--sb-text);
+}
+
+/* --- Form Fields --- */
+.seobetter-dashboard input[type="text"],
+.seobetter-dashboard input[type="url"],
+.seobetter-dashboard input[type="email"],
+.seobetter-dashboard input[type="number"],
+.seobetter-dashboard input[type="password"],
+.seobetter-dashboard textarea,
+.seobetter-dashboard select {
+    height: 40px;
+    padding: 8px 12px;
+    border: 1px solid var(--sb-border);
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--sb-text);
+    background: var(--sb-card);
+    transition: border-color var(--sb-transition), box-shadow var(--sb-transition);
+    box-sizing: border-box;
+}
+
+.seobetter-dashboard textarea {
+    height: auto;
+    min-height: 80px;
+}
+
+.seobetter-dashboard input:focus,
+.seobetter-dashboard textarea:focus,
+.seobetter-dashboard select:focus {
+    border-color: var(--sb-primary);
+    box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.15);
+    outline: none;
+}
+
+.seobetter-dashboard .form-table th {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--sb-text);
+    padding: 16px 10px 16px 0;
+    vertical-align: top;
+    width: 180px;
+}
+
+.seobetter-dashboard .form-table td {
+    padding: 12px 0;
+}
+
+.seobetter-dashboard .form-table td .description {
+    font-size: 12px;
+    color: var(--sb-text-secondary);
+    margin-top: 4px;
+}
+
+/* --- Tooltips (redesigned: smaller, right-positioned) --- */
+.seobetter-tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.seobetter-tooltip .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: var(--sb-text-muted);
+    vertical-align: middle;
+}
+
+.seobetter-tooltip .seobetter-tooltip-text {
+    visibility: hidden;
+    opacity: 0;
+    width: 240px;
+    background: var(--sb-text);
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    position: absolute;
+    z-index: 1400;
+    left: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: opacity var(--sb-transition);
+    box-shadow: var(--sb-shadow-md);
+}
+
+.seobetter-tooltip .seobetter-tooltip-text::before {
+    content: "";
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    margin-top: -5px;
+    border: 5px solid transparent;
+    border-right-color: var(--sb-text);
+}
+
+.seobetter-tooltip:hover .seobetter-tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* --- Buttons --- */
+.seobetter-dashboard .button.sb-btn-primary,
+.seobetter-dashboard .sb-btn-primary {
+    background: var(--sb-primary) !important;
+    border-color: var(--sb-primary) !important;
+    color: #fff !important;
+    padding: 8px 24px;
+    height: 44px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background var(--sb-transition);
+    line-height: 26px;
+}
+
+.seobetter-dashboard .sb-btn-primary:hover {
+    background: var(--sb-primary-hover) !important;
+}
+
+.seobetter-dashboard .button.sb-btn-secondary,
+.seobetter-dashboard .sb-btn-secondary {
+    background: transparent !important;
+    border: 2px solid var(--sb-primary) !important;
+    color: var(--sb-primary) !important;
+    padding: 6px 24px;
+    height: 44px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all var(--sb-transition);
+    line-height: 26px;
+}
+
+.seobetter-dashboard .sb-btn-secondary:hover {
+    background: var(--sb-primary-light) !important;
+}
+
+.seobetter-dashboard .button.sb-btn-sm {
+    height: 32px;
+    padding: 4px 12px;
+    font-size: 12px;
+    line-height: 22px;
+}
+
+/* --- Score Badges --- */
+.seobetter-score {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.seobetter-score-good, .seobetter-score.good {
+    background: var(--sb-success-bg);
+    color: var(--sb-success);
+}
+
+.seobetter-score-ok, .seobetter-score.ok {
+    background: var(--sb-warning-bg);
+    color: var(--sb-warning);
+}
+
+.seobetter-score-poor, .seobetter-score.poor {
+    background: var(--sb-error-bg);
+    color: var(--sb-error);
+}
+
+/* --- Score Circle --- */
+.seobetter-score-card {
+    text-align: center;
+}
+
+.seobetter-score-circle {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 5px solid var(--sb-border);
+    margin: 10px auto;
+}
+
+.seobetter-score-circle.good { border-color: var(--sb-success); }
+.seobetter-score-circle.ok { border-color: var(--sb-warning); }
+.seobetter-score-circle.poor { border-color: var(--sb-error); }
+
+.seobetter-score-circle .score-number {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--sb-text);
+}
+
+.seobetter-score-circle .score-grade {
+    font-size: 13px;
+    color: var(--sb-text-secondary);
+    margin-top: 2px;
+}
+
+/* --- Suggestions --- */
+.seobetter-suggestion {
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--sb-border);
+    background: var(--sb-bg);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--sb-text);
+}
+
+.seobetter-suggestion-high {
+    border-left-color: var(--sb-error);
+    background: var(--sb-error-bg);
+}
+
+.seobetter-suggestion-medium {
+    border-left-color: var(--sb-warning);
+    background: var(--sb-warning-bg);
+}
+
+.seobetter-suggestion .dashicons {
+    margin-right: 6px;
+    vertical-align: middle;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.seobetter-suggestion-type {
+    font-weight: 600;
+    margin-right: 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* --- Affiliate Links Section --- */
+.seobetter-affiliate-section {
+    margin-top: 24px;
+    padding: 20px 24px;
+    background: var(--sb-bg);
+    border: 1px solid var(--sb-border);
+    border-radius: var(--sb-radius);
+}
+
+.seobetter-affiliate-section h3 {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+}
+
+.seobetter-affiliate-row {
+    background: var(--sb-card);
+    border: 1px solid var(--sb-border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+}
+
+.seobetter-affiliate-row .sb-aff-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr 140px 32px;
+    gap: 10px;
+    align-items: end;
+}
+
+.seobetter-affiliate-row .sb-aff-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--sb-text-secondary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.seobetter-affiliate-row .sb-aff-field input,
+.seobetter-affiliate-row .sb-aff-field select {
+    width: 100%;
+}
+
+.seobetter-affiliate-row .sb-aff-remove {
+    background: none;
+    border: 1px solid var(--sb-border);
+    color: var(--sb-text-muted);
+    cursor: pointer;
+    border-radius: 6px;
+    height: 40px;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all var(--sb-transition);
+    padding: 0;
+}
+
+.seobetter-affiliate-row .sb-aff-remove:hover {
+    border-color: var(--sb-error);
+    color: var(--sb-error);
+    background: var(--sb-error-bg);
+}
+
+/* --- Status Bar --- */
+.seobetter-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    background: var(--sb-card);
+    border: 1px solid var(--sb-border);
+    border-radius: var(--sb-radius);
+    margin-bottom: 24px;
+    font-size: 13px;
+}
+
+/* --- Section Divider --- */
+.seobetter-divider {
+    border: none;
+    border-top: 1px solid var(--sb-border);
+    margin: 24px 0;
+}
+
+/* --- Tables --- */
+.seobetter-dashboard .widefat {
+    border-radius: var(--sb-radius);
+    overflow: hidden;
+    border: 1px solid var(--sb-border);
+}
+
+.seobetter-dashboard .widefat th {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--sb-text-secondary);
+    background: var(--sb-bg);
+    padding: 10px 16px;
+}
+
+.seobetter-dashboard .widefat td {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--sb-text);
+}
+
+/* --- SERP Preview --- */
+.seobetter-serp-preview {
+    padding: 16px;
+    background: var(--sb-card);
+    border: 1px solid var(--sb-border);
+    border-radius: var(--sb-radius);
+    font-family: Arial, sans-serif;
+    max-width: 600px;
+}
+
+.seobetter-serp-preview .serp-url {
+    font-size: 12px;
+    color: #202124;
+    margin-bottom: 2px;
+}
+
+.seobetter-serp-preview .serp-title {
+    font-size: 20px;
+    color: #1a0dab;
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.seobetter-serp-preview .serp-desc {
+    font-size: 14px;
+    color: #4d5156;
+    line-height: 1.5;
+}
+
+/* --- Headline Picker --- */
+.seobetter-headline-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin: 6px 0;
+    background: var(--sb-card);
+    border: 1px solid var(--sb-border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color var(--sb-transition), background var(--sb-transition);
+}
+
+.seobetter-headline-option:hover {
+    border-color: var(--sb-primary);
+    background: var(--sb-primary-light);
+}
+
+.seobetter-headline-option input[type="radio"] {
+    flex-shrink: 0;
+    accent-color: var(--sb-primary);
+}
+
+.seobetter-headline-option .headline-text {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--sb-text);
+}
+
+.seobetter-headline-option .headline-chars {
+    font-size: 11px;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+/* --- Social Content Grid --- */
+.seobetter-social-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.seobetter-social-grid h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sb-text);
+}
+
+.seobetter-social-grid textarea {
+    font-size: 12px;
+    border-radius: 6px;
+    resize: vertical;
+}
+
+/* --- Topic Suggester --- */
+.seobetter-topic-row td {
+    vertical-align: middle;
+}
+
+.seobetter-topic-row .topic-intent {
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.seobetter-topic-row .topic-difficulty {
+    font-weight: 600;
+    font-size: 12px;
+}
+
+/* --- Content Preview --- */
+.seobetter-content-preview {
+    background: var(--sb-card);
+    border: 1px solid var(--sb-border);
+    padding: 24px;
+    border-radius: var(--sb-radius);
+    max-height: 600px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    line-height: 1.7;
+}
+
+/* --- Generator 2-Column Layout --- */
+.sb-generator-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    align-items: start;
+}
+
+.sb-generator-main { min-width: 0; }
+.sb-generator-sidebar { position: sticky; top: 32px; }
+
+/* --- Form Fields (modern) --- */
+.sb-field {
+    margin-bottom: 16px;
+}
+
+.sb-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sb-text);
+    margin-bottom: 6px;
+}
+
+.sb-field input,
+.sb-field select,
+.sb-field textarea {
+    width: 100%;
+    height: 44px;
+    padding: 10px 14px;
+    border: 1px solid var(--sb-border);
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--sb-text);
+    background: var(--sb-card);
+    transition: border-color var(--sb-transition), box-shadow var(--sb-transition);
+    box-sizing: border-box;
+}
+
+.sb-field textarea { height: auto; }
+
+.sb-field input:focus,
+.sb-field select:focus,
+.sb-field textarea:focus {
+    border-color: var(--sb-primary);
+    box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.12);
+    outline: none;
+}
+
+.sb-field .sb-help {
+    font-size: 12px;
+    color: var(--sb-text-muted);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.sb-field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.sb-field-row-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+}
+
+/* --- Section Cards --- */
+.sb-section {
+    background: var(--sb-card);
+    border: 1px solid var(--sb-border);
+    border-radius: var(--sb-radius);
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: var(--sb-shadow);
+}
+
+.sb-section-header {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--sb-text);
+    margin: 0 0 16px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--sb-border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sb-section-header .dashicons {
+    color: var(--sb-primary);
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
+/* --- Affiliate Row (compact) --- */
+.sb-aff-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 120px 36px;
+    gap: 8px;
+    align-items: end;
+    padding: 10px 12px;
+    background: var(--sb-bg);
+    border: 1px solid var(--sb-border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.sb-aff-row input {
+    height: 36px;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.sb-aff-row .sb-aff-x {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--sb-border);
+    background: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--sb-text-muted);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--sb-transition);
+    padding: 0;
+}
+
+.sb-aff-row .sb-aff-x:hover {
+    border-color: var(--sb-error);
+    color: var(--sb-error);
+    background: var(--sb-error-bg);
+}
+
+/* --- Sidebar Cards --- */
+.sb-sidebar-card {
+    background: var(--sb-card);
+    border: 1px solid var(--sb-border);
+    border-radius: var(--sb-radius);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--sb-shadow);
+}
+
+.sb-sidebar-card h3 {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--sb-text);
+}
+
+.sb-sidebar-card ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 12px;
+    line-height: 2;
+}
+
+.sb-sidebar-card li {
+    color: var(--sb-text-secondary);
+}
+
+/* --- Pro Upsell Sidebar --- */
+.sb-upsell-card {
+    background: var(--sb-primary-light);
+    border: 2px solid var(--sb-primary);
+    border-radius: var(--sb-radius);
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.sb-upsell-card h3 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--sb-primary);
+}
+
+.sb-upsell-card p {
+    font-size: 13px;
+    color: var(--sb-text-secondary);
+    margin: 0 0 14px 0;
+    line-height: 1.5;
+}
+
+.sb-upsell-card .sb-btn-primary {
+    width: 100%;
+    text-align: center;
+}
+
+/* --- Responsive --- */
+@media screen and (max-width: 1200px) {
+    .sb-generator-layout {
+        grid-template-columns: 1fr;
+    }
+    .sb-generator-sidebar {
+        position: static;
+    }
+}
+
+@media screen and (max-width: 782px) {
+    .seobetter-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .sb-field-row,
+    .sb-field-row-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .sb-aff-row {
+        grid-template-columns: 1fr;
+    }
+
+    .seobetter-social-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .seobetter-status-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}
