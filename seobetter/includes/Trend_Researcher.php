@@ -85,14 +85,23 @@ class Trend_Researcher {
      */
     private static function cloud_research( string $keyword ): array {
         $cloud_url = Cloud_API::get_cloud_url();
+        $settings = get_option( 'seobetter_settings', [] );
+
+        $body = [
+            'keyword'  => $keyword,
+            'site_url' => home_url(),
+        ];
+
+        // Pass Brave key for Pro users
+        $brave_key = $settings['brave_api_key'] ?? '';
+        if ( ! empty( $brave_key ) && License_Manager::can_use( 'content_brief' ) ) {
+            $body['brave_key'] = $brave_key;
+        }
 
         $response = wp_remote_post( $cloud_url . '/api/research', [
-            'timeout' => 15,
+            'timeout' => 20,
             'headers' => [ 'Content-Type' => 'application/json' ],
-            'body'    => wp_json_encode( [
-                'keyword'  => $keyword,
-                'site_url' => home_url(),
-            ] ),
+            'body'    => wp_json_encode( $body ),
         ] );
 
         if ( is_wp_error( $response ) ) {

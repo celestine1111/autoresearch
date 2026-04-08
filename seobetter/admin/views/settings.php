@@ -54,6 +54,7 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
         'target_readability' => absint( $_POST['target_readability'] ?? 7 ),
         'geo_engines'        => array_map( 'sanitize_text_field', $_POST['geo_engines'] ?? [] ),
         'llms_txt_enabled'   => ! empty( $_POST['llms_txt_enabled'] ),
+        'brave_api_key'      => sanitize_text_field( $_POST['brave_api_key'] ?? '' ),
     ];
     update_option( 'seobetter_settings', $settings );
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'seobetter' ) . '</p></div>';
@@ -220,6 +221,16 @@ $settings = get_option( 'seobetter_settings', [] );
                     <td>
                         <label><input type="checkbox" name="llms_txt_enabled" value="1" <?php checked( $settings['llms_txt_enabled'] ?? true ); ?> /> <?php esc_html_e( 'Enable llms.txt for AI crawlers', 'seobetter' ); ?></label>
                         <p class="description"><code><?php echo esc_html( home_url( '/llms.txt' ) ); ?></code></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Brave Search API Key', 'seobetter' ); ?>
+                        <?php if ( ! $license_info['is_pro'] ) : ?><span class="seobetter-score seobetter-score-ok" style="font-size:10px;margin-left:6px">PRO</span><?php endif; ?>
+                    </th>
+                    <td>
+                        <input type="password" name="brave_api_key" value="<?php echo esc_attr( $settings['brave_api_key'] ?? '' ); ?>" class="regular-text" placeholder="BSA..." />
+                        <a href="https://brave.com/search/api/" target="_blank" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Free Key', 'seobetter' ); ?></a>
+                        <p class="description"><?php esc_html_e( 'Pro feature. Adds real web statistics and verified sources to generated articles. 2,000 free queries/month.', 'seobetter' ); ?></p>
                     </td>
                 </tr>
             </table>

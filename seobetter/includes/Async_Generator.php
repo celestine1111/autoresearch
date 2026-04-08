@@ -301,11 +301,24 @@ class Async_Generator {
             $prompt = "Write an FAQ section for an article about \"{$keyword}\".\n{$kw_context}\n\nWrite 5 question-answer pairs. Each answer must be 40-60 words. Use simple language.{$readability_rule}\n\nFormat:\n\n## Frequently Asked Questions\n\n### [Question]?\n[Answer — 40-60 words, simple language]\n\nNever start answers with pronouns (It, This, They).";
             $max = 2000;
         } elseif ( $is_references ) {
-            $prompt = "Write a References section for an article about \"{$keyword}\". Include 5-8 references with source names and years.\n\nFormat:\n## References\n1. [Source Name] (Year). Description.\n2. ...";
-            $max = 600;
+            // Inject real source URLs from research data
+            $sources_list = '';
+            if ( $trends ) {
+                // Extract markdown links from the research data
+                preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)\s*[—-]\s*(.+)/i', $trends, $link_matches, PREG_SET_ORDER );
+                if ( ! empty( $link_matches ) ) {
+                    $sources_list = "\n\nREAL SOURCES TO USE (these are verified URLs — use them as outbound links):\n";
+                    foreach ( array_slice( $link_matches, 0, 10 ) as $lm ) {
+                        $sources_list .= "- [{$lm[1]}]({$lm[2]}) — {$lm[3]}\n";
+                    }
+                    $sources_list .= "\nIMPORTANT: Use ONLY the URLs above. Do NOT invent or hallucinate any URLs.";
+                }
+            }
+            $prompt = "Write a References section for an article about \"{$keyword}\".{$sources_list}\n\nFormat each reference as a clickable Markdown link:\n## References\n1. [Source Title](https://real-url.com) — Brief description of what this source covers.\n2. ...\n\nInclude 5-10 references. Every URL must be a REAL, working link from the sources provided above. If you don't have enough real URLs, include the source name and year without a fake URL.";
+            $max = 800;
         } else {
-            $trends_inject = ( $trends && $index <= 3 ) ? "\n\nRECENT DATA TO WEAVE IN:\n{$trends}" : '';
-            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nYou MUST write at least {$words_per_section} words for this section. This is not optional — count your words.{$trends_inject}{$readability_rule}\n\nSTRUCTURE RULES:\n- Start with: ## {$heading}\n- First paragraph MUST be exactly 40-60 words and directly answer the heading question\n- Write 3-5 more paragraphs after that (each 50-80 words)\n- Include 1-2 statistics with (Source Name, Year) attribution\n- Include 1 expert quote: \"Quote text here\" — Dr. Name, Title (Source, Year)\n- Include 2+ inline citations like [Source, Year]\n- If the section compares things, add a Markdown comparison table\n- Use bullet lists where appropriate\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- Use **Bold** for important terms\n\nMinimum {$words_per_section} words. Output Markdown only.";
+            $trends_inject = ( $trends && $index <= 3 ) ? "\n\nREAL-TIME RESEARCH DATA (use these real statistics and sources — do NOT hallucinate numbers):\n{$trends}" : '';
+            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nYou MUST write at least {$words_per_section} words for this section. This is not optional — count your words.{$trends_inject}{$readability_rule}\n\nSTRUCTURE RULES:\n- Start with: ## {$heading}\n- First paragraph MUST be exactly 40-60 words and directly answer the heading question\n- Write 3-5 more paragraphs after that (each 50-80 words)\n- Include 1-2 statistics from the RESEARCH DATA above (if available). Use the exact numbers and source names provided. Do NOT invent statistics.\n- Include 1 expert quote if provided in the research data\n- When citing a source, use the exact URL from the research data as a Markdown link: [Source Name](https://real-url.com)\n- If the section compares things, add a Markdown comparison table\n- Use bullet lists where appropriate\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- Use **Bold** for important terms\n\nMinimum {$words_per_section} words. Output Markdown only.";
             $max = 4096;
         }
 
