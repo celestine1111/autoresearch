@@ -81,7 +81,17 @@ Every generated article MUST follow this structure. This is the foundation for G
 7. **H2: Frequently Asked Questions** — 3-5 Q&A pairs
 8. **H2: References** — 5-8 cited sources with years
 
-### 3.2 Section Opening Rule (40-60 Word Rule)
+### 3.2 Introduction Paragraph Rule (CRITICAL — SEO plugins check this)
+The **very first content paragraph** of the article (the first `<p>` after Key Takeaways and the first H2) is the **introduction**. SEO plugins (AIOSEO, Yoast, RankMath) specifically check this paragraph for the focus keyword. It MUST:
+- Contain the **exact primary keyword** in the **first sentence**
+- Be 40-60 words
+- Directly state what the article is about
+- Bold the keyword on first mention: `**keyword phrase**`
+- Example: "**Reptile shop Melbourne** provides essential supplies for reptile owners across Victoria. Finding the right reptile shop Melbourne residents trust requires..."
+
+**Why this matters:** AIOSEO/Yoast flag "Focus keyword not in introduction" if the keyword is missing from the first `<p>` tag. This is the #1 most common SEO plugin warning.
+
+### 3.2b Section Opening Rule (40-60 Word Rule)
 Every H2/H3 section MUST begin with a **40-60 word paragraph** that:
 - Directly answers the heading question
 - Functions as a standalone answer if extracted by AI
@@ -208,12 +218,26 @@ The **exact primary keyword** (e.g., "reptile shop melbourne") MUST appear in AL
 - Remaining headings use secondary/LSI keywords
 - Never force the keyword where it sounds unnatural
 
-### 5A.4 First Paragraph Rule
-The first paragraph of the article (after Key Takeaways) MUST:
-- Contain the **exact primary keyword** in the first 1-2 sentences
+### 5A.4 First Paragraph / Introduction Rule (SEO PLUGIN CRITICAL)
+**This is the most commonly failed SEO check.** AIOSEO, Yoast, and RankMath all check that the focus keyword appears in the first paragraph (`<p>` tag) of the article.
+
+The introduction paragraph MUST:
+- Contain the **exact primary keyword in the FIRST SENTENCE** — not the second, not buried later
+- Bold the keyword: `**keyword phrase**`
 - Be 40-60 words (GEO section opening rule)
-- Directly answer what the article is about
-- Example: "**Reptile shop Melbourne** owners need reliable supplies for their cold-blooded pets. Melbourne has over 15 specialist reptile stores offering..."
+- Directly state what the article covers
+- The keyword must appear as a continuous phrase (e.g., "reptile shop melbourne" not "reptile...shop...melbourne" split across sentences)
+
+**Correct example:**
+> **Reptile shop Melbourne** offers a wide range of supplies for reptile owners across Victoria. Choosing the best reptile shop Melbourne has available requires comparing prices, product range, and expert advice from experienced herpetologists.
+
+**Wrong — keyword not in first sentence:**
+> Finding the right supplies for your pet can be challenging. There are many options available. A reptile shop Melbourne residents trust will offer...
+
+**Wrong — keyword split across sentences:**
+> Looking for a reptile shop? Melbourne has several options...
+
+**Implementation note for AI prompts:** The system prompt and first section prompt MUST explicitly say: "The FIRST SENTENCE of the article must contain the exact phrase '{keyword}'".
 
 ### 5A.5 Meta Description Keyword Rule
 - Must contain the **exact primary keyword** naturally
