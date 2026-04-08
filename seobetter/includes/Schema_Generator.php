@@ -72,6 +72,12 @@ class Schema_Generator {
             $schema['image'] = $thumbnail;
         }
 
+        // Speakable markup — tells voice assistants which sections to read aloud
+        $schema['speakable'] = [
+            '@type'       => 'SpeakableSpecification',
+            'cssSelector' => [ 'h1', 'h2 + p', '.key-takeaways', '.faq-answer' ],
+        ];
+
         return $schema;
     }
 

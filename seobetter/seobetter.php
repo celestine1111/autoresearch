@@ -63,6 +63,7 @@ final class SEOBetter {
         add_action( 'enqueue_block_editor_assets', [ $this, 'enqueue_editor_assets' ] );
         add_action( 'wp_head', [ $this, 'output_schema_markup' ], 1 );
         add_action( 'wp_head', [ $this, 'output_social_meta' ], 2 );
+        add_action( 'wp_head', [ $this, 'output_ai_meta' ], 3 );
         add_action( 'save_post', [ $this, 'analyze_on_save' ], 20, 2 );
         add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
 
@@ -270,6 +271,26 @@ final class SEOBetter {
             $social->output_meta( get_the_ID() );
         } catch ( \Throwable $e ) {
             // Silently fail
+        }
+    }
+
+    /**
+     * Output AI optimization meta tags for Google Discover, AI Overviews,
+     * voice search, and LLM snippet extraction.
+     */
+    public function output_ai_meta(): void {
+        if ( ! is_singular() ) {
+            return;
+        }
+
+        // Allow maximum AI snippet extraction + Google Discover eligibility
+        echo '<meta name="robots" content="max-image-preview:large, max-snippet:-1, max-video-preview:-1">' . "\n";
+
+        // Article dates for AI freshness signals
+        $post = get_post();
+        if ( $post ) {
+            echo '<meta property="article:published_time" content="' . esc_attr( get_the_date( 'c', $post ) ) . '">' . "\n";
+            echo '<meta property="article:modified_time" content="' . esc_attr( get_the_modified_date( 'c', $post ) ) . '">' . "\n";
         }
     }
 

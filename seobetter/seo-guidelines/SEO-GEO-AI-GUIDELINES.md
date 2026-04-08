@@ -655,4 +655,249 @@ Google NotebookLM integration for deep content enrichment. Requires Google OAuth
 
 ---
 
+## 23. GOOGLE DISCOVER OPTIMIZATION
+
+Google Discover shows content to 800M+ users based on their interests. Articles that appear here get massive traffic spikes.
+
+### Requirements
+- **Image:** Minimum **1200px wide**, landscape, 16:9 ratio, high-quality photo (not logos or text-heavy graphics)
+- **Meta tag required:** `<meta name="robots" content="max-image-preview:large">` — without this, articles are ineligible
+- **Content:** Timely content, compelling storytelling, or unique insights
+- **E-E-A-T:** Strong author credentials, original reporting, unique data
+- **Page experience:** Good Core Web Vitals (LCP < 2.5s, CLS < 0.1)
+
+### What Gets Articles Into Discover
+- Large, high-quality featured images (1200x630+ px)
+- Compelling headlines (not clickbait)
+- Fresh, timely content on topics users follow
+- Strong topic authority (multiple articles on same subject)
+- No sensationalism, misleading titles, or withheld information
+
+### Plugin Implementation
+- `set_featured_image()` downloads 1200x630 images ✓
+- Schema_Generator outputs Article schema ✓
+- Social_Meta_Generator outputs OG image tags ✓
+- **TODO:** Add `max-image-preview:large` to `<head>` output
+
+---
+
+## 24. AI SEARCH FEATURES OPTIMIZATION
+
+### Google AI Overviews & AI Mode
+- **No special markup required** — Google explicitly states there are no AI-specific optimization requirements
+- Content selection based on: relevance, indexability, existing search eligibility
+- AI Overviews use "query fan-out" — issuing multiple sub-queries — which surfaces content from **more diverse sources** than traditional search
+- Clicks from AI Overviews are **higher quality** (users spend more time on site)
+- To appear: ensure content is indexed, has snippets enabled, follows standard SEO
+
+### How to Maximize AI Overview Inclusion
+1. **Answer questions directly** in first 40-60 words (Section 3.2)
+2. **Use structured data** — FAQPage, HowTo, Article schema
+3. **Provide factual, citable content** — statistics, expert quotes, tables
+4. **Don't block snippets** — avoid `nosnippet` meta tag
+5. **Match query intent exactly** — title and H1 should mirror the search query
+
+### Control Mechanisms
+- `nosnippet` — prevents content from appearing in AI features
+- `max-snippet:[number]` — limits snippet length
+- `data-nosnippet` — excludes specific HTML elements from snippets
+- `Google-Extended` user-agent — blocks AI training (but NOT search/snippets)
+
+---
+
+## 25. AI VOICE SEARCH & ASSISTANT OPTIMIZATION
+
+### Speakable Schema Markup
+Add `speakable` property to Article schema to mark content as voice-assistant-friendly:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Article Title",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [".key-takeaways", ".faq-answer", "h2 + p"]
+  }
+}
+```
+
+### Voice Search Content Rules
+- **Answer in 40-60 words** — voice assistants read short, direct answers
+- **Use question-format headings** — "What is X?", "How does X work?"
+- **FAQ sections are critical** — voice assistants pull from FAQ schema
+- **Conversational tone** — write how people speak, not how they type
+- **Local keywords** — voice searches are 3x more likely to be local ("near me", city names)
+
+### Content Blocks Optimized for Voice
+1. **Definition blocks** — "X is [definition]." → perfect for "What is X?" queries
+2. **Step-by-step blocks** — numbered lists → perfect for "How do I X?" queries
+3. **FAQ blocks** — question + 40-60 word answer → directly read by assistants
+4. **Key Takeaways** — bullet summaries → read as quick answers
+
+---
+
+## 26. INTERNATIONAL SEARCH ENGINE OPTIMIZATION
+
+### Yandex (Russia — 60% market share)
+- Supports Schema.org structured data
+- Prefers content in Russian with proper Cyrillic encoding
+- `hreflang` tags for multilingual content
+- Yandex Webmaster Tools submission
+- Quality factors: text uniqueness, behavioral factors (time on page, bounce rate)
+
+### Baidu (China — 75% market share)
+- Requires ICP filing for .cn domains
+- Prefers Simplified Chinese content
+- Meta keywords tag still used (unlike Google)
+- Baidu Webmaster Tools submission
+- Fast server response time critical (< 1s)
+
+### Naver (South Korea — 60% market share)
+- Naver Blog integration preferred
+- Structured data via Naver Search Advisor
+- Korean language content prioritized
+
+### Mercado Libre / Google LATAM (South America)
+- Spanish/Portuguese content with local variations
+- `hreflang` tags: `es-AR`, `es-MX`, `es-CO`, `pt-BR`
+- Google dominates but local directory listings matter
+- Mobile-first critical (80%+ mobile usage in LATAM)
+
+### Universal International SEO Rules
+- `hreflang` tags for each language/region version
+- `<html lang="xx">` attribute set correctly
+- Canonical URLs pointing to correct language version
+- Server location or CDN for target region
+- Content in target language (not just translated — localized)
+
+---
+
+## 27. AI SNIPPET OPTIMIZATION (FOR LLM CITATIONS)
+
+### How LLMs Select Content to Cite
+AI models (ChatGPT, Gemini, Claude, Perplexity, Copilot) select citations based on:
+
+1. **Self-contained answer blocks** — paragraphs that make sense in isolation
+2. **Factual density** — specific numbers, dates, names > vague claims
+3. **Attribution chains** — content that cites other sources is seen as more authoritative
+4. **Structured data** — FAQPage schema content is extracted directly
+5. **Freshness** — recently updated content (within 30 days) cited 3.2x more
+
+### AI Snippet Content Patterns (implement in every article)
+
+**Pattern 1: Direct Answer Block**
+```
+[Question as H2]
+[40-60 word paragraph directly answering the question with a specific fact/number]
+```
+→ This exact block gets extracted by AI as a snippet
+
+**Pattern 2: Definition + Context Block**
+```
+**[Term]** is [1-sentence definition]. [Supporting fact with source]. [Why it matters].
+```
+→ Cited for "What is X?" queries
+
+**Pattern 3: Comparison Table**
+```
+| Feature | Option A | Option B |
+|---------|----------|----------|
+| Price   | $X       | $Y       |
+| Best For| [use case]| [use case]|
+```
+→ Tables cited 30-40% more than prose
+
+**Pattern 4: Evidence Sandwich**
+```
+[Claim]. According to [Source] ([Year]), [supporting statistic]. [Actionable insight].
+```
+→ The attribution makes this citable
+
+**Pattern 5: FAQ Q&A Pair**
+```
+### [Question phrased exactly as users search]?
+[Direct 40-60 word answer]. [Supporting evidence]. [Source citation].
+```
+→ Extracted by voice assistants AND text-based AI
+
+### Meta Tags for AI Crawlers
+Every article should have these in `<head>`:
+```html
+<meta name="robots" content="max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+```
+- `max-image-preview:large` — enables Google Discover + rich AI snippets
+- `max-snippet:-1` — allows unlimited snippet length for AI extraction
+- `max-video-preview:-1` — allows video preview in AI results
+
+---
+
+## 28. SYNTHID & AI CONTENT TRANSPARENCY
+
+### What SynthID Is
+Google DeepMind's watermarking tool for AI-generated content. Embeds invisible watermarks in text, images, audio, and video generated by Google's models.
+
+### Impact on SEO
+- SynthID is **detection-only** — it identifies AI content, does NOT penalize it
+- Google has stated AI-generated content is acceptable if it's helpful and high-quality
+- No way for publishers to add SynthID watermarks to their own content (Google-internal only)
+- No API available for third-party use
+
+### What Publishers SHOULD Do Instead
+1. **Declare AI assistance transparently** — add author byline: "Written with AI assistance, reviewed by [Human Expert Name]"
+2. **Add human expertise** — AI generates the draft, human adds experience, quotes, original insights
+3. **Fact-check AI output** — every statistic and citation should be verified
+4. **Add original value** — unique data, personal experience, expert interviews that AI cannot generate
+5. **Use `article:author` meta tag** — attribute content to a real person with credentials
+
+### AI Content Best Practices for SEO
+- Google does NOT penalize AI content that is helpful, relevant, and accurate
+- Google DOES penalize low-quality content regardless of how it was created
+- The key differentiator: **human editorial oversight** and **original expertise**
+- Add E-E-A-T signals: author bio, credentials, "reviewed by" attribution, real experience
+
+---
+
+## 29. ROBOTS META FOR MAXIMUM AI VISIBILITY
+
+### Required Meta Tags (add to every article `<head>`)
+```html
+<!-- Allow full AI snippet extraction -->
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+
+<!-- Open Graph for social + AI -->
+<meta property="og:type" content="article">
+<meta property="og:image" content="[1200x630 image URL]">
+<meta property="article:published_time" content="[ISO date]">
+<meta property="article:modified_time" content="[ISO date]">
+```
+
+### AI Bot User-Agents to ALLOW
+```
+User-agent: GPTBot          # ChatGPT search
+User-agent: ChatGPT-User    # ChatGPT browsing
+User-agent: PerplexityBot   # Perplexity AI
+User-agent: ClaudeBot        # Claude
+User-agent: Google-Extended  # Gemini, AI Overviews
+User-agent: Bingbot          # Microsoft Copilot
+User-agent: YandexBot        # Yandex (Russia)
+User-agent: Baiduspider      # Baidu (China)
+User-agent: NaverBot         # Naver (Korea)
+Allow: /
+```
+
+### IndexNow for Instant Indexing
+Submit new articles immediately to Bing/Yandex via IndexNow protocol:
+```
+POST https://api.indexnow.org/IndexNow
+{
+  "host": "yoursite.com",
+  "key": "[your-key]",
+  "urlList": ["https://yoursite.com/new-article/"]
+}
+```
+Supported by: Bing, Yandex, Seznam, Naver. Google uses its own Indexing API.
+
+---
+
 *This document is the authoritative reference for all SEOBetter plugin optimization. When in doubt, follow these guidelines. Update this document when new research or algorithm changes are published.*
