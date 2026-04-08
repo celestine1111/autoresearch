@@ -636,7 +636,7 @@ final class SEOBetter {
 
         // Populate AIOSEO fields if the plugin is active
         if ( defined( 'AIOSEO_VERSION' ) || function_exists( 'aioseo' ) ) {
-            $this->populate_aioseo( $post_id, $keyword, $meta_title ?: $title, $meta_desc, $og_title ?: $meta_title ?: $title );
+            $this->populate_aioseo( $post_id, $keyword, $meta_title ?: $title, $meta_desc, $og_title ?: $meta_title ?: $title, $post_content );
         }
 
         // Also populate Yoast and RankMath if active (covers all SEO plugins)
@@ -661,32 +661,31 @@ final class SEOBetter {
     /**
      * Populate AIOSEO fields for a post.
      */
-    private function populate_aioseo( int $post_id, string $keyword, string $seo_title, string $meta_desc, string $og_title ): void {
+    private function populate_aioseo( int $post_id, string $keyword, string $seo_title, string $meta_desc, string $og_title, string $content = '' ): void {
         global $wpdb;
 
-        // Facebook Title (max 95 chars)
+        // Social meta
         $fb_title = mb_strlen( $og_title ) > 95 ? mb_substr( $og_title, 0, 92 ) . '...' : $og_title;
-        // Facebook Description (max 200 chars)
         $fb_desc = mb_strlen( $meta_desc ) > 200 ? mb_substr( $meta_desc, 0, 197 ) . '...' : $meta_desc;
-        // X Title (max 70 chars)
         $tw_title = mb_strlen( $og_title ) > 70 ? mb_substr( $og_title, 0, 67 ) . '...' : $og_title;
-        // X Description (max 200 chars)
         $tw_desc = mb_strlen( $meta_desc ) > 200 ? mb_substr( $meta_desc, 0, 197 ) . '...' : $meta_desc;
 
-        // Article Tags from keyword words + full keyword
+        // Article Tags
         $tags = array_filter( array_map( 'trim', explode( ' ', strtolower( $keyword ) ) ), fn( $t ) => strlen( $t ) > 2 );
         $tags[] = strtolower( $keyword );
         $tags = array_values( array_unique( $tags ) );
 
-        // Article Section from post category
         $categories = wp_get_post_categories( $post_id, [ 'fields' => 'names' ] );
         $article_section = ! empty( $categories ) ? $categories[0] : 'General';
 
-        // AIOSEO uses a custom table: {prefix}aioseo_posts
+        // --- Detect article type and build schema ---
+        $schema_type = $this->detect_schema_type( $seo_title, $content );
+        $schema_data = $this->build_aioseo_schema( $schema_type, $post_id, $seo_title, $content, $keyword );
+
+        // AIOSEO table
         $table = $wpdb->prefix . 'aioseo_posts';
 
         if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" ) !== $table ) {
-            // Fallback to post meta
             update_post_meta( $post_id, '_aioseo_title', $seo_title );
             update_post_meta( $post_id, '_aioseo_description', $meta_desc );
             update_post_meta( $post_id, '_aioseo_og_title', $fb_title );
@@ -702,27 +701,25 @@ final class SEOBetter {
 
         $data = [
             'post_id'              => $post_id,
-            // SEO
             'title'                => $seo_title,
             'description'          => $meta_desc,
             'keyphrases'           => wp_json_encode( [
                 'focus'      => [ 'keyphrase' => $keyword ],
                 'additional' => [],
             ] ),
-            // Facebook / Open Graph
             'og_title'             => $fb_title,
             'og_description'       => $fb_desc,
             'og_object_type'       => 'article',
             'og_image_type'        => 'featured',
             'og_article_section'   => $article_section,
             'og_article_tags'      => wp_json_encode( $tags ),
-            // X / Twitter
             'twitter_title'        => $tw_title,
             'twitter_description'  => $tw_desc,
             'twitter_card'         => 'summary_large_image',
             'twitter_image_type'   => 'featured',
             'twitter_use_og'       => 0,
-            // Timestamp
+            // Schema
+            'schema'               => wp_json_encode( $schema_data ),
             'updated'              => current_time( 'mysql' ),
         ];
 
@@ -732,6 +729,144 @@ final class SEOBetter {
             $data['created'] = current_time( 'mysql' );
             $wpdb->insert( $table, $data );
         }
+    }
+
+    /**
+     * Detect the schema type based on article title and content.
+     */
+    private function detect_schema_type( string $title, string $content ): string {
+        $title_lower = strtolower( $title );
+        $content_lower = strtolower( $content );
+
+        // How-to / Guide
+        if ( preg_match( '/\b(how to|step.by.step|tutorial|guide|instructions|diy)\b/i', $title_lower ) ) {
+            return 'howto';
+        }
+
+        // FAQ
+        if ( preg_match( '/\b(faq|frequently asked|questions and answers)\b/i', $title_lower ) ) {
+            return 'faq';
+        }
+
+        // Review / comparison
+        if ( preg_match( '/\b(review|vs\.?|versus|comparison|compared|best \d+|top \d+)\b/i', $title_lower ) ) {
+            return 'review';
+        }
+
+        // Product / buying guide
+        if ( preg_match( '/\b(buy|price|cost|cheap|affordable|shop|store|deal)\b/i', $title_lower ) ) {
+            return 'product';
+        }
+
+        // Check content for FAQ section (most articles have one)
+        if ( preg_match( '/frequently asked questions|<h[23][^>]*>.*\?/i', $content_lower ) ) {
+            return 'article_with_faq';
+        }
+
+        return 'article';
+    }
+
+    /**
+     * Build AIOSEO schema JSON based on detected type.
+     * AIOSEO stores schema as a JSON object in the `schema` column.
+     */
+    private function build_aioseo_schema( string $type, int $post_id, string $title, string $content, string $keyword ): array {
+        $post = get_post( $post_id );
+        $url = get_permalink( $post_id );
+        $author = get_userdata( $post ? $post->post_author : 0 );
+        $author_name = $author ? $author->display_name : 'Author';
+        $thumbnail = get_the_post_thumbnail_url( $post_id, 'full' );
+        $date_pub = $post ? get_the_date( 'c', $post ) : '';
+        $date_mod = $post ? get_the_modified_date( 'c', $post ) : '';
+
+        // Base Article schema (always present)
+        $schemas = [];
+
+        $article = [
+            '@type'            => 'Article',
+            'headline'         => $title,
+            'description'      => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
+            'datePublished'    => $date_pub,
+            'dateModified'     => $date_mod,
+            'author'           => [ '@type' => 'Person', 'name' => $author_name ],
+            'mainEntityOfPage' => $url,
+        ];
+        if ( $thumbnail ) {
+            $article['image'] = $thumbnail;
+        }
+        $schemas[] = $article;
+
+        // Extract FAQ Q&A pairs from content
+        $faq_pairs = [];
+        if ( in_array( $type, [ 'faq', 'article_with_faq', 'article', 'howto', 'review', 'product' ], true ) ) {
+            // Match H3 questions followed by paragraph answers
+            if ( preg_match_all( '/<h3[^>]*>(.*?\?)<\/h3>\s*(?:<!--[^>]*-->\s*)*<p[^>]*>(.*?)<\/p>/is', $content, $faq_matches, PREG_SET_ORDER ) ) {
+                foreach ( $faq_matches as $m ) {
+                    $q = wp_strip_all_tags( $m[1] );
+                    $a = wp_strip_all_tags( $m[2] );
+                    if ( strlen( $q ) > 5 && strlen( $a ) > 10 ) {
+                        $faq_pairs[] = [ 'question' => $q, 'answer' => $a ];
+                    }
+                }
+            }
+            // Also try markdown-style ### Question? patterns
+            if ( empty( $faq_pairs ) && preg_match_all( '/###\s*(.*?\?)\s*\n+([^\n#]+)/i', $content, $md_matches, PREG_SET_ORDER ) ) {
+                foreach ( $md_matches as $m ) {
+                    $q = trim( $m[1] );
+                    $a = trim( $m[2] );
+                    if ( strlen( $q ) > 5 && strlen( $a ) > 10 ) {
+                        $faq_pairs[] = [ 'question' => $q, 'answer' => $a ];
+                    }
+                }
+            }
+        }
+
+        // Add FAQPage schema if we found Q&A pairs
+        if ( ! empty( $faq_pairs ) ) {
+            $faq_items = [];
+            foreach ( array_slice( $faq_pairs, 0, 10 ) as $pair ) {
+                $faq_items[] = [
+                    '@type'          => 'Question',
+                    'name'           => $pair['question'],
+                    'acceptedAnswer' => [
+                        '@type' => 'Answer',
+                        'text'  => $pair['answer'],
+                    ],
+                ];
+            }
+            $schemas[] = [
+                '@type'      => 'FAQPage',
+                'mainEntity' => $faq_items,
+            ];
+        }
+
+        // Add HowTo schema if detected
+        if ( $type === 'howto' ) {
+            $steps = [];
+            if ( preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $content, $step_matches ) ) {
+                $step_num = 0;
+                foreach ( array_slice( $step_matches[1], 0, 10 ) as $step_text ) {
+                    $step_num++;
+                    $clean = wp_strip_all_tags( $step_text );
+                    if ( strlen( $clean ) > 5 ) {
+                        $steps[] = [
+                            '@type'    => 'HowToStep',
+                            'position' => $step_num,
+                            'text'     => $clean,
+                        ];
+                    }
+                }
+            }
+            if ( ! empty( $steps ) ) {
+                $schemas[] = [
+                    '@type' => 'HowTo',
+                    'name'  => $title,
+                    'step'  => $steps,
+                ];
+            }
+        }
+
+        return $schemas;
     }
 
     /**
