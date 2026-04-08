@@ -584,10 +584,14 @@ final class SEOBetter {
         $post_content = '';
 
         if ( ! empty( $markdown ) ) {
+            // Format as classic HTML with inline styles (same as preview)
+            // then wrap in <!-- wp:html --> block so WordPress preserves all styling
             $formatter = new SEOBetter\Content_Formatter();
-            $post_content = $formatter->format( $markdown, 'gutenberg', [
+            $styled_html = $formatter->format( $markdown, 'classic', [
                 'accent_color' => $accent,
             ] );
+            // Wrap in Custom HTML block — renders exactly as-is with all inline styles
+            $post_content = "<!-- wp:html -->\n" . $styled_html . "\n<!-- /wp:html -->";
         }
 
         // Fallback to raw content if gutenberg formatting produced nothing
