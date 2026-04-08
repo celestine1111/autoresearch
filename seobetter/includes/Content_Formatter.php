@@ -30,6 +30,10 @@ class Content_Formatter {
         // Parse markdown into structured sections
         $sections = $this->parse_markdown( $markdown );
 
+        if ( $mode === 'hybrid' ) {
+            return $this->format_hybrid( $sections, $options );
+        }
+
         if ( $mode === 'gutenberg' ) {
             return $this->format_gutenberg( $sections, $options );
         }
@@ -321,8 +325,144 @@ class Content_Formatter {
     }
 
     /**
-     * Format as styled HTML for Classic Editor (no Gutenberg blocks).
+     * Format as hybrid Gutenberg blocks.
+     *
+     * Uses native wp:heading, wp:paragraph, wp:list, wp:image, wp:separator
+     * for standard content (editable in the block editor), and wp:html blocks
+     * only for styled elements that need inline CSS (key takeaways, tables,
+     * blockquotes).
      */
+    public function format_hybrid( array $sections, array $options ): string {
+        $output = [];
+        $accent = $options['accent_color'] ?? '#764ba2';
+
+        foreach ( $sections as $i => $section ) {
+            switch ( $section['type'] ) {
+
+                case 'heading':
+                    $level = $section['level'];
+                    $text = $section['content'];
+
+                    if ( $level === 2 ) {
+                        $output[] = '<!-- wp:heading -->';
+                        $output[] = "<h2 class=\"wp-block-heading\">{$text}</h2>";
+                        $output[] = '<!-- /wp:heading -->';
+                    } elseif ( $level === 1 ) {
+                        $output[] = '<!-- wp:heading {"level":1} -->';
+                        $output[] = "<h1 class=\"wp-block-heading\">{$text}</h1>";
+                        $output[] = '<!-- /wp:heading -->';
+                    } else {
+                        $output[] = "<!-- wp:heading {\"level\":{$level}} -->";
+                        $output[] = "<h{$level} class=\"wp-block-heading\">{$text}</h{$level}>";
+                        $output[] = '<!-- /wp:heading -->';
+                    }
+                    break;
+
+                case 'paragraph':
+                    $text = $this->inline_markdown( $section['content'] );
+                    if ( empty( trim( $text ) ) ) continue 2;
+
+                    if ( preg_match( '/^last\s*updated/i', strip_tags( $text ) ) ) {
+                        $output[] = '<!-- wp:paragraph {"fontSize":"small"} -->';
+                        $output[] = "<p class=\"has-small-font-size\"><em>{$text}</em></p>";
+                        $output[] = '<!-- /wp:paragraph -->';
+                    } else {
+                        $output[] = '<!-- wp:paragraph -->';
+                        $output[] = "<p>{$text}</p>";
+                        $output[] = '<!-- /wp:paragraph -->';
+                    }
+                    break;
+
+                case 'list':
+                    $tag = $section['list_type'];
+
+                    // Check if this follows a Key Takeaways heading — use styled wp:html
+                    $prev_heading = '';
+                    for ( $j = $i - 1; $j >= 0; $j-- ) {
+                        if ( $sections[ $j ]['type'] === 'heading' ) {
+                            $prev_heading = $sections[ $j ]['content'];
+                            break;
+                        }
+                        if ( $sections[ $j ]['type'] === 'paragraph' && ! empty( trim( $sections[ $j ]['content'] ) ) ) break;
+                    }
+
+                    $is_takeaways = preg_match( '/key\s*takeaway/i', $prev_heading );
+                    if ( $is_takeaways ) {
+                        // Styled key takeaways — wp:html to preserve styling
+                        $html = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0">';
+                        $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151\">";
+                        foreach ( $section['items'] as $item ) {
+                            $html .= "<li style=\"margin-bottom:0.5em\">{$item}</li>";
+                        }
+                        $html .= "</{$tag}></div>";
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    } else {
+                        // Standard list — native Gutenberg block
+                        $items_html = '';
+                        foreach ( $section['items'] as $item ) {
+                            $items_html .= "<li>{$item}</li>";
+                        }
+                        if ( $tag === 'ol' ) {
+                            $output[] = '<!-- wp:list {"ordered":true} -->';
+                            $output[] = "<ol>{$items_html}</ol>";
+                        } else {
+                            $output[] = '<!-- wp:list -->';
+                            $output[] = "<ul>{$items_html}</ul>";
+                        }
+                        $output[] = '<!-- /wp:list -->';
+                    }
+                    break;
+
+                case 'quote':
+                    // Styled blockquote — wp:html to preserve styling
+                    $text = $this->inline_markdown( $section['content'] );
+                    $html = "<blockquote style=\"border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563;line-height:1.7\"><p style=\"margin:0\">{$text}</p></blockquote>";
+                    $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    break;
+
+                case 'table':
+                    // Styled table — wp:html to preserve styling
+                    $rows = $section['rows'];
+                    if ( empty( $rows ) ) continue 2;
+
+                    $html = '<div style="overflow-x:auto;margin:1.5em 0">';
+                    $html .= '<table style="width:100%;border-collapse:collapse;font-size:0.95em;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">';
+                    $html .= '<thead><tr>';
+                    foreach ( $rows[0] as $cell ) {
+                        $html .= '<th style="background:' . $accent . ';color:#ffffff;padding:0.75em 1em;text-align:left;font-weight:600;font-size:0.9em;text-transform:uppercase;letter-spacing:0.05em">' . $this->inline_markdown( $cell ) . '</th>';
+                    }
+                    $html .= '</tr></thead><tbody>';
+                    for ( $r = 1; $r < count( $rows ); $r++ ) {
+                        $bg = ( $r % 2 === 0 ) ? 'background:#f9fafb;' : '';
+                        $html .= '<tr>';
+                        foreach ( $rows[ $r ] as $cell ) {
+                            $html .= '<td style="padding:0.75em 1em;border-bottom:1px solid #e5e7eb;color:#374151;' . $bg . '">' . $this->inline_markdown( $cell ) . '</td>';
+                        }
+                        $html .= '</tr>';
+                    }
+                    $html .= '</tbody></table></div>';
+                    $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    break;
+
+                case 'separator':
+                    $output[] = '<!-- wp:separator -->';
+                    $output[] = '<hr class="wp-block-separator has-alpha-channel-opacity"/>';
+                    $output[] = '<!-- /wp:separator -->';
+                    break;
+
+                case 'image':
+                    $alt = esc_attr( $section['alt'] );
+                    $url = esc_url( $section['url'] );
+                    $output[] = '<!-- wp:image {"sizeSlug":"large"} -->';
+                    $output[] = "<figure class=\"wp-block-image size-large\"><img src=\"{$url}\" alt=\"{$alt}\"/></figure>";
+                    $output[] = '<!-- /wp:image -->';
+                    break;
+            }
+        }
+
+        return implode( "\n\n", $output );
+    }
+
     /**
      * Format as styled HTML with inline styles.
      * Reference: seo-guidelines/article_design.md

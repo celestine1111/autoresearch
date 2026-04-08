@@ -878,10 +878,14 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
         };
 
         h += '<div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">';
-        h += '<select id="seobetter-post-type" style="height:44px;padding:0 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px">';
-        h += '<option value="post">Save as Post</option>';
-        h += '<option value="page">Save as Page</option>';
+        h += '<span style="font-size:13px;color:#6b7280">Save as</span>';
+        h += '<div style="position:relative;display:inline-block">';
+        h += '<select id="seobetter-post-type" style="height:40px;padding:0 32px 0 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;color:#374151;background:#fff;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none;min-width:100px">';
+        h += '<option value="post">Post</option>';
+        h += '<option value="page">Page</option>';
         h += '</select>';
+        h += '<svg style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;width:14px;height:14px;color:#6b7280" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>';
+        h += '</div>';
         h += '<button type="button" id="seobetter-save-draft-btn" class="button sb-btn-primary" style="height:44px">Save Draft</button>';
         h += '<span id="seobetter-save-status" style="font-size:13px;color:#888"></span>';
         h += '</div></div>';

@@ -584,14 +584,12 @@ final class SEOBetter {
         $post_content = '';
 
         if ( ! empty( $markdown ) ) {
-            // Format as classic HTML with inline styles (same as preview)
-            // then wrap in <!-- wp:html --> block so WordPress preserves all styling
+            // Hybrid format: native Gutenberg blocks for standard content (editable),
+            // wp:html blocks only for styled elements (key takeaways, tables, blockquotes)
             $formatter = new SEOBetter\Content_Formatter();
-            $styled_html = $formatter->format( $markdown, 'classic', [
+            $post_content = $formatter->format( $markdown, 'hybrid', [
                 'accent_color' => $accent,
             ] );
-            // Wrap in Custom HTML block — renders exactly as-is with all inline styles
-            $post_content = "<!-- wp:html -->\n" . $styled_html . "\n<!-- /wp:html -->";
         }
 
         // Fallback to raw content if gutenberg formatting produced nothing
