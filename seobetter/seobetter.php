@@ -587,7 +587,7 @@ final class SEOBetter {
             'post_title'   => $title,
             'post_content' => $post_content,
             'post_status'  => 'draft',
-            'post_type'    => 'post',
+            'post_type'    => sanitize_text_field( $request->get_param( 'post_type' ) ?? 'post' ),
         ] );
 
         if ( is_wp_error( $post_id ) ) {

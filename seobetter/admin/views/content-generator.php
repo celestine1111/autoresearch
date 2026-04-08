@@ -877,8 +877,12 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             og_title: (res.meta && res.meta.og_title) || bestTitle || ''
         };
 
-        h += '<div style="margin-top:16px;display:flex;gap:12px;align-items:center">';
-        h += '<button type="button" id="seobetter-save-draft-btn" class="button sb-btn-primary" style="height:44px">Save as WordPress Draft</button>';
+        h += '<div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">';
+        h += '<select id="seobetter-post-type" style="height:44px;padding:0 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px">';
+        h += '<option value="post">Save as Post</option>';
+        h += '<option value="page">Save as Page</option>';
+        h += '</select>';
+        h += '<button type="button" id="seobetter-save-draft-btn" class="button sb-btn-primary" style="height:44px">Save Draft</button>';
         h += '<span id="seobetter-save-status" style="font-size:13px;color:#888"></span>';
         h += '</div></div>';
 
@@ -904,6 +908,10 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             // Use the selected headline if user picked one
             var selectedHL = document.querySelector('[name="async_headline"]:checked');
             if (selectedHL) draft.title = selectedHL.value;
+
+            // Get selected post type
+            var postTypeSelect = document.getElementById('seobetter-post-type');
+            draft.post_type = postTypeSelect ? postTypeSelect.value : 'post';
 
             api('save-draft', 'POST', draft).then(function(r) {
                 if (r.success) {
