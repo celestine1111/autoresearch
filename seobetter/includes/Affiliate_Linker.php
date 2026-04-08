@@ -20,7 +20,11 @@ class Affiliate_Linker {
      * Check if ThirstyAffiliates is active.
      */
     public static function is_thirstyaffiliates_active(): bool {
-        return post_type_exists( 'thirstylink' );
+        if ( ! function_exists( 'is_plugin_active' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        return is_plugin_active( 'thirstyaffiliates/ThirstyAffiliates.php' )
+            || is_plugin_active( 'thirstyaffiliates-pro/ThirstyAffiliates.php' );
     }
 
     /**
@@ -75,6 +79,12 @@ class Affiliate_Linker {
             $name = $aff['name'] ?? $keyword;
 
             if ( empty( $keyword ) || empty( $url ) ) {
+                continue;
+            }
+
+            // Validate URL scheme — only allow http/https
+            $parsed = wp_parse_url( $url );
+            if ( ! isset( $parsed['scheme'] ) || ! in_array( $parsed['scheme'], [ 'http', 'https' ], true ) ) {
                 continue;
             }
 
@@ -180,7 +190,7 @@ BLOCK;
         $text = esc_html( $this->cta_text( $name ) );
         $esc_url = esc_url( $url );
 
-        return '<div style="margin:20px 0"><a href="' . $esc_url . '" rel="nofollow sponsored" target="_blank" style="display:inline-block;padding:14px 28px;background:' . $accent . ';color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:15px">' . $text . '</a></div>';
+        return '<div style="margin:1.25em 0"><a href="' . $esc_url . '" rel="nofollow sponsored" target="_blank" style="display:inline-block;padding:0.875em 1.75em;background:' . $accent . ';color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;font-size:0.95em;box-shadow:0 2px 4px rgba(0,0,0,0.15)">' . $text . '</a></div>';
     }
 
     /**

@@ -38,6 +38,11 @@ class Image_SEO_Analyzer {
         }
 
         $issues = [];
+        // Limit analysis to first 50 images to prevent performance issues
+        $max_analyze = 50;
+        $truncated = count( $images ) > $max_analyze;
+        $images_to_check = array_slice( $images, 0, $max_analyze );
+
         $checks = [
             'missing_alt'        => 0,
             'empty_alt'          => 0,
@@ -49,8 +54,15 @@ class Image_SEO_Analyzer {
             'total'              => count( $images ),
         ];
 
-        foreach ( $images as $img ) {
+        foreach ( $images_to_check as $img ) {
             $this->check_single_image( $img, $checks, $issues );
+        }
+
+        if ( $truncated ) {
+            $issues[] = [
+                'type'    => 'analysis_limit',
+                'message' => sprintf( 'Only first %d of %d images analyzed. Consider optimizing images across the full page.', $max_analyze, count( $images ) ),
+            ];
         }
 
         // Check featured image

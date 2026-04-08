@@ -103,6 +103,7 @@ class Stock_Image_Inserter {
         // The sig parameter ensures different images for different sections
         $sig = md5( $keyword . $heading . $index );
 
+        // Use Unsplash source URL directly (no blocking HTTP check during generation)
         $url = 'https://source.unsplash.com/' . self::IMAGE_WIDTH . 'x' . self::IMAGE_HEIGHT . '/?' . urlencode( $search );
 
         return $url;
@@ -146,6 +147,6 @@ BLOCK;
         $w = self::IMAGE_WIDTH;
         $h = self::IMAGE_HEIGHT;
 
-        return '<figure style="margin:1.5em 0;text-align:center"><img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" width="' . $w . '" height="' . $h . '" loading="lazy" decoding="async" style="max-width:100%;height:auto;border-radius:8px" /></figure>';
+        return '<figure style="margin:1.5em 0;text-align:center"><img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" width="' . $w . '" height="' . $h . '" loading="lazy" decoding="async" style="max-width:100%;height:auto;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)" /></figure>';
     }
 }

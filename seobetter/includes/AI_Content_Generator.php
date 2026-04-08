@@ -106,15 +106,18 @@ class AI_Content_Generator {
         $context = $article_text ? "\n\nArticle summary: " . substr( $article_text, 0, 300 ) : '';
         $prompt = "Generate exactly 5 headline variations for an article about: \"{$keyword}\"{$context}
 
+CRITICAL RULE: Every single headline MUST contain the exact phrase \"{$keyword}\" — no exceptions. If the keyword is multiple words, include ALL words.
+
 Rules:
 1. Each headline must be 50-60 characters (for full SERP display)
-2. Front-load the primary keyword in at least 3 of the 5
-3. Use different headline formulas:
-   - #1: Number + Keyword + Benefit (e.g., \"7 Best [Keyword] for [Outcome] in 2026\")
-   - #2: How-to + Keyword (e.g., \"How to Choose [Keyword]: Expert Guide\")
-   - #3: Question format (e.g., \"What Are the Best [Keyword]? Complete Guide\")
-   - #4: Keyword + Power words (e.g., \"[Keyword]: Essential Guide You Need\")
-   - #5: Current year + Keyword (e.g., \"[Keyword] in 2026: What You Must Know\")
+2. The keyword \"{$keyword}\" must appear in ALL 5 headlines
+3. Front-load the keyword (put it in the first half of the headline) in at least 3 of 5
+4. Use different headline formulas:
+   - #1: Number + \"{$keyword}\" + Benefit (e.g., \"7 Best {$keyword} for [Outcome] in 2026\")
+   - #2: How-to + \"{$keyword}\" (e.g., \"How to Choose {$keyword}: Expert Guide\")
+   - #3: Question + \"{$keyword}\" (e.g., \"What Are the Best {$keyword}? Guide\")
+   - #4: \"{$keyword}\" + Power words (e.g., \"{$keyword}: Essential Guide You Need\")
+   - #5: \"{$keyword}\" + Current year (e.g., \"{$keyword} in 2026: What You Must Know\")
 
 Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
 
@@ -129,7 +132,24 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
         foreach ( $lines as $line ) {
             $line = trim( $line );
             if ( preg_match( '/^\d+[\.\)]\s*(.+)$/', $line, $m ) ) {
-                $headlines[] = trim( $m[1], '"\'*' );
+                $hl = trim( $m[1], '"\'*' );
+                // Only keep headlines that contain the keyword
+                if ( stripos( $hl, $keyword ) !== false ) {
+                    $headlines[] = $hl;
+                }
+            }
+        }
+
+        // If filtering removed too many, add keyword-prefixed fallbacks
+        if ( count( $headlines ) < 3 ) {
+            $fallbacks = [
+                ucwords( $keyword ) . ': Complete Guide for ' . wp_date( 'Y' ),
+                'Best ' . ucwords( $keyword ) . ' — Expert Review ' . wp_date( 'Y' ),
+                'How to Choose ' . ucwords( $keyword ) . ': Buyer\'s Guide',
+            ];
+            foreach ( $fallbacks as $fb ) {
+                if ( count( $headlines ) >= 5 ) break;
+                $headlines[] = $fb;
             }
         }
 
@@ -309,18 +329,13 @@ Use the article's statistics, expert quotes, and key facts. Make each piece stan
      * Fetch recent trends for a keyword to inject fresh data into articles.
      * Based on last30days skill.
      */
+    /**
+     * Fetch recent trends for a keyword.
+     * Uses Last30Days real web research if available, otherwise AI fallback.
+     */
     public function fetch_recent_trends( string $keyword ): string {
-        $prompt = "Research the most recent developments, statistics, and news about \"{$keyword}\" from the last 30 days (as of " . wp_date( 'F Y' ) . ").
-
-Return 3-5 recent data points in this format:
-- [Specific fact or statistic] (Source Name, " . wp_date( 'Y' ) . ")
-
-These will be injected into an article to make it current and timely.
-Only include verifiable facts from real sources. If you're unsure about recency, include the most recent stats you know with their actual year.";
-
-        $result = $this->send_ai_request( $prompt, 'You are a research assistant providing the most recent, verifiable data points.', [ 'max_tokens' => 500 ] );
-
-        return $result['success'] ? $result['content'] : '';
+        $research = Trend_Researcher::research( $keyword );
+        return $research['for_prompt'] ?? '';
     }
 
     private function score_meta_title( string $title, string $keyword ): int {
@@ -352,7 +367,7 @@ Only include verifiable facts from real sources. If you're unsure about recency,
     /**
      * Single-request generation for short articles.
      */
-    private function generate_single( string $keyword, int $word_count, string $tone, string $audience, string $domain, array $secondary, array $lsi, string $system, string $trends = '' ): string {
+    private function generate_single( string $keyword, int $word_count, string $tone, string $audience, string $domain, array $secondary, array $lsi, string $system, string $trends = '' ): string|array {
         $prompt = $this->build_user_prompt( $keyword, $word_count, $tone, $audience, $domain, $secondary, $lsi );
         if ( $trends ) {
             $prompt .= "\n\nRECENT DATA TO INCLUDE (integrate naturally as statistics/citations):\n{$trends}";
@@ -371,7 +386,7 @@ Only include verifiable facts from real sources. If you're unsure about recency,
      * Step 2: Generate each section individually (~400-600 words each)
      * Step 3: Combine into a full article
      */
-    private function generate_chained( string $keyword, int $word_count, string $tone, string $audience, string $domain, array $secondary, array $lsi, string $system, string $trends = '' ): string {
+    private function generate_chained( string $keyword, int $word_count, string $tone, string $audience, string $domain, array $secondary, array $lsi, string $system, string $trends = '' ): string|array {
         $date = wp_date( 'F Y' );
         $kw_context = '';
         if ( ! empty( $secondary ) ) {
@@ -542,42 +557,44 @@ Format as clean Markdown.";
      */
     private function build_system_prompt(): string {
         return <<<'PROMPT'
-You are an expert SEO content writer trained in Generative Engine Optimization (GEO). You write articles that maximize visibility across Google AI Overviews, SearchGPT, Perplexity, Gemini, and Claude.
+You are an expert SEO content writer. Follow these rules exactly:
 
-## MANDATORY RULES (Article Protocol v2026.4)
+## READABILITY (MOST IMPORTANT)
+- Write at a 6th-8th GRADE reading level
+- Use SHORT sentences (under 20 words each)
+- Use SIMPLE, everyday words (use "buy" not "purchase", "help" not "facilitate")
+- A smart 12-year-old should understand every sentence
+- No academic jargon, no complex vocabulary
 
-### Structure — Chunk-First Model
-1. Start with `## Key Takeaways` containing exactly 3 bullet points summarizing the core answer
-2. Every H2/H3 section MUST begin with a 40-60 word paragraph that directly answers the heading
-3. This opening paragraph must function as a standalone answer if extracted by an AI model
+## WORD COUNT
+- Always write the FULL number of words requested
+- If asked for 400 words per section, write at least 400
+- Being too short is a failure — write more, not less
 
-### Island Test (Context Independence)
+## STRUCTURE
+- Start with ## Key Takeaways (3 bullet points)
+- Every H2/H3 section starts with a 40-60 word paragraph answering the heading
 - NEVER start paragraphs with pronouns (It, This, They, These, Those)
-- Always use specific entity names instead
-- Every paragraph must be semantically complete in isolation
 
-### Factual Density & Evidence (E-E-A-T)
-- Include 3+ verifiable statistics per 1,000 words with parenthetical attribution and year
-- Include 2+ direct expert quotes from credentialed sources
-- Include 5+ inline citations in [Source, Year] format
-- Add at least 1 comparison table using Markdown
+## EVIDENCE
+- 3+ statistics per 1,000 words with (Source Name, Year)
+- 2+ expert quotes: "Quote" — Dr. Name, Title (Source, Year)
+- 5+ inline citations in [Source, Year] format
+- At least 1 comparison table in Markdown
 
-### Formatting Signals
-- Use Markdown tables for comparisons, pricing, specs (LLMs cite tables 30-40% more)
-- Use numbered lists for procedures, bullet lists for features
-- Use **Bold** for primary entities, tools, and key concepts
-- No filler phrases like "In this section, we will explore..."
+## FORMAT
+- GitHub Flavored Markdown
+- **Bold** for key terms
+- Tables for comparisons
+- Bullet/numbered lists
+- "Last Updated: [Month Year]" at top
+- FAQ section with 3-5 Q&A pairs
+- References section at end
 
-### Technical
-- Output in GitHub Flavored Markdown (GFM)
-- Include `Last Updated: [Current Month Year]` at the top
-- End with a References section linking cited sources
-- Generate FAQPage-style Q&A (3-5 questions) near the end
-
-### BLOCKED — Research proves these HURT visibility:
-- Keyword stuffing (-8% visibility)
-- Vague/creative titles (use semantically precise titles)
+## BLOCKED (hurts visibility)
+- Keyword stuffing (-8%)
 - Starting paragraphs with pronouns
+- Complex academic language
 PROMPT;
     }
 

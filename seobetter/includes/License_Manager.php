@@ -81,6 +81,12 @@ class License_Manager {
         'internal_link_suggestions',
         'unlimited_ai_providers',
         'bulk_content_generation',
+        'citation_tracker',
+        'content_refresh',
+        'content_brief',
+        'content_export',
+        'decay_alerts',
+        'white_label',
         'ahrefs_integration',
         'gsc_integration',
         'ga_integration',
@@ -250,9 +256,16 @@ class License_Manager {
         ] );
 
         if ( is_wp_error( $response ) ) {
-            // Network error — use cached status if available
+            // Network error — use cached status with 48-hour grace period
             $cached = get_option( self::OPTION_KEY, [] );
-            return (bool) ( $cached['is_active'] ?? false );
+            $grace_period = 2 * DAY_IN_SECONDS;
+            $last_validated = $cached['valid_until'] ?? 0;
+
+            // If within grace period, trust cached status; otherwise fall back to free
+            if ( time() < ( $last_validated + $grace_period ) ) {
+                return (bool) ( $cached['is_active'] ?? false );
+            }
+            return false;
         }
 
         $body = json_decode( wp_remote_retrieve_body( $response ), true );

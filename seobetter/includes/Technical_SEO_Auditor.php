@@ -432,16 +432,30 @@ class Technical_SEO_Auditor {
 
     private function check_site_depth(): array {
         // Count pages that are deeply nested (>3 levels in URL)
-        $pages = get_posts( [ 'post_type' => [ 'post', 'page' ], 'post_status' => 'publish', 'posts_per_page' => -1, 'fields' => 'ids' ] );
-
+        // Use batched queries to avoid memory issues on large sites
         $deep_pages = 0;
-        foreach ( $pages as $page_id ) {
-            $path = wp_parse_url( get_permalink( $page_id ), PHP_URL_PATH );
-            $depth = substr_count( trim( $path, '/' ), '/' );
-            if ( $depth > 3 ) {
-                $deep_pages++;
+        $page = 1;
+        $per_page = 200;
+
+        do {
+            $pages = get_posts( [
+                'post_type'      => [ 'post', 'page' ],
+                'post_status'    => 'publish',
+                'posts_per_page' => $per_page,
+                'paged'          => $page,
+                'fields'         => 'ids',
+            ] );
+
+            foreach ( $pages as $page_id ) {
+                $path = wp_parse_url( get_permalink( $page_id ), PHP_URL_PATH );
+                $depth = substr_count( trim( $path, '/' ), '/' );
+                if ( $depth > 3 ) {
+                    $deep_pages++;
+                }
             }
-        }
+
+            $page++;
+        } while ( count( $pages ) === $per_page );
 
         $pass = $deep_pages === 0;
         return [
@@ -473,53 +487,68 @@ class Technical_SEO_Auditor {
     }
 
     private function check_missing_meta_descriptions(): array {
-        $posts = get_posts( [
-            'post_type'      => [ 'post', 'page' ],
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-            'fields'         => 'ids',
-        ] );
+        global $wpdb;
 
-        $missing = 0;
-        foreach ( $posts as $pid ) {
-            $desc = get_post_meta( $pid, '_seobetter_meta_description', true )
-                 ?: get_post_meta( $pid, '_yoast_wpseo_metadesc', true )
-                 ?: get_post_meta( $pid, 'rank_math_description', true );
-            if ( ! $desc ) {
-                $missing++;
-            }
-        }
+        // Use a single SQL query instead of loading all posts + meta in a loop
+        $total_published = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+            WHERE post_status = 'publish' AND post_type IN ('post','page')"
+        );
 
-        $pass = $missing === 0;
+        $has_meta = (int) $wpdb->get_var(
+            "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
+            INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+            WHERE p.post_status = 'publish' AND p.post_type IN ('post','page')
+            AND pm.meta_key IN ('_seobetter_meta_description','_yoast_wpseo_metadesc','rank_math_description')
+            AND pm.meta_value != ''"
+        );
+
+        $missing = $total_published - $has_meta;
+        $pass = $missing <= 0;
         return [
             'pass'   => $pass,
             'detail' => $pass
                 ? 'All published pages have meta descriptions'
                 : "{$missing} pages missing meta descriptions.",
-            'missing_count' => $missing,
+            'missing_count' => max( 0, $missing ),
         ];
     }
 
     private function check_orphan_pages(): array {
         global $wpdb;
 
-        $published = $wpdb->get_col(
-            "SELECT ID FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ('post','page')"
+        // Use batched processing to avoid loading all posts + N+1 queries
+        $total_published = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ('post','page')"
         );
 
-        // Find pages with no internal links pointing to them
-        $orphans = 0;
-        foreach ( $published as $pid ) {
-            $url = get_permalink( $pid );
-            $path = wp_parse_url( $url, PHP_URL_PATH );
+        // For very large sites, skip this expensive check and advise manual review
+        if ( $total_published > 500 ) {
+            return [
+                'pass'         => true,
+                'detail'       => "Site has {$total_published} pages — orphan detection skipped for performance. Use a dedicated crawl tool (Screaming Frog, Sitebulb) for orphan page analysis.",
+                'orphan_count' => 0,
+            ];
+        }
 
-            // Check if any other published post links to this page
+        $published = $wpdb->get_results(
+            "SELECT ID, post_name FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ('post','page')",
+            OBJECT
+        );
+
+        $orphans = 0;
+        foreach ( $published as $post_row ) {
+            $slug = $post_row->post_name;
+            if ( empty( $slug ) ) {
+                continue;
+            }
+
             $linked = $wpdb->get_var( $wpdb->prepare(
                 "SELECT COUNT(*) FROM {$wpdb->posts}
                 WHERE post_status = 'publish' AND post_type IN ('post','page')
                 AND ID != %d AND post_content LIKE %s",
-                $pid,
-                '%' . $wpdb->esc_like( $path ) . '%'
+                $post_row->ID,
+                '%' . $wpdb->esc_like( $slug ) . '%'
             ) );
 
             if ( (int) $linked === 0 ) {
@@ -527,7 +556,7 @@ class Technical_SEO_Auditor {
             }
         }
 
-        $pass = $orphans <= 2; // Allow a couple (homepage, etc.)
+        $pass = $orphans <= 2;
         return [
             'pass'   => $pass,
             'detail' => $orphans > 0

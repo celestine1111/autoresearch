@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.0.0' );
+define( 'SEOBETTER_VERSION', '1.1.0' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -70,7 +70,14 @@ final class SEOBetter {
         add_action( 'init', [ $this, 'register_llms_txt_rewrite' ] );
         add_action( 'template_redirect', [ $this, 'serve_llms_txt' ] );
 
+        // Content decay alerts cron
+        add_action( 'seobetter_decay_check', [ $this, 'run_decay_check' ] );
+
+        // Export handler
+        add_action( 'admin_init', [ $this, 'handle_export' ] );
+
         register_activation_hook( __FILE__, [ $this, 'activate' ] );
+        register_deactivation_hook( __FILE__, [ $this, 'deactivate' ] );
     }
 
     public function load_textdomain(): void {
@@ -91,6 +98,11 @@ final class SEOBetter {
             add_option( 'seobetter_settings', $defaults );
         }
         flush_rewrite_rules();
+        SEOBetter\Decay_Alert_Manager::schedule();
+    }
+
+    public function deactivate(): void {
+        SEOBetter\Decay_Alert_Manager::unschedule();
     }
 
     public function register_admin_menu(): void {
@@ -104,6 +116,11 @@ final class SEOBetter {
             30
         );
         add_submenu_page( 'seobetter', __( 'Content Generator', 'seobetter' ), __( 'Generate Content', 'seobetter' ), 'edit_posts', 'seobetter-generate', [ $this, 'render_content_generator' ] );
+        add_submenu_page( 'seobetter', __( 'Bulk Generate', 'seobetter' ), __( 'Bulk Generate', 'seobetter' ), 'edit_posts', 'seobetter-bulk', [ $this, 'render_bulk_generator' ] );
+        add_submenu_page( 'seobetter', __( 'Content Brief', 'seobetter' ), __( 'Content Brief', 'seobetter' ), 'edit_posts', 'seobetter-brief', [ $this, 'render_content_brief' ] );
+        add_submenu_page( 'seobetter', __( 'Citation Tracker', 'seobetter' ), __( 'Citation Tracker', 'seobetter' ), 'edit_posts', 'seobetter-citations', [ $this, 'render_citation_tracker' ] );
+        add_submenu_page( 'seobetter', __( 'Link Suggestions', 'seobetter' ), __( 'Link Suggestions', 'seobetter' ), 'edit_posts', 'seobetter-links', [ $this, 'render_link_suggestions' ] );
+        add_submenu_page( 'seobetter', __( 'Cannibalization', 'seobetter' ), __( 'Cannibalization', 'seobetter' ), 'edit_posts', 'seobetter-cannibalization', [ $this, 'render_cannibalization' ] );
         add_submenu_page( 'seobetter', __( 'Settings', 'seobetter' ), __( 'Settings', 'seobetter' ), 'manage_options', 'seobetter-settings', [ $this, 'render_settings' ] );
     }
 
@@ -135,12 +152,78 @@ final class SEOBetter {
         require_once SEOBETTER_PLUGIN_DIR . 'admin/views/checklist.php';
     }
 
+    public function render_bulk_generator(): void {
+        require_once SEOBETTER_PLUGIN_DIR . 'admin/views/bulk-generator.php';
+    }
+
+    public function render_content_brief(): void {
+        require_once SEOBETTER_PLUGIN_DIR . 'admin/views/content-brief.php';
+    }
+
+    public function render_citation_tracker(): void {
+        require_once SEOBETTER_PLUGIN_DIR . 'admin/views/citation-tracker.php';
+    }
+
+    public function render_link_suggestions(): void {
+        require_once SEOBETTER_PLUGIN_DIR . 'admin/views/link-suggestions.php';
+    }
+
+    public function render_cannibalization(): void {
+        require_once SEOBETTER_PLUGIN_DIR . 'admin/views/cannibalization.php';
+    }
+
+    public function run_decay_check(): void {
+        $manager = new SEOBetter\Decay_Alert_Manager();
+        $manager->run_check();
+    }
+
+    public function handle_export(): void {
+        if ( ! isset( $_GET['seobetter_export'] ) || ! current_user_can( 'edit_posts' ) ) {
+            return;
+        }
+        check_admin_referer( 'seobetter_export' );
+
+        $format = sanitize_text_field( $_GET['format'] ?? 'html' );
+        $content = wp_unslash( $_POST['export_content'] ?? '' );
+        $markdown = wp_unslash( $_POST['export_markdown'] ?? '' );
+        $title = sanitize_text_field( $_POST['export_title'] ?? 'article' );
+        $keyword = sanitize_text_field( $_POST['export_keyword'] ?? '' );
+        $slug = sanitize_title( $keyword ?: $title );
+
+        switch ( $format ) {
+            case 'markdown':
+                SEOBetter\Content_Exporter::serve_download(
+                    SEOBetter\Content_Exporter::export_markdown( $markdown, $keyword ),
+                    "{$slug}.md",
+                    'text/markdown'
+                );
+                break;
+            case 'text':
+                SEOBetter\Content_Exporter::serve_download(
+                    SEOBetter\Content_Exporter::export_text( $content, $title, $keyword ),
+                    "{$slug}.txt",
+                    'text/plain'
+                );
+                break;
+            default:
+                SEOBetter\Content_Exporter::serve_download(
+                    SEOBetter\Content_Exporter::export_html( $content, $title, $keyword ),
+                    "{$slug}.html",
+                    'text/html'
+                );
+        }
+    }
+
     public function enqueue_admin_assets( string $hook ): void {
         if ( strpos( $hook, 'seobetter' ) === false ) {
             return;
         }
         wp_enqueue_style( 'seobetter-admin', SEOBETTER_PLUGIN_URL . 'admin/css/admin.css', [], SEOBETTER_VERSION );
         wp_enqueue_script( 'seobetter-admin', SEOBETTER_PLUGIN_URL . 'admin/js/admin.js', [ 'jquery' ], SEOBETTER_VERSION, true );
+        wp_localize_script( 'seobetter-admin', 'wpApiSettings', [
+            'root'  => esc_url_raw( rest_url() ),
+            'nonce' => wp_create_nonce( 'wp_rest' ),
+        ] );
     }
 
     public function enqueue_editor_assets(): void {
@@ -194,13 +277,20 @@ final class SEOBetter {
         }
 
         try {
-            $analyzer = new SEOBetter\GEO_Analyzer();
-            $score = $analyzer->analyze( $post->post_content, $post->post_title );
-            update_post_meta( $post_id, '_seobetter_geo_score', $score );
+            // Check content hash to skip re-analysis if unchanged
+            $content_hash = md5( $post->post_content . $post->post_title );
+            $cached_hash = get_post_meta( $post_id, '_seobetter_content_hash', true );
 
-            $schema_gen = new SEOBetter\Schema_Generator();
-            $schema = $schema_gen->generate( $post );
-            update_post_meta( $post_id, '_seobetter_schema', wp_json_encode( $schema ) );
+            if ( $content_hash !== $cached_hash ) {
+                $analyzer = new SEOBetter\GEO_Analyzer();
+                $score = $analyzer->analyze( $post->post_content, $post->post_title );
+                update_post_meta( $post_id, '_seobetter_geo_score', $score );
+                update_post_meta( $post_id, '_seobetter_content_hash', $content_hash );
+
+                $schema_gen = new SEOBetter\Schema_Generator();
+                $schema = $schema_gen->generate( $post );
+                update_post_meta( $post_id, '_seobetter_schema', wp_json_encode( $schema ) );
+            }
         } catch ( \Throwable $e ) {
             // Silently fail — don't break post saving
         }
@@ -242,9 +332,98 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
+        register_rest_route( 'seobetter/v1', '/citation-check/(?P<post_id>\d+)', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_citation_check' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/link-suggestions/(?P<post_id>\d+)', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_link_suggestions' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/cannibalization', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_cannibalization' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/bulk-process/(?P<batch_id>\d+)', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_bulk_process' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/refresh/(?P<post_id>\d+)', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_refresh_post' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/generate/start', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_generate_start' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/generate/step', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_generate_step' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/generate/result', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_generate_result' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/generate/estimate', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_generate_estimate' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/save-draft', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_draft' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+    }
+
+    /**
+     * Check REST API rate limit (50 requests/hour per user).
+     */
+    private function check_rate_limit( string $action ): ?\WP_REST_Response {
+        $user_id = get_current_user_id();
+        $key = "seobetter_rate_{$action}_{$user_id}";
+        $count = (int) get_transient( $key );
+
+        if ( $count >= 50 ) {
+            return new \WP_REST_Response( [ 'error' => 'Rate limit exceeded. Try again later.' ], 429 );
+        }
+
+        set_transient( $key, $count + 1, HOUR_IN_SECONDS );
+        return null;
     }
 
     public function rest_analyze( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'analyze' );
+        if ( $rate_check ) return $rate_check;
+
         $post = get_post( $request->get_param( 'post_id' ) );
         if ( ! $post ) {
             return new \WP_REST_Response( [ 'error' => 'Post not found' ], 404 );
@@ -255,6 +434,9 @@ final class SEOBetter {
     }
 
     public function rest_optimize( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'optimize' );
+        if ( $rate_check ) return $rate_check;
+
         $content = $request->get_param( 'content' );
         $methods = $request->get_param( 'methods' ) ?? [ 'statistics', 'quotations', 'citations' ];
         $domain = $request->get_param( 'domain' ) ?? 'general';
@@ -265,6 +447,9 @@ final class SEOBetter {
     }
 
     public function rest_tech_audit( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'tech_audit' );
+        if ( $rate_check ) return $rate_check;
+
         $post = get_post( $request->get_param( 'post_id' ) );
         if ( ! $post ) {
             return new \WP_REST_Response( [ 'error' => 'Post not found' ], 404 );
@@ -274,13 +459,137 @@ final class SEOBetter {
     }
 
     public function rest_site_audit( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'site_audit' );
+        if ( $rate_check ) return $rate_check;
+
         $auditor = new SEOBetter\Technical_SEO_Auditor();
         return new \WP_REST_Response( $auditor->audit_site() );
     }
 
     public function rest_freshness( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'freshness' );
+        if ( $rate_check ) return $rate_check;
+
         $manager = new SEOBetter\Content_Freshness_Manager();
         return new \WP_REST_Response( $manager->get_freshness_report() );
+    }
+
+    public function rest_citation_check( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'citation' );
+        if ( $rate_check ) return $rate_check;
+
+        $tracker = new SEOBetter\Citation_Tracker();
+        return new \WP_REST_Response( $tracker->check_post( (int) $request->get_param( 'post_id' ) ) );
+    }
+
+    public function rest_link_suggestions( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'links' );
+        if ( $rate_check ) return $rate_check;
+
+        $suggester = new SEOBetter\Internal_Link_Suggester();
+        return new \WP_REST_Response( $suggester->suggest_for_post( (int) $request->get_param( 'post_id' ) ) );
+    }
+
+    public function rest_cannibalization( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'cannibalization' );
+        if ( $rate_check ) return $rate_check;
+
+        $detector = new SEOBetter\Cannibalization_Detector();
+        return new \WP_REST_Response( $detector->detect() );
+    }
+
+    public function rest_bulk_process( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'bulk' );
+        if ( $rate_check ) return $rate_check;
+
+        $bulk = new SEOBetter\Bulk_Generator();
+        return new \WP_REST_Response( $bulk->process_next( (int) $request->get_param( 'batch_id' ) ) );
+    }
+
+    public function rest_refresh_post( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'refresh' );
+        if ( $rate_check ) return $rate_check;
+
+        $refresher = new SEOBetter\Content_Refresher();
+        return new \WP_REST_Response( $refresher->refresh( (int) $request->get_param( 'post_id' ) ) );
+    }
+
+    public function rest_generate_start( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'generate' );
+        if ( $rate_check ) return $rate_check;
+
+        return new \WP_REST_Response( SEOBetter\Async_Generator::start_job( $request->get_params() ) );
+    }
+
+    public function rest_generate_step( \WP_REST_Request $request ): \WP_REST_Response {
+        $job_id = sanitize_text_field( $request->get_param( 'job_id' ) );
+        if ( ! $job_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Missing job_id' ], 400 );
+        }
+        return new \WP_REST_Response( SEOBetter\Async_Generator::process_step( $job_id ) );
+    }
+
+    public function rest_generate_result( \WP_REST_Request $request ): \WP_REST_Response {
+        $job_id = sanitize_text_field( $request->get_param( 'job_id' ) );
+        if ( ! $job_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Missing job_id' ], 400 );
+        }
+        return new \WP_REST_Response( SEOBetter\Async_Generator::get_result( $job_id ) );
+    }
+
+    public function rest_generate_estimate( \WP_REST_Request $request ): \WP_REST_Response {
+        return new \WP_REST_Response( SEOBetter\Async_Generator::get_estimate() );
+    }
+
+    public function rest_save_draft( \WP_REST_Request $request ): \WP_REST_Response {
+        $title    = sanitize_text_field( $request->get_param( 'title' ) ?? 'New Article' );
+        $markdown = $request->get_param( 'markdown' ) ?? '';
+        $content  = $request->get_param( 'content' ) ?? '';
+        $accent   = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
+
+        if ( ! preg_match( '/^#[0-9a-fA-F]{6}$/', $accent ) ) {
+            $accent = '#764ba2';
+        }
+
+        $post_content = '';
+
+        if ( ! empty( $markdown ) ) {
+            $formatter = new SEOBetter\Content_Formatter();
+            $post_content = $formatter->format( $markdown, 'gutenberg', [
+                'accent_color' => $accent,
+            ] );
+        }
+
+        // Fallback to raw content if gutenberg formatting produced nothing
+        if ( empty( trim( $post_content ) ) && ! empty( $content ) ) {
+            $post_content = $content;
+        }
+
+        // Last resort: wrap markdown in HTML block
+        if ( empty( trim( $post_content ) ) && ! empty( $markdown ) ) {
+            $post_content = "<!-- wp:html -->\n" . nl2br( esc_html( $markdown ) ) . "\n<!-- /wp:html -->";
+        }
+
+        if ( empty( trim( $post_content ) ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'No content to save.' ], 400 );
+        }
+
+        $post_id = wp_insert_post( [
+            'post_title'   => $title,
+            'post_content' => $post_content,
+            'post_status'  => 'draft',
+            'post_type'    => 'post',
+        ] );
+
+        if ( is_wp_error( $post_id ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $post_id->get_error_message() ], 500 );
+        }
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'post_id' => $post_id,
+            'edit_url' => get_edit_post_link( $post_id, 'raw' ),
+        ] );
     }
 
     public function register_llms_txt_rewrite(): void {

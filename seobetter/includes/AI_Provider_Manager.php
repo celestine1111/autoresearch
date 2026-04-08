@@ -29,7 +29,13 @@ class AI_Provider_Manager {
             'name'        => 'Anthropic (Claude)',
             'api_url'     => 'https://api.anthropic.com/v1/messages',
             'key_prefix'  => 'sk-ant-api',
-            'models'      => [ 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-6' ],
+            'models'      => [
+                'claude-sonnet-4-6',
+                'claude-opus-4-6',
+                'claude-haiku-4-5-20251001',
+                'claude-sonnet-4-5-20250414',
+                'claude-3-5-haiku-20241022',
+            ],
             'default_model' => 'claude-sonnet-4-6',
             'docs_url'    => 'https://console.anthropic.com/settings/keys',
             'help'        => 'Get your API key from console.anthropic.com. Claude OAuth tokens (sk-ant-oat) are NOT supported for API calls.',
@@ -38,7 +44,16 @@ class AI_Provider_Manager {
             'name'        => 'OpenAI (ChatGPT)',
             'api_url'     => 'https://api.openai.com/v1/chat/completions',
             'key_prefix'  => 'sk-',
-            'models'      => [ 'gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini' ],
+            'models'      => [
+                'gpt-4o',
+                'gpt-4o-mini',
+                'gpt-4.1',
+                'gpt-4.1-mini',
+                'gpt-4.1-nano',
+                'o3',
+                'o3-mini',
+                'o4-mini',
+            ],
             'default_model' => 'gpt-4o',
             'docs_url'    => 'https://platform.openai.com/api-keys',
             'help'        => 'Get your API key from platform.openai.com',
@@ -47,7 +62,14 @@ class AI_Provider_Manager {
             'name'        => 'Google Gemini',
             'api_url'     => 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
             'key_prefix'  => '',
-            'models'      => [ 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash' ],
+            'models'      => [
+                'gemini-2.5-pro',
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+                'gemini-2.0-flash-lite',
+                'gemini-1.5-pro',
+                'gemini-1.5-flash',
+            ],
             'default_model' => 'gemini-2.5-flash',
             'docs_url'    => 'https://aistudio.google.com/apikey',
             'help'        => 'Get your API key from Google AI Studio',
@@ -56,7 +78,14 @@ class AI_Provider_Manager {
             'name'        => 'Groq',
             'api_url'     => 'https://api.groq.com/openai/v1/chat/completions',
             'key_prefix'  => 'gsk_',
-            'models'      => [ 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768' ],
+            'models'      => [
+                'llama-3.3-70b-versatile',
+                'llama-3.1-8b-instant',
+                'llama-3.1-70b-versatile',
+                'mixtral-8x7b-32768',
+                'gemma2-9b-it',
+                'deepseek-r1-distill-llama-70b',
+            ],
             'default_model' => 'llama-3.3-70b-versatile',
             'docs_url'    => 'https://console.groq.com/keys',
             'help'        => 'Free tier available. Get your key from console.groq.com',
@@ -65,7 +94,18 @@ class AI_Provider_Manager {
             'name'        => 'OpenRouter (100+ models)',
             'api_url'     => 'https://openrouter.ai/api/v1/chat/completions',
             'key_prefix'  => 'sk-or-',
-            'models'      => [ 'anthropic/claude-sonnet-4', 'openai/gpt-4o', 'google/gemini-2.5-pro', 'meta-llama/llama-3.3-70b' ],
+            'models'      => [
+                'anthropic/claude-sonnet-4',
+                'anthropic/claude-opus-4',
+                'openai/gpt-4o',
+                'openai/gpt-4.1',
+                'openai/o3',
+                'google/gemini-2.5-pro',
+                'google/gemini-2.5-flash',
+                'meta-llama/llama-3.3-70b',
+                'deepseek/deepseek-r1',
+                'deepseek/deepseek-chat-v3',
+            ],
             'default_model' => 'anthropic/claude-sonnet-4',
             'docs_url'    => 'https://openrouter.ai/keys',
             'help'        => 'Access 100+ models with one key. Pay per token.',
@@ -74,7 +114,18 @@ class AI_Provider_Manager {
             'name'        => 'Ollama (Local)',
             'api_url'     => 'http://localhost:11434/api/chat',
             'key_prefix'  => '',
-            'models'      => [ 'llama3.3', 'mistral', 'qwen2.5', 'deepseek-r1' ],
+            'models'      => [
+                'llama3.3',
+                'llama3.1',
+                'mistral',
+                'mixtral',
+                'qwen2.5',
+                'deepseek-r1',
+                'deepseek-v3',
+                'gemma2',
+                'phi4',
+                'command-r',
+            ],
             'default_model' => 'llama3.3',
             'docs_url'    => 'https://ollama.com',
             'help'        => 'Run models locally. No API key needed. Install Ollama first.',
@@ -105,6 +156,38 @@ class AI_Provider_Manager {
     }
 
     /**
+     * Encrypt a value for storage using WordPress auth keys.
+     */
+    private static function encrypt_key( string $value ): string {
+        if ( empty( $value ) ) {
+            return '';
+        }
+        $salt = defined( 'AUTH_SALT' ) ? AUTH_SALT : 'seobetter-fallback-salt';
+        $key  = defined( 'AUTH_KEY' ) ? AUTH_KEY : 'seobetter-fallback-key';
+        $iv   = substr( hash( 'sha256', $salt ), 0, 16 );
+        $encrypted = openssl_encrypt( $value, 'aes-256-cbc', $key, 0, $iv );
+        return $encrypted !== false ? base64_encode( $encrypted ) : $value;
+    }
+
+    /**
+     * Decrypt a stored value.
+     */
+    private static function decrypt_key( string $value ): string {
+        if ( empty( $value ) ) {
+            return '';
+        }
+        $salt = defined( 'AUTH_SALT' ) ? AUTH_SALT : 'seobetter-fallback-salt';
+        $key  = defined( 'AUTH_KEY' ) ? AUTH_KEY : 'seobetter-fallback-key';
+        $iv   = substr( hash( 'sha256', $salt ), 0, 16 );
+        $decoded = base64_decode( $value, true );
+        if ( $decoded === false ) {
+            return $value; // Not encrypted, return as-is (migration)
+        }
+        $decrypted = openssl_decrypt( $decoded, 'aes-256-cbc', $key, 0, $iv );
+        return $decrypted !== false ? $decrypted : $value;
+    }
+
+    /**
      * Save a provider configuration.
      */
     public static function save_provider( string $provider_id, array $config ): bool {
@@ -121,9 +204,11 @@ class AI_Provider_Manager {
             }
         }
 
+        $raw_key = sanitize_text_field( $config['api_key'] ?? '' );
+
         $saved = self::get_saved_providers();
         $saved[ $provider_id ] = [
-            'api_key'    => sanitize_text_field( $config['api_key'] ?? '' ),
+            'api_key'    => self::encrypt_key( $raw_key ),
             'model'      => sanitize_text_field( $config['model'] ?? self::PROVIDERS[ $provider_id ]['default_model'] ),
             'api_url'    => esc_url_raw( $config['api_url'] ?? self::PROVIDERS[ $provider_id ]['api_url'] ),
             'is_active'  => true,
@@ -196,7 +281,7 @@ class AI_Provider_Manager {
 
         $model = $config['model'] ?? $provider['default_model'];
         $api_url = $config['api_url'] ?: $provider['api_url'];
-        $api_key = $config['api_key'] ?? '';
+        $api_key = self::decrypt_key( $config['api_key'] ?? '' );
 
         $max_tokens = $options['max_tokens'] ?? 4096;
         $temperature = $options['temperature'] ?? 0.7;
@@ -289,9 +374,15 @@ class AI_Provider_Manager {
             return [ 'success' => false, 'error' => $data['error']['message'] ?? 'Unknown error' ];
         }
 
+        // Validate Gemini response structure
+        $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+        if ( $text === null ) {
+            return [ 'success' => false, 'error' => 'Invalid Gemini response structure — no content returned' ];
+        }
+
         return [
             'success' => true,
-            'content' => $data['candidates'][0]['content']['parts'][0]['text'] ?? '',
+            'content' => $text,
             'model'   => $model,
         ];
     }

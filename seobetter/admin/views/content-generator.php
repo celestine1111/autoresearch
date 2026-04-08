@@ -4,6 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 $status = SEOBetter\Cloud_API::check_status();
 $result = null;
 $outline_result = null;
+$affiliates = [];
 
 // Handle article generation
 if ( isset( $_POST['seobetter_generate_article'] ) && check_admin_referer( 'seobetter_generate_nonce' ) ) {
@@ -26,7 +27,8 @@ if ( isset( $_POST['seobetter_generate_article'] ) && check_admin_referer( 'seob
         }
     }
 
-    $accent_color = sanitize_hex_color( $_POST['accent_color'] ?? '#764ba2' );
+    $raw_color = sanitize_text_field( $_POST['accent_color'] ?? '#764ba2' );
+    $accent_color = preg_match( '/^#[0-9a-fA-F]{6}$/', $raw_color ) ? $raw_color : '#764ba2';
 
     $result = $generator->generate( $primary, [
         'word_count'         => absint( $_POST['word_count'] ?? 2000 ),
@@ -67,16 +69,28 @@ if ( isset( $_POST['seobetter_reoptimize'] ) && check_admin_referer( 'seobetter_
     $keyword = sanitize_text_field( $_POST['draft_keyword'] ?? '' );
 
     if ( $content_to_fix && ! empty( $suggestions ) ) {
-        // Build fix instructions from the actual suggestions
+        // Strip HTML to clean text so the AI gets readable content, not messy HTML
+        $clean_text = wp_strip_all_tags( $content_to_fix );
+        // Preserve headings structure by converting HTML headings to markdown first
+        $md_content = preg_replace( '/<h1[^>]*>(.*?)<\/h1>/is', '# $1', $content_to_fix );
+        $md_content = preg_replace( '/<h2[^>]*>(.*?)<\/h2>/is', '## $1', $md_content );
+        $md_content = preg_replace( '/<h3[^>]*>(.*?)<\/h3>/is', '### $1', $md_content );
+        $md_content = preg_replace( '/<li[^>]*>(.*?)<\/li>/is', '- $1', $md_content );
+        $md_content = preg_replace( '/<blockquote[^>]*>(.*?)<\/blockquote>/is', '> $1', $md_content );
+        $md_content = preg_replace( '/<strong>(.*?)<\/strong>/is', '**$1**', $md_content );
+        $md_content = preg_replace( '/<em>(.*?)<\/em>/is', '*$1*', $md_content );
+        $md_content = wp_strip_all_tags( $md_content );
+
+        // Only include the specific issues that need fixing
         $fix_list = [];
         foreach ( $suggestions as $s ) {
             $fix_list[] = '- ' . ( $s['message'] ?? $s );
         }
         $fix_instructions = implode( "\n", $fix_list );
 
-        $fix_prompt = "Re-optimize this article for the keyword \"{$keyword}\". Fix these specific issues:\n\n{$fix_instructions}\n\nIMPORTANT RULES:\n- Simplify language to Flesch-Kincaid grade 6-8 (shorter sentences, simpler words)\n- Every H2/H3 section MUST open with a 40-60 word paragraph that directly answers the heading\n- Add more verifiable statistics with (Source, Year) attribution\n- Add expert quotes from credentialed professionals\n- Add inline citations in [Source, Year] format\n- Add a comparison table if missing\n- Never start paragraphs with pronouns (It, This, They)\n- Keep the same topics and structure but improve the content quality\n- Target word count: 2000+ words\n\nOriginal article:\n\n{$content_to_fix}\n\nReturn the improved article in GitHub Flavored Markdown.";
+        $fix_prompt = "You are re-optimizing an existing article about \"{$keyword}\". Fix ONLY these specific issues:\n\n{$fix_instructions}\n\nCRITICAL RULES:\n- Keep the EXACT same structure, headings, and topic coverage\n- Keep all existing statistics, quotes, citations, and tables — only ADD more where needed\n- Do NOT remove or shorten any content — only enhance\n- Do NOT rewrite sections that are already good\n- Keep the article at least the same length (2000+ words)\n- Start with \"Last Updated: " . wp_date( 'F Y' ) . "\" freshness signal\n- Include ## Key Takeaways with 3 bullets near the top\n- Every H2/H3 section must open with a 40-60 word paragraph answering the heading\n- Never start paragraphs with pronouns (It, This, They)\n- Include 3+ stats per 1000 words with (Source, Year)\n- Include 2+ expert quotes\n- Include 5+ inline citations in [Source, Year] format\n- Include at least 1 comparison table in Markdown format\n- End with FAQ section (3-5 Q&A) and References section\n\nOriginal article:\n\n{$md_content}\n\nReturn the FULL improved article in GitHub Flavored Markdown. Do not truncate or shorten it.";
 
-        $system = "You are an expert content optimizer specializing in Generative Engine Optimization (GEO). Your job is to fix specific SEO issues while maintaining the article's structure and topic. Write at a grade 6-8 reading level. Every fix you make should improve the article's chances of being cited by AI models (Google AI Overviews, ChatGPT, Perplexity, Gemini, Claude).";
+        $system = "You are an expert content optimizer specializing in Generative Engine Optimization (GEO). Your job is to fix the specific flagged issues while preserving everything else. The output must be LONGER and MORE detailed than the input, never shorter. Write at a grade 6-8 reading level. Output complete GitHub Flavored Markdown with tables, lists, blockquotes, and all formatting.";
 
         $provider = SEOBetter\AI_Provider_Manager::get_active_provider();
         $request_options = [ 'max_tokens' => 8192, 'temperature' => 0.5 ];
@@ -88,16 +102,12 @@ if ( isset( $_POST['seobetter_reoptimize'] ) && check_admin_referer( 'seobetter_
         }
 
         if ( ! empty( $reopt_result['success'] ) && ! empty( $reopt_result['content'] ) ) {
-            $generator = new SEOBetter\AI_Content_Generator();
-            // Use reflection to access markdown_to_html (or just re-instantiate)
-            $html = $reopt_result['content'];
-            // Basic markdown to HTML
-            $html = preg_replace( '/^###\s+(.+)$/m', '<h3>$1</h3>', $html );
-            $html = preg_replace( '/^##\s+(.+)$/m', '<h2>$1</h2>', $html );
-            $html = preg_replace( '/^#\s+(.+)$/m', '<h1>$1</h1>', $html );
-            $html = preg_replace( '/\*\*(.+?)\*\*/', '<strong>$1</strong>', $html );
-            $html = preg_replace( '/\*(.+?)\*/', '<em>$1</em>', $html );
-            $html = preg_replace( '/\[([^\]]+)\]\(([^)]+)\)/', '<a href="$2">$1</a>', $html );
+            // Use the full Content_Formatter for proper HTML output
+            $formatter = new SEOBetter\Content_Formatter();
+            $accent = sanitize_text_field( $_POST['accent_color'] ?? '#764ba2' );
+            $html = $formatter->format( $reopt_result['content'], 'classic', [
+                'accent_color' => preg_match( '/^#[0-9a-fA-F]{6}$/', $accent ) ? $accent : '#764ba2',
+            ] );
 
             $analyzer = new SEOBetter\GEO_Analyzer();
             $score = $analyzer->analyze( $html, $keyword );
@@ -105,6 +115,7 @@ if ( isset( $_POST['seobetter_reoptimize'] ) && check_admin_referer( 'seobetter_
             $result = [
                 'success'    => true,
                 'content'    => $html,
+                'markdown'   => $reopt_result['content'],
                 'keyword'    => $keyword,
                 'geo_score'  => $score['geo_score'],
                 'grade'      => $score['grade'],
@@ -124,8 +135,40 @@ if ( isset( $_POST['seobetter_reoptimize'] ) && check_admin_referer( 'seobetter_
 
 // Handle "Create as Draft"
 if ( isset( $_POST['seobetter_create_draft'] ) && check_admin_referer( 'seobetter_draft_nonce' ) ) {
-    $content = wp_kses_post( $_POST['draft_content'] ?? '' );
-    $title = sanitize_text_field( $_POST['draft_title'] ?? $_POST['draft_keyword'] ?? 'New Article' );
+    $title    = sanitize_text_field( $_POST['draft_title'] ?? $_POST['draft_keyword'] ?? 'New Article' );
+    $markdown = wp_unslash( $_POST['draft_markdown'] ?? '' );
+    $accent   = sanitize_text_field( $_POST['draft_accent_color'] ?? '#764ba2' );
+    if ( ! preg_match( '/^#[0-9a-fA-F]{6}$/', $accent ) ) {
+        $accent = '#764ba2';
+    }
+
+    $content = '';
+
+    if ( ! empty( $markdown ) ) {
+        // Format as Gutenberg blocks
+        $formatter = new SEOBetter\Content_Formatter();
+        $content   = $formatter->format( $markdown, 'gutenberg', [
+            'accent_color' => $accent,
+        ] );
+
+        // Re-apply affiliate links
+        $draft_affiliates = json_decode( wp_unslash( $_POST['draft_affiliates'] ?? '[]' ), true );
+        if ( ! empty( $draft_affiliates ) && is_array( $draft_affiliates ) ) {
+            $linker  = new SEOBetter\Affiliate_Linker();
+            $content = $linker->process( $content, $draft_affiliates, 'classic', $accent );
+        }
+    }
+
+    // If Gutenberg formatting produced empty content, use raw HTML fallback
+    if ( empty( trim( $content ) ) ) {
+        $raw_html = wp_unslash( $_POST['draft_content'] ?? '' );
+        if ( ! empty( $raw_html ) ) {
+            $content = $raw_html;
+        } elseif ( ! empty( $markdown ) ) {
+            // Last resort: wrap raw markdown in a single HTML block
+            $content = "<!-- wp:html -->\n" . nl2br( esc_html( $markdown ) ) . "\n<!-- /wp:html -->";
+        }
+    }
 
     $post_id = wp_insert_post( [
         'post_title'   => $title,
@@ -141,7 +184,7 @@ if ( isset( $_POST['seobetter_create_draft'] ) && check_admin_referer( 'seobette
         ) . '</p></div>';
     }
 }
-<?php
+
 $license = SEOBetter\License_Manager::get_info();
 $is_pro = $license['is_pro'];
 $ta_active = SEOBetter\Affiliate_Linker::is_thirstyaffiliates_active();
@@ -157,10 +200,28 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
     <!-- Status Bar -->
     <div class="seobetter-status-bar" style="margin-bottom:20px">
         <span><strong>AI:</strong>
-            <?php if ( $status['has_own_key'] ) : ?>
-                <span class="seobetter-score seobetter-score-good">Your API Key</span> <span style="color:var(--sb-text-muted)">Unlimited</span>
+            <?php if ( $status['has_own_key'] ) :
+                $active_provider = SEOBetter\AI_Provider_Manager::get_active_provider();
+                $model_name = $active_provider['model'] ?? 'unknown';
+                $provider_name = $active_provider['name'] ?? '';
+            ?>
+                <span class="seobetter-score seobetter-score-good"><?php echo esc_html( $provider_name ); ?></span>
+                <code style="font-size:11px;margin:0 6px"><?php echo esc_html( $model_name ); ?></code>
+                <span style="color:var(--sb-text-muted)">Unlimited</span>
             <?php else : ?>
                 <span class="seobetter-score seobetter-score-ok">Cloud</span> <span style="color:var(--sb-text-muted)">(<?php echo esc_html( $status['monthly_used'] ); ?>/<?php echo esc_html( $status['monthly_limit'] ); ?> used)</span>
+            <?php endif; ?>
+        </span>
+        <?php
+        $trend_status = SEOBetter\Trend_Researcher::get_status();
+        ?>
+        <span style="margin-left:12px;font-size:12px">
+            <strong>Research:</strong>
+            <?php if ( $trend_status['available'] ) : ?>
+                <span style="color:var(--sb-success)">Last30Days</span>
+                <span style="color:var(--sb-text-muted)">(<?php echo esc_html( $trend_status['source_count'] ); ?> sources)</span>
+            <?php else : ?>
+                <span style="color:var(--sb-text-muted)">AI only</span>
             <?php endif; ?>
         </span>
         <?php if ( ! $status['has_own_key'] ) : ?>
@@ -295,13 +356,37 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
 
                 <!-- Generate Buttons -->
                 <div style="display:flex;gap:12px;margin-bottom:24px">
-                    <button type="submit" name="seobetter_generate_article" class="button sb-btn-primary" style="font-size:15px;padding:12px 32px;height:50px">
+                    <button type="submit" name="seobetter_generate_article" id="seobetter-async-generate" class="button sb-btn-primary" style="font-size:15px;padding:12px 32px;height:50px">
                         Generate Article
                     </button>
                     <button type="submit" name="seobetter_generate_outline" class="button sb-btn-secondary" style="font-size:15px;padding:12px 32px;height:50px">
                         Generate Outline
                     </button>
                 </div>
+
+                <!-- Async Progress Panel (hidden by default) -->
+                <div id="seobetter-progress-panel" style="display:none;padding:24px;background:var(--sb-card,#fff);border:1px solid var(--sb-border,#e0e0e0);border-radius:8px;margin-bottom:24px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <h3 id="seobetter-progress-title" style="margin:0;font-size:15px">Generating article...</h3>
+                        <span id="seobetter-progress-time" style="font-size:12px;color:var(--sb-text-muted,#888)">0:00</span>
+                    </div>
+                    <div style="background:var(--sb-bg,#f5f5f5);border-radius:6px;height:28px;overflow:hidden;margin-bottom:12px">
+                        <div id="seobetter-progress-bar" style="height:100%;background:linear-gradient(90deg,#764ba2,#667eea);border-radius:6px;transition:width 0.5s ease;width:0%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600">0%</div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <span id="seobetter-progress-label" style="font-size:13px;color:var(--sb-text-secondary,#666)">Starting...</span>
+                        <span id="seobetter-progress-steps" style="font-size:12px;color:var(--sb-text-muted,#888)"></span>
+                    </div>
+                    <div id="seobetter-progress-error" style="display:none;margin-top:12px;padding:12px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:13px">
+                        <strong>Error:</strong> <span id="seobetter-progress-error-msg"></span>
+                        <button type="button" id="seobetter-retry-btn" class="button" style="margin-left:12px;height:30px;font-size:12px">Retry</button>
+                    </div>
+                    <div id="seobetter-progress-estimate" style="margin-top:8px;font-size:11px;color:var(--sb-text-muted,#888)"></div>
+                </div>
+
+                <!-- Result container for AJAX results -->
+                <div id="seobetter-async-result" style="display:none"></div>
+
             </form>
         </div>
 
@@ -407,14 +492,42 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
             <?php endif; ?>
 
             <!-- Content Preview -->
-            <div class="seobetter-content-preview"><?php echo wp_kses_post( $result['content'] ); ?></div>
+            <?php
+            // Output the <style> block separately — wp_kses_post() strips it
+            if ( preg_match( '/<style>.*?<\/style>/s', $result['content'], $style_match ) ) {
+                echo $style_match[0];
+            }
+            $preview_html = preg_replace( '/<style>.*?<\/style>/s', '', $result['content'] );
+            ?>
+            <div class="seobetter-content-preview"><?php echo wp_kses_post( $preview_html ); ?></div>
 
             <!-- Actions -->
             <form method="post" style="margin-bottom:16px">
                 <?php wp_nonce_field( 'seobetter_draft_nonce' ); ?>
                 <input type="hidden" name="draft_content" value="<?php echo esc_attr( $result['content'] ); ?>" />
                 <input type="hidden" name="draft_keyword" value="<?php echo esc_attr( $result['keyword'] ?? '' ); ?>" />
+                <input type="hidden" name="draft_markdown" value="<?php echo esc_attr( $result['markdown'] ?? '' ); ?>" />
+                <input type="hidden" name="draft_accent_color" value="<?php echo esc_attr( $_POST['accent_color'] ?? '#764ba2' ); ?>" />
+                <input type="hidden" name="draft_affiliates" value="<?php echo esc_attr( wp_json_encode( $affiliates ) ); ?>" />
                 <input type="hidden" name="reoptimize_suggestions" value="<?php echo esc_attr( wp_json_encode( $result['suggestions'] ?? [] ) ); ?>" />
+                <input type="hidden" name="draft_title" id="seobetter-draft-title" value="<?php echo esc_attr( $result['headlines'][0] ?? $result['keyword'] ?? '' ); ?>" />
+
+                <!-- Headlines -->
+                <?php if ( ! empty( $result['headlines'] ) ) : ?>
+                <div style="padding:16px;background:var(--sb-primary-light);border-radius:8px;margin-bottom:16px">
+                    <h4 style="margin:0 0 10px;font-size:13px;font-weight:700">Choose Your Headline (used as post title)</h4>
+                    <?php foreach ( $result['headlines'] as $idx => $hl ) :
+                        $len = mb_strlen( $hl );
+                        $ok = $len >= 45 && $len <= 65;
+                    ?>
+                    <label class="seobetter-headline-option">
+                        <input type="radio" name="selected_headline" value="<?php echo esc_attr( $hl ); ?>" <?php if ( $idx === 0 ) echo 'checked'; ?> onchange="document.getElementById('seobetter-draft-title').value=this.value" />
+                        <span class="headline-text"><?php echo esc_html( $hl ); ?></span>
+                        <span class="headline-chars" style="color:<?php echo $ok ? 'var(--sb-success)' : 'var(--sb-error)'; ?>"><?php echo $len; ?> chars</span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
 
                 <div style="display:flex;gap:10px;flex-wrap:wrap">
                     <?php if ( ! empty( $result['suggestions'] ) ) : ?>
@@ -426,23 +539,6 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                 </div>
             </form>
 
-            <!-- Headlines -->
-            <?php if ( ! empty( $result['headlines'] ) ) : ?>
-            <div style="padding:16px;background:var(--sb-primary-light);border-radius:8px;margin-bottom:16px">
-                <h4 style="margin:0 0 10px;font-size:13px;font-weight:700">Choose Your Headline</h4>
-                <?php foreach ( $result['headlines'] as $idx => $hl ) :
-                    $len = mb_strlen( $hl );
-                    $ok = $len >= 45 && $len <= 65;
-                ?>
-                <label class="seobetter-headline-option">
-                    <input type="radio" name="selected_headline" value="<?php echo esc_attr( $hl ); ?>" <?php if ( $idx === 0 ) echo 'checked'; ?> />
-                    <span class="headline-text"><?php echo esc_html( $hl ); ?></span>
-                    <span class="headline-chars" style="color:<?php echo $ok ? 'var(--sb-success)' : 'var(--sb-error)'; ?>"><?php echo $len; ?>c</span>
-                </label>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-
             <!-- Meta Tags -->
             <?php if ( ! empty( $result['meta']['title'] ) ) : ?>
             <div style="padding:16px;background:var(--sb-bg);border:1px solid var(--sb-border);border-radius:8px;margin-bottom:16px">
@@ -452,7 +548,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         <label style="font-size:12px;font-weight:600">Title</label>
                         <span style="font-size:11px">
                             <span class="seobetter-score seobetter-score-<?php echo $result['meta']['title_score'] >= 80 ? 'good' : ( $result['meta']['title_score'] >= 60 ? 'ok' : 'poor' ); ?>"><?php echo $result['meta']['title_score']; ?>/100</span>
-                            <span style="color:var(--sb-text-muted)"><?php echo $result['meta']['title_length']; ?>c</span>
+                            <span style="color:var(--sb-text-muted)"><?php echo $result['meta']['title_length']; ?> chars</span>
                         </span>
                     </div>
                     <input type="text" value="<?php echo esc_attr( $result['meta']['title'] ); ?>" readonly onclick="this.select()" style="background:var(--sb-card);width:100%;height:38px;font-size:13px" />
@@ -462,7 +558,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         <label style="font-size:12px;font-weight:600">Description</label>
                         <span style="font-size:11px">
                             <span class="seobetter-score seobetter-score-<?php echo $result['meta']['desc_score'] >= 80 ? 'good' : ( $result['meta']['desc_score'] >= 60 ? 'ok' : 'poor' ); ?>"><?php echo $result['meta']['desc_score']; ?>/100</span>
-                            <span style="color:var(--sb-text-muted)"><?php echo $result['meta']['desc_length']; ?>c</span>
+                            <span style="color:var(--sb-text-muted)"><?php echo $result['meta']['desc_length']; ?> chars</span>
                         </span>
                     </div>
                     <textarea rows="2" readonly onclick="this.select()" style="background:var(--sb-card);width:100%;font-size:13px"><?php echo esc_textarea( $result['meta']['description'] ); ?></textarea>
@@ -608,4 +704,279 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
         } else st.textContent=d.error||'Failed';
     }).catch(e => { btn.disabled=false; st.textContent='Error'; });
 });
+
+// ===== ASYNC ARTICLE GENERATION =====
+(function() {
+    var btn = document.getElementById('seobetter-async-generate');
+    if (!btn) return;
+
+    var panel = document.getElementById('seobetter-progress-panel');
+    var bar = document.getElementById('seobetter-progress-bar');
+    var label = document.getElementById('seobetter-progress-label');
+    var stepsEl = document.getElementById('seobetter-progress-steps');
+    var timeEl = document.getElementById('seobetter-progress-time');
+    var titleEl = document.getElementById('seobetter-progress-title');
+    var errorEl = document.getElementById('seobetter-progress-error');
+    var errorMsg = document.getElementById('seobetter-progress-error-msg');
+    var estimateEl = document.getElementById('seobetter-progress-estimate');
+    var resultEl = document.getElementById('seobetter-async-result');
+    var timer = null, elapsed = 0, jobId = null;
+    var apiRoot = '<?php echo esc_js( rest_url() ); ?>';
+    var apiNonce = '<?php echo esc_js( wp_create_nonce( "wp_rest" ) ); ?>';
+    var draftNonce = '<?php echo esc_js( wp_create_nonce( "seobetter_draft_nonce" ) ); ?>';
+
+    function startTimer() {
+        elapsed = 0; clearInterval(timer);
+        timer = setInterval(function() {
+            elapsed++;
+            var m = Math.floor(elapsed/60), s = elapsed%60;
+            timeEl.textContent = m + ':' + (s<10?'0':'') + s;
+        }, 1000);
+    }
+    function stopTimer() { clearInterval(timer); }
+
+    function api(endpoint, method, data) {
+        var opts = { method: method||'POST', headers: { 'Content-Type':'application/json', 'X-WP-Nonce': apiNonce } };
+        if (data && method !== 'GET') opts.body = JSON.stringify(data);
+        var url = apiRoot + 'seobetter/v1/' + endpoint;
+        if (data && method === 'GET') url += '?' + new URLSearchParams(data).toString();
+        return fetch(url, opts).then(function(r) { return r.json(); });
+    }
+
+    function processNext() {
+        errorEl.style.display = 'none';
+        api('generate/step', 'POST', { job_id: jobId }).then(function(res) {
+            if (!res.success && res.error) {
+                errorEl.style.display = 'block';
+                errorMsg.textContent = res.error;
+                if (!res.can_retry) stopTimer();
+                return;
+            }
+            bar.style.width = (res.progress||0) + '%';
+            bar.textContent = Math.round(res.progress||0) + '%';
+            if (res.label) label.textContent = res.label;
+            if (res.current && res.total) stepsEl.textContent = 'Step ' + res.current + ' of ' + res.total;
+
+            if (res.done) {
+                label.textContent = 'Loading results...';
+                fetchResult();
+            } else {
+                processNext();
+            }
+        }).catch(function(err) {
+            errorEl.style.display = 'block';
+            errorMsg.textContent = 'Request failed — click Retry to continue';
+        });
+    }
+
+    function fetchResult() {
+        api('generate/result', 'GET', { job_id: jobId }).then(function(res) {
+            stopTimer();
+            if (!res.success) {
+                errorEl.style.display = 'block';
+                errorMsg.textContent = res.error || 'Failed to load results.';
+                return;
+            }
+            bar.style.width = '100%'; bar.textContent = '100%';
+            titleEl.textContent = 'Article generated!';
+            label.textContent = 'Complete!';
+            renderResult(res);
+        }).catch(function() {
+            stopTimer();
+            errorEl.style.display = 'block';
+            errorMsg.textContent = 'Failed to load results.';
+        });
+    }
+
+    function esc(s) { var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+    function renderResult(res) {
+        var sc = res.geo_score >= 80 ? 'good' : (res.geo_score >= 60 ? 'ok' : 'poor');
+        var h = '<div class="seobetter-card" style="padding:20px;margin-top:16px">';
+        h += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:13px">';
+        h += '<span><strong>GEO Score:</strong> <span class="seobetter-score seobetter-score-'+sc+'">'+esc(res.geo_score)+' ('+esc(res.grade)+')</span></span>';
+        h += '<span><strong>Words:</strong> '+(res.word_count||0).toLocaleString()+'</span>';
+        h += '</div>';
+
+        if (res.suggestions && res.suggestions.length) {
+            h += '<div style="margin-bottom:16px">';
+            res.suggestions.forEach(function(s) {
+                h += '<div class="seobetter-suggestion seobetter-suggestion-'+(s.priority||'medium')+'">';
+                h += '<span class="seobetter-suggestion-type">['+(s.type||'issue')+']</span> '+esc(s.message)+'</div>';
+            });
+            h += '</div>';
+        }
+
+        // Content preview with style block
+        var content = res.content || '';
+        var styleMatch = content.match(/<style>[\s\S]*?<\/style>/);
+        if (styleMatch) { h += styleMatch[0]; content = content.replace(/<style>[\s\S]*?<\/style>/, ''); }
+        h += '<div class="seobetter-content-preview">' + content + '</div>';
+
+        // Headlines — score, rank, and make selectable
+        if (res.headlines && res.headlines.length) {
+            var keyword = (res.keyword||'').toLowerCase();
+            var scored = res.headlines.map(function(hl) {
+                var len = hl.length, s = 0, tags = [];
+                // Length: 50-60 is ideal for SERP display
+                if (len >= 50 && len <= 60) { s += 25; tags.push('ideal length'); }
+                else if (len >= 45 && len <= 65) { s += 15; tags.push('good length'); }
+                else { tags.push(len < 45 ? 'too short' : 'may truncate'); }
+                // Keyword placement
+                if (hl.toLowerCase().indexOf(keyword) === 0) { s += 25; tags.push('keyword first'); }
+                else if (hl.toLowerCase().indexOf(keyword) !== -1) { s += 15; tags.push('has keyword'); }
+                else { tags.push('missing keyword'); }
+                // Number (CTR boost)
+                if (/\d/.test(hl)) { s += 10; tags.push('has number'); }
+                // Year (freshness signal for AI)
+                if (/20[2-3]\d/.test(hl)) { s += 10; tags.push('has year'); }
+                // Question format (PAA/snippet ready)
+                if (/^(what|how|why|when|where|which|can|do|is|are)\b/i.test(hl)) { s += 10; tags.push('question format'); }
+                // Power words (CTR)
+                if (/\b(best|top|ultimate|complete|essential|proven|expert|guide|review)\b/i.test(hl)) { s += 10; tags.push('power word'); }
+                // Colon/dash structure (snippet-friendly)
+                if (/[:\-–—]/.test(hl)) { s += 5; tags.push('structured'); }
+                return { text: hl, score: Math.min(100, s), len: len, tags: tags };
+            });
+            // Sort best first
+            scored.sort(function(a, b) { return b.score - a.score; });
+
+            h += '<div style="padding:16px;background:var(--sb-primary-light,#f0f0ff);border-radius:8px;margin-top:16px">';
+            h += '<h4 style="margin:0 0 4px;font-size:13px;font-weight:700">Select Headline (ranked by SEO + GEO + AI snippet score)</h4>';
+            h += '<p style="margin:0 0 12px;font-size:11px;color:#888">Click to select as your post title. #1 is recommended.</p>';
+            scored.forEach(function(item, i) {
+                var scoreColor = item.score >= 70 ? '#22c55e' : (item.score >= 50 ? '#f59e0b' : '#ef4444');
+                var isFirst = (i === 0);
+                var border = isFirst ? 'border:2px solid '+scoreColor : 'border:1px solid #e0e0e0';
+                h += '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;'+border+';border-radius:6px;margin-bottom:6px;cursor:pointer;background:'+(isFirst?'#f0fff4':'#fff')+'">';
+                h += '<input type="radio" name="async_headline" value="'+esc(item.text)+'" '+(isFirst?'checked':'')+' style="margin:0" onchange="document.getElementById(\'async-draft-title\').value=this.value">';
+                h += '<span style="flex:1;font-size:13px">'+(isFirst?'<strong>':'') + esc(item.text) + (isFirst?'</strong>':'')+'</span>';
+                h += '<span style="font-size:11px;font-weight:600;color:'+scoreColor+'">'+item.score+'/100</span>';
+                h += '<span style="font-size:11px;color:#888">'+item.len+' chars</span>';
+                h += '</label>';
+                if (item.tags.length) {
+                    h += '<div style="margin:-2px 0 6px 32px;font-size:10px;color:#888">'+item.tags.join(' · ')+'</div>';
+                }
+            });
+            h += '</div>';
+        }
+
+        // Save Draft — via AJAX (form POST kept losing content)
+        var accentVal = (document.querySelector('[name="accent_color"]')?document.querySelector('[name="accent_color"]').value:'#764ba2');
+        var bestTitle = (typeof scored !== 'undefined' && scored && scored.length ? scored[0].text : null) || (res.headlines&&res.headlines[0]) || res.keyword || '';
+
+        // Store data for the save button
+        window._seobetterDraft = {
+            title: bestTitle,
+            markdown: res.markdown || '',
+            content: res.content || '',
+            accent_color: accentVal,
+            keyword: res.keyword || ''
+        };
+
+        h += '<div style="margin-top:16px;display:flex;gap:12px;align-items:center">';
+        h += '<button type="button" id="seobetter-save-draft-btn" class="button sb-btn-primary" style="height:44px">Save as WordPress Draft</button>';
+        h += '<span id="seobetter-save-status" style="font-size:13px;color:#888"></span>';
+        h += '</div></div>';
+
+        resultEl.innerHTML = h;
+        resultEl.style.display = 'block';
+        resultEl.scrollIntoView({ behavior:'smooth', block:'start' });
+
+        // Wire up the save button
+        document.getElementById('seobetter-save-draft-btn').addEventListener('click', function() {
+            var btn = this;
+            var statusEl = document.getElementById('seobetter-save-status');
+            var draft = window._seobetterDraft;
+
+            if (!draft || (!draft.markdown && !draft.content)) {
+                alert('Error: No content to save. Please regenerate.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            statusEl.textContent = '';
+
+            // Use the selected headline if user picked one
+            var selectedHL = document.querySelector('[name="async_headline"]:checked');
+            if (selectedHL) draft.title = selectedHL.value;
+
+            api('save-draft', 'POST', draft).then(function(r) {
+                if (r.success) {
+                    btn.textContent = 'Saved!';
+                    btn.style.background = '#059669';
+                    statusEl.innerHTML = '<a href="'+r.edit_url+'" style="color:#764ba2;font-weight:600">Edit post &rarr;</a>';
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = 'Save as WordPress Draft';
+                    statusEl.textContent = 'Error: ' + (r.error || 'Failed to save.');
+                    statusEl.style.color = '#ef4444';
+                }
+            }).catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Save as WordPress Draft';
+                statusEl.textContent = 'Error: Request failed.';
+                statusEl.style.color = '#ef4444';
+            });
+        });
+    }
+
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var form = btn.closest('form');
+        var keyword = form.querySelector('[name="primary_keyword"]').value.trim();
+        if (!keyword) { alert('Please enter a primary keyword.'); return; }
+
+        var data = {
+            keyword: keyword,
+            secondary_keywords: (form.querySelector('[name="secondary_keywords"]')||{}).value||'',
+            lsi_keywords: (form.querySelector('[name="lsi_keywords"]')||{}).value||'',
+            word_count: (form.querySelector('[name="word_count"]')||{}).value||'2000',
+            tone: (form.querySelector('[name="tone"]')||{}).value||'authoritative',
+            domain: (form.querySelector('[name="domain"]')||{}).value||'general',
+            audience: (form.querySelector('[name="audience"]')||{}).value||'',
+            accent_color: (form.querySelector('[name="accent_color"]')||{}).value||'#764ba2'
+        };
+
+        btn.disabled = true; btn.textContent = 'Generating...';
+        panel.style.display = 'block';
+        resultEl.style.display = 'none';
+        errorEl.style.display = 'none';
+        bar.style.width = '0%'; bar.textContent = '0%';
+        label.textContent = 'Starting generation...';
+        stepsEl.textContent = '';
+        startTimer();
+
+        api('generate/start', 'POST', data).then(function(res) {
+            if (!res.success) {
+                stopTimer();
+                errorEl.style.display = 'block';
+                errorMsg.textContent = res.error || 'Failed to start.';
+                btn.disabled = false; btn.textContent = 'Generate Article';
+                return;
+            }
+            jobId = res.job_id;
+            estimateEl.textContent = 'Estimated time: ~' + res.est_minutes + ' min';
+            stepsEl.textContent = 'Step 0 of ' + res.total_steps;
+            processNext();
+        }).catch(function(err) {
+            stopTimer();
+            errorEl.style.display = 'block';
+            errorMsg.textContent = 'Failed to connect to API. Check Settings.';
+            btn.disabled = false; btn.textContent = 'Generate Article';
+        });
+    });
+
+    // Retry button
+    var retryBtn = document.getElementById('seobetter-retry-btn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function() {
+            if (!jobId) return;
+            errorEl.style.display = 'none';
+            label.textContent = 'Retrying...';
+            processNext();
+        });
+    }
+})();
 </script>
