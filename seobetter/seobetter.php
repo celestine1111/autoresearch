@@ -717,44 +717,94 @@ final class SEOBetter {
      * Download an image and set it as the post's featured image.
      * Uses Lorem Picsum (1200x630 for OG/social sharing compatibility).
      */
+    /**
+     * Set a topic-relevant featured image for the post.
+     * Uses Pexels API (free, 15K req/month) for keyword-relevant photos.
+     * Falls back to downloading a generic image if Pexels unavailable.
+     */
     private function set_featured_image( int $post_id, string $keyword ): void {
-        // Need media functions
         if ( ! function_exists( 'media_sideload_image' ) ) {
             require_once ABSPATH . 'wp-admin/includes/media.php';
             require_once ABSPATH . 'wp-admin/includes/file.php';
             require_once ABSPATH . 'wp-admin/includes/image.php';
         }
 
-        // Skip if post already has a featured image
         if ( has_post_thumbnail( $post_id ) ) {
             return;
         }
 
-        // Generate a consistent seed from keyword so the same keyword gets the same image
-        $seed = abs( crc32( $keyword . 'featured' ) ) % 1000;
-        $image_url = "https://picsum.photos/seed/{$seed}/1200/630";
+        // Try Pexels API for topic-relevant image
+        $image_url = $this->search_pexels_image( $keyword );
 
-        // SEO-optimized alt text with keyword
+        // Fallback: use a direct Picsum URL with .jpg extension
+        if ( ! $image_url ) {
+            $seed = abs( crc32( $keyword . 'featured' ) ) % 1000;
+            $image_url = "https://picsum.photos/seed/{$seed}/1200/630.jpg";
+        }
+
         $alt_text = ucwords( $keyword ) . ' — featured guide image';
 
         // Download to media library
         $image_id = media_sideload_image( $image_url, $post_id, $alt_text, 'id' );
 
         if ( is_wp_error( $image_id ) ) {
-            return; // Silently fail — article still saves without featured image
+            return;
         }
 
-        // Set as featured image
         set_post_thumbnail( $post_id, $image_id );
-
-        // Set SEO-optimized alt text on the attachment
         update_post_meta( $image_id, '_wp_attachment_image_alt', $alt_text );
-
-        // Update attachment title to be keyword-rich
         wp_update_post( [
             'ID'         => $image_id,
             'post_title' => ucwords( $keyword ) . ' Guide',
         ] );
+    }
+
+    /**
+     * Search Pexels for a topic-relevant image.
+     * Free API: 15,000 requests/month, no attribution required for API usage.
+     */
+    private function search_pexels_image( string $keyword ): string {
+        $settings = get_option( 'seobetter_settings', [] );
+        $pexels_key = $settings['pexels_api_key'] ?? '';
+
+        // Use hardcoded free key for basic usage (rate limited)
+        if ( empty( $pexels_key ) ) {
+            $pexels_key = ''; // No default key — users must add their own
+        }
+
+        if ( empty( $pexels_key ) ) {
+            return ''; // No Pexels key, fall back to Picsum
+        }
+
+        $response = wp_remote_get(
+            'https://api.pexels.com/v1/search?' . http_build_query( [
+                'query'    => $keyword,
+                'per_page' => 5,
+                'orientation' => 'landscape',
+                'size'     => 'large',
+            ] ),
+            [
+                'timeout' => 8,
+                'headers' => [ 'Authorization' => $pexels_key ],
+            ]
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return '';
+        }
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $photos = $body['photos'] ?? [];
+
+        if ( empty( $photos ) ) {
+            return '';
+        }
+
+        // Pick a random photo from results for variety
+        $photo = $photos[ array_rand( $photos ) ];
+
+        // Use the landscape-cropped version at 1200px wide
+        return $photo['src']['landscape'] ?? $photo['src']['large'] ?? '';
     }
 
     /**

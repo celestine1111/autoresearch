@@ -55,6 +55,7 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
         'geo_engines'        => array_map( 'sanitize_text_field', $_POST['geo_engines'] ?? [] ),
         'llms_txt_enabled'   => ! empty( $_POST['llms_txt_enabled'] ),
         'brave_api_key'      => sanitize_text_field( $_POST['brave_api_key'] ?? '' ),
+        'pexels_api_key'     => sanitize_text_field( $_POST['pexels_api_key'] ?? '' ),
     ];
     update_option( 'seobetter_settings', $settings );
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'seobetter' ) . '</p></div>';
@@ -231,6 +232,14 @@ $settings = get_option( 'seobetter_settings', [] );
                         <input type="password" name="brave_api_key" value="<?php echo esc_attr( $settings['brave_api_key'] ?? '' ); ?>" class="regular-text" placeholder="BSA..." />
                         <a href="https://brave.com/search/api/" target="_blank" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Free Key', 'seobetter' ); ?></a>
                         <p class="description"><?php esc_html_e( 'Pro feature. Adds real web statistics and verified sources to generated articles. 2,000 free queries/month.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Pexels API Key', 'seobetter' ); ?></th>
+                    <td>
+                        <input type="password" name="pexels_api_key" value="<?php echo esc_attr( $settings['pexels_api_key'] ?? '' ); ?>" class="regular-text" placeholder="Enter Pexels API key..." />
+                        <a href="https://www.pexels.com/api/new/" target="_blank" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Free Key', 'seobetter' ); ?></a>
+                        <p class="description"><?php esc_html_e( 'Free. Adds topic-relevant images to articles and sets featured image. 15,000 requests/month. Without this, generic placeholder images are used.', 'seobetter' ); ?></p>
                     </td>
                 </tr>
             </table>

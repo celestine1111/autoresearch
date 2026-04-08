@@ -123,13 +123,72 @@ class Stock_Image_Inserter {
      * Uses Unsplash Source API for keyword-based images.
      * Applies: WebP format, 800px width, 80% quality, auto-crop.
      */
+    /**
+     * Get a topic-relevant image URL.
+     * Uses Pexels API if key is configured, falls back to Picsum.
+     */
     private function get_image_url( string $keyword, string $heading, int $index ): string {
-        // source.unsplash.com was shut down in 2024.
-        // Use Lorem Picsum (free, no API key, always works).
-        // The seed ensures different but consistent images per section.
-        $seed = abs( crc32( $keyword . $heading . $index ) ) % 1000;
+        $settings = get_option( 'seobetter_settings', [] );
+        $pexels_key = $settings['pexels_api_key'] ?? '';
 
-        return 'https://picsum.photos/seed/' . $seed . '/' . self::IMAGE_WIDTH . '/' . self::IMAGE_HEIGHT;
+        if ( ! empty( $pexels_key ) ) {
+            $search = $this->build_search_terms( $keyword, $heading );
+            $url = $this->search_pexels( $search, $pexels_key, $index );
+            if ( $url ) {
+                return $url;
+            }
+        }
+
+        // Fallback to Picsum with .jpg extension for compatibility
+        $seed = abs( crc32( $keyword . $heading . $index ) ) % 1000;
+        return 'https://picsum.photos/seed/' . $seed . '/' . self::IMAGE_WIDTH . '/' . self::IMAGE_HEIGHT . '.jpg';
+    }
+
+    /**
+     * Search Pexels for a relevant image.
+     */
+    private function search_pexels( string $query, string $api_key, int $index ): string {
+        // Cache results per query to avoid hitting API for every section
+        $cache_key = 'seobetter_pexels_' . md5( $query );
+        $cached = get_transient( $cache_key );
+
+        if ( $cached === false ) {
+            $response = wp_remote_get(
+                'https://api.pexels.com/v1/search?' . http_build_query( [
+                    'query'       => $query,
+                    'per_page'    => 10,
+                    'orientation' => 'landscape',
+                ] ),
+                [
+                    'timeout' => 6,
+                    'headers' => [ 'Authorization' => $api_key ],
+                ]
+            );
+
+            if ( is_wp_error( $response ) ) {
+                return '';
+            }
+
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            $photos = $body['photos'] ?? [];
+
+            // Store just the URLs
+            $urls = [];
+            foreach ( $photos as $p ) {
+                $urls[] = $p['src']['landscape'] ?? $p['src']['large'] ?? '';
+            }
+            $urls = array_filter( $urls );
+
+            set_transient( $cache_key, $urls, 6 * HOUR_IN_SECONDS );
+            $cached = $urls;
+        }
+
+        if ( empty( $cached ) ) {
+            return '';
+        }
+
+        // Pick image by index so each section gets a different one
+        return $cached[ $index % count( $cached ) ] ?? $cached[0];
     }
 
     /**
