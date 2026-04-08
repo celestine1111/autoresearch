@@ -76,6 +76,15 @@ final class SEOBetter {
         // Export handler
         add_action( 'admin_init', [ $this, 'handle_export' ] );
 
+        // Posts list columns
+        add_filter( 'manage_posts_columns', [ $this, 'add_posts_columns' ] );
+        add_filter( 'manage_pages_columns', [ $this, 'add_posts_columns' ] );
+        add_action( 'manage_posts_custom_column', [ $this, 'render_posts_column' ], 10, 2 );
+        add_action( 'manage_pages_custom_column', [ $this, 'render_posts_column' ], 10, 2 );
+        add_filter( 'manage_edit-post_sortable_columns', [ $this, 'sortable_columns' ] );
+        add_filter( 'manage_edit-page_sortable_columns', [ $this, 'sortable_columns' ] );
+        add_action( 'pre_get_posts', [ $this, 'sort_by_geo_score' ] );
+
         register_activation_hook( __FILE__, [ $this, 'activate' ] );
         register_deactivation_hook( __FILE__, [ $this, 'deactivate' ] );
     }
@@ -746,6 +755,102 @@ final class SEOBetter {
             'ID'         => $image_id,
             'post_title' => ucwords( $keyword ) . ' Guide',
         ] );
+    }
+
+    /**
+     * Add SEOBetter column to posts/pages list.
+     */
+    public function add_posts_columns( array $columns ): array {
+        $new = [];
+        foreach ( $columns as $key => $label ) {
+            $new[ $key ] = $label;
+            // Insert after title column
+            if ( $key === 'title' ) {
+                $new['seobetter_score'] = '<span style="color:#764ba2">SEOBetter</span>';
+            }
+        }
+        return $new;
+    }
+
+    /**
+     * Render the SEOBetter column content.
+     */
+    public function render_posts_column( string $column, int $post_id ): void {
+        if ( $column !== 'seobetter_score' ) {
+            return;
+        }
+
+        $score_data = get_post_meta( $post_id, '_seobetter_geo_score', true );
+        $keyword = get_post_meta( $post_id, '_seobetter_focus_keyword', true );
+
+        if ( ! is_array( $score_data ) || ! isset( $score_data['geo_score'] ) ) {
+            echo '<span style="color:#94a3b8;font-size:12px">—</span>';
+            return;
+        }
+
+        $score = $score_data['geo_score'];
+        $grade = $score_data['grade'] ?? '';
+        $word_count = $score_data['word_count'] ?? 0;
+
+        // Color based on score
+        if ( $score >= 80 ) {
+            $color = '#059669'; $bg = '#ecfdf5';
+        } elseif ( $score >= 60 ) {
+            $color = '#d97706'; $bg = '#fffbeb';
+        } else {
+            $color = '#dc2626'; $bg = '#fef2f2';
+        }
+
+        // Score badge
+        echo '<div style="display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:1.4">';
+        echo '<span style="display:inline-block;padding:2px 8px;background:' . $bg . ';color:' . $color . ';border-radius:4px;font-weight:700;font-size:13px;text-align:center;width:fit-content">';
+        echo esc_html( $score ) . ' <span style="font-weight:400;font-size:11px">' . esc_html( $grade ) . '</span>';
+        echo '</span>';
+
+        // Details row
+        $details = [];
+        if ( $word_count ) {
+            $details[] = number_format( $word_count ) . 'w';
+        }
+        if ( $keyword ) {
+            $details[] = '<span title="Focus keyword: ' . esc_attr( $keyword ) . '" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom">' . esc_html( $keyword ) . '</span>';
+        }
+
+        // Check counts from score data
+        $checks = $score_data['checks'] ?? [];
+        $citations = $checks['citations']['count'] ?? null;
+        $quotes = $checks['expert_quotes']['count'] ?? null;
+        $tables = $checks['tables']['count'] ?? null;
+
+        if ( $citations !== null ) $details[] = $citations . ' cites';
+        if ( $quotes !== null ) $details[] = $quotes . ' quotes';
+
+        if ( ! empty( $details ) ) {
+            echo '<span style="color:#64748b;font-size:11px">' . implode( ' · ', $details ) . '</span>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * Make the SEOBetter column sortable.
+     */
+    public function sortable_columns( array $columns ): array {
+        $columns['seobetter_score'] = 'seobetter_score';
+        return $columns;
+    }
+
+    /**
+     * Handle sorting by GEO score.
+     */
+    public function sort_by_geo_score( \WP_Query $query ): void {
+        if ( ! is_admin() || ! $query->is_main_query() ) {
+            return;
+        }
+        if ( $query->get( 'orderby' ) === 'seobetter_score' ) {
+            $query->set( 'meta_key', '_seobetter_geo_score' );
+            $query->set( 'orderby', 'meta_value_num' );
+        }
     }
 
     public function register_llms_txt_rewrite(): void {
