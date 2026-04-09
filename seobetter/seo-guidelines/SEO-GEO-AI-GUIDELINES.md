@@ -181,6 +181,51 @@ These are the specific content patterns that AI models extract and cite. Every a
 
 ---
 
+## 4B. HUMANIZER — ANTI-AI WRITING PATTERNS (CRITICAL)
+
+Source: [Wikipedia Signs of AI Writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing), Humanizer Skill v2.5.1
+
+AI-generated articles that "sound AI" get lower engagement, lower trust, and lower E-E-A-T scores. Google's helpful content guidelines penalize content that reads as mass-produced. Every generated article MUST avoid these patterns.
+
+### Banned Words (Never Use)
+| Category | Words to Avoid | Use Instead |
+|---|---|---|
+| **Significance inflation** | testament, pivotal, crucial, vital, cornerstone, paradigm, game-changer | important, useful, notable, key |
+| **Promotional** | vibrant, groundbreaking, renowned, breathtaking, nestled, stunning, seamless, robust, cutting-edge | well-known, effective, popular, strong |
+| **AI vocabulary** | delve, foster, garner, underscore, showcase, encompass, interplay, intricate, enduring, tapestry, landscape (abstract) | explore, support, earn, show, include, connection, complex, lasting |
+| **Filler** | additionally, furthermore, it is important to note, in order to, at the end of the day, in today's world, when it comes to | also, to, now, for |
+| **Signposting** | let's dive in, let's explore, here's what you need to know, without further ado | *(just start the content)* |
+| **Hedging** | it could potentially possibly be argued that, it is worth noting | *(state the claim directly)* |
+
+### Banned Patterns
+| Pattern | Example (Bad) | Fix (Good) |
+|---|---|---|
+| Copula avoidance | "serves as a reminder" | "is a reminder" |
+| Em dash overuse | "the tool — which is free — works well" | "the tool, which is free, works well" |
+| Rule of three | "innovation, inspiration, and industry insights" | "talks and panels" |
+| -ing phrase padding | "highlighting the importance of..." | *(delete the phrase)* |
+| Negative parallelism | "It's not just X; it's Y" | *(state Y directly)* |
+| False ranges | "from X to Y, from A to B" | list the items simply |
+| Generic endings | "the future looks bright" | state a specific next step |
+| Challenges formula | "Despite challenges... continues to thrive" | state the specific challenge and response |
+| Synonym cycling | "protagonist / main character / central figure / hero" | pick one term and reuse it |
+| Excessive bold | "**every** **key** **term** bolded" | bold primary keyword once only |
+| Fragmented headers | heading followed by one-line restatement | start with real content |
+
+### How to Write Naturally
+- Use "is", "are", "has" — simple verbs, not elaborate substitutes
+- Vary sentence length: mix short (5-8 words) with medium (15-20 words)
+- Be specific: "3,200 units sold in March" not "significant sales growth"
+- Have a point of view — don't neutrally list everything
+- Acknowledge tradeoffs: "works well for X but less suited for Y"
+- Write how you would explain it to a colleague
+- Occasionally use first person: "here is what stands out"
+
+### Implementation
+The `get_system_prompt()` in Async_Generator.php includes banned words, banned patterns, and natural writing rules. Every section is generated with these constraints active.
+
+---
+
 ## 5. READABILITY REQUIREMENTS
 
 ### 5.1 Reading Level Targets

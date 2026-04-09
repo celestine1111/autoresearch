@@ -344,7 +344,7 @@ class Async_Generator {
         $is_faq = preg_match( '/faq|frequently\s*asked/i', $heading );
         $is_references = preg_match( '/reference/i', $heading );
 
-        $readability_rule = "\n\nREADABILITY (CRITICAL): Write at a 6th grade reading level. Use short sentences under 20 words. Use simple everyday words. No jargon. No academic language. Write like you are explaining to a smart 12-year-old.";
+        $readability_rule = "\n\nREADABILITY: Write at a 6th-8th grade reading level. Mix short sentences (under 10 words) with medium ones (15-20 words). Use everyday words. Write like you would explain something to a friend — natural, not robotic. Vary your rhythm. Do not write every sentence the same length.";
 
         if ( $is_takeaways ) {
             $prompt = "Write the Key Takeaways section for an article about \"{$keyword}\".\n\nReturn exactly:\n## Key Takeaways\n- [Takeaway 1 — 15-25 simple words]\n- [Takeaway 2 — 15-25 simple words]\n- [Takeaway 3 — 15-25 simple words]\n\nUse simple language a 12-year-old can understand.";
@@ -518,13 +518,44 @@ NLP ENTITY OPTIMIZATION (Google Natural Language):
 - Mention primary entities early in the text (salience scoring)
 - Stay focused on one topic per section (triggers specific content classification)
 
-READABILITY: Grade 6-8 reading level. Short sentences under 20 words. Simple common words. Active voice. No filler phrases.
+WRITE LIKE A HUMAN (CRITICAL — readers and Google detect AI writing):
+You MUST avoid these AI writing patterns. Articles that sound AI-generated get lower engagement and trust scores.
+
+BANNED WORDS AND PHRASES — never use these:
+- Significance words: testament, pivotal, crucial, vital, landscape (abstract), tapestry, cornerstone, paradigm, game-changer, revolutionary
+- Promotional: vibrant, groundbreaking, renowned, breathtaking, nestled, stunning, seamless, robust, cutting-edge, leverage, utilize
+- Filler: additionally, furthermore, it is important to note, in order to, at the end of the day, in today's world, when it comes to
+- AI tells: delve, foster, garner, underscore, highlight (verb), showcase, encompass, interplay, intricate, enduring
+- Signposting: let's dive in, let's explore, here's what you need to know, without further ado, let's break this down
+- Sycophantic: great question, absolutely, certainly, I hope this helps
+
+BANNED PATTERNS:
+- Never use 'serves as' / 'stands as' / 'represents' — just use 'is'
+- Never use em dashes (—) more than once per 500 words — use commas or periods instead
+- Never group things in threes for rhetorical effect (rule of three)
+- Never use -ing phrases to pad depth: 'highlighting...', 'showcasing...', 'underscoring...'
+- Never use 'Not only X, but also Y' or 'It's not just X, it's Y'
+- Never use 'From X to Y' false range constructions
+- Never end with generic positive conclusions like 'the future looks bright'
+- Never write 'Despite challenges... continues to thrive'
+- Never cycle through synonyms for the same thing (protagonist/main character/central figure/hero)
+
+WRITE NATURALLY:
+- Use 'is', 'are', 'has', 'was' — simple verbs, not elaborate substitutes
+- Vary sentence length: mix short punchy sentences with longer flowing ones
+- Be specific: '3,200 units sold in March' not 'significant sales growth'
+- Have a point of view — don't just neutrally list facts
+- Acknowledge tradeoffs: 'works well for X but less suited for Y'
+- Use occasional first-person when appropriate: 'here is what stands out'
+- Write how you would explain it to a colleague, not how a press release reads
+
+READABILITY: Grade 6-8 reading level. Simple common words. Active voice.
 
 WORD COUNT: Always write the FULL number of words requested. Being too short is a failure.
 
 STRUCTURE: Start every H2/H3 section with a 40-60 word paragraph that directly answers the heading. Never start paragraphs with pronouns (It, This, They, These, Those, He, She, We). Every paragraph must make sense in isolation (AI extracts individual paragraphs).
 
-FORMAT: Output GitHub Flavored Markdown. Only bold the primary keyword on its FIRST mention in the article — do NOT bold other terms, secondary keywords, or repeat bold on the keyword. Use tables for comparisons. Use bullet/numbered lists for features and steps.";
+FORMAT: Output GitHub Flavored Markdown. Only bold the primary keyword on its FIRST mention in the article — no other bold. Use tables for comparisons. Use bullet/numbered lists for features and steps.";
     }
 
     /**
