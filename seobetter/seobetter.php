@@ -425,6 +425,14 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
+        register_rest_route( 'seobetter/v1', '/generate/improve', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_improve_content' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+
         register_rest_route( 'seobetter/v1', '/save-draft', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_save_draft' ],
@@ -662,6 +670,36 @@ final class SEOBetter {
             'success' => true,
             'post_id' => $post_id,
             'edit_url' => get_edit_post_link( $post_id, 'raw' ),
+        ] );
+    }
+
+    /**
+     * Re-format and re-score improved content (called by Fix Now buttons).
+     */
+    public function rest_improve_content( \WP_REST_Request $request ): \WP_REST_Response {
+        $markdown = $request->get_param( 'markdown' ) ?? '';
+        $keyword  = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
+        $accent   = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
+
+        if ( empty( $markdown ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'No content.' ], 400 );
+        }
+
+        // Format as classic HTML
+        $formatter = new SEOBetter\Content_Formatter();
+        $html = $formatter->format( $markdown, 'classic', [ 'accent_color' => $accent ] );
+
+        // Re-score
+        $analyzer = new SEOBetter\GEO_Analyzer();
+        $score = $analyzer->analyze( $html, $keyword );
+
+        return new \WP_REST_Response( [
+            'success'    => true,
+            'content'    => $html,
+            'geo_score'  => $score['geo_score'],
+            'grade'      => $score['grade'],
+            'word_count' => str_word_count( wp_strip_all_tags( $html ) ),
+            'checks'     => $score['checks'],
         ] );
     }
 
