@@ -27,15 +27,19 @@ class GEO_Analyzer {
      * @param string $title   Post title.
      * @return array Analysis results with overall score and breakdown.
      */
-    public function analyze( string $content, string $title = '' ): array {
+    public function analyze( string $content, string $title = '', string $content_type = '' ): array {
         $text = wp_strip_all_tags( $content );
         $sections = $this->extract_sections( $content );
         $word_count = str_word_count( $text );
 
+        // Content types where section opener prose rules don't apply
+        $skip_opener_types = [ 'recipe', 'faq_page', 'live_blog', 'interview', 'glossary_definition' ];
+        $skip_openers = in_array( $content_type, $skip_opener_types, true );
+
         $checks = [
             'readability'      => $this->check_readability( $text ),
             'bluf_header'      => $this->check_bluf_header( $content ),
-            'section_openings' => $this->check_section_openings( $sections ),
+            'section_openings' => $skip_openers ? [ 'score' => 80, 'detail' => 'Section opener check adjusted for ' . $content_type . ' content type' ] : $this->check_section_openings( $sections ),
             'island_test'      => $this->check_island_test( $text ),
             'factual_density'  => $this->check_factual_density( $text, $word_count ),
             'citations'        => $this->check_citations( $text ),

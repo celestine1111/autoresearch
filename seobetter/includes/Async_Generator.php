@@ -324,7 +324,13 @@ class Async_Generator {
             'glossary_definition' => ['sections' => 'One-Sentence Definition, Expanded Explanation, Examples, Related Terms, FAQ, References', 'guidance' => 'What is X? explainer. Lead with the definition. Expand with context. Include practical examples. Link to related terms.', 'schema' => 'Article'],
             'sponsored' => ['sections' => 'Sponsorship Disclosure, Introduction, Body, Sponsor Call to Action, FAQ, References', 'guidance' => 'Paid content. MUST include clear disclosure at the top. Balance informational value with sponsor messaging. Be transparent.', 'schema' => 'AdvertiserContentArticle'],
         ];
-        return $templates[ $content_type ] ?? $templates['blog_post'];
+
+        // Shared SEO + humanizer rules appended to all content type guidance
+        $shared = ' CRITICAL RULES FOR ALL TYPES: Include 3+ statistics with (Source, Year) per 1000 words (+40% AI visibility). Include 2+ expert quotes with full attribution (+41% visibility). Include 5+ inline citations in [Source, Year] format (+30% visibility). Follow humanizer rules: no AI words (delve, leverage, pivotal, tapestry, landscape), vary sentence rhythm, write like a knowledgeable human with opinions. Apply E-E-A-T: show experience, expertise, authority, and trustworthiness appropriate to this content type.';
+
+        $template = $templates[ $content_type ] ?? $templates['blog_post'];
+        $template['guidance'] .= $shared;
+        return $template;
     }
 
     /**
@@ -386,7 +392,10 @@ class Async_Generator {
         $domain = $options['domain'] ?? 'general';
         $intent_guidance = self::get_intent_guidance( $intent );
         $tone_guidance = self::get_tone_guidance( $tone );
-        $kw_context = "\n{$intent_guidance}";
+        $content_type = $options['content_type'] ?? 'blog_post';
+        $prose = self::get_prose_template( $content_type );
+        $kw_context = "\nCONTENT TYPE: {$content_type}. {$prose['guidance']}";
+        $kw_context .= "\n{$intent_guidance}";
         $kw_context .= "\n{$tone_guidance}";
         if ( $audience ) $kw_context .= "\nTarget audience: {$audience} — write for this specific reader, use their language and concerns";
         if ( $domain && $domain !== 'general' ) $kw_context .= "\nContent domain: {$domain}";
@@ -476,9 +485,9 @@ class Async_Generator {
             'accent_color' => $options['accent_color'] ?? '#764ba2',
         ] );
 
-        // GEO score
+        // GEO score — pass content type so scorer adjusts checks
         $analyzer = new GEO_Analyzer();
-        $score = $analyzer->analyze( $html, $keyword );
+        $score = $analyzer->analyze( $html, $keyword, $options['content_type'] ?? '' );
 
         return [
             'success'     => true,

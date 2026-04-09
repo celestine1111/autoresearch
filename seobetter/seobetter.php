@@ -863,16 +863,16 @@ final class SEOBetter {
             'article_with_faq' => 'Article',
             'news'             => 'NewsArticle',
             'opinion'          => 'OpinionNewsArticle',
-            'howto'            => 'Article',
-            'review'           => 'Article',
-            'faq'              => 'Article',
+            'howto'            => 'HowTo',
+            'review'           => 'Review',
+            'faq'              => 'FAQPage',
             'product'          => 'Article',
             'tech'             => 'TechArticle',
             'report'           => 'Report',
             'scholarly'        => 'ScholarlyArticle',
             'liveblog'         => 'LiveBlogPosting',
             'sponsored'        => 'AdvertiserContentArticle',
-            'recipe'           => 'Article',
+            'recipe'           => 'Recipe',
         ];
         $schema_at_type = $type_map[ $type ] ?? 'Article';
 
