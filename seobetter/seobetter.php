@@ -251,6 +251,10 @@ final class SEOBetter {
         if ( ! is_singular() ) {
             return;
         }
+        // Skip if an SEO plugin is handling schema (avoid duplication)
+        if ( defined( 'AIOSEO_VERSION' ) || defined( 'WPSEO_VERSION' ) || class_exists( 'RankMath' ) ) {
+            return;
+        }
         $settings = get_option( 'seobetter_settings', [] );
         if ( empty( $settings['auto_schema'] ) ) {
             return;
@@ -667,10 +671,17 @@ final class SEOBetter {
             update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
         }
 
+        // Detect where schema is going for user feedback
+        $schema_dest = 'seobetter';
+        if ( defined( 'AIOSEO_VERSION' ) ) $schema_dest = 'aioseo';
+        elseif ( defined( 'WPSEO_VERSION' ) ) $schema_dest = 'yoast';
+        elseif ( class_exists( 'RankMath' ) ) $schema_dest = 'rankmath';
+
         return new \WP_REST_Response( [
-            'success' => true,
-            'post_id' => $post_id,
-            'edit_url' => get_edit_post_link( $post_id, 'raw' ),
+            'success'     => true,
+            'post_id'     => $post_id,
+            'edit_url'    => get_edit_post_link( $post_id, 'raw' ),
+            'schema_dest' => $schema_dest,
         ] );
     }
 
@@ -807,7 +818,6 @@ final class SEOBetter {
             'personal_essay'     => 'article',
             'glossary_definition'=> 'article_with_faq',
             'sponsored'          => 'sponsored',
-            'live_blog'          => 'liveblog',
         ];
         return $map[ $content_type ] ?? 'article';
     }

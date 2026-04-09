@@ -1285,7 +1285,12 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
                 if (r.success) {
                     btn.textContent = 'Saved!';
                     btn.style.background = '#059669';
-                    statusEl.innerHTML = '<a href="'+r.edit_url+'" style="color:#764ba2;font-weight:600">Edit post &rarr;</a>';
+                    var schemaNote = '';
+                    if (r.schema_dest === 'aioseo') schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → AIOSEO</span>';
+                    else if (r.schema_dest === 'yoast') schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → Yoast SEO</span>';
+                    else if (r.schema_dest === 'rankmath') schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → RankMath</span>';
+                    else schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → SEOBetter (auto-injected)</span>';
+                    statusEl.innerHTML = '<a href="'+r.edit_url+'" style="color:#764ba2;font-weight:600">Edit post &rarr;</a>' + schemaNote;
                 } else {
                     btn.disabled = false;
                     btn.textContent = 'Save as WordPress Draft';
