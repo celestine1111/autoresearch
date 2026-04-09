@@ -82,6 +82,7 @@ class Async_Generator {
                 'accent_color'       => sanitize_text_field( $params['accent_color'] ?? '#764ba2' ),
                 'country'            => sanitize_text_field( $params['country'] ?? '' ),
                 'language'           => sanitize_text_field( $params['language'] ?? 'en' ),
+                'content_type'       => sanitize_text_field( $params['content_type'] ?? 'blog_post' ),
             ],
             'steps'       => $steps,
             'current'     => 0,
@@ -296,6 +297,37 @@ class Async_Generator {
     }
 
     /**
+     * Get prose template sections for a content type.
+     * Returns section structure guidance for the outline and section generation.
+     */
+    private static function get_prose_template( string $content_type ): array {
+        $templates = [
+            'blog_post' => ['sections' => 'Key Takeaways, 3-5 topic sections with H2 headings, FAQ, References', 'guidance' => 'Conversational blog entry. Grab attention with an opening hook. Personal voice allowed. End with a call to action.', 'schema' => 'BlogPosting'],
+            'news_article' => ['sections' => 'Key Takeaways, Lede (who/what/when/where/why), Supporting Details, Background Context, What Happens Next, FAQ, References', 'guidance' => 'Inverted pyramid: most important facts first. Neutral third person. Attribute every claim. Short paragraphs.', 'schema' => 'NewsArticle'],
+            'opinion' => ['sections' => 'Key Takeaways, Thesis Statement, Supporting Arguments (3 points with evidence), Counterargument, Call to Action, FAQ, References', 'guidance' => 'Argumentative piece with clear stance. First person allowed. Confident tone. Address the strongest counterargument.', 'schema' => 'OpinionNewsArticle'],
+            'how_to' => ['sections' => 'Key Takeaways, Why This Matters, What You Will Need, Numbered Steps (each step: action verb + result), Common Problems, Conclusion, FAQ, References', 'guidance' => 'Step-by-step tutorial. Imperative voice (do this, then do that). Clear prerequisites. Each step should be independently actionable.', 'schema' => 'HowTo'],
+            'listicle' => ['sections' => 'Key Takeaways, Introduction (selection criteria), Numbered Items (each with H2 heading + 100-200 words), Conclusion, FAQ, References', 'guidance' => 'Scannable numbered list. Each item gets its own H2. Include one image reference per item. Punchy descriptions.', 'schema' => 'Article'],
+            'review' => ['sections' => 'Key Takeaways, What It Is and Who It Is For, Key Specs and Features, Hands-on Experience, Pros and Cons, Verdict and Rating, FAQ, References', 'guidance' => 'Honest product evaluation. Evidence-based claims. Include specific measurements and comparisons. Declare a clear verdict.', 'schema' => 'Review'],
+            'comparison' => ['sections' => 'Key Takeaways, Quick Overview Table, One H2 Per Comparison Criterion (declare winner per criterion), Overall Verdict, Who Should Pick Which, FAQ, References', 'guidance' => 'Head-to-head comparison. Must include at least one comparison table. Declare a winner per criterion and overall. Be specific with numbers.', 'schema' => 'Article'],
+            'buying_guide' => ['sections' => 'Key Takeaways, Quick Picks Table, Individual Product Mini-Reviews (each with H2), What to Look For When Buying, FAQ, References', 'guidance' => 'Best X for Y roundup. Start with a quick picks summary table. Each product gets pros/cons/verdict. End with buying criteria.', 'schema' => 'Article'],
+            'pillar_guide' => ['sections' => 'Key Takeaways, Table of Contents, 5-10 Chapter Sections (each a standalone mini-guide with H2), Summary and Next Steps, Further Reading, FAQ, References', 'guidance' => 'Comprehensive evergreen guide. Each chapter should work as a standalone article. Include internal links between chapters. This is the definitive resource on the topic.', 'schema' => 'Article'],
+            'case_study' => ['sections' => 'Key Takeaways, Executive Summary, The Challenge, The Solution, Results and Metrics, Client Quote, FAQ, References', 'guidance' => 'Customer success story. Lead with the metric. Problem-solution-result structure. Include specific numbers. End with a direct quote from the client.', 'schema' => 'Article'],
+            'interview' => ['sections' => 'Key Takeaways, Introduction (why this person), Short Bio, Q&A Pairs (5-10 questions), Closing Thoughts, References', 'guidance' => 'Q&A format. Questions should be bold H3 headings. Answers should feel natural and conversational. Include follow-up questions.', 'schema' => 'Article'],
+            'faq_page' => ['sections' => 'Topic Introduction, 10-15 Question and Answer Pairs, References', 'guidance' => 'Collection of Q&A pairs. Questions phrased exactly as users search. Direct answers in the first sentence. Vary answer lengths.', 'schema' => 'FAQPage'],
+            'recipe' => ['sections' => 'Recipe Intro Story, Tips and Substitutions, Ingredients List, Numbered Instructions, Notes and Storage, FAQ, References', 'guidance' => 'Recipe format. Brief personal story (2-3 paragraphs max). Clear ingredient list with measurements. Numbered steps with action verbs. Include prep time, cook time, servings in the intro.', 'schema' => 'Recipe'],
+            'tech_article' => ['sections' => 'Key Takeaways, What You Will Build, Prerequisites, Setup, Code Walkthrough (with code blocks), Testing and Verification, Recap and Further Reading, FAQ, References', 'guidance' => 'Developer tutorial. Include code blocks. Explain each step. List prerequisites clearly. Test everything you recommend.', 'schema' => 'TechArticle'],
+            'white_paper' => ['sections' => 'Executive Summary, Introduction and Problem Statement, Methodology, Findings, Analysis, Recommendations, Conclusion, References', 'guidance' => 'Authoritative research report. Data-driven. Formal tone. Every claim backed by evidence. Include charts/tables for data visualization.', 'schema' => 'Report'],
+            'scholarly_article' => ['sections' => 'Abstract, Introduction, Literature Review, Methods, Results, Discussion, Conclusion, References', 'guidance' => 'Academic paper format. Formal academic tone. Cite all claims. Include methodology details. Discuss limitations.', 'schema' => 'ScholarlyArticle'],
+            'live_blog' => ['sections' => 'What We Are Covering, Timestamped Updates (latest first)', 'guidance' => 'Real-time event coverage. Each update gets a timestamp. Latest first. Short punchy updates. Include quotes from participants.', 'schema' => 'LiveBlogPosting'],
+            'press_release' => ['sections' => 'Headline, Subheadline, Dateline and Lede Paragraph, Body with Quotes, About Company, Media Contact, References', 'guidance' => 'Corporate announcement. Formal third person. Include at least 2 executive quotes. End with company boilerplate. Keep under 800 words.', 'schema' => 'NewsArticle'],
+            'personal_essay' => ['sections' => 'Opening Scene, Tension or Conflict, Reflection, Resolution or Lesson', 'guidance' => 'First-person narrative. Show don\'t tell. Vivid sensory details. Honest personal voice. Build to a realization or lesson learned.', 'schema' => 'BlogPosting'],
+            'glossary_definition' => ['sections' => 'One-Sentence Definition, Expanded Explanation, Examples, Related Terms, FAQ, References', 'guidance' => 'What is X? explainer. Lead with the definition. Expand with context. Include practical examples. Link to related terms.', 'schema' => 'Article'],
+            'sponsored' => ['sections' => 'Sponsorship Disclosure, Introduction, Body, Sponsor Call to Action, FAQ, References', 'guidance' => 'Paid content. MUST include clear disclosure at the top. Balance informational value with sponsor messaging. Be transparent.', 'schema' => 'AdvertiserContentArticle'],
+        ];
+        return $templates[ $content_type ] ?? $templates['blog_post'];
+    }
+
+    /**
      * Generate the article outline (one API call).
      */
     private static function generate_outline( string $keyword, array $options, array $secondary, array $lsi ): array {
@@ -314,10 +346,12 @@ class Async_Generator {
         $tone = $options['tone'] ?? 'authoritative';
         $tone_guidance = self::get_tone_guidance( $tone );
         $audience = $options['audience'] ?? 'general';
+        $content_type = $options['content_type'] ?? 'blog_post';
+        $prose = self::get_prose_template( $content_type );
 
         $year = wp_date( 'Y' );
         $min_kw_headings = max( 1, round( $content_sections * 0.3 ) );
-        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the content H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant\n- Make headings sound natural — like questions a real person would ask, not SEO templates\n- Target word count: {$total_words} words\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
+        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "\n\nRequirements:\n- Follow the REQUIRED SECTIONS structure above — use those as your H2 headings\n- Adapt the section names to fit the specific keyword naturally\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant\n- Make headings sound natural, not like SEO templates\n- Target word count: {$total_words} words\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
 
         $result = self::send_request( $prompt, 'You are an SEO content strategist. Return only the numbered list of headings.', [ 'max_tokens' => 500 ] );
 

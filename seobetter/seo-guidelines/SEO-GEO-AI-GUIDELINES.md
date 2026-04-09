@@ -446,19 +446,49 @@ This is the scoring system used by `GEO_Analyzer.php`. Each check is weighted.
 
 ## 10. SCHEMA MARKUP REQUIREMENTS
 
-| Content Type | Required Schema | AI Visibility Boost |
-|---|---|:---:|
-| Blog Post | Article + FAQPage | 30-40% |
-| How-To Guide | HowTo + FAQPage | Direct step extraction |
-| Product Page | Product + Review | Pricing/features extraction |
-| Comparison | ItemList + FAQPage | Structured comparison data |
-| FAQ Page | FAQPage | +40% AI visibility |
+### 10.1 Content Types and Schema Mapping
 
-**Implementation:**
+The plugin supports 21 content types. Each uses a different schema.org @type and prose structure:
+
+| Content Type | Schema @type | Prose Structure | Word Range |
+|---|---|---|---|
+| Blog Post | BlogPosting + FAQPage | Hook → Intro → Body → Conclusion → CTA | 800-2000 |
+| News Article | NewsArticle | Lede → Nut Graf → Details → Background → Closing | 400-1200 |
+| Opinion / Op-Ed | OpinionNewsArticle | Thesis → Arguments → Counterargument → CTA | 600-1500 |
+| How-To Guide | HowTo + Article | Why → Prerequisites → Steps → Troubleshooting → Conclusion | 800-2500 |
+| Listicle | Article + ItemList | Intro → Numbered Items → Conclusion | 1000-3000 |
+| Product Review | Review + Article | Intro → Specs → Experience → Pros/Cons → Verdict | 800-2000 |
+| Comparison | Article + FAQPage | Overview Table → Criterion Sections → Verdict → Recommendation | 1200-2500 |
+| Buying Guide | Article + ItemList | Quick Picks → Mini-Reviews → Buying Advice → FAQ | 2000-5000 |
+| Ultimate Guide | Article + FAQPage | TOC → Chapters (5-10) → Summary → Resources | 3000-10000 |
+| Case Study | Article | Summary → Challenge → Solution → Results → Quote | 800-2000 |
+| Interview | Article | Intro → Bio → Q&A → Closing | 1000-3000 |
+| FAQ Page | FAQPage | Intro → 10-15 Q&A Pairs | 500-2000 |
+| Recipe | Recipe + HowTo | Story → Tips → Ingredients → Instructions → Notes | 500-1500 |
+| Technical Article | TechArticle | What to Build → Prerequisites → Setup → Walkthrough → Testing | 1000-3500 |
+| White Paper | Report | Executive Summary → Problem → Methodology → Findings → Recommendations | 2500-8000 |
+| Scholarly Article | ScholarlyArticle | Abstract → Intro → Lit Review → Methods → Results → Discussion | 3000-8000 |
+| Live Blog | LiveBlogPosting | Coverage Intro → Timestamped Updates | 500-5000 |
+| Press Release | NewsArticle | Headline → Dateline → Body → Boilerplate → Contact | 300-800 |
+| Personal Essay | BlogPosting | Scene → Tension → Reflection → Resolution | 800-2500 |
+| Glossary | Article + FAQPage | Definition → Explanation → Examples → Related Terms | 400-1200 |
+| Sponsored | AdvertiserContentArticle | Disclosure → Intro → Body → Sponsor CTA | 600-1500 |
+
+### 10.2 Schema Implementation
 - JSON-LD format only (not microdata)
 - Single `<script type="application/ld+json">` tag
 - Must match visible page content exactly
 - Validate with Schema.org Validator
+- Content type selection in the form determines the schema @type
+- FAQ Q&A pairs are auto-extracted from content and added as FAQPage schema
+- HowTo steps are auto-extracted from ordered lists
+- Recipe ingredients and instructions are auto-extracted
+
+### 10.3 Schema Notes
+- **HowTo** rich results were deprecated by Google in late 2023 — schema is still valid and useful for AI crawlers
+- **FAQPage** rich results are now limited to government/health sites — still worth emitting for AI/semantic reasons
+- **Review** aggregate ratings must be real and visible on the page
+- **Recipe** requires at least ingredients and instructions to be valid
 
 ---
 

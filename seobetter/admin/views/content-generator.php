@@ -276,6 +276,43 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                 <div class="sb-section">
                     <h3 class="sb-section-header"><span class="dashicons dashicons-admin-settings"></span> Article Settings</h3>
 
+                    <div class="sb-field-row">
+                        <div class="sb-field">
+                            <label>Content Type
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text">Changes the article structure, tone, and JSON-LD schema. Each type uses a different prose template optimized for its format.</span>
+                                </span>
+                            </label>
+                            <select name="content_type" id="sb-content-type" onchange="sbContentTypeChanged(this.value)">
+                                <optgroup label="Common">
+                                    <option value="blog_post" <?php selected( $_POST['content_type'] ?? 'blog_post', 'blog_post' ); ?>>Blog Post</option>
+                                    <option value="how_to" <?php selected( $_POST['content_type'] ?? '', 'how_to' ); ?>>How-To Guide</option>
+                                    <option value="listicle" <?php selected( $_POST['content_type'] ?? '', 'listicle' ); ?>>Listicle (Top 10...)</option>
+                                    <option value="review" <?php selected( $_POST['content_type'] ?? '', 'review' ); ?>>Product Review</option>
+                                    <option value="comparison" <?php selected( $_POST['content_type'] ?? '', 'comparison' ); ?>>Comparison (X vs Y)</option>
+                                    <option value="buying_guide" <?php selected( $_POST['content_type'] ?? '', 'buying_guide' ); ?>>Buying Guide / Roundup</option>
+                                    <option value="news_article" <?php selected( $_POST['content_type'] ?? '', 'news_article' ); ?>>News Article</option>
+                                    <option value="faq_page" <?php selected( $_POST['content_type'] ?? '', 'faq_page' ); ?>>FAQ Page</option>
+                                    <option value="pillar_guide" <?php selected( $_POST['content_type'] ?? '', 'pillar_guide' ); ?>>Ultimate Guide</option>
+                                </optgroup>
+                                <optgroup label="Specialized">
+                                    <option value="recipe" <?php selected( $_POST['content_type'] ?? '', 'recipe' ); ?>>Recipe</option>
+                                    <option value="case_study" <?php selected( $_POST['content_type'] ?? '', 'case_study' ); ?>>Case Study</option>
+                                    <option value="tech_article" <?php selected( $_POST['content_type'] ?? '', 'tech_article' ); ?>>Technical Article</option>
+                                    <option value="interview" <?php selected( $_POST['content_type'] ?? '', 'interview' ); ?>>Interview / Q&A</option>
+                                    <option value="white_paper" <?php selected( $_POST['content_type'] ?? '', 'white_paper' ); ?>>White Paper / Report</option>
+                                    <option value="opinion" <?php selected( $_POST['content_type'] ?? '', 'opinion' ); ?>>Opinion / Op-Ed</option>
+                                    <option value="press_release" <?php selected( $_POST['content_type'] ?? '', 'press_release' ); ?>>Press Release</option>
+                                    <option value="personal_essay" <?php selected( $_POST['content_type'] ?? '', 'personal_essay' ); ?>>Personal Essay</option>
+                                    <option value="glossary_definition" <?php selected( $_POST['content_type'] ?? '', 'glossary_definition' ); ?>>Glossary / Definition</option>
+                                    <option value="scholarly_article" <?php selected( $_POST['content_type'] ?? '', 'scholarly_article' ); ?>>Scholarly Article</option>
+                                    <option value="sponsored" <?php selected( $_POST['content_type'] ?? '', 'sponsored' ); ?>>Sponsored / Advertorial</option>
+                                    <option value="live_blog" <?php selected( $_POST['content_type'] ?? '', 'live_blog' ); ?>>Live Blog</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="sb-field-row-3">
                         <div class="sb-field">
                             <label>Word Count
@@ -780,6 +817,40 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
 var CLOUD = '<?php echo esc_js( $cloud_url ); ?>';
 var SITE  = '<?php echo esc_js( $home ); ?>';
 
+// Content type auto-adjust (tone + word count)
+function sbContentTypeChanged(type) {
+    var toneEl = document.querySelector('[name="tone"]');
+    var wcEl = document.querySelector('[name="word_count"]');
+    var presets = {
+        blog_post:      {tone:'conversational',wc:'1500'},
+        news_article:   {tone:'journalistic',wc:'1000'},
+        opinion:        {tone:'authoritative',wc:'1500'},
+        how_to:         {tone:'educational',wc:'2000'},
+        listicle:       {tone:'conversational',wc:'2000'},
+        review:         {tone:'authoritative',wc:'1500'},
+        comparison:     {tone:'authoritative',wc:'2000'},
+        buying_guide:   {tone:'authoritative',wc:'2500'},
+        pillar_guide:   {tone:'authoritative',wc:'3000'},
+        case_study:     {tone:'professional',wc:'1500'},
+        interview:      {tone:'conversational',wc:'1500'},
+        faq_page:       {tone:'educational',wc:'1000'},
+        recipe:         {tone:'conversational',wc:'1000'},
+        tech_article:   {tone:'educational',wc:'2000'},
+        white_paper:    {tone:'professional',wc:'3000'},
+        scholarly_article:{tone:'professional',wc:'3000'},
+        live_blog:      {tone:'journalistic',wc:'1000'},
+        press_release:  {tone:'professional',wc:'800'},
+        personal_essay: {tone:'conversational',wc:'1500'},
+        glossary_definition:{tone:'educational',wc:'800'},
+        sponsored:      {tone:'conversational',wc:'1000'},
+    };
+    var p = presets[type];
+    if (p && toneEl && wcEl) {
+        toneEl.value = p.tone;
+        wcEl.value = p.wc;
+    }
+}
+
 // Auto-suggest keywords
 document.getElementById('seobetter-auto-keywords').addEventListener('click', function() {
     var kw = document.getElementById('primary_keyword').value.trim();
@@ -1164,6 +1235,7 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             content: res.content || '',
             accent_color: accentVal,
             keyword: res.keyword || '',
+            content_type: (document.querySelector('[name="content_type"]')||{}).value||'blog_post',
             meta_title: (res.meta && res.meta.title) || bestTitle || '',
             meta_description: (res.meta && res.meta.description) || '',
             og_title: (res.meta && res.meta.og_title) || bestTitle || ''
@@ -1311,6 +1383,7 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             lsi_keywords: (form.querySelector('[name="lsi_keywords"]')||{}).value||'',
             word_count: (form.querySelector('[name="word_count"]')||{}).value||'2000',
             tone: (form.querySelector('[name="tone"]')||{}).value||'authoritative',
+            content_type: (form.querySelector('[name="content_type"]')||{}).value||'blog_post',
             domain: (form.querySelector('[name="domain"]')||{}).value||'general',
             audience: (form.querySelector('[name="audience"]')||{}).value||'',
             country: (form.querySelector('[name="country"]')||{}).value||'',

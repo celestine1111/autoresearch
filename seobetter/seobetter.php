@@ -651,7 +651,8 @@ final class SEOBetter {
 
         // Populate AIOSEO fields if the plugin is active
         if ( defined( 'AIOSEO_VERSION' ) || function_exists( 'aioseo' ) ) {
-            $this->populate_aioseo( $post_id, $keyword, $meta_title ?: $title, $meta_desc, $og_title ?: $meta_title ?: $title, $post_content );
+            $content_type = sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' );
+            $this->populate_aioseo( $post_id, $keyword, $meta_title ?: $title, $meta_desc, $og_title ?: $meta_title ?: $title, $post_content, $content_type );
         }
 
         // Also populate Yoast and RankMath if active (covers all SEO plugins)
@@ -706,7 +707,7 @@ final class SEOBetter {
     /**
      * Populate AIOSEO fields for a post.
      */
-    private function populate_aioseo( int $post_id, string $keyword, string $seo_title, string $meta_desc, string $og_title, string $content = '' ): void {
+    private function populate_aioseo( int $post_id, string $keyword, string $seo_title, string $meta_desc, string $og_title, string $content = '', string $content_type = '' ): void {
         global $wpdb;
 
         // Social meta
@@ -724,7 +725,8 @@ final class SEOBetter {
         $article_section = ! empty( $categories ) ? $categories[0] : 'General';
 
         // --- Detect article type and build schema ---
-        $schema_type = $this->detect_schema_type( $seo_title, $content );
+        // Use user-selected content type if provided, otherwise auto-detect from title
+        $schema_type = $content_type ? $this->content_type_to_schema( $content_type ) : $this->detect_schema_type( $seo_title, $content );
         $schema_data = $this->build_aioseo_schema( $schema_type, $post_id, $seo_title, $content, $keyword );
 
         // AIOSEO table
@@ -779,6 +781,37 @@ final class SEOBetter {
     /**
      * Detect the schema type based on article title and content.
      */
+    /**
+     * Map content type to schema type string used by build_aioseo_schema.
+     */
+    private function content_type_to_schema( string $content_type ): string {
+        $map = [
+            'blog_post'          => 'article',
+            'news_article'       => 'news',
+            'opinion'            => 'opinion',
+            'how_to'             => 'howto',
+            'listicle'           => 'article_with_faq',
+            'review'             => 'review',
+            'comparison'         => 'article_with_faq',
+            'buying_guide'       => 'article_with_faq',
+            'pillar_guide'       => 'article_with_faq',
+            'case_study'         => 'article',
+            'interview'          => 'article',
+            'faq_page'           => 'faq',
+            'recipe'             => 'recipe',
+            'tech_article'       => 'tech',
+            'white_paper'        => 'report',
+            'scholarly_article'  => 'scholarly',
+            'live_blog'          => 'liveblog',
+            'press_release'      => 'news',
+            'personal_essay'     => 'article',
+            'glossary_definition'=> 'article_with_faq',
+            'sponsored'          => 'sponsored',
+            'live_blog'          => 'liveblog',
+        ];
+        return $map[ $content_type ] ?? 'article';
+    }
+
     private function detect_schema_type( string $title, string $content ): string {
         $title_lower = strtolower( $title );
         $content_lower = strtolower( $content );
@@ -824,11 +857,30 @@ final class SEOBetter {
         $date_pub = $post ? get_the_date( 'c', $post ) : '';
         $date_mod = $post ? get_the_modified_date( 'c', $post ) : '';
 
+        // Map type to schema.org @type
+        $type_map = [
+            'article'          => 'Article',
+            'article_with_faq' => 'Article',
+            'news'             => 'NewsArticle',
+            'opinion'          => 'OpinionNewsArticle',
+            'howto'            => 'Article',
+            'review'           => 'Article',
+            'faq'              => 'Article',
+            'product'          => 'Article',
+            'tech'             => 'TechArticle',
+            'report'           => 'Report',
+            'scholarly'        => 'ScholarlyArticle',
+            'liveblog'         => 'LiveBlogPosting',
+            'sponsored'        => 'AdvertiserContentArticle',
+            'recipe'           => 'Article',
+        ];
+        $schema_at_type = $type_map[ $type ] ?? 'Article';
+
         // Base Article schema (always present)
         $schemas = [];
 
         $article = [
-            '@type'            => 'Article',
+            '@type'            => $schema_at_type,
             'headline'         => $title,
             'description'      => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
             'datePublished'    => $date_pub,
@@ -909,6 +961,50 @@ final class SEOBetter {
                     'step'  => $steps,
                 ];
             }
+        }
+
+        // Add Recipe schema if recipe type
+        if ( $type === 'recipe' ) {
+            $recipe = [
+                '@type'       => 'Recipe',
+                'name'        => $title,
+                'description' => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
+                'author'      => [ '@type' => 'Person', 'name' => $author_name ],
+                'datePublished' => $date_pub,
+            ];
+            if ( $thumbnail ) $recipe['image'] = $thumbnail;
+            // Extract ingredients from list items
+            if ( preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $content, $ing_matches ) ) {
+                $recipe['recipeIngredient'] = array_map( 'wp_strip_all_tags', array_slice( $ing_matches[1], 0, 30 ) );
+            }
+            // Extract instructions from ordered list or steps
+            if ( preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $content, $step_matches ) ) {
+                $recipe_steps = [];
+                foreach ( array_slice( $step_matches[1], 0, 15 ) as $s ) {
+                    $recipe_steps[] = [ '@type' => 'HowToStep', 'text' => wp_strip_all_tags( $s ) ];
+                }
+                $recipe['recipeInstructions'] = $recipe_steps;
+            }
+            $schemas[] = $recipe;
+        }
+
+        // Add Review schema if review type
+        if ( $type === 'review' ) {
+            $schemas[] = [
+                '@type'        => 'Review',
+                'name'         => $title,
+                'author'       => [ '@type' => 'Person', 'name' => $author_name ],
+                'datePublished' => $date_pub,
+                'itemReviewed' => [
+                    '@type' => 'Product',
+                    'name'  => $keyword ?: $title,
+                ],
+            ];
+        }
+
+        // Store content type in post meta for future reference
+        if ( $type ) {
+            update_post_meta( $post_id, '_seobetter_content_type', $type );
         }
 
         return $schemas;
