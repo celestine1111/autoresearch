@@ -11,20 +11,39 @@
 
 These are the proven methods from the KDD 2024 research paper on Generative Engine Optimization. Use these percentages in scoring and prioritization.
 
-| Method | Visibility Boost | Priority | How to Apply |
-|--------|:---:|:---:|---|
-| Cite sources | **+40%** | CRITICAL | Inline citations in [Source, Year] format. 5+ per article. |
-| Add statistics | **+37%** | CRITICAL | Specific numbers with (Source Name, Year). 3+ per 1000 words. |
-| Add quotations | **+30%** | HIGH | Expert quotes with name, title, org. 2+ per article. |
-| Authoritative tone | **+25%** | HIGH | Confident, decisive language. Active voice. |
-| Improve clarity | **+20%** | HIGH | Grade 6-8 reading level. Short sentences. |
-| Technical terms | **+18%** | MEDIUM | Domain-specific terminology where appropriate. |
-| Unique vocabulary | **+15%** | MEDIUM | Varied word choice. Avoid repetition. |
-| Fluency optimization | **+15-30%** | HIGH | Smooth transitions, natural flow. |
-| **Keyword stuffing** | **-10%** | **BLOCKED** | **Actively hurts AI visibility. Never do this.** |
+| Method | Visibility Boost (Position-Adjusted) | Subjective Impression | Priority | How to Apply |
+|--------|:---:|:---:|:---:|---|
+| Add quotations | **+41%** | +28% | CRITICAL | Expert quotes with name, title, org. 2+ per article. |
+| Add statistics | **+40%** | +23.7% | CRITICAL | Specific numbers with (Source Name, Year). 3+ per 1000 words. |
+| Cite sources | **+30%** | +21.9% | CRITICAL | Inline citations in [Source, Year] format. 5+ per article. |
+| Fluency optimization | **+25-30%** | +15-20% | HIGH | Smooth transitions, natural flow, polished writing. |
+| Easy-to-understand | **+15-30%** | varies | HIGH | Grade 6-8 reading level. Short sentences. |
+| Authoritative tone | **+12%** | +12% | HIGH | Confident, decisive language. Active voice. |
+| Technical terms | **modest** | modest | MEDIUM | Domain-specific terminology where appropriate. |
+| Unique vocabulary | **minimal** | minimal | LOW | Varied word choice — minimal impact on its own. |
+| **Keyword stuffing** | **-9%** | negative | **BLOCKED** | **Actively hurts AI visibility. Never do this.** |
 
-**Best combination:** Fluency + Statistics + Citations = Maximum boost
-**Key insight:** Low-ranking sites benefit even more — up to 115% visibility increase with citations
+**Best combination:** Fluency + Statistics = +5.5% above single-method performance. Adding Citations as supplement = average +31.4% improvement.
+
+**Key insight — Authority matters inversely:**
+| Site Authority (SERP Rank) | Cite Sources Boost | Statistics Boost |
+|---|:---:|:---:|
+| Rank 5 (lowest authority) | **+115.1%** | +97.9% |
+| Rank 3-4 (mid authority) | +40-60% | +30-50% |
+| Rank 1 (highest authority) | **-30.3%** | modest |
+
+**Low-authority sites benefit most from GEO.** Citation and statistics optimization can more than double visibility for sites that don't rank well traditionally. High-authority sites already get cited — aggressive optimization can actually reduce their visibility.
+
+**Domain-specific effectiveness:**
+| Method | Best For These Domains |
+|---|---|
+| Authoritative tone | Debate, History, Science |
+| Fluency optimization | Business, Science, Health |
+| Cite sources | Law & Government, Factual statements |
+| Add quotations | People & Society, History, Explanations |
+| Add statistics | Law & Government, Debate, Opinion |
+
+Source: Princeton University GEO study (arxiv.org/pdf/2311.09735), KDD 2024, GEO-bench with 10,000 queries across 25 domains.
 
 ---
 
@@ -433,7 +452,53 @@ Allow: /
 
 ---
 
-## 15. CORE-EEAT SCORING DIMENSIONS
+## 15. GOOGLE HELPFUL CONTENT REQUIREMENTS (E-E-A-T)
+
+Source: [Google Creating Helpful Content](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+### Trust Is The Most Important Signal
+Google states: "Of these aspects, trust is most important. The others contribute to trust, but content doesn't necessarily have to demonstrate all of them."
+
+### Google's Self-Assessment Questions (MUST pass all)
+Every generated article should pass these checks:
+- [ ] Would you bookmark or share this with a friend?
+- [ ] Does the content provide original information, reporting, or analysis?
+- [ ] Does it go beyond the obvious — is the analysis insightful?
+- [ ] After reading, will someone feel they learned enough to achieve their goal?
+- [ ] Does it demonstrate first-hand expertise or experience?
+- [ ] Is it free of easily-verified factual errors?
+- [ ] Is the headline accurate and non-exaggerated?
+
+### What Google Considers Unhelpful (AVOID)
+- Content primarily made to attract search engine visits (not people)
+- Mass-produced content across many topics without depth
+- Targeting specific word counts (Google says no preferred length exists)
+- Entering niche areas without real expertise
+- Promising answers to unanswerable questions
+- Creating need for user to search again for better info
+
+### AI Content Disclosure
+Google requires: "Make AI use self-evident to visitors through disclosures." When AI generates content, disclose it. Using AI to manipulate rankings violates spam policies.
+
+### YMYL (Your Money Your Life) Content
+Health, finance, safety, legal content requires STRONGER E-E-A-T. Google gives "even more weight to content that aligns with strong E-E-A-T" for YMYL topics.
+
+### NLP Entity Optimization (Google Cloud Natural Language)
+Google's NLP API evaluates content on these dimensions. Optimizing for them improves how Google understands and classifies content:
+
+| NLP Dimension | What Google Measures | How to Optimize |
+|---|---|---|
+| **Entity Recognition** | Named entities (people, orgs, places, products) with salience scores | Use specific proper nouns frequently. "Dr. Sarah Chen at MIT" > "an expert". Target 5%+ entity density. |
+| **Entity Salience** | How important each entity is to the overall text | Mention primary entities early and often. First mention = highest salience. |
+| **Sentiment** | Score (-1 to +1) and magnitude (0 to ∞) | Commercial content: balanced (magnitude high, score near 0). Informational: neutral-positive. |
+| **Content Classification** | Hierarchical categories (e.g., /Science/Astronomy) | Stay focused on one topic. Clear topical focus triggers specific (not generic) classification. |
+| **Syntax Analysis** | Sentence structure, parts of speech, dependency trees | Clear simple sentences. Active voice. Explicit subjects (no pronoun starts). |
+
+Reference: [Google Cloud Natural Language](https://cloud.google.com/natural-language)
+
+---
+
+## 15B. CORE-EEAT SCORING DIMENSIONS
 
 ### Content Body (CORE) — 40 items
 | Dimension | Items | Key Checks |

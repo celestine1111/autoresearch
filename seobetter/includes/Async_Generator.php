@@ -154,6 +154,9 @@ class Async_Generator {
                 $job['results']['trends'] = $research['for_prompt'] ?? '';
                 $job['results']['trend_source'] = $research['source'] ?? 'unknown';
 
+                // Detect search intent from keyword to adapt article structure
+                $job['results']['intent'] = self::detect_intent( $keyword );
+
             } elseif ( $step === 'outline' ) {
                 $step_label = 'Creating article outline...';
                 $outline = self::generate_outline( $keyword, $options, $secondary, $lsi );
@@ -182,7 +185,8 @@ class Async_Generator {
                 $section_content = self::generate_section(
                     $keyword, $heading, $section_idx, $options,
                     $secondary, $lsi, $system,
-                    $job['results']['trends'] ?? ''
+                    $job['results']['trends'] ?? '',
+                    $job['results']['intent'] ?? 'informational'
                 );
                 $job['results'][ 'section_' . $section_idx ] = $section_content;
 
@@ -242,6 +246,41 @@ class Async_Generator {
     }
 
     /**
+     * Detect search intent from keyword to adapt article structure.
+     * Returns: informational, commercial, transactional, or navigational.
+     */
+    private static function detect_intent( string $keyword ): string {
+        $kw = strtolower( $keyword );
+
+        // Transactional — user wants to buy/act
+        if ( preg_match( '/\b(buy|order|purchase|price|pricing|cost|cheap|affordable|deal|discount|coupon|shop|store|subscribe|download|hire|book|rent)\b/', $kw ) ) {
+            return 'transactional';
+        }
+        // Commercial — user is researching before buying
+        if ( preg_match( '/\b(best|top|review|compare|comparison|vs\.?|versus|recommend|rated|alternative|worth|should i)\b/', $kw ) ) {
+            return 'commercial';
+        }
+        // Navigational — user looking for specific brand/site
+        if ( preg_match( '/\b(login|sign in|official|website|contact|support|\.com|\.org)\b/', $kw ) ) {
+            return 'navigational';
+        }
+        // Default: informational
+        return 'informational';
+    }
+
+    /**
+     * Get intent-specific structure guidance for the AI.
+     */
+    private static function get_intent_guidance( string $intent ): string {
+        return match ( $intent ) {
+            'commercial' => "SEARCH INTENT: Commercial (user is comparing options before buying).\nSTRUCTURE: Include comparison tables with pros/cons, 'Best For' recommendations, specific pricing/features where available. Be balanced and data-driven. Include Product or Review schema signals.",
+            'transactional' => "SEARCH INTENT: Transactional (user wants to buy/act now).\nSTRUCTURE: Focus on product details, pricing, features, clear calls-to-action. Be direct and action-oriented. Keep content focused (1000-2000 words). Include purchase-relevant details.",
+            'navigational' => "SEARCH INTENT: Navigational (user looking for specific brand/entity).\nSTRUCTURE: Provide direct factual information about the entity. Include official sources. Keep content focused and specific (800-1500 words).",
+            default => "SEARCH INTENT: Informational (user wants to learn/understand).\nSTRUCTURE: Comprehensive guide with definitions, step-by-step explanations, expert quotes, statistics, and FAQ. Be thorough and educational.",
+        };
+    }
+
+    /**
      * Generate the article outline (one API call).
      */
     private static function generate_outline( string $keyword, array $options, array $secondary, array $lsi ): array {
@@ -254,8 +293,12 @@ class Async_Generator {
         if ( ! empty( $secondary ) ) $kw_context .= "\nSecondary keywords: " . implode( ', ', $secondary );
         if ( ! empty( $lsi ) ) $kw_context .= "\nLSI keywords: " . implode( ', ', $lsi );
 
+        // Detect search intent and adapt outline structure
+        $intent = self::detect_intent( $keyword );
+        $intent_guidance = self::get_intent_guidance( $intent );
+
         $min_kw_headings = max( 1, round( $content_sections * 0.3 ) );
-        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the content H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. For example: \"What Is the Best {$keyword}?\", \"How to Choose {$keyword}\", \"{$keyword}: Complete Guide\"\n- Target word count: {$total_words} words total\n- Target audience: " . ( $options['audience'] ?? 'general' ) . "\n- Domain: " . ( $options['domain'] ?? 'general' ) . "\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
+        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the content H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. For example: \"What Is the Best {$keyword}?\", \"How to Choose {$keyword}\", \"{$keyword}: Complete Guide\"\n- Target word count: {$total_words} words total\n- Target audience: " . ( $options['audience'] ?? 'general' ) . "\n- Domain: " . ( $options['domain'] ?? 'general' ) . "\n- Tone: " . ( $options['tone'] ?? 'authoritative' ) . "\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
 
         $result = self::send_request( $prompt, 'You are an SEO content strategist. Return only the numbered list of headings.', [ 'max_tokens' => 500 ] );
 
@@ -281,14 +324,16 @@ class Async_Generator {
     /**
      * Generate a single section (one API call).
      */
-    private static function generate_section( string $keyword, string $heading, int $index, array $options, array $secondary, array $lsi, string $system, string $trends ): string {
+    private static function generate_section( string $keyword, string $heading, int $index, array $options, array $secondary, array $lsi, string $system, string $trends, string $intent = 'informational' ): string {
         $total_words = $options['word_count'] ?? 2000;
         $num_sections = max( 3, round( $total_words / 400 ) );
         $words_per_section = max( 150, round( $total_words / $num_sections ) );
         $tone = $options['tone'] ?? 'authoritative';
         $audience = $options['audience'] ?? '';
         $domain = $options['domain'] ?? 'general';
-        $kw_context = "\nTone: {$tone}";
+        $intent_guidance = self::get_intent_guidance( $intent );
+        $kw_context = "\n{$intent_guidance}";
+        $kw_context .= "\nTone: {$tone}";
         if ( $audience ) $kw_context .= "\nTarget audience: {$audience}";
         if ( $domain && $domain !== 'general' ) $kw_context .= "\nContent domain: {$domain}";
         if ( ! empty( $secondary ) ) $kw_context .= "\nSecondary keywords to include: " . implode( ', ', $secondary );
@@ -343,8 +388,7 @@ class Async_Generator {
      * Assemble markdown from completed sections.
      */
     private static function assemble_markdown( array $job ): string {
-        $date = wp_date( 'F Y' );
-        $md = "Last Updated: {$date}\n\n# {$job['keyword']}\n\n";
+        $md = "# {$job['keyword']}\n\n";
 
         $section_keys = array_filter( array_keys( $job['results'] ), fn( $k ) => str_starts_with( $k, 'section_' ) );
         ksort( $section_keys );
@@ -440,24 +484,42 @@ class Async_Generator {
      * Get the system prompt.
      */
     private static function get_system_prompt(): string {
-        return "You are an expert SEO content writer. CRITICAL RULES you must follow:
+        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).
 
-KEYWORD DENSITY (MOST IMPORTANT FOR SEO):
-- The primary keyword MUST appear every 100-200 words (0.5%-1.5% density)
-- The primary keyword MUST appear in the first 1-2 sentences of the article
-- At least 30% of H2 headings must contain the primary keyword or a close variant
-- Use the EXACT keyword phrase naturally — do not split it or rearrange it
-- Also use natural variations (e.g., if keyword is 'reptile shop melbourne', also use 'melbourne reptile shop', 'reptile store in melbourne')
+KEYWORD DENSITY (CRITICAL FOR SEO PLUGINS):
+- Primary keyword MUST appear every 100-200 words (0.5%-1.5% density)
+- Primary keyword MUST appear in the first 1-2 sentences of the article
+- At least 30% of H2 headings must contain the primary keyword or close variant
+- Use EXACT keyword phrase naturally — do not split or rearrange it
+- Also use natural variations (rearranged words, synonyms, related phrases)
 
-READABILITY: Write at a 6th-8th grade reading level. Use short sentences (under 20 words). Use simple, common words. No jargon.
+GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
+- Expert quotes with full attribution: name, title, organization (+41% visibility)
+- Statistics with specific numbers and source: '85% of users prefer X (Source, Year)' (+40% visibility)
+- Inline citations in [Source, Year] format — 5+ per article (+30% visibility)
+- Fluent, polished writing with smooth transitions (+25-30% visibility)
+- NEVER stuff keywords — this REDUCES AI visibility by 9%
+
+E-E-A-T (Google Helpful Content Requirements):
+- Experience: Include first-hand examples, practical details, real-world context
+- Expertise: Use domain-specific terminology accurately, show depth of knowledge
+- Authoritativeness: Cite recognized sources, reference official data
+- Trustworthiness: Be balanced, acknowledge limitations, no exaggerated claims
+- For health/finance/legal topics (YMYL): apply stronger E-E-A-T standards
+
+NLP ENTITY OPTIMIZATION (Google Natural Language):
+- Use specific named entities: 'Dr. Sarah Chen at MIT' NOT 'an expert says'
+- Use proper nouns for people, organizations, places, products — target 5%+ entity density
+- Mention primary entities early in the text (salience scoring)
+- Stay focused on one topic per section (triggers specific content classification)
+
+READABILITY: Grade 6-8 reading level. Short sentences under 20 words. Simple common words. Active voice. No filler phrases.
 
 WORD COUNT: Always write the FULL number of words requested. Being too short is a failure.
 
-STRUCTURE: Start every H2/H3 section with a 40-60 word paragraph that directly answers the heading. Never start paragraphs with pronouns (It, This, They, These).
+STRUCTURE: Start every H2/H3 section with a 40-60 word paragraph that directly answers the heading. Never start paragraphs with pronouns (It, This, They, These, Those, He, She, We). Every paragraph must make sense in isolation (AI extracts individual paragraphs).
 
-EVIDENCE: Include statistics with (Source, Year) format. Include expert quotes. Include inline citations in [Source, Year] format.
-
-FORMAT: Output GitHub Flavored Markdown. Use **Bold** for key terms. Use tables for comparisons. Use bullet lists for features.";
+FORMAT: Output GitHub Flavored Markdown. Use **Bold** for key terms on first mention. Use tables for comparisons. Use bullet/numbered lists for features and steps.";
     }
 
     /**

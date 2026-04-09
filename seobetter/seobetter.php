@@ -620,6 +620,11 @@ final class SEOBetter {
         // Set featured image — download from Picsum to media library
         $this->set_featured_image( $post_id, sanitize_text_field( $request->get_param( 'keyword' ) ?? $title ) );
 
+        // Set freshness signal via WordPress post meta (not hardcoded text in article)
+        // dateModified in Article schema is auto-pulled from get_the_modified_date() in populate_aioseo()
+        update_post_meta( $post_id, '_seobetter_generated_date', current_time( 'mysql' ) );
+        update_post_meta( $post_id, '_seobetter_last_updated', wp_date( 'F Y' ) );
+
         // Store SEOBetter meta
         $keyword = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
         $meta_title = sanitize_text_field( $request->get_param( 'meta_title' ) ?? '' );
