@@ -80,6 +80,7 @@ class Async_Generator {
                 'secondary_keywords' => sanitize_text_field( $params['secondary_keywords'] ?? '' ),
                 'lsi_keywords'       => sanitize_text_field( $params['lsi_keywords'] ?? '' ),
                 'accent_color'       => sanitize_text_field( $params['accent_color'] ?? '#764ba2' ),
+                'country'            => sanitize_text_field( $params['country'] ?? '' ),
             ],
             'steps'       => $steps,
             'current'     => 0,
@@ -150,7 +151,7 @@ class Async_Generator {
                     ? 'Researching real-time trends (Reddit, X, YouTube, Web)...'
                     : 'Researching recent trends...';
 
-                $research = Trend_Researcher::research( $keyword, $options['domain'] ?? 'general' );
+                $research = Trend_Researcher::research( $keyword, $options['domain'] ?? 'general', $options['country'] ?? '' );
                 $job['results']['trends'] = $research['for_prompt'] ?? '';
                 $job['results']['trend_source'] = $research['source'] ?? 'unknown';
 

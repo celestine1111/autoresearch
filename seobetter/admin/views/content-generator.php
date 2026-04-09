@@ -339,10 +339,130 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         </div>
                     </div>
 
-                    <div class="sb-field-row">
+                    <div class="sb-field-row-3">
                         <div class="sb-field">
                             <label>Target Audience</label>
                             <input type="text" name="audience" value="<?php echo esc_attr( $_POST['audience'] ?? '' ); ?>" placeholder="e.g. horse owners, equine vets" />
+                        </div>
+                        <div class="sb-field">
+                            <label>Country
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text">Pulls real statistics from country-specific government APIs, health data, and public datasets for localized citations.</span>
+                                </span>
+                            </label>
+                            <select name="country">
+                                <option value="">Global (no country)</option>
+                                <optgroup label="Oceania">
+                                    <option value="AU" <?php selected( $_POST['country'] ?? '', 'AU' ); ?>>Australia</option>
+                                    <option value="NZ" <?php selected( $_POST['country'] ?? '', 'NZ' ); ?>>New Zealand</option>
+                                    <option value="FJ" <?php selected( $_POST['country'] ?? '', 'FJ' ); ?>>Pacific Islands</option>
+                                </optgroup>
+                                <optgroup label="North America">
+                                    <option value="US" <?php selected( $_POST['country'] ?? '', 'US' ); ?>>United States</option>
+                                    <option value="CA" <?php selected( $_POST['country'] ?? '', 'CA' ); ?>>Canada</option>
+                                    <option value="MX" <?php selected( $_POST['country'] ?? '', 'MX' ); ?>>Mexico</option>
+                                </optgroup>
+                                <optgroup label="Europe — Western">
+                                    <option value="GB" <?php selected( $_POST['country'] ?? '', 'GB' ); ?>>United Kingdom</option>
+                                    <option value="IE" <?php selected( $_POST['country'] ?? '', 'IE' ); ?>>Ireland</option>
+                                    <option value="FR" <?php selected( $_POST['country'] ?? '', 'FR' ); ?>>France</option>
+                                    <option value="DE" <?php selected( $_POST['country'] ?? '', 'DE' ); ?>>Germany</option>
+                                    <option value="ES" <?php selected( $_POST['country'] ?? '', 'ES' ); ?>>Spain</option>
+                                    <option value="PT" <?php selected( $_POST['country'] ?? '', 'PT' ); ?>>Portugal</option>
+                                    <option value="IT" <?php selected( $_POST['country'] ?? '', 'IT' ); ?>>Italy</option>
+                                    <option value="NL" <?php selected( $_POST['country'] ?? '', 'NL' ); ?>>Netherlands</option>
+                                    <option value="BE" <?php selected( $_POST['country'] ?? '', 'BE' ); ?>>Belgium</option>
+                                    <option value="CH" <?php selected( $_POST['country'] ?? '', 'CH' ); ?>>Switzerland</option>
+                                    <option value="AT" <?php selected( $_POST['country'] ?? '', 'AT' ); ?>>Austria</option>
+                                    <option value="LU" <?php selected( $_POST['country'] ?? '', 'LU' ); ?>>Luxembourg</option>
+                                    <option value="GR" <?php selected( $_POST['country'] ?? '', 'GR' ); ?>>Greece</option>
+                                    <option value="CY" <?php selected( $_POST['country'] ?? '', 'CY' ); ?>>Cyprus</option>
+                                    <option value="MT" <?php selected( $_POST['country'] ?? '', 'MT' ); ?>>Malta</option>
+                                </optgroup>
+                                <optgroup label="Europe — Nordic &amp; Baltic">
+                                    <option value="SE" <?php selected( $_POST['country'] ?? '', 'SE' ); ?>>Sweden</option>
+                                    <option value="NO" <?php selected( $_POST['country'] ?? '', 'NO' ); ?>>Norway</option>
+                                    <option value="DK" <?php selected( $_POST['country'] ?? '', 'DK' ); ?>>Denmark</option>
+                                    <option value="FI" <?php selected( $_POST['country'] ?? '', 'FI' ); ?>>Finland</option>
+                                    <option value="IS" <?php selected( $_POST['country'] ?? '', 'IS' ); ?>>Iceland</option>
+                                    <option value="EE" <?php selected( $_POST['country'] ?? '', 'EE' ); ?>>Estonia</option>
+                                    <option value="LV" <?php selected( $_POST['country'] ?? '', 'LV' ); ?>>Latvia</option>
+                                    <option value="LT" <?php selected( $_POST['country'] ?? '', 'LT' ); ?>>Lithuania</option>
+                                </optgroup>
+                                <optgroup label="Europe — Central &amp; Eastern">
+                                    <option value="PL" <?php selected( $_POST['country'] ?? '', 'PL' ); ?>>Poland</option>
+                                    <option value="CZ" <?php selected( $_POST['country'] ?? '', 'CZ' ); ?>>Czech Republic</option>
+                                    <option value="SK" <?php selected( $_POST['country'] ?? '', 'SK' ); ?>>Slovakia</option>
+                                    <option value="HU" <?php selected( $_POST['country'] ?? '', 'HU' ); ?>>Hungary</option>
+                                    <option value="SI" <?php selected( $_POST['country'] ?? '', 'SI' ); ?>>Slovenia</option>
+                                    <option value="HR" <?php selected( $_POST['country'] ?? '', 'HR' ); ?>>Croatia</option>
+                                    <option value="RS" <?php selected( $_POST['country'] ?? '', 'RS' ); ?>>Serbia</option>
+                                    <option value="BG" <?php selected( $_POST['country'] ?? '', 'BG' ); ?>>Bulgaria</option>
+                                    <option value="RO" <?php selected( $_POST['country'] ?? '', 'RO' ); ?>>Romania</option>
+                                    <option value="UA" <?php selected( $_POST['country'] ?? '', 'UA' ); ?>>Ukraine</option>
+                                    <option value="MD" <?php selected( $_POST['country'] ?? '', 'MD' ); ?>>Moldova</option>
+                                    <option value="TR" <?php selected( $_POST['country'] ?? '', 'TR' ); ?>>Turkey</option>
+                                    <option value="RU" <?php selected( $_POST['country'] ?? '', 'RU' ); ?>>Russia</option>
+                                </optgroup>
+                                <optgroup label="Asia">
+                                    <option value="JP" <?php selected( $_POST['country'] ?? '', 'JP' ); ?>>Japan</option>
+                                    <option value="KR" <?php selected( $_POST['country'] ?? '', 'KR' ); ?>>South Korea</option>
+                                    <option value="CN" <?php selected( $_POST['country'] ?? '', 'CN' ); ?>>China / Hong Kong</option>
+                                    <option value="TW" <?php selected( $_POST['country'] ?? '', 'TW' ); ?>>Taiwan</option>
+                                    <option value="SG" <?php selected( $_POST['country'] ?? '', 'SG' ); ?>>Singapore</option>
+                                    <option value="MY" <?php selected( $_POST['country'] ?? '', 'MY' ); ?>>Malaysia</option>
+                                    <option value="ID" <?php selected( $_POST['country'] ?? '', 'ID' ); ?>>Indonesia</option>
+                                    <option value="PH" <?php selected( $_POST['country'] ?? '', 'PH' ); ?>>Philippines</option>
+                                    <option value="TH" <?php selected( $_POST['country'] ?? '', 'TH' ); ?>>Thailand</option>
+                                    <option value="VN" <?php selected( $_POST['country'] ?? '', 'VN' ); ?>>Vietnam</option>
+                                    <option value="IN" <?php selected( $_POST['country'] ?? '', 'IN' ); ?>>India</option>
+                                    <option value="PK" <?php selected( $_POST['country'] ?? '', 'PK' ); ?>>Pakistan</option>
+                                    <option value="BD" <?php selected( $_POST['country'] ?? '', 'BD' ); ?>>Bangladesh</option>
+                                    <option value="LK" <?php selected( $_POST['country'] ?? '', 'LK' ); ?>>Sri Lanka</option>
+                                    <option value="NP" <?php selected( $_POST['country'] ?? '', 'NP' ); ?>>Nepal</option>
+                                    <option value="MN" <?php selected( $_POST['country'] ?? '', 'MN' ); ?>>Mongolia</option>
+                                    <option value="KZ" <?php selected( $_POST['country'] ?? '', 'KZ' ); ?>>Kazakhstan</option>
+                                    <option value="UZ" <?php selected( $_POST['country'] ?? '', 'UZ' ); ?>>Uzbekistan</option>
+                                </optgroup>
+                                <optgroup label="Middle East">
+                                    <option value="IL" <?php selected( $_POST['country'] ?? '', 'IL' ); ?>>Israel</option>
+                                    <option value="AE" <?php selected( $_POST['country'] ?? '', 'AE' ); ?>>UAE</option>
+                                    <option value="SA" <?php selected( $_POST['country'] ?? '', 'SA' ); ?>>Saudi Arabia</option>
+                                    <option value="QA" <?php selected( $_POST['country'] ?? '', 'QA' ); ?>>Qatar</option>
+                                    <option value="BH" <?php selected( $_POST['country'] ?? '', 'BH' ); ?>>Bahrain</option>
+                                    <option value="KW" <?php selected( $_POST['country'] ?? '', 'KW' ); ?>>Kuwait</option>
+                                    <option value="OM" <?php selected( $_POST['country'] ?? '', 'OM' ); ?>>Oman</option>
+                                    <option value="JO" <?php selected( $_POST['country'] ?? '', 'JO' ); ?>>Jordan</option>
+                                </optgroup>
+                                <optgroup label="Latin America">
+                                    <option value="BR" <?php selected( $_POST['country'] ?? '', 'BR' ); ?>>Brazil</option>
+                                    <option value="AR" <?php selected( $_POST['country'] ?? '', 'AR' ); ?>>Argentina</option>
+                                    <option value="CL" <?php selected( $_POST['country'] ?? '', 'CL' ); ?>>Chile</option>
+                                    <option value="CO" <?php selected( $_POST['country'] ?? '', 'CO' ); ?>>Colombia</option>
+                                    <option value="PE" <?php selected( $_POST['country'] ?? '', 'PE' ); ?>>Peru</option>
+                                    <option value="UY" <?php selected( $_POST['country'] ?? '', 'UY' ); ?>>Uruguay</option>
+                                    <option value="EC" <?php selected( $_POST['country'] ?? '', 'EC' ); ?>>Ecuador</option>
+                                    <option value="CR" <?php selected( $_POST['country'] ?? '', 'CR' ); ?>>Costa Rica</option>
+                                    <option value="PA" <?php selected( $_POST['country'] ?? '', 'PA' ); ?>>Panama</option>
+                                    <option value="DO" <?php selected( $_POST['country'] ?? '', 'DO' ); ?>>Dominican Republic</option>
+                                    <option value="GT" <?php selected( $_POST['country'] ?? '', 'GT' ); ?>>Guatemala</option>
+                                    <option value="JM" <?php selected( $_POST['country'] ?? '', 'JM' ); ?>>Jamaica</option>
+                                    <option value="TT" <?php selected( $_POST['country'] ?? '', 'TT' ); ?>>Trinidad &amp; Tobago</option>
+                                </optgroup>
+                                <optgroup label="Africa">
+                                    <option value="ZA" <?php selected( $_POST['country'] ?? '', 'ZA' ); ?>>South Africa</option>
+                                    <option value="NG" <?php selected( $_POST['country'] ?? '', 'NG' ); ?>>Nigeria</option>
+                                    <option value="KE" <?php selected( $_POST['country'] ?? '', 'KE' ); ?>>Kenya</option>
+                                    <option value="GH" <?php selected( $_POST['country'] ?? '', 'GH' ); ?>>Ghana</option>
+                                    <option value="TZ" <?php selected( $_POST['country'] ?? '', 'TZ' ); ?>>Tanzania</option>
+                                    <option value="UG" <?php selected( $_POST['country'] ?? '', 'UG' ); ?>>Uganda</option>
+                                    <option value="RW" <?php selected( $_POST['country'] ?? '', 'RW' ); ?>>Rwanda</option>
+                                    <option value="EG" <?php selected( $_POST['country'] ?? '', 'EG' ); ?>>Egypt</option>
+                                    <option value="MA" <?php selected( $_POST['country'] ?? '', 'MA' ); ?>>Morocco</option>
+                                    <option value="TN" <?php selected( $_POST['country'] ?? '', 'TN' ); ?>>Tunisia</option>
+                                    <option value="SN" <?php selected( $_POST['country'] ?? '', 'SN' ); ?>>Senegal</option>
+                                </optgroup>
+                            </select>
                         </div>
                         <div class="sb-field">
                             <label>Accent Color</label>
@@ -1136,6 +1256,7 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             tone: (form.querySelector('[name="tone"]')||{}).value||'authoritative',
             domain: (form.querySelector('[name="domain"]')||{}).value||'general',
             audience: (form.querySelector('[name="audience"]')||{}).value||'',
+            country: (form.querySelector('[name="country"]')||{}).value||'',
             accent_color: (form.querySelector('[name="accent_color"]')||{}).value||'#764ba2'
         };
 
