@@ -281,6 +281,19 @@ class Async_Generator {
     }
 
     /**
+     * Get tone-specific writing guidance so the AI actually changes voice.
+     */
+    private static function get_tone_guidance( string $tone ): string {
+        return match ( $tone ) {
+            'conversational' => "TONE: Conversational. Write like you are talking to a friend over coffee. Use contractions (don't, isn't, you'll). Ask rhetorical questions occasionally. Use 'you' and 'your' frequently. Keep sentences short. Imagine explaining this at a dinner party.",
+            'professional' => "TONE: Professional. Write in clear, confident business language. Avoid slang and contractions. Use specific data points and named sources. Structure information logically. Write like a senior consultant presenting findings to a client.",
+            'educational' => "TONE: Educational. Write like a patient teacher explaining to a curious student. Define terms when first used. Build from simple concepts to complex ones. Use analogies and real-world examples. Anticipate follow-up questions.",
+            'journalistic' => "TONE: Journalistic. Write like a reporter covering a beat. Lead with the most important fact. Use short paragraphs (1-3 sentences). Quote real people by name. Present multiple perspectives. Write tight — no wasted words.",
+            default => "TONE: Authoritative. Write with confidence and expertise. State facts directly without hedging. Use specific numbers and named sources. Take clear positions on recommendations. Write like an industry expert sharing honest advice.",
+        };
+    }
+
+    /**
      * Generate the article outline (one API call).
      */
     private static function generate_outline( string $keyword, array $options, array $secondary, array $lsi ): array {
@@ -296,10 +309,13 @@ class Async_Generator {
         // Detect search intent and adapt outline structure
         $intent = self::detect_intent( $keyword );
         $intent_guidance = self::get_intent_guidance( $intent );
+        $tone = $options['tone'] ?? 'authoritative';
+        $tone_guidance = self::get_tone_guidance( $tone );
+        $audience = $options['audience'] ?? 'general';
 
         $year = wp_date( 'Y' );
         $min_kw_headings = max( 1, round( $content_sections * 0.3 ) );
-        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the content H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. For example: \"What Is the Best {$keyword} in {$year}?\", \"How to Choose {$keyword}\", \"{$keyword}: Complete Guide\"\n- Target word count: {$total_words} words total\n- Target audience: " . ( $options['audience'] ?? 'general' ) . "\n- Domain: " . ( $options['domain'] ?? 'general' ) . "\n- Tone: " . ( $options['tone'] ?? 'authoritative' ) . "\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
+        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the content H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant\n- Make headings sound natural — like questions a real person would ask, not SEO templates\n- Target word count: {$total_words} words\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
 
         $result = self::send_request( $prompt, 'You are an SEO content strategist. Return only the numbered list of headings.', [ 'max_tokens' => 500 ] );
 
@@ -333,9 +349,10 @@ class Async_Generator {
         $audience = $options['audience'] ?? '';
         $domain = $options['domain'] ?? 'general';
         $intent_guidance = self::get_intent_guidance( $intent );
+        $tone_guidance = self::get_tone_guidance( $tone );
         $kw_context = "\n{$intent_guidance}";
-        $kw_context .= "\nTone: {$tone}";
-        if ( $audience ) $kw_context .= "\nTarget audience: {$audience}";
+        $kw_context .= "\n{$tone_guidance}";
+        if ( $audience ) $kw_context .= "\nTarget audience: {$audience} — write for this specific reader, use their language and concerns";
         if ( $domain && $domain !== 'general' ) $kw_context .= "\nContent domain: {$domain}";
         if ( ! empty( $secondary ) ) $kw_context .= "\nSecondary keywords to include: " . implode( ', ', $secondary );
         if ( ! empty( $lsi ) ) $kw_context .= "\nLSI keywords to include: " . implode( ', ', $lsi );
@@ -347,10 +364,12 @@ class Async_Generator {
         $readability_rule = "\n\nREADABILITY: Write at a 6th-8th grade reading level. Mix short sentences (under 10 words) with medium ones (15-20 words). Use everyday words. Write like you would explain something to a friend — natural, not robotic. Vary your rhythm. Do not write every sentence the same length.";
 
         if ( $is_takeaways ) {
-            $prompt = "Write the Key Takeaways section for an article about \"{$keyword}\".\n\nReturn:\n## Key Takeaways\n- [Takeaway 1]\n- [Takeaway 2]\n- [Takeaway 3]\n\nMake each bullet a different length. One can be short and punchy (8-12 words). One can be slightly longer (18-25 words). Do not make them all the same structure. Write in plain language.";
+            $trends_context = ( $trends ) ? "\n\nUse these real data points if relevant:\n{$trends}" : '';
+            $prompt = "Write the Key Takeaways section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\nReturn:\n## Key Takeaways\n- [Takeaway 1]\n- [Takeaway 2]\n- [Takeaway 3]\n\nRules:\n- Make each bullet a different length. One short and punchy. One longer with a specific number or fact.\n- Include the primary keyword \"{$keyword}\" in at least one bullet.\n- If research data is available, use a real statistic in one bullet.\n- Match the tone and audience specified above.\n- Do not use AI words (pivotal, crucial, landscape, delve, leverage).";
             $max = 400;
         } elseif ( $is_faq ) {
-            $prompt = "Write an FAQ section for an article about \"{$keyword}\".\n{$kw_context}\n\nWrite 5 question-answer pairs. Vary the answer lengths — some short (30 words), some longer (60-80 words). Do not make every answer the same length or structure. Write answers the way a knowledgeable person would actually explain something in conversation.{$readability_rule}\n\nFormat:\n\n## Frequently Asked Questions\n\n### [Question phrased how real people search]?\n[Direct answer — no filler, no hedging, get to the point]\n\nNever start answers with pronouns (It, This, They). Never start with 'Yes,' or 'No,' followed by a restatement of the question.";
+            $trends_context = ( $trends ) ? "\n\nUse real data from research when answering:\n{$trends}" : '';
+            $prompt = "Write an FAQ section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\nWrite 5 question-answer pairs. Vary the answer lengths — some short (25-35 words), some longer (50-80 words). Do not make every answer the same length or structure.{$readability_rule}\n\nRules:\n- Phrase questions exactly how real people search (use 'you' and natural language)\n- Answer directly in the first sentence — no throat-clearing\n- Include the keyword \"{$keyword}\" in at least 2 questions\n- Use a real statistic or fact from the research data in at least one answer\n- Never start answers with pronouns (It, This, They)\n- Never start with 'Yes,' or 'No,' followed by a restatement\n- Match the tone specified above\n\nFormat:\n\n## Frequently Asked Questions\n\n### [Question]?\n[Answer]";
             $max = 2000;
         } elseif ( $is_references ) {
             // Inject real source URLs from research data
@@ -366,7 +385,8 @@ class Async_Generator {
                     $sources_list .= "\nIMPORTANT: Use ONLY the URLs above. Do NOT invent or hallucinate any URLs.";
                 }
             }
-            $prompt = "Write a References section for an article about \"{$keyword}\".{$sources_list}\n\nFormat each reference as a clickable Markdown link:\n## References\n1. [Source Title](https://real-url.com) — Brief description of what this source covers.\n2. ...\n\nInclude 5-10 references. Every URL must be a REAL, working link from the sources provided above. If you don't have enough real URLs, include the source name and year without a fake URL.";
+            $domain_hint = ( $domain && $domain !== 'general' ) ? "\nDomain: {$domain} — prioritize authoritative sources for this field." : '';
+            $prompt = "Write a References section for an article about \"{$keyword}\".{$domain_hint}{$sources_list}\n\nFormat each reference as a clickable Markdown link:\n## References\n1. [Source Title](https://real-url.com) — One sentence describing what this source covers.\n2. ...\n\nRules:\n- Include 5-10 references\n- Every URL must be a REAL, working link from the sources provided above\n- If you do not have enough real URLs, include the source name and year without a fake URL\n- Prioritize authoritative sources (government, academic, established organizations) over community sources\n- Do not include API documentation URLs or developer tool links as references\n- Write each description differently — do not use the same sentence structure for every reference";
             $max = 800;
         } else {
             $trends_inject = ( $trends && $index <= 3 ) ? "\n\nREAL-TIME RESEARCH DATA (use these real statistics and sources — do NOT hallucinate numbers):\n{$trends}" : '';
