@@ -453,8 +453,8 @@ class Content_Formatter {
                 case 'image':
                     $alt = esc_attr( $section['alt'] );
                     $url = esc_url( $section['url'] );
-                    $output[] = '<!-- wp:image {"sizeSlug":"large"} -->';
-                    $output[] = "<figure class=\"wp-block-image size-large\"><img src=\"{$url}\" alt=\"{$alt}\"/></figure>";
+                    $output[] = '<!-- wp:image {"align":"center","sizeSlug":"large"} -->';
+                    $output[] = "<figure class=\"wp-block-image aligncenter size-large\"><img src=\"{$url}\" alt=\"{$alt}\"/></figure>";
                     $output[] = '<!-- /wp:image -->';
                     break;
             }
