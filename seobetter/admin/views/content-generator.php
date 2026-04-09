@@ -278,13 +278,18 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
 
                     <div class="sb-field-row-3">
                         <div class="sb-field">
-                            <label>Word Count</label>
+                            <label>Word Count
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text">Longer content ranks better for competitive keywords. 2,000+ words is optimal for AI citations (ChatGPT, Perplexity). Shorter works for transactional pages.</span>
+                                </span>
+                            </label>
                             <select name="word_count">
-                                <option value="1000" <?php selected( $_POST['word_count'] ?? '', '1000' ); ?>>1,000</option>
-                                <option value="1500" <?php selected( $_POST['word_count'] ?? '', '1500' ); ?>>1,500</option>
-                                <option value="2000" <?php selected( $_POST['word_count'] ?? '2000', '2000' ); ?>>2,000</option>
-                                <option value="2500" <?php selected( $_POST['word_count'] ?? '', '2500' ); ?>>2,500</option>
-                                <option value="3000" <?php selected( $_POST['word_count'] ?? '', '3000' ); ?>>3,000</option>
+                                <option value="800" <?php selected( $_POST['word_count'] ?? '', '800' ); ?>>800 — Quick answer</option>
+                                <option value="1000" <?php selected( $_POST['word_count'] ?? '', '1000' ); ?>>1,000 — Product/transactional</option>
+                                <option value="1500" <?php selected( $_POST['word_count'] ?? '', '1500' ); ?>>1,500 — Standard article</option>
+                                <option value="2000" <?php selected( $_POST['word_count'] ?? '2000', '2000' ); ?>>2,000 — AI citation optimal</option>
+                                <option value="2500" <?php selected( $_POST['word_count'] ?? '', '2500' ); ?>>2,500 — Comprehensive guide</option>
+                                <option value="3000" <?php selected( $_POST['word_count'] ?? '', '3000' ); ?>>3,000 — Definitive guide</option>
                             </select>
                         </div>
                         <div class="sb-field">
@@ -813,20 +818,113 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
     function esc(s) { var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
     function renderResult(res) {
-        var sc = res.geo_score >= 80 ? 'good' : (res.geo_score >= 60 ? 'ok' : 'poor');
-        var h = '<div class="seobetter-card" style="padding:20px;margin-top:16px">';
-        h += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:13px">';
-        h += '<span><strong>GEO Score:</strong> <span class="seobetter-score seobetter-score-'+sc+'">'+esc(res.geo_score)+' ('+esc(res.grade)+')</span></span>';
-        h += '<span><strong>Words:</strong> '+(res.word_count||0).toLocaleString()+'</span>';
+        var score = res.geo_score || 0;
+        var sc = score >= 80 ? 'good' : (score >= 60 ? 'ok' : 'poor');
+        var scoreColor = score >= 80 ? '#22c55e' : (score >= 60 ? '#f59e0b' : '#ef4444');
+        var scoreBg = score >= 80 ? '#f0fdf4' : (score >= 60 ? '#fffbeb' : '#fef2f2');
+        var scoreRing = score >= 80 ? '#dcfce7' : (score >= 60 ? '#fef3c7' : '#fee2e2');
+
+        var h = '<div style="margin-top:16px">';
+
+        // ===== SCORE DASHBOARD =====
+        h += '<div style="display:grid;grid-template-columns:180px 1fr;gap:20px;padding:24px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">';
+
+        // Left: Score circle
+        h += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center">';
+        h += '<div style="position:relative;width:130px;height:130px">';
+        h += '<svg viewBox="0 0 120 120" style="width:130px;height:130px;transform:rotate(-90deg)">';
+        h += '<circle cx="60" cy="60" r="52" fill="none" stroke="'+scoreRing+'" stroke-width="10"/>';
+        h += '<circle cx="60" cy="60" r="52" fill="none" stroke="'+scoreColor+'" stroke-width="10" stroke-linecap="round" stroke-dasharray="'+(326.7*score/100)+' 326.7" style="transition:stroke-dasharray 1s ease"/>';
+        h += '</svg>';
+        h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">';
+        h += '<span style="font-size:36px;font-weight:800;color:'+scoreColor+'">'+score+'</span>';
+        h += '<span style="font-size:12px;font-weight:600;color:#6b7280">'+esc(res.grade)+'</span>';
+        h += '</div></div>';
+        h += '<span style="font-size:11px;color:#9ca3af;margin-top:6px">GEO Score</span>';
         h += '</div>';
 
-        if (res.suggestions && res.suggestions.length) {
-            h += '<div style="margin-bottom:16px">';
-            res.suggestions.forEach(function(s) {
-                h += '<div class="seobetter-suggestion seobetter-suggestion-'+(s.priority||'medium')+'">';
-                h += '<span class="seobetter-suggestion-type">['+(s.type||'issue')+']</span> '+esc(s.message)+'</div>';
+        // Right: Stats grid
+        h += '<div>';
+        h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">';
+        // Words stat
+        h += '<div style="padding:12px;background:#f8fafc;border-radius:8px;text-align:center">';
+        h += '<div style="font-size:22px;font-weight:700;color:#1e293b">'+(res.word_count||0).toLocaleString()+'</div>';
+        h += '<div style="font-size:11px;color:#64748b">Words</div></div>';
+        // Citations stat
+        var citCount = 0; if(res.checks&&res.checks.citations) citCount = res.checks.citations.count||0;
+        h += '<div style="padding:12px;background:#f8fafc;border-radius:8px;text-align:center">';
+        h += '<div style="font-size:22px;font-weight:700;color:'+(citCount>=5?'#22c55e':'#ef4444')+'">'+citCount+'</div>';
+        h += '<div style="font-size:11px;color:#64748b">Citations (5+ needed)</div></div>';
+        // Quotes stat
+        var quoteCount = 0; if(res.checks&&res.checks.expert_quotes) quoteCount = res.checks.expert_quotes.count||0;
+        h += '<div style="padding:12px;background:#f8fafc;border-radius:8px;text-align:center">';
+        h += '<div style="font-size:22px;font-weight:700;color:'+(quoteCount>=2?'#22c55e':'#ef4444')+'">'+quoteCount+'</div>';
+        h += '<div style="font-size:11px;color:#64748b">Expert Quotes (2+ needed)</div></div>';
+        h += '</div>';
+
+        // Score breakdown bars
+        if (res.checks) {
+            var barItems = [
+                {label:'Readability',w:12,s:res.checks.readability},
+                {label:'Citations',w:12,s:res.checks.citations},
+                {label:'Statistics',w:12,s:res.checks.factual_density},
+                {label:'Key Takeaways',w:10,s:res.checks.bluf_header},
+                {label:'Section Openers',w:10,s:res.checks.section_openings},
+                {label:'Island Test',w:10,s:res.checks.island_test},
+                {label:'Expert Quotes',w:8,s:res.checks.expert_quotes},
+                {label:'Entity Density',w:8,s:res.checks.entity_usage},
+                {label:'Freshness',w:7,s:res.checks.freshness},
+                {label:'Tables',w:6,s:res.checks.tables},
+                {label:'Lists',w:5,s:res.checks.lists}
+            ];
+            h += '<div style="display:flex;flex-direction:column;gap:4px">';
+            barItems.forEach(function(item) {
+                if (!item.s) return;
+                var s = item.s.score||0;
+                var barColor = s >= 80 ? '#22c55e' : (s >= 50 ? '#f59e0b' : '#ef4444');
+                h += '<div style="display:flex;align-items:center;gap:8px;font-size:11px">';
+                h += '<span style="width:100px;color:#64748b;text-align:right">'+item.label+'</span>';
+                h += '<div style="flex:1;height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden"><div style="width:'+s+'%;height:100%;background:'+barColor+';border-radius:4px;transition:width 0.5s"></div></div>';
+                h += '<span style="width:30px;font-weight:600;color:'+barColor+'">'+s+'</span>';
+                h += '</div>';
             });
             h += '</div>';
+        }
+        h += '</div></div>';
+
+        // ===== PRO UPSELL (if score < 80) =====
+        if (score < 80) {
+            var missingPoints = 80 - score;
+            h += '<div style="padding:16px 20px;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:10px;margin-bottom:16px;display:flex;align-items:center;gap:16px">';
+            h += '<div style="flex-shrink:0;width:44px;height:44px;background:linear-gradient(135deg,#764ba2,#667eea);border-radius:10px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></div>';
+            h += '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:#312e81">+'+missingPoints+' points needed for A grade</div>';
+            h += '<div style="font-size:12px;color:#4338ca;margin-top:2px">Pro plan adds Brave Search for real statistics, expert quotes, and authoritative citations that boost your GEO score to 80+</div></div>';
+            h += '<a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>" style="flex-shrink:0;padding:8px 16px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap">Upgrade to Pro</a>';
+            h += '</div>';
+        }
+
+        // ===== SUGGESTIONS =====
+        if (res.suggestions && res.suggestions.length) {
+            var highPri = res.suggestions.filter(function(s){return s.priority==='high'});
+            var medPri = res.suggestions.filter(function(s){return s.priority!=='high'});
+            if (highPri.length) {
+                h += '<div style="margin-bottom:12px">';
+                h += '<div style="font-size:12px;font-weight:600;color:#991b1b;margin-bottom:6px">Fix these for a higher score:</div>';
+                highPri.forEach(function(s) {
+                    h += '<div style="padding:8px 12px;background:#fef2f2;border-left:3px solid #ef4444;border-radius:0 6px 6px 0;margin-bottom:4px;font-size:12px;color:#991b1b">';
+                    h += '<strong>['+esc(s.type||'issue')+']</strong> '+esc(s.message)+'</div>';
+                });
+                h += '</div>';
+            }
+            if (medPri.length) {
+                h += '<details style="margin-bottom:12px"><summary style="font-size:12px;font-weight:600;color:#92400e;cursor:pointer">'+medPri.length+' additional suggestions</summary>';
+                h += '<div style="margin-top:6px">';
+                medPri.forEach(function(s) {
+                    h += '<div style="padding:6px 12px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 6px 6px 0;margin-bottom:3px;font-size:12px;color:#92400e">';
+                    h += '<strong>['+esc(s.type||'issue')+']</strong> '+esc(s.message)+'</div>';
+                });
+                h += '</div></details>';
+            }
         }
 
         // Content preview with style block

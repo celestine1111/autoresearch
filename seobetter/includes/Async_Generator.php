@@ -344,7 +344,7 @@ class Async_Generator {
     private static function generate_section( string $keyword, string $heading, int $index, array $options, array $secondary, array $lsi, string $system, string $trends, string $intent = 'informational' ): string {
         $total_words = $options['word_count'] ?? 2000;
         $num_sections = max( 3, round( $total_words / 400 ) );
-        $words_per_section = max( 150, round( $total_words / $num_sections ) );
+        $words_per_section = max( 100, round( ( $total_words * 0.85 ) / $num_sections ) );
         $tone = $options['tone'] ?? 'authoritative';
         $audience = $options['audience'] ?? '';
         $domain = $options['domain'] ?? 'general';
@@ -397,7 +397,7 @@ class Async_Generator {
                 $intro_rule = "\n\nINTRODUCTION RULE (FIRST SECTION — SEO PLUGINS CHECK THIS):\n- The FIRST SENTENCE must contain the exact phrase \"{$keyword}\" naturally\n- Bold the keyword once: **{$keyword}**\n- SEO plugins flag 'Focus keyword not in introduction' if missing from first paragraph\n- Write the intro like a human would open a conversation about this topic — not like a definition or press release\n- Do NOT start with '[Keyword] is...' or '[Keyword] refers to...' — those are AI patterns\n- Instead, jump into a specific fact, opinion, or context that includes the keyword naturally";
             }
 
-            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nTarget: around {$words_per_section} words for this section.{$trends_inject}{$readability_rule}{$intro_rule}\n\nKEYWORD RULES:\n- The phrase \"{$keyword}\" should appear 2-3 times in this section, naturally\n- Include it in the first paragraph\n- Also use variations and rearrangements\n\nWRITING RULES:\n- Start with: ## {$heading}\n- Open with a paragraph that directly answers the heading. Do not restate the heading.\n- Vary paragraph lengths — some short (2-3 sentences), some longer (4-5). Do not make every paragraph the same size.\n- Include statistics from the RESEARCH DATA if available. Do NOT invent numbers.\n- Include expert quotes from the research data if available. Use real names and organizations.\n- When citing, use exact URLs from research data: [Source Name](https://real-url.com)\n- Add a comparison table ONLY if the section genuinely compares things. Do not force tables.\n- Use a bullet list ONLY when listing items. Do not default to bullets for every section.\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- No bold except the keyword once in the intro section\n- Vary your sentence rhythm. Mix short direct statements with longer explanations. Do not write every sentence the same length.\n- Write like someone who knows this topic well and has an opinion about it.\n\nOutput Markdown only.";
+            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nWORD LIMIT: Write {$words_per_section} words for this section. Do not exceed this. Stop when you reach it.{$trends_inject}{$readability_rule}{$intro_rule}\n\nKEYWORD RULES:\n- The phrase \"{$keyword}\" should appear 2-3 times in this section, naturally\n- Include it in the first paragraph\n- Also use variations and rearrangements\n\nWRITING RULES:\n- Start with: ## {$heading}\n- Open with a paragraph that directly answers the heading. Do not restate the heading.\n- Vary paragraph lengths — some short (2-3 sentences), some longer (4-5). Do not make every paragraph the same size.\n- Include statistics from the RESEARCH DATA if available. Do NOT invent numbers.\n- Include expert quotes from the research data if available. Use real names and organizations.\n- When citing, use exact URLs from research data: [Source Name](https://real-url.com)\n- Add a comparison table ONLY if the section genuinely compares things. Do not force tables.\n- Use a bullet list ONLY when listing items. Do not default to bullets for every section.\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- No bold except the keyword once in the intro section\n- Vary your sentence rhythm. Mix short direct statements with longer explanations. Do not write every sentence the same length.\n- Write like someone who knows this topic well and has an opinion about it.\n\nOutput Markdown only.";
             $max = 4096;
         }
 
@@ -409,7 +409,8 @@ class Async_Generator {
      * Assemble markdown from completed sections.
      */
     private static function assemble_markdown( array $job ): string {
-        $md = "# {$job['keyword']}\n\n";
+        $date = wp_date( 'F Y' );
+        $md = "*Last Updated: {$date}*\n\n# {$job['keyword']}\n\n";
 
         $section_keys = array_filter( array_keys( $job['results'] ), fn( $k ) => str_starts_with( $k, 'section_' ) );
         ksort( $section_keys );
@@ -453,6 +454,7 @@ class Async_Generator {
             'word_count'  => str_word_count( wp_strip_all_tags( $html ) ),
             'model_used'  => 'async-chained',
             'suggestions' => $score['suggestions'],
+            'checks'      => $score['checks'],
             'headlines'   => $job['results']['headlines'] ?? [],
             'meta'        => $job['results']['meta'] ?? [],
         ];

@@ -16,8 +16,8 @@ namespace SEOBetter;
 class GEO_Analyzer {
 
     private const TARGET_FLESCH_GRADE = 7;
-    private const SECTION_WORD_MIN    = 40;
-    private const SECTION_WORD_MAX    = 60;
+    private const SECTION_WORD_MIN    = 25;
+    private const SECTION_WORD_MAX    = 75;
     private const STATS_PER_1000      = 3;
 
     /**
