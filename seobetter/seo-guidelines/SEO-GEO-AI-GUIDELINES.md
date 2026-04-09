@@ -2,8 +2,8 @@
 
 > **Single source of truth** for all article generation, scoring, and optimization in the SEOBetter WordPress plugin. Every prompt, scorer, and formatter MUST reference this document.
 >
-> **Last updated:** April 2026
-> **Sources:** KDD 2024 GEO Research, Princeton University, SE Ranking (129K domain study), Semrush, CORE-EEAT Benchmark, Google Search Quality Guidelines, Last30Days v2.9.6 (multi-source trend research), installed Claude Skills (ai-seo, geo-content-optimizer, seo-content-writer, content-quality-auditor, meta-tags-optimizer, serp-analysis, last30days)
+> **Last updated:** April 2026 (v2)
+> **Sources:** KDD 2024 GEO Research, Princeton University (arxiv.org/pdf/2311.09735), SE Ranking (129K domain study), Semrush, CORE-EEAT Benchmark, Google Search Quality Guidelines, Google Helpful Content Guidelines, Google Cloud NLP, 5-Part Content Ranking Framework, Last30Days v2.9.6 (multi-source trend research), installed Claude Skills (ai-seo, geo-content-optimizer, seo-content-writer, content-quality-auditor, meta-tags-optimizer, serp-analysis, last30days)
 
 ---
 
@@ -921,6 +921,167 @@ POST https://api.indexnow.org/IndexNow
 }
 ```
 Supported by: Bing, Yandex, Seznam, Naver. Google uses its own Indexing API.
+
+---
+
+## 28. 5-PART CONTENT RANKING FRAMEWORK
+
+Proven framework for creating content that ranks on Google, gets cited by AI, and drives traffic. Based on the Princeton GEO study (arxiv.org/pdf/2311.09735) and real-world ranking results.
+
+**Core principle:** No one-shot AI prompt can generate content that ranks. Research-first, structure second, writing third.
+
+### 28.1 Step 1: Topic Selection via Competitor Analysis
+Before writing, analyze the top 10 Google results for your target keyword:
+- **Count headings** (H1, H2, H3) used by competitors
+- **Map subtopics** covered across all 10 results
+- **Identify content gaps** — topics competitors miss that you can cover
+- **Note content length** — aim for equal or longer than the average
+- **Check content freshness** — if top results are 2+ years old, fresh content has an advantage
+
+**Rule:** Your article must cover everything competitors cover PLUS unique angles they miss. The AI generates the outline from this research via the Async_Generator outline step.
+
+**Plugin implementation:** The Vercel research endpoint (`/api/research`) pulls real-time data from Reddit, HN, Wikipedia, Google Trends, and 70+ category-specific APIs. This data replaces competitor analysis by providing real statistics, quotes, and sources competitors may not have.
+
+### 28.2 Step 2: Keyword Research Protocol
+- **For new/low-authority sites:** Target keywords with Keyword Difficulty (KD) < 20
+- **For established sites:** KD < 40 is competitive
+- **Always prefer long-tail keywords** — "best grain-free puppy food for small breeds" over "dog food"
+- **Check what competitors rank for** — use their keywords as starting points
+- **The primary keyword becomes the article's focus** — every SEO optimization centers on it
+
+**Plugin implementation:** The Primary Keyword field drives everything — meta title, H1, first paragraph, density (0.5-1.5%), heading placement (30%+ of H2s), and image alt text. Secondary and LSI keywords fill the remaining heading and body slots.
+
+### 28.3 Step 3: Keyword Intent Grouping (NLP/Semantics)
+Classify every keyword by search intent BEFORE writing. The intent determines article structure:
+
+| Intent | Signal Words | Article Structure | Example |
+|---|---|---|---|
+| **Informational** | what, how, why, guide, learn | Detailed guide, FAQ, definitions, step-by-step | "how to train a puppy" |
+| **Commercial** | best, top, review, compare, vs | Comparison tables, pros/cons, recommendations | "best dog food brands 2026" |
+| **Transactional** | buy, price, discount, order, deal | Product focus, pricing, CTAs, schema markup | "buy organic dog food online" |
+| **Navigational** | [brand name], login, official | Brand-focused, direct answers | "Purina Pro Plan ingredients" |
+
+**Why this matters for NLP:** Google's Natural Language API (cloud.google.com/natural-language) classifies content by entity, sentiment, and syntax. Articles that match the intent pattern rank higher because Google's NLP can confirm the content serves the query. Reference: Google's Helpful Content guidelines (developers.google.com/search/docs/fundamentals/creating-helpful-content).
+
+**Plugin implementation:** The Domain/Category dropdown helps the AI understand context, and the Tone selector adjusts writing style. Future enhancement: auto-detect intent from keyword and adjust article structure accordingly.
+
+### 28.4 Step 4: Research-First Writing
+Never generate an article in one prompt. The plugin's Async_Generator builds articles in steps:
+
+1. **Research step** — Pull real data from 8-12 APIs based on category
+2. **Outline step** — Generate heading structure from research + keyword
+3. **Section-by-section writing** — Each H2 section generated individually with:
+   - Real statistics injected from API data
+   - Keyword placement rules enforced
+   - 40-60 word opening paragraph (GEO extractable)
+   - Citations using real URLs from research
+4. **Headlines step** — Score and rank multiple title options
+5. **Meta step** — Generate SEO-optimized title and description
+6. **Assembly** — Combine all sections with freshness signal
+
+**Critical rule:** Every statistic in the article should come from the research data, not from AI training data. The `REAL-TIME RESEARCH DATA` block in prompts explicitly says: "use these real statistics — do NOT hallucinate numbers."
+
+### 28.5 Step 5: Quality Gate + Schema
+Before publishing, every article passes through:
+
+1. **GEO Analyzer scoring** (Section 6) — must score 60+ to publish
+2. **SEO plugin checks** — AIOSEO/Yoast/RankMath auto-populated with focus keyword, meta title, meta description, OG tags
+3. **Schema auto-generation** — Article + FAQPage schema in JSON-LD
+4. **Multi-engine compatibility** — JSON-LD schema works universally across:
+   - Google (AI Overviews, Featured Snippets, Rich Results)
+   - Bing (Copilot, Rich Results)
+   - Yandex (Structured Snippets)
+   - Baidu (Structured Data)
+   - AI platforms (ChatGPT, Perplexity, Claude, Gemini)
+5. **Image optimization** — Pexels images with keyword alt text, 1200px+ for Discover eligibility
+
+**FAQ from the framework:**
+- *How long should content be?* Long enough to cover everything, short enough to keep attention. Value matters, not word count — but empirically, 2000+ words ranks better for competitive keywords.
+- *Can I just use AI to write everything?* Use AI as a tool, not a replacement. The research data, structure, and quality gate ensure AI output meets standards. Always review before publishing.
+- *How do I match competitor word counts?* Cover everything someone would want to know: check competitor H2s on page 1, use similar headings, answer the same questions plus more.
+
+---
+
+## 29. KEYWORD-TO-TITLE RULES
+
+The keyword is NOT the title. The title is created AROUND the keyword.
+
+### Formula
+```
+Keyword = [focus phrase]
+Title   = [Keyword] + [hook/number/benefit]
+SEO Title = [Keyword] + [variation with extra context]
+```
+
+### Examples
+| Keyword | Title | SEO Title (Yoast/AIOSEO) |
+|---|---|---|
+| florida birds of prey | Florida Birds Of Prey: 26 Birds To Watch Out For! | Florida Birds Of Prey: 26 Birds Of Prey In Florida To Watch |
+| best dog food for puppies | Best Dog Food for Puppies: 12 Vet-Approved Brands in 2026 | Best Dog Food for Puppies — Top 12 Brands Reviewed |
+| bitcoin etf 2026 | Bitcoin ETF 2026: Complete Investor Guide | Bitcoin ETF 2026: What You Need To Know Before Investing |
+| equine vet supplies | Equine Vet Supplies: Essential Products Every Horse Owner Needs | Equine Vet Supplies — Complete Guide for Horse Owners |
+
+### Rules
+1. **Keyword front-loaded** — always in the first half of the title
+2. **Add a number** when possible — articles with numbers get 36% higher CTR
+3. **Include current year** for time-sensitive topics
+4. **Power words** — Best, Ultimate, Complete, Essential, Proven, Expert
+5. **Colon or dash separator** — structures the title for scanning
+6. **SEO title can differ from H1** — SEO plugins let you set a separate SERP title
+7. **50-60 characters** for display title, up to 70 for SEO title
+
+**Plugin implementation:** The Async_Generator headlines step generates 5 title variations, scores them against Section 7 criteria, and the user selects their preferred option before saving.
+
+---
+
+## 30. SEARCH INTENT CLASSIFICATION FOR AI PROMPTS
+
+When generating articles, the AI should adapt its structure based on detected intent. This section provides rules that prompts can reference.
+
+### Informational Intent ("What/How/Why")
+- **Structure:** Definition → Explanation → Evidence → Examples → FAQ
+- **Tone:** Educational, helpful, comprehensive
+- **Must include:** Definition blocks (Section 4.1), step-by-step blocks (Section 4.2)
+- **Citation style:** Academic — `[Source, Year]` inline
+- **Word count:** 2000-3000 (comprehensive coverage expected)
+
+### Commercial Intent ("Best/Top/Review/Compare")
+- **Structure:** Overview → Comparison table → Individual reviews → Recommendation → FAQ
+- **Tone:** Authoritative, data-driven, balanced
+- **Must include:** Comparison tables (Section 4.3), pros/cons lists, "Best For" recommendations
+- **Citation style:** Product-focused — pricing, features, user reviews
+- **Word count:** 2500-4000 (thorough comparison expected)
+
+### Transactional Intent ("Buy/Price/Order")
+- **Structure:** Product overview → Features → Pricing → How to buy → FAQ
+- **Tone:** Confident, direct, action-oriented
+- **Must include:** Product schema, pricing data, clear CTAs, affiliate links where applicable
+- **Citation style:** Brand/official sources
+- **Word count:** 1000-2000 (focused, conversion-oriented)
+
+### Navigational Intent ("[Brand Name]")
+- **Structure:** Brand overview → Key products/services → Contact/links → FAQ
+- **Tone:** Neutral, factual
+- **Must include:** Organization schema, official links
+- **Citation style:** Official sources only
+- **Word count:** 800-1500 (direct and specific)
+
+### E-E-A-T Optimization per Intent
+| Intent | Most Important E-E-A-T Signal |
+|---|---|
+| Informational | **Expertise** — deep knowledge, technical terms, reasoning transparency |
+| Commercial | **Experience** — hands-on testing, real comparisons, specific details |
+| Transactional | **Trust** — transparent pricing, clear terms, secure checkout signals |
+| Navigational | **Authority** — official sources, verified brand information |
+
+### Google NLP Alignment
+Google's Natural Language API evaluates content on:
+- **Entity recognition** — named entities (people, organizations, products) should be specific and frequent (target 5%+ entity density per Section 6)
+- **Sentiment analysis** — commercial intent should be balanced (not overly positive = review quality signal)
+- **Syntax analysis** — simple sentence structures score higher for readability
+- **Content classification** — article must clearly fall into the correct category (the Domain/Category selector helps)
+
+Reference: [Google Cloud Natural Language](https://cloud.google.com/natural-language), [Google Helpful Content Guidelines](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
 
 ---
 
