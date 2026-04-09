@@ -354,33 +354,6 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                     </div>
                 </div>
 
-                <!-- Affiliate Links Section -->
-                <div class="sb-section">
-                    <h3 class="sb-section-header">
-                        <span class="dashicons dashicons-money-alt"></span> Affiliate Links
-                        <span style="font-weight:400;font-size:12px;color:var(--sb-text-muted);margin-left:4px">optional</span>
-                        <?php if ( $ta_active ) : ?>
-                            <span style="margin-left:auto;font-size:12px;color:var(--sb-success)"><span class="dashicons dashicons-yes-alt" style="font-size:14px;width:14px;height:14px;vertical-align:middle"></span> ThirstyAffiliates</span>
-                        <?php endif; ?>
-                    </h3>
-
-                    <div id="sb-aff-list">
-                        <?php foreach ( $saved_aff as $idx => $aff ) : ?>
-                        <div class="sb-aff-row">
-                            <input type="url" name="affiliates[<?php echo $idx; ?>][url]" value="<?php echo esc_attr( $aff['url'] ?? '' ); ?>" placeholder="Affiliate URL" class="sb-aff-url" />
-                            <input type="text" name="affiliates[<?php echo $idx; ?>][keyword]" value="<?php echo esc_attr( $aff['keyword'] ?? '' ); ?>" placeholder="Keyword to link" class="sb-aff-kw" />
-                            <input type="text" name="affiliates[<?php echo $idx; ?>][name]" value="<?php echo esc_attr( $aff['name'] ?? '' ); ?>" placeholder="CTA name" class="sb-aff-name" />
-                            <button type="button" class="sb-aff-x" onclick="if(document.querySelectorAll('.sb-aff-row').length>1)this.parentElement.remove()">&times;</button>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-
-                    <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
-                        <button type="button" id="sb-add-aff" class="button sb-btn-sm">+ Add Link</button>
-                        <label style="font-size:12px;color:var(--sb-text-secondary)"><input type="checkbox" name="affiliate_cta" value="1" <?php checked( $_POST['affiliate_cta'] ?? '1', '1' ); ?> /> Auto-insert CTA buttons</label>
-                    </div>
-                </div>
-
                 <!-- Generate Buttons -->
                 <div style="display:flex;gap:12px;margin-bottom:24px">
                     <button type="submit" name="seobetter_generate_article" id="seobetter-async-generate" class="button sb-btn-primary" style="font-size:15px;padding:12px 32px;height:50px">
@@ -663,19 +636,6 @@ document.getElementById('seobetter-auto-keywords').addEventListener('click', fun
             st.textContent = 'Done!'; setTimeout(()=>st.textContent='', 2000);
         } else st.textContent = d.error||'Failed';
     }).catch(e => { btn.disabled=false; st.textContent='Error'; });
-});
-
-// Add affiliate row
-var affN = <?php echo count( $saved_aff ); ?>;
-document.getElementById('sb-add-aff').addEventListener('click', function() {
-    affN++;
-    var r = document.createElement('div');
-    r.className = 'sb-aff-row';
-    r.innerHTML = '<input type="url" name="affiliates['+affN+'][url]" placeholder="Affiliate URL" class="sb-aff-url" />' +
-        '<input type="text" name="affiliates['+affN+'][keyword]" placeholder="Keyword to link" class="sb-aff-kw" />' +
-        '<input type="text" name="affiliates['+affN+'][name]" placeholder="CTA name" class="sb-aff-name" />' +
-        '<button type="button" class="sb-aff-x" onclick="if(document.querySelectorAll(\'.sb-aff-row\').length>1)this.parentElement.remove()">&times;</button>';
-    document.getElementById('sb-aff-list').appendChild(r);
 });
 
 <?php if ( $result && $result['success'] ) : ?>
