@@ -339,130 +339,10 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         </div>
                     </div>
 
-                    <div class="sb-field-row-3">
+                    <div class="sb-field-row">
                         <div class="sb-field">
                             <label>Target Audience</label>
                             <input type="text" name="audience" value="<?php echo esc_attr( $_POST['audience'] ?? '' ); ?>" placeholder="e.g. horse owners, equine vets" />
-                        </div>
-                        <div class="sb-field">
-                            <label>Country
-                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text">Pulls real statistics from country-specific government APIs, health data, and public datasets for localized citations.</span>
-                                </span>
-                            </label>
-                            <select name="country">
-                                <option value="">Global (no country)</option>
-                                <optgroup label="Oceania">
-                                    <option value="AU" <?php selected( $_POST['country'] ?? '', 'AU' ); ?>>Australia</option>
-                                    <option value="NZ" <?php selected( $_POST['country'] ?? '', 'NZ' ); ?>>New Zealand</option>
-                                    <option value="FJ" <?php selected( $_POST['country'] ?? '', 'FJ' ); ?>>Pacific Islands</option>
-                                </optgroup>
-                                <optgroup label="North America">
-                                    <option value="US" <?php selected( $_POST['country'] ?? '', 'US' ); ?>>United States</option>
-                                    <option value="CA" <?php selected( $_POST['country'] ?? '', 'CA' ); ?>>Canada</option>
-                                    <option value="MX" <?php selected( $_POST['country'] ?? '', 'MX' ); ?>>Mexico</option>
-                                </optgroup>
-                                <optgroup label="Europe — Western">
-                                    <option value="GB" <?php selected( $_POST['country'] ?? '', 'GB' ); ?>>United Kingdom</option>
-                                    <option value="IE" <?php selected( $_POST['country'] ?? '', 'IE' ); ?>>Ireland</option>
-                                    <option value="FR" <?php selected( $_POST['country'] ?? '', 'FR' ); ?>>France</option>
-                                    <option value="DE" <?php selected( $_POST['country'] ?? '', 'DE' ); ?>>Germany</option>
-                                    <option value="ES" <?php selected( $_POST['country'] ?? '', 'ES' ); ?>>Spain</option>
-                                    <option value="PT" <?php selected( $_POST['country'] ?? '', 'PT' ); ?>>Portugal</option>
-                                    <option value="IT" <?php selected( $_POST['country'] ?? '', 'IT' ); ?>>Italy</option>
-                                    <option value="NL" <?php selected( $_POST['country'] ?? '', 'NL' ); ?>>Netherlands</option>
-                                    <option value="BE" <?php selected( $_POST['country'] ?? '', 'BE' ); ?>>Belgium</option>
-                                    <option value="CH" <?php selected( $_POST['country'] ?? '', 'CH' ); ?>>Switzerland</option>
-                                    <option value="AT" <?php selected( $_POST['country'] ?? '', 'AT' ); ?>>Austria</option>
-                                    <option value="LU" <?php selected( $_POST['country'] ?? '', 'LU' ); ?>>Luxembourg</option>
-                                    <option value="GR" <?php selected( $_POST['country'] ?? '', 'GR' ); ?>>Greece</option>
-                                    <option value="CY" <?php selected( $_POST['country'] ?? '', 'CY' ); ?>>Cyprus</option>
-                                    <option value="MT" <?php selected( $_POST['country'] ?? '', 'MT' ); ?>>Malta</option>
-                                </optgroup>
-                                <optgroup label="Europe — Nordic &amp; Baltic">
-                                    <option value="SE" <?php selected( $_POST['country'] ?? '', 'SE' ); ?>>Sweden</option>
-                                    <option value="NO" <?php selected( $_POST['country'] ?? '', 'NO' ); ?>>Norway</option>
-                                    <option value="DK" <?php selected( $_POST['country'] ?? '', 'DK' ); ?>>Denmark</option>
-                                    <option value="FI" <?php selected( $_POST['country'] ?? '', 'FI' ); ?>>Finland</option>
-                                    <option value="IS" <?php selected( $_POST['country'] ?? '', 'IS' ); ?>>Iceland</option>
-                                    <option value="EE" <?php selected( $_POST['country'] ?? '', 'EE' ); ?>>Estonia</option>
-                                    <option value="LV" <?php selected( $_POST['country'] ?? '', 'LV' ); ?>>Latvia</option>
-                                    <option value="LT" <?php selected( $_POST['country'] ?? '', 'LT' ); ?>>Lithuania</option>
-                                </optgroup>
-                                <optgroup label="Europe — Central &amp; Eastern">
-                                    <option value="PL" <?php selected( $_POST['country'] ?? '', 'PL' ); ?>>Poland</option>
-                                    <option value="CZ" <?php selected( $_POST['country'] ?? '', 'CZ' ); ?>>Czech Republic</option>
-                                    <option value="SK" <?php selected( $_POST['country'] ?? '', 'SK' ); ?>>Slovakia</option>
-                                    <option value="HU" <?php selected( $_POST['country'] ?? '', 'HU' ); ?>>Hungary</option>
-                                    <option value="SI" <?php selected( $_POST['country'] ?? '', 'SI' ); ?>>Slovenia</option>
-                                    <option value="HR" <?php selected( $_POST['country'] ?? '', 'HR' ); ?>>Croatia</option>
-                                    <option value="RS" <?php selected( $_POST['country'] ?? '', 'RS' ); ?>>Serbia</option>
-                                    <option value="BG" <?php selected( $_POST['country'] ?? '', 'BG' ); ?>>Bulgaria</option>
-                                    <option value="RO" <?php selected( $_POST['country'] ?? '', 'RO' ); ?>>Romania</option>
-                                    <option value="UA" <?php selected( $_POST['country'] ?? '', 'UA' ); ?>>Ukraine</option>
-                                    <option value="MD" <?php selected( $_POST['country'] ?? '', 'MD' ); ?>>Moldova</option>
-                                    <option value="TR" <?php selected( $_POST['country'] ?? '', 'TR' ); ?>>Turkey</option>
-                                    <option value="RU" <?php selected( $_POST['country'] ?? '', 'RU' ); ?>>Russia</option>
-                                </optgroup>
-                                <optgroup label="Asia">
-                                    <option value="JP" <?php selected( $_POST['country'] ?? '', 'JP' ); ?>>Japan</option>
-                                    <option value="KR" <?php selected( $_POST['country'] ?? '', 'KR' ); ?>>South Korea</option>
-                                    <option value="CN" <?php selected( $_POST['country'] ?? '', 'CN' ); ?>>China / Hong Kong</option>
-                                    <option value="TW" <?php selected( $_POST['country'] ?? '', 'TW' ); ?>>Taiwan</option>
-                                    <option value="SG" <?php selected( $_POST['country'] ?? '', 'SG' ); ?>>Singapore</option>
-                                    <option value="MY" <?php selected( $_POST['country'] ?? '', 'MY' ); ?>>Malaysia</option>
-                                    <option value="ID" <?php selected( $_POST['country'] ?? '', 'ID' ); ?>>Indonesia</option>
-                                    <option value="PH" <?php selected( $_POST['country'] ?? '', 'PH' ); ?>>Philippines</option>
-                                    <option value="TH" <?php selected( $_POST['country'] ?? '', 'TH' ); ?>>Thailand</option>
-                                    <option value="VN" <?php selected( $_POST['country'] ?? '', 'VN' ); ?>>Vietnam</option>
-                                    <option value="IN" <?php selected( $_POST['country'] ?? '', 'IN' ); ?>>India</option>
-                                    <option value="PK" <?php selected( $_POST['country'] ?? '', 'PK' ); ?>>Pakistan</option>
-                                    <option value="BD" <?php selected( $_POST['country'] ?? '', 'BD' ); ?>>Bangladesh</option>
-                                    <option value="LK" <?php selected( $_POST['country'] ?? '', 'LK' ); ?>>Sri Lanka</option>
-                                    <option value="NP" <?php selected( $_POST['country'] ?? '', 'NP' ); ?>>Nepal</option>
-                                    <option value="MN" <?php selected( $_POST['country'] ?? '', 'MN' ); ?>>Mongolia</option>
-                                    <option value="KZ" <?php selected( $_POST['country'] ?? '', 'KZ' ); ?>>Kazakhstan</option>
-                                    <option value="UZ" <?php selected( $_POST['country'] ?? '', 'UZ' ); ?>>Uzbekistan</option>
-                                </optgroup>
-                                <optgroup label="Middle East">
-                                    <option value="IL" <?php selected( $_POST['country'] ?? '', 'IL' ); ?>>Israel</option>
-                                    <option value="AE" <?php selected( $_POST['country'] ?? '', 'AE' ); ?>>UAE</option>
-                                    <option value="SA" <?php selected( $_POST['country'] ?? '', 'SA' ); ?>>Saudi Arabia</option>
-                                    <option value="QA" <?php selected( $_POST['country'] ?? '', 'QA' ); ?>>Qatar</option>
-                                    <option value="BH" <?php selected( $_POST['country'] ?? '', 'BH' ); ?>>Bahrain</option>
-                                    <option value="KW" <?php selected( $_POST['country'] ?? '', 'KW' ); ?>>Kuwait</option>
-                                    <option value="OM" <?php selected( $_POST['country'] ?? '', 'OM' ); ?>>Oman</option>
-                                    <option value="JO" <?php selected( $_POST['country'] ?? '', 'JO' ); ?>>Jordan</option>
-                                </optgroup>
-                                <optgroup label="Latin America">
-                                    <option value="BR" <?php selected( $_POST['country'] ?? '', 'BR' ); ?>>Brazil</option>
-                                    <option value="AR" <?php selected( $_POST['country'] ?? '', 'AR' ); ?>>Argentina</option>
-                                    <option value="CL" <?php selected( $_POST['country'] ?? '', 'CL' ); ?>>Chile</option>
-                                    <option value="CO" <?php selected( $_POST['country'] ?? '', 'CO' ); ?>>Colombia</option>
-                                    <option value="PE" <?php selected( $_POST['country'] ?? '', 'PE' ); ?>>Peru</option>
-                                    <option value="UY" <?php selected( $_POST['country'] ?? '', 'UY' ); ?>>Uruguay</option>
-                                    <option value="EC" <?php selected( $_POST['country'] ?? '', 'EC' ); ?>>Ecuador</option>
-                                    <option value="CR" <?php selected( $_POST['country'] ?? '', 'CR' ); ?>>Costa Rica</option>
-                                    <option value="PA" <?php selected( $_POST['country'] ?? '', 'PA' ); ?>>Panama</option>
-                                    <option value="DO" <?php selected( $_POST['country'] ?? '', 'DO' ); ?>>Dominican Republic</option>
-                                    <option value="GT" <?php selected( $_POST['country'] ?? '', 'GT' ); ?>>Guatemala</option>
-                                    <option value="JM" <?php selected( $_POST['country'] ?? '', 'JM' ); ?>>Jamaica</option>
-                                    <option value="TT" <?php selected( $_POST['country'] ?? '', 'TT' ); ?>>Trinidad &amp; Tobago</option>
-                                </optgroup>
-                                <optgroup label="Africa">
-                                    <option value="ZA" <?php selected( $_POST['country'] ?? '', 'ZA' ); ?>>South Africa</option>
-                                    <option value="NG" <?php selected( $_POST['country'] ?? '', 'NG' ); ?>>Nigeria</option>
-                                    <option value="KE" <?php selected( $_POST['country'] ?? '', 'KE' ); ?>>Kenya</option>
-                                    <option value="GH" <?php selected( $_POST['country'] ?? '', 'GH' ); ?>>Ghana</option>
-                                    <option value="TZ" <?php selected( $_POST['country'] ?? '', 'TZ' ); ?>>Tanzania</option>
-                                    <option value="UG" <?php selected( $_POST['country'] ?? '', 'UG' ); ?>>Uganda</option>
-                                    <option value="RW" <?php selected( $_POST['country'] ?? '', 'RW' ); ?>>Rwanda</option>
-                                    <option value="EG" <?php selected( $_POST['country'] ?? '', 'EG' ); ?>>Egypt</option>
-                                    <option value="MA" <?php selected( $_POST['country'] ?? '', 'MA' ); ?>>Morocco</option>
-                                    <option value="TN" <?php selected( $_POST['country'] ?? '', 'TN' ); ?>>Tunisia</option>
-                                    <option value="SN" <?php selected( $_POST['country'] ?? '', 'SN' ); ?>>Senegal</option>
-                                </optgroup>
-                            </select>
                         </div>
                         <div class="sb-field">
                             <label>Accent Color</label>
@@ -470,6 +350,183 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                                 <input type="color" name="accent_color" value="<?php echo esc_attr( $_POST['accent_color'] ?? '#764ba2' ); ?>" style="width:44px;height:44px;padding:4px;cursor:pointer;border:1px solid var(--sb-border);border-radius:6px" />
                                 <span class="sb-help" style="margin:0">Headings, borders, CTA buttons</span>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="sb-field-row">
+                        <div class="sb-field" style="flex:1">
+                            <label>Country &amp; Language
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text">Sets the article language and pulls statistics from country-specific government APIs. Article will be written entirely in the selected language.</span>
+                                </span>
+                            </label>
+                            <input type="hidden" name="country" id="sb-country-val" value="<?php echo esc_attr( $_POST['country'] ?? '' ); ?>" />
+                            <input type="hidden" name="language" id="sb-lang-val" value="<?php echo esc_attr( $_POST['language'] ?? 'en' ); ?>" />
+                            <div id="sb-country-picker" style="position:relative">
+                                <div id="sb-country-selected" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border:1px solid var(--sb-border,#d1d5db);border-radius:6px;cursor:pointer;background:#fff;font-size:13px" onclick="document.getElementById('sb-country-dropdown').style.display=document.getElementById('sb-country-dropdown').style.display==='block'?'none':'block';document.getElementById('sb-country-search').focus()">
+                                    <span id="sb-country-flag" style="font-size:18px">🌐</span>
+                                    <span id="sb-country-label" style="flex:1;color:#374151">Global — English</span>
+                                    <svg style="width:14px;height:14px;color:#6b7280;flex-shrink:0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                                </div>
+                                <div id="sb-country-dropdown" style="display:none;position:absolute;top:44px;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:9999;max-height:320px;overflow:hidden">
+                                    <div style="padding:8px;border-bottom:1px solid #e5e7eb">
+                                        <input type="text" id="sb-country-search" placeholder="Search country or language..." style="width:100%;height:34px;padding:0 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;outline:none;box-sizing:border-box" oninput="sbFilterCountries(this.value)" />
+                                    </div>
+                                    <div id="sb-country-list" style="max-height:260px;overflow-y:auto"></div>
+                                </div>
+                            </div>
+                            <script>
+                            var sbCountries = [
+                                {v:'',c:'',f:'🌐',n:'Global',l:'en',ln:'English'},
+                                // Oceania
+                                {v:'AU',c:'AU',f:'🇦🇺',n:'Australia',l:'en',ln:'English'},
+                                {v:'NZ',c:'NZ',f:'🇳🇿',n:'New Zealand',l:'en',ln:'English'},
+                                {v:'FJ',c:'FJ',f:'🇫🇯',n:'Pacific Islands',l:'en',ln:'English'},
+                                // North America
+                                {v:'US',c:'US',f:'🇺🇸',n:'United States',l:'en',ln:'English'},
+                                {v:'CA:en',c:'CA',f:'🇨🇦',n:'Canada',l:'en',ln:'English'},
+                                {v:'CA:fr',c:'CA',f:'🇨🇦',n:'Canada',l:'fr',ln:'Français'},
+                                {v:'MX',c:'MX',f:'🇲🇽',n:'Mexico',l:'es',ln:'Español'},
+                                // Europe Western
+                                {v:'GB',c:'GB',f:'🇬🇧',n:'United Kingdom',l:'en',ln:'English'},
+                                {v:'IE',c:'IE',f:'🇮🇪',n:'Ireland',l:'en',ln:'English'},
+                                {v:'FR',c:'FR',f:'🇫🇷',n:'France',l:'fr',ln:'Français'},
+                                {v:'DE',c:'DE',f:'🇩🇪',n:'Germany',l:'de',ln:'Deutsch'},
+                                {v:'ES',c:'ES',f:'🇪🇸',n:'Spain',l:'es',ln:'Español'},
+                                {v:'PT',c:'PT',f:'🇵🇹',n:'Portugal',l:'pt',ln:'Português'},
+                                {v:'IT',c:'IT',f:'🇮🇹',n:'Italy',l:'it',ln:'Italiano'},
+                                {v:'NL',c:'NL',f:'🇳🇱',n:'Netherlands',l:'nl',ln:'Nederlands'},
+                                {v:'BE:nl',c:'BE',f:'🇧🇪',n:'Belgium',l:'nl',ln:'Nederlands'},
+                                {v:'BE:fr',c:'BE',f:'🇧🇪',n:'Belgium',l:'fr',ln:'Français'},
+                                {v:'CH:de',c:'CH',f:'🇨🇭',n:'Switzerland',l:'de',ln:'Deutsch'},
+                                {v:'CH:fr',c:'CH',f:'🇨🇭',n:'Switzerland',l:'fr',ln:'Français'},
+                                {v:'CH:it',c:'CH',f:'🇨🇭',n:'Switzerland',l:'it',ln:'Italiano'},
+                                {v:'AT',c:'AT',f:'🇦🇹',n:'Austria',l:'de',ln:'Deutsch'},
+                                {v:'LU',c:'LU',f:'🇱🇺',n:'Luxembourg',l:'fr',ln:'Français'},
+                                {v:'GR',c:'GR',f:'🇬🇷',n:'Greece',l:'el',ln:'Ελληνικά'},
+                                {v:'CY',c:'CY',f:'🇨🇾',n:'Cyprus',l:'el',ln:'Ελληνικά'},
+                                {v:'MT',c:'MT',f:'🇲🇹',n:'Malta',l:'en',ln:'English'},
+                                // Nordic & Baltic
+                                {v:'SE',c:'SE',f:'🇸🇪',n:'Sweden',l:'sv',ln:'Svenska'},
+                                {v:'NO',c:'NO',f:'🇳🇴',n:'Norway',l:'no',ln:'Norsk'},
+                                {v:'DK',c:'DK',f:'🇩🇰',n:'Denmark',l:'da',ln:'Dansk'},
+                                {v:'FI',c:'FI',f:'🇫🇮',n:'Finland',l:'fi',ln:'Suomi'},
+                                {v:'IS',c:'IS',f:'🇮🇸',n:'Iceland',l:'is',ln:'Íslenska'},
+                                {v:'EE',c:'EE',f:'🇪🇪',n:'Estonia',l:'et',ln:'Eesti'},
+                                {v:'LV',c:'LV',f:'🇱🇻',n:'Latvia',l:'lv',ln:'Latviešu'},
+                                {v:'LT',c:'LT',f:'🇱🇹',n:'Lithuania',l:'lt',ln:'Lietuvių'},
+                                // Central & Eastern Europe
+                                {v:'PL',c:'PL',f:'🇵🇱',n:'Poland',l:'pl',ln:'Polski'},
+                                {v:'CZ',c:'CZ',f:'🇨🇿',n:'Czech Republic',l:'cs',ln:'Čeština'},
+                                {v:'SK',c:'SK',f:'🇸🇰',n:'Slovakia',l:'sk',ln:'Slovenčina'},
+                                {v:'HU',c:'HU',f:'🇭🇺',n:'Hungary',l:'hu',ln:'Magyar'},
+                                {v:'SI',c:'SI',f:'🇸🇮',n:'Slovenia',l:'sl',ln:'Slovenščina'},
+                                {v:'HR',c:'HR',f:'🇭🇷',n:'Croatia',l:'hr',ln:'Hrvatski'},
+                                {v:'RS',c:'RS',f:'🇷🇸',n:'Serbia',l:'sr',ln:'Српски'},
+                                {v:'BG',c:'BG',f:'🇧🇬',n:'Bulgaria',l:'bg',ln:'Български'},
+                                {v:'RO',c:'RO',f:'🇷🇴',n:'Romania',l:'ro',ln:'Română'},
+                                {v:'UA',c:'UA',f:'🇺🇦',n:'Ukraine',l:'uk',ln:'Українська'},
+                                {v:'MD',c:'MD',f:'🇲🇩',n:'Moldova',l:'ro',ln:'Română'},
+                                {v:'TR',c:'TR',f:'🇹🇷',n:'Turkey',l:'tr',ln:'Türkçe'},
+                                {v:'RU',c:'RU',f:'🇷🇺',n:'Russia',l:'ru',ln:'Русский'},
+                                // Asia
+                                {v:'JP',c:'JP',f:'🇯🇵',n:'Japan',l:'ja',ln:'日本語'},
+                                {v:'KR',c:'KR',f:'🇰🇷',n:'South Korea',l:'ko',ln:'한국어'},
+                                {v:'CN',c:'CN',f:'🇨🇳',n:'China',l:'zh',ln:'中文'},
+                                {v:'TW',c:'TW',f:'🇹🇼',n:'Taiwan',l:'zh',ln:'中文'},
+                                {v:'SG',c:'SG',f:'🇸🇬',n:'Singapore',l:'en',ln:'English'},
+                                {v:'MY',c:'MY',f:'🇲🇾',n:'Malaysia',l:'ms',ln:'Bahasa Melayu'},
+                                {v:'ID',c:'ID',f:'🇮🇩',n:'Indonesia',l:'id',ln:'Bahasa Indonesia'},
+                                {v:'PH',c:'PH',f:'🇵🇭',n:'Philippines',l:'en',ln:'English'},
+                                {v:'TH',c:'TH',f:'🇹🇭',n:'Thailand',l:'th',ln:'ไทย'},
+                                {v:'VN',c:'VN',f:'🇻🇳',n:'Vietnam',l:'vi',ln:'Tiếng Việt'},
+                                {v:'IN:en',c:'IN',f:'🇮🇳',n:'India',l:'en',ln:'English'},
+                                {v:'IN:hi',c:'IN',f:'🇮🇳',n:'India',l:'hi',ln:'हिन्दी'},
+                                {v:'PK',c:'PK',f:'🇵🇰',n:'Pakistan',l:'ur',ln:'اردو'},
+                                {v:'BD',c:'BD',f:'🇧🇩',n:'Bangladesh',l:'bn',ln:'বাংলা'},
+                                {v:'LK',c:'LK',f:'🇱🇰',n:'Sri Lanka',l:'si',ln:'සිංහල'},
+                                {v:'NP',c:'NP',f:'🇳🇵',n:'Nepal',l:'ne',ln:'नेपाली'},
+                                {v:'MN',c:'MN',f:'🇲🇳',n:'Mongolia',l:'mn',ln:'Монгол'},
+                                {v:'KZ',c:'KZ',f:'🇰🇿',n:'Kazakhstan',l:'kk',ln:'Қазақша'},
+                                {v:'UZ',c:'UZ',f:'🇺🇿',n:'Uzbekistan',l:'uz',ln:'Oʻzbekcha'},
+                                // Middle East
+                                {v:'IL',c:'IL',f:'🇮🇱',n:'Israel',l:'he',ln:'עברית'},
+                                {v:'AE',c:'AE',f:'🇦🇪',n:'UAE',l:'ar',ln:'العربية'},
+                                {v:'AE:en',c:'AE',f:'🇦🇪',n:'UAE',l:'en',ln:'English'},
+                                {v:'SA',c:'SA',f:'🇸🇦',n:'Saudi Arabia',l:'ar',ln:'العربية'},
+                                {v:'QA',c:'QA',f:'🇶🇦',n:'Qatar',l:'ar',ln:'العربية'},
+                                {v:'BH',c:'BH',f:'🇧🇭',n:'Bahrain',l:'ar',ln:'العربية'},
+                                {v:'KW',c:'KW',f:'🇰🇼',n:'Kuwait',l:'ar',ln:'العربية'},
+                                {v:'OM',c:'OM',f:'🇴🇲',n:'Oman',l:'ar',ln:'العربية'},
+                                {v:'JO',c:'JO',f:'🇯🇴',n:'Jordan',l:'ar',ln:'العربية'},
+                                {v:'EG',c:'EG',f:'🇪🇬',n:'Egypt',l:'ar',ln:'العربية'},
+                                // Latin America
+                                {v:'BR',c:'BR',f:'🇧🇷',n:'Brazil',l:'pt',ln:'Português'},
+                                {v:'AR',c:'AR',f:'🇦🇷',n:'Argentina',l:'es',ln:'Español'},
+                                {v:'CL',c:'CL',f:'🇨🇱',n:'Chile',l:'es',ln:'Español'},
+                                {v:'CO',c:'CO',f:'🇨🇴',n:'Colombia',l:'es',ln:'Español'},
+                                {v:'PE',c:'PE',f:'🇵🇪',n:'Peru',l:'es',ln:'Español'},
+                                {v:'UY',c:'UY',f:'🇺🇾',n:'Uruguay',l:'es',ln:'Español'},
+                                {v:'EC',c:'EC',f:'🇪🇨',n:'Ecuador',l:'es',ln:'Español'},
+                                {v:'CR',c:'CR',f:'🇨🇷',n:'Costa Rica',l:'es',ln:'Español'},
+                                {v:'PA',c:'PA',f:'🇵🇦',n:'Panama',l:'es',ln:'Español'},
+                                {v:'DO',c:'DO',f:'🇩🇴',n:'Dominican Republic',l:'es',ln:'Español'},
+                                {v:'GT',c:'GT',f:'🇬🇹',n:'Guatemala',l:'es',ln:'Español'},
+                                {v:'JM',c:'JM',f:'🇯🇲',n:'Jamaica',l:'en',ln:'English'},
+                                // Africa
+                                {v:'ZA',c:'ZA',f:'🇿🇦',n:'South Africa',l:'en',ln:'English'},
+                                {v:'NG',c:'NG',f:'🇳🇬',n:'Nigeria',l:'en',ln:'English'},
+                                {v:'KE',c:'KE',f:'🇰🇪',n:'Kenya',l:'en',ln:'English'},
+                                {v:'GH',c:'GH',f:'🇬🇭',n:'Ghana',l:'en',ln:'English'},
+                                {v:'TZ',c:'TZ',f:'🇹🇿',n:'Tanzania',l:'sw',ln:'Kiswahili'},
+                                {v:'UG',c:'UG',f:'🇺🇬',n:'Uganda',l:'en',ln:'English'},
+                                {v:'RW',c:'RW',f:'🇷🇼',n:'Rwanda',l:'en',ln:'English'},
+                                {v:'MA',c:'MA',f:'🇲🇦',n:'Morocco',l:'ar',ln:'العربية'},
+                                {v:'MA:fr',c:'MA',f:'🇲🇦',n:'Morocco',l:'fr',ln:'Français'},
+                                {v:'TN',c:'TN',f:'🇹🇳',n:'Tunisia',l:'ar',ln:'العربية'},
+                                {v:'SN',c:'SN',f:'🇸🇳',n:'Senegal',l:'fr',ln:'Français'},
+                            ];
+                            function sbRenderCountries(filter) {
+                                var list = document.getElementById('sb-country-list');
+                                var q = (filter||'').toLowerCase();
+                                var html = '';
+                                sbCountries.forEach(function(c) {
+                                    var searchStr = (c.n+' '+c.ln+' '+c.l+' '+c.c).toLowerCase();
+                                    if (q && searchStr.indexOf(q) === -1) return;
+                                    html += '<div class="sb-country-item" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font-size:13px" onmouseenter="this.style.background=\'#f1f5f9\'" onmouseleave="this.style.background=\'#fff\'" onclick="sbSelectCountry(\''+c.v+'\',\''+c.c+'\',\''+c.f+'\',\''+c.n.replace(/'/g,"\\'")+'\',\''+c.l+'\',\''+c.ln.replace(/'/g,"\\'")+'\')">';
+                                    html += '<span style="font-size:20px;width:28px;text-align:center">'+c.f+'</span>';
+                                    html += '<span style="flex:1;color:#1e293b">'+c.n+'</span>';
+                                    html += '<span style="font-size:11px;color:#64748b;background:#f1f5f9;padding:2px 8px;border-radius:4px">'+c.ln+'</span>';
+                                    html += '</div>';
+                                });
+                                list.innerHTML = html || '<div style="padding:16px;text-align:center;color:#9ca3af;font-size:13px">No countries found</div>';
+                            }
+                            function sbFilterCountries(q) { sbRenderCountries(q); }
+                            function sbSelectCountry(v, c, f, n, l, ln) {
+                                document.getElementById('sb-country-val').value = c;
+                                document.getElementById('sb-lang-val').value = l;
+                                document.getElementById('sb-country-flag').textContent = f;
+                                document.getElementById('sb-country-label').textContent = n + ' — ' + ln;
+                                document.getElementById('sb-country-dropdown').style.display = 'none';
+                                document.getElementById('sb-country-search').value = '';
+                            }
+                            // Init
+                            sbRenderCountries('');
+                            // Close on outside click
+                            document.addEventListener('click', function(e) {
+                                if (!document.getElementById('sb-country-picker').contains(e.target)) {
+                                    document.getElementById('sb-country-dropdown').style.display = 'none';
+                                }
+                            });
+                            // Set initial value if exists
+                            <?php if ( ! empty( $_POST['country'] ) ) : ?>
+                            (function() {
+                                var saved = '<?php echo esc_js( $_POST['country'] ?? '' ); ?>';
+                                var lang = '<?php echo esc_js( $_POST['language'] ?? 'en' ); ?>';
+                                sbCountries.forEach(function(c) { if (c.c === saved && c.l === lang) sbSelectCountry(c.v,c.c,c.f,c.n,c.l,c.ln); });
+                            })();
+                            <?php endif; ?>
+                            </script>
                         </div>
                     </div>
                 </div>
@@ -1257,6 +1314,7 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             domain: (form.querySelector('[name="domain"]')||{}).value||'general',
             audience: (form.querySelector('[name="audience"]')||{}).value||'',
             country: (form.querySelector('[name="country"]')||{}).value||'',
+            language: (form.querySelector('[name="language"]')||{}).value||'en',
             accent_color: (form.querySelector('[name="accent_color"]')||{}).value||'#764ba2'
         };
 

@@ -81,6 +81,7 @@ class Async_Generator {
                 'lsi_keywords'       => sanitize_text_field( $params['lsi_keywords'] ?? '' ),
                 'accent_color'       => sanitize_text_field( $params['accent_color'] ?? '#764ba2' ),
                 'country'            => sanitize_text_field( $params['country'] ?? '' ),
+                'language'           => sanitize_text_field( $params['language'] ?? 'en' ),
             ],
             'steps'       => $steps,
             'current'     => 0,
@@ -141,7 +142,7 @@ class Async_Generator {
         $lsi = array_filter( array_map( 'trim', explode( ',', $options['lsi_keywords'] ) ) );
 
         $generator = new AI_Content_Generator();
-        $system = self::get_system_prompt();
+        $system = self::get_system_prompt( $options['language'] ?? 'en' );
         $result = null;
         $step_label = '';
 
@@ -507,10 +508,28 @@ class Async_Generator {
     /**
      * Get the system prompt.
      */
-    private static function get_system_prompt(): string {
+    private static function get_system_prompt( string $language = 'en' ): string {
         $year = wp_date( 'Y' );
         $month_year = wp_date( 'F Y' );
-        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).
+
+        $lang_names = [
+            'en' => 'English', 'fr' => 'French', 'de' => 'German', 'es' => 'Spanish',
+            'pt' => 'Portuguese', 'it' => 'Italian', 'nl' => 'Dutch', 'sv' => 'Swedish',
+            'no' => 'Norwegian', 'da' => 'Danish', 'fi' => 'Finnish', 'pl' => 'Polish',
+            'cs' => 'Czech', 'sk' => 'Slovak', 'hu' => 'Hungarian', 'ro' => 'Romanian',
+            'bg' => 'Bulgarian', 'hr' => 'Croatian', 'sr' => 'Serbian', 'sl' => 'Slovenian',
+            'uk' => 'Ukrainian', 'ru' => 'Russian', 'tr' => 'Turkish', 'el' => 'Greek',
+            'ja' => 'Japanese', 'ko' => 'Korean', 'zh' => 'Chinese (Simplified)',
+            'ar' => 'Arabic', 'he' => 'Hebrew', 'hi' => 'Hindi', 'bn' => 'Bengali',
+            'th' => 'Thai', 'vi' => 'Vietnamese', 'id' => 'Indonesian', 'ms' => 'Malay',
+            'sw' => 'Swahili', 'ur' => 'Urdu', 'si' => 'Sinhala', 'ne' => 'Nepali',
+            'mn' => 'Mongolian', 'kk' => 'Kazakh', 'uz' => 'Uzbek', 'is' => 'Icelandic',
+            'et' => 'Estonian', 'lv' => 'Latvian', 'lt' => 'Lithuanian',
+        ];
+        $lang_name = $lang_names[ $language ] ?? 'English';
+        $lang_rule = ( $language !== 'en' ) ? "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every heading, paragraph, FAQ, key takeaway, and reference description must be in {$lang_name}. Do NOT write in English unless the language is English. The keyword may be in any language — use it as-is." : '';
+
+        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).{$lang_rule}
 
 CURRENT DATE: {$month_year}. The current year is {$year}. ALWAYS use {$year} when writing 'in [year]', 'best X in [year]', or any year reference. NEVER use 2024 or 2025 — those are outdated.
 
