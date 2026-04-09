@@ -106,16 +106,19 @@ The **very first content paragraph** of the article (the first `<p>` after Key T
 - Be 40-60 words
 - Directly state what the article is about
 - Bold the keyword on first mention: `**keyword phrase**`
-- Example: "**Reptile shop Melbourne** provides essential supplies for reptile owners across Victoria. Finding the right reptile shop Melbourne residents trust requires..."
+- Do NOT start with "[Keyword] is..." or "[Keyword] refers to..." — those are AI patterns
+- Jump into a specific fact, opinion, or context that includes the keyword naturally
+- Example: "**Reptile shop Melbourne** owners know the difference between a good heat lamp and a cheap one. The right supplier stocks veterinary-grade equipment alongside everyday essentials."
 
 **Why this matters:** AIOSEO/Yoast flag "Focus keyword not in introduction" if the keyword is missing from the first `<p>` tag. This is the #1 most common SEO plugin warning.
 
-### 3.2b Section Opening Rule (40-60 Word Rule)
-Every H2/H3 section MUST begin with a **40-60 word paragraph** that:
-- Directly answers the heading question
+### 3.2b Section Opening Rule
+Every H2/H3 section MUST begin with a paragraph that:
+- Directly answers the heading question (do not restate the heading)
 - Functions as a standalone answer if extracted by AI
 - Contains the primary or secondary keyword
 - Never starts with a pronoun
+- Varies in length — not every opening needs to be exactly 40-60 words. Some can be shorter (25-35), some longer (50-70). The key is answering the heading directly.
 
 ### 3.3 Island Test (Context Independence)
 - **NEVER** start paragraphs with: It, This, They, These, Those, He, She, We, Its
@@ -124,11 +127,13 @@ Every H2/H3 section MUST begin with a **40-60 word paragraph** that:
 - AI models extract individual paragraphs — each must stand alone
 
 ### 3.4 Paragraph Structure
-- 3-5 sentences per paragraph (target 4)
+- Vary paragraph length — some 2-3 sentences, some 4-5. Do not make every paragraph the same size.
 - One main idea per paragraph
-- Mix short (10 words) and medium (15-20 words) sentences
-- No sentences over 25 words without a break
-- Bold key terms on first mention
+- Mix sentence lengths: short punchy (under 8 words), medium (15-20), occasional longer (25-30)
+- No more than 3 consecutive sentences of similar length (burstiness signal)
+- Start some sentences with "But", "And", "So" — humans do this naturally
+- Use occasional fragments. They work.
+- Bold the primary keyword once in the introduction only — no other bold
 
 ---
 
@@ -263,18 +268,26 @@ Based on humanize-writing skill v2.0.0:
 | Technical topics | 10-12 | Professional but accessible |
 | Academic | 12-14 | Only when necessary |
 
-### 5.2 Sentence Rules
+### 5.2 Sentence Rules (Burstiness)
+AI detection tools measure sentence length variation ("burstiness"). Low burstiness = AI. High burstiness = human.
 - Average: 15-20 words per sentence
-- Short sentences (under 10 words): 30-40% of content
-- Medium sentences (15-25 words): 40-50%
-- Long sentences (25+ words): maximum 10-20%
+- Short sentences (under 8 words): 20-30% of content — "That changed things." "It works."
+- Medium sentences (10-20 words): 50-60%
+- Longer sentences (20-30 words): 10-20% — let some ideas breathe
+- **Critical:** No more than 3 consecutive sentences of similar length
+- Start some sentences with conjunctions: "But", "And", "So", "Still"
+- Use occasional fragments in non-academic writing
 
 ### 5.3 Word Choice Rules
 - Simple > Complex: "buy" not "purchase", "help" not "facilitate", "use" not "utilize"
 - Active voice > Passive voice
-- Specific > Generic
-- No filler phrases: "In this section we will explore..." is BANNED
+- Specific > Generic: "3,200 units sold in March" not "significant sales growth"
+- Use "is"/"are"/"has" — not "serves as"/"stands as"/"boasts"
+- All Tier 1 and Tier 2 banned words from Section 4B are enforced in the system prompt
+- No filler phrases (see Section 4B for complete list)
 - No academic jargon unless explaining technical concepts
+- No signposting ("let's dive in", "here's what you need to know")
+- Write like explaining to a colleague, not writing a press release
 
 ---
 
