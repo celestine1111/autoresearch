@@ -183,7 +183,7 @@ These are the specific content patterns that AI models extract and cite. Every a
 
 ## 4B. HUMANIZER — ANTI-AI WRITING PATTERNS (CRITICAL)
 
-Source: [Wikipedia Signs of AI Writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing), Humanizer Skill v2.5.1
+Sources: [Wikipedia Signs of AI Writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing), Humanizer Skill v2.5.1, humanize-writing Skill v2.0.0 (8-pass editing), HumanizerAI agent-skills (burstiness/perplexity metrics)
 
 AI-generated articles that "sound AI" get lower engagement, lower trust, and lower E-E-A-T scores. Google's helpful content guidelines penalize content that reads as mass-produced. Every generated article MUST avoid these patterns.
 
@@ -222,7 +222,35 @@ AI-generated articles that "sound AI" get lower engagement, lower trust, and low
 - Occasionally use first person: "here is what stands out"
 
 ### Implementation
-The `get_system_prompt()` in Async_Generator.php includes banned words, banned patterns, and natural writing rules. Every section is generated with these constraints active.
+The `get_system_prompt()` in Async_Generator.php includes banned words (Tier 1 + Tier 2), banned patterns, rhythm rules, transition rules, and human texture guidance. Every section is generated with these constraints active.
+
+### Sentence Rhythm (Burstiness)
+AI detection tools measure "burstiness" — how much sentence length varies. AI scores low (metronomic cadence). Human writing scores high (varied rhythm).
+- Target: no more than 3 consecutive sentences of similar length
+- Mix short sentences (under 8 words) with medium (15-20) and occasional longer ones
+- Start some sentences with "But", "And", "So"
+- Use occasional fragments
+
+### Transition Overuse
+AI's favorite transitions are also its biggest tells: "Moreover", "Furthermore", "Additionally", "That said", "Moving forward", "When it comes to". Often you don't need a transition. Just start the next thought. Use actual logical connectors: "because", "so", "but".
+
+### The "Read It Aloud" Test
+After generation, every article should pass this test: read it out loud and flag anything that:
+- Sounds like a press release
+- No human would actually say in conversation
+- Could have been written about any topic by swapping a few nouns
+- Feels like it's trying too hard to sound smart
+
+### 8-Pass Editing Framework (Reference)
+Based on humanize-writing skill v2.0.0:
+1. **Structure** — kill formulaic section patterns, vary lengths
+2. **Inflation** — strip significance and promotional language
+3. **Vocabulary** — replace Tier 1 AI words, check Tier 2 clusters
+4. **Grammar** — fix copula avoidance, -ing phrases, parallelisms
+5. **Rhythm** — vary sentence length, add short punchy lines
+6. **Hedging** — cut filler, vague attributions, excessive qualifiers
+7. **Transitions** — replace generic connectors or remove entirely
+8. **Soul** — add human texture, opinions, specific reactions
 
 ---
 
