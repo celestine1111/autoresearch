@@ -297,8 +297,9 @@ class Async_Generator {
         $intent = self::detect_intent( $keyword );
         $intent_guidance = self::get_intent_guidance( $intent );
 
+        $year = wp_date( 'Y' );
         $min_kw_headings = max( 1, round( $content_sections * 0.3 ) );
-        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the content H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. For example: \"What Is the Best {$keyword}?\", \"How to Choose {$keyword}\", \"{$keyword}: Complete Guide\"\n- Target word count: {$total_words} words total\n- Target audience: " . ( $options['audience'] ?? 'general' ) . "\n- Domain: " . ( $options['domain'] ?? 'general' ) . "\n- Tone: " . ( $options['tone'] ?? 'authoritative' ) . "\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
+        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\n\nRequirements:\n- Exactly {$num_sections} sections total:\n  1. Key Takeaways (always first)\n  2-" . ( $content_sections + 1 ) . ". {$content_sections} content sections with question-format H2 headings\n  " . ( $content_sections + 2 ) . ". Frequently Asked Questions\n  " . ( $content_sections + 3 ) . ". References\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the content H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. For example: \"What Is the Best {$keyword} in {$year}?\", \"How to Choose {$keyword}\", \"{$keyword}: Complete Guide\"\n- Target word count: {$total_words} words total\n- Target audience: " . ( $options['audience'] ?? 'general' ) . "\n- Domain: " . ( $options['domain'] ?? 'general' ) . "\n- Tone: " . ( $options['tone'] ?? 'authoritative' ) . "\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
 
         $result = self::send_request( $prompt, 'You are an SEO content strategist. Return only the numbered list of headings.', [ 'max_tokens' => 500 ] );
 
@@ -484,7 +485,11 @@ class Async_Generator {
      * Get the system prompt.
      */
     private static function get_system_prompt(): string {
+        $year = wp_date( 'Y' );
+        $month_year = wp_date( 'F Y' );
         return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).
+
+CURRENT DATE: {$month_year}. The current year is {$year}. ALWAYS use {$year} when writing 'in [year]', 'best X in [year]', or any year reference. NEVER use 2024 or 2025 — those are outdated.
 
 KEYWORD DENSITY (CRITICAL FOR SEO PLUGINS):
 - Primary keyword MUST appear every 100-200 words (0.5%-1.5% density)
