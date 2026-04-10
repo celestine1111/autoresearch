@@ -166,8 +166,78 @@
         );
     };
 
-    // Pre-publish panel — shows in the publish confirmation screen
-    const { PluginPrePublishPanel } = wp.editPost;
+    // Document setting panel — shows in the Post sidebar (like AIOSEO)
+    const { PluginPrePublishPanel, PluginDocumentSettingPanel } = wp.editPost;
+
+    const SEOBetterDocPanel = () => {
+        const [analysis, setAnalysis] = useState(null);
+        const [loading, setLoading] = useState(true);
+        const isPro = window.seobetterData?.isPro || false;
+
+        useEffect(() => {
+            const postId = select('core/editor').getCurrentPostId();
+            if (!postId) { setLoading(false); return; }
+            apiFetch({ path: '/seobetter/v1/analyze/' + postId })
+                .then(data => { setAnalysis(data); setLoading(false); })
+                .catch(() => setLoading(false));
+        }, []);
+
+        if (loading) {
+            return wp.element.createElement(PluginDocumentSettingPanel, {
+                name: 'seobetter-doc-panel',
+                title: 'SEOBetter GEO Score',
+                icon: 'chart-line'
+            }, wp.element.createElement('div', { style: { textAlign: 'center', padding: 8 } },
+                wp.element.createElement(Spinner, {})
+            ));
+        }
+
+        if (!analysis) {
+            return wp.element.createElement(PluginDocumentSettingPanel, {
+                name: 'seobetter-doc-panel',
+                title: 'SEOBetter',
+                icon: 'chart-line'
+            }, wp.element.createElement('p', { style: { fontSize: 13, color: '#666', margin: 0 } },
+                'Generate an article with SEOBetter to see your GEO score.'
+            ));
+        }
+
+        const score = analysis.geo_score || 0;
+        const scoreColor = score >= 80 ? '#22c55e' : (score >= 60 ? '#f59e0b' : '#ef4444');
+        const checks = analysis.checks || {};
+
+        const items = [
+            { label: 'GEO Score', value: score + ' (' + (analysis.grade || '?') + ')', color: scoreColor, ok: score >= 70 },
+            { label: 'Words', value: (analysis.word_count || 0).toLocaleString(), ok: true },
+            { label: 'Citations', value: (checks.citations?.count || 0) + '/5', ok: (checks.citations?.count || 0) >= 5 },
+            { label: 'Quotes', value: (checks.expert_quotes?.count || 0) + '/2', ok: (checks.expert_quotes?.count || 0) >= 2 },
+            { label: 'Readability', value: 'G' + Math.round(checks.readability?.grade || 0), ok: (checks.readability?.score || 0) >= 70 },
+        ];
+
+        return wp.element.createElement(PluginDocumentSettingPanel, {
+            name: 'seobetter-doc-panel',
+            title: 'SEOBetter: ' + score + '/100 (' + (analysis.grade || '?') + ')',
+            icon: 'chart-line'
+        },
+            items.map((item, i) =>
+                wp.element.createElement('div', {
+                    key: i,
+                    style: { display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13 }
+                },
+                    wp.element.createElement('span', {}, (item.ok ? '✅ ' : '❌ ') + item.label),
+                    wp.element.createElement('span', { style: { fontWeight: 600, color: item.ok ? '#22c55e' : '#ef4444' } }, item.value)
+                )
+            ),
+            !isPro && score < 80 ? wp.element.createElement('div', {
+                style: { marginTop: 8, padding: '6px 10px', background: '#eef2ff', borderRadius: 4, textAlign: 'center', fontSize: 12 }
+            },
+                wp.element.createElement('a', {
+                    href: window.seobetterData?.settingsUrl || '#',
+                    style: { color: '#4338ca', fontWeight: 600, textDecoration: 'none' }
+                }, 'Upgrade to Pro — fix all issues →')
+            ) : null
+        );
+    };
 
     const SEOBetterPrePublish = () => {
         const [analysis, setAnalysis] = useState(null);
@@ -290,6 +360,7 @@
 
     registerPlugin('seobetter', {
         render: () => wp.element.createElement(wp.element.Fragment, {},
+            wp.element.createElement(SEOBetterDocPanel, {}),
             wp.element.createElement(SEOBetterSidebar, {}),
             wp.element.createElement(SEOBetterPrePublish, {})
         ),

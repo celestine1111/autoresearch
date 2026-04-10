@@ -631,6 +631,7 @@ final class SEOBetter {
 
         // Fallback to raw content if gutenberg formatting produced nothing
         if ( empty( trim( $post_content ) ) && ! empty( $content ) ) {
+            $content = $this->validate_outbound_links( $content );
             $post_content = $content;
         }
 
@@ -1094,7 +1095,23 @@ final class SEOBetter {
      */
     private function validate_outbound_links( string $markdown ): string {
         // Extract all markdown links: [text](url)
-        if ( ! preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
+        // Match both markdown links [text](url) and HTML links href="url"
+        $md_links = [];
+        preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $md_links, PREG_SET_ORDER );
+
+        $html_links = [];
+        preg_match_all( '/href="(https?:\/\/[^"]+)"/', $markdown, $html_links, PREG_SET_ORDER );
+
+        // Combine: normalize to [full_match, link_text_or_empty, url] format
+        $matches = [];
+        foreach ( $md_links as $m ) {
+            $matches[] = [ 'full' => $m[0], 'text' => $m[1], 'url' => $m[2], 'type' => 'md' ];
+        }
+        foreach ( $html_links as $m ) {
+            $matches[] = [ 'full' => $m[0], 'text' => '', 'url' => $m[1], 'type' => 'html' ];
+        }
+
+        if ( empty( $matches ) ) {
             return $markdown;
         }
 
@@ -1102,9 +1119,10 @@ final class SEOBetter {
         $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
 
         foreach ( $matches as $match ) {
-            $full_match = $match[0];
-            $link_text = $match[1];
-            $url = $match[2];
+            $full_match = $match['full'];
+            $link_text = $match['text'];
+            $url = $match['url'];
+            $type = $match['type'];
 
             // Skip internal links
             $host = wp_parse_url( $url, PHP_URL_HOST );
@@ -1112,10 +1130,11 @@ final class SEOBetter {
 
             // Check cache first
             if ( isset( $checked[ $url ] ) ) {
-                if ( $checked[ $url ] === 'remove' ) {
-                    $markdown = str_replace( $full_match, $link_text, $markdown );
-                } elseif ( $checked[ $url ] !== $url ) {
-                    $markdown = str_replace( $full_match, "[{$link_text}]({$checked[$url]})", $markdown );
+                $new_url = $checked[ $url ];
+                if ( $new_url === 'remove' ) {
+                    $markdown = ( $type === 'md' ) ? str_replace( $full_match, $link_text, $markdown ) : str_replace( $url, '#', $markdown );
+                } elseif ( $new_url !== $url ) {
+                    $markdown = str_replace( $url, $new_url, $markdown );
                 }
                 continue;
             }
@@ -1125,14 +1144,14 @@ final class SEOBetter {
                 'timeout'     => 4,
                 'redirection' => 3,
                 'sslverify'   => false,
-                'user-agent'  => 'SEOBetter Link Validator/1.0',
+                'user-agent'  => 'Mozilla/5.0 (compatible; SEOBetter/1.0)',
             ] );
 
             if ( is_wp_error( $response ) ) {
                 // Network error — fall back to homepage
                 $homepage = 'https://' . $host . '/';
                 $checked[ $url ] = $homepage;
-                $markdown = str_replace( $full_match, "[{$link_text}]({$homepage})", $markdown );
+                $markdown = str_replace( $url, $homepage, $markdown );
                 continue;
             }
 
@@ -1144,23 +1163,29 @@ final class SEOBetter {
             } elseif ( $code === 404 || $code === 410 ) {
                 // Dead page — replace with homepage
                 $homepage = 'https://' . $host . '/';
-                $homepage_check = wp_remote_head( $homepage, [ 'timeout' => 3, 'sslverify' => false ] );
+                $homepage_check = wp_remote_head( $homepage, [ 'timeout' => 3, 'sslverify' => false, 'user-agent' => 'Mozilla/5.0' ] );
                 if ( ! is_wp_error( $homepage_check ) && wp_remote_retrieve_response_code( $homepage_check ) < 400 ) {
                     $checked[ $url ] = $homepage;
-                    $markdown = str_replace( $full_match, "[{$link_text}]({$homepage})", $markdown );
+                    $markdown = str_replace( $url, $homepage, $markdown );
                 } else {
                     // Even homepage is dead — remove link entirely
                     $checked[ $url ] = 'remove';
-                    $markdown = str_replace( $full_match, $link_text, $markdown );
+                    if ( $type === 'md' ) {
+                        $markdown = str_replace( $full_match, $link_text, $markdown );
+                    } else {
+                        $markdown = str_replace( $url, '#', $markdown );
+                    }
                 }
             } elseif ( $code === 403 ) {
-                // Forbidden — site is real but blocks bots. Keep the link.
-                $checked[ $url ] = $url;
+                // Forbidden — site blocks bots but probably real. Replace with homepage to be safe.
+                $homepage = 'https://' . $host . '/';
+                $checked[ $url ] = $homepage;
+                $markdown = str_replace( $url, $homepage, $markdown );
             } else {
                 // Other error — fall back to homepage
                 $homepage = 'https://' . $host . '/';
                 $checked[ $url ] = $homepage;
-                $markdown = str_replace( $full_match, "[{$link_text}]({$homepage})", $markdown );
+                $markdown = str_replace( $url, $homepage, $markdown );
             }
         }
 
