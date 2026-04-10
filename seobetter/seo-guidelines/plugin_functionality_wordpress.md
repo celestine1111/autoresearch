@@ -405,4 +405,39 @@ delve, tapestry, landscape (metaphorical), paradigm, leverage (verb), harness, n
 
 ---
 
+## 11. GUTENBERG EDITOR INTEGRATION
+
+### 11.1 Pre-Publish Panel (PluginPrePublishPanel)
+
+Appears in the Gutenberg publish confirmation screen (when user clicks "Publish" button). Shows:
+
+| Item | Green (OK) | Red (Issue) |
+|---|---|---|
+| GEO Score | 70+ with grade | Below 70 |
+| Citations | 5+ found | Under 5 |
+| Expert Quotes | 2+ found | Under 2 |
+| Readability | Grade 6-8 | Grade 10+ |
+| Schema | Type detected | Missing |
+
+Also shows:
+- High-priority suggestions (up to 3)
+- Pro upsell banner when score < 80 (gradient background, "Upgrade to Pro" button)
+
+**File:** `assets/js/editor-sidebar.js` — `SEOBetterPrePublish` component
+**Data source:** `GET /seobetter/v1/analyze/{post_id}` REST endpoint
+**Pro detection:** `window.seobetterData.isPro` via `wp_localize_script`
+
+### 11.2 Editor Sidebar Panel (PluginSidebar)
+
+Full GEO analysis available via the SEOBetter icon in the Gutenberg sidebar:
+- GEO Score ring gauge (SVG)
+- Word count
+- 11 individual check scores with progress bars
+- Suggestions list with priority coloring
+- Re-analyze button
+
+**File:** `assets/js/editor-sidebar.js` — `SEOBetterSidebar` component
+
+---
+
 *This document is the authoritative technical reference for all SEOBetter functionality. Update when features are added or changed.*

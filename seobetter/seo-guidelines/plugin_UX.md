@@ -5,7 +5,7 @@
 > **If a feature listed here is missing from the code, it's a bug — restore it.**
 >
 > **Last verified:** April 2026
-> **File:** `admin/views/content-generator.php`
+> **Files:** `admin/views/content-generator.php`, `assets/js/editor-sidebar.js`
 
 ---
 
@@ -265,6 +265,25 @@ After ANY code change to content-generator.php or seobetter.php, verify ALL of t
 - [ ] Text is readable (dark on white) on published page
 - [ ] All !important colors survive theme CSS
 
+### Pre-Publish Panel (editor-sidebar.js)
+- [ ] Panel appears when clicking "Publish" in Gutenberg editor
+- [ ] Shows GEO Score with value and grade
+- [ ] Shows Citations count (green if >=5, red if not)
+- [ ] Shows Expert Quotes count (green if >=2, red if not)
+- [ ] Shows Readability grade
+- [ ] Shows Schema types (Article, FAQPage, etc.)
+- [ ] Shows high-priority issues (if any)
+- [ ] Shows Pro upsell banner when score < 80 and not Pro
+- [ ] "Upgrade to Pro" button links to settings page
+
+### Editor Sidebar Panel (editor-sidebar.js)
+- [ ] SEOBetter GEO icon in sidebar
+- [ ] GEO Score ring gauge (SVG circle)
+- [ ] Word count display
+- [ ] GEO Checks panel (11 bars, collapsible)
+- [ ] Suggestions panel (collapsible)
+- [ ] Re-analyze button
+
 ---
 
-*This document is the definitive UI specification. NEVER remove a feature listed here without explicit user approval. When editing content-generator.php, seobetter.php, or Content_Formatter.php, use this file as the reference to verify nothing was lost.*
+*This document is the definitive UI specification. NEVER remove a feature listed here without explicit user approval. When editing content-generator.php, seobetter.php, Content_Formatter.php, or editor-sidebar.js, use this file as the reference to verify nothing was lost.*

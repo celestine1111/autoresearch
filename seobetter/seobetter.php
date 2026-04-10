@@ -245,6 +245,11 @@ final class SEOBetter {
             true
         );
         wp_enqueue_style( 'seobetter-editor', SEOBETTER_PLUGIN_URL . 'assets/css/editor-sidebar.css', [], SEOBETTER_VERSION );
+
+        wp_localize_script( 'seobetter-editor', 'seobetterData', [
+            'isPro'       => SEOBetter\License_Manager::is_pro(),
+            'settingsUrl' => admin_url( 'admin.php?page=seobetter-settings' ),
+        ] );
     }
 
     public function output_schema_markup(): void {
@@ -470,8 +475,21 @@ final class SEOBetter {
         if ( ! $post ) {
             return new \WP_REST_Response( [ 'error' => 'Post not found' ], 404 );
         }
+        $content_type = get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: '';
         $analyzer = new SEOBetter\GEO_Analyzer();
-        $result = $analyzer->analyze( $post->post_content, $post->post_title );
+        $result = $analyzer->analyze( $post->post_content, $post->post_title, $content_type );
+
+        // Add schema info for pre-publish panel
+        $schema = get_post_meta( $post->ID, '_seobetter_schema', true );
+        if ( $schema ) {
+            $decoded = json_decode( $schema, true );
+            if ( isset( $decoded['@type'] ) ) {
+                $result['schema_types'] = $decoded['@type'];
+            } elseif ( isset( $decoded['@graph'] ) ) {
+                $result['schema_types'] = implode( ' + ', array_column( $decoded['@graph'], '@type' ) );
+            }
+        }
+
         return new \WP_REST_Response( $result );
     }
 

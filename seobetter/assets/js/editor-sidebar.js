@@ -166,8 +166,133 @@
         );
     };
 
+    // Pre-publish panel — shows in the publish confirmation screen
+    const { PluginPrePublishPanel } = wp.editPost;
+
+    const SEOBetterPrePublish = () => {
+        const [analysis, setAnalysis] = useState(null);
+        const [loading, setLoading] = useState(true);
+        const isPro = window.seobetterData?.isPro || false;
+
+        useEffect(() => {
+            const postId = select('core/editor').getCurrentPostId();
+            if (!postId) { setLoading(false); return; }
+
+            apiFetch({ path: '/seobetter/v1/analyze/' + postId })
+                .then(data => { setAnalysis(data); setLoading(false); })
+                .catch(() => setLoading(false));
+        }, []);
+
+        if (loading) {
+            return wp.element.createElement(PluginPrePublishPanel, {
+                title: 'SEOBetter: Analyzing...',
+                icon: 'chart-line',
+                initialOpen: true
+            }, wp.element.createElement('div', { style: { textAlign: 'center', padding: 12 } },
+                wp.element.createElement(Spinner, {})
+            ));
+        }
+
+        if (!analysis) {
+            return wp.element.createElement(PluginPrePublishPanel, {
+                title: 'SEOBetter',
+                icon: 'chart-line',
+                initialOpen: true
+            }, wp.element.createElement('p', { style: { fontSize: 13, color: '#666' } },
+                'Generate an article with SEOBetter to see your GEO score here.'
+            ));
+        }
+
+        const score = analysis.geo_score || 0;
+        const scoreColor = score >= 80 ? '#22c55e' : (score >= 60 ? '#f59e0b' : '#ef4444');
+        const checks = analysis.checks || {};
+        const suggestions = analysis.suggestions || [];
+        const highPri = suggestions.filter(s => s.priority === 'high');
+
+        // Build score items
+        const items = [
+            { label: 'GEO Score', value: score + '/100 (' + (analysis.grade || '?') + ')', color: scoreColor, ok: score >= 70 },
+            { label: 'Citations', value: (checks.citations?.count || 0) + ' found', ok: (checks.citations?.count || 0) >= 5 },
+            { label: 'Expert Quotes', value: (checks.expert_quotes?.count || 0) + ' found', ok: (checks.expert_quotes?.count || 0) >= 2 },
+            { label: 'Readability', value: 'Grade ' + (checks.readability?.grade || '?'), ok: (checks.readability?.score || 0) >= 70 },
+            { label: 'Schema', value: analysis.schema_types || 'Article', ok: true },
+        ];
+
+        return wp.element.createElement(PluginPrePublishPanel, {
+            title: 'SEOBetter: ' + (score >= 70 ? 'Ready to publish' : 'Needs improvement'),
+            icon: 'chart-line',
+            initialOpen: true
+        },
+            // Score items
+            items.map((item, i) =>
+                wp.element.createElement('div', {
+                    key: i,
+                    style: {
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '8px 0', borderBottom: i < items.length - 1 ? '1px solid #e5e7eb' : 'none'
+                    }
+                },
+                    wp.element.createElement('span', { style: { fontSize: 13 } },
+                        wp.element.createElement('span', {
+                            style: { marginRight: 6, fontSize: 14 }
+                        }, item.ok ? '✅' : '❌'),
+                        item.label
+                    ),
+                    wp.element.createElement('span', {
+                        style: { fontSize: 13, fontWeight: 600, color: item.ok ? '#22c55e' : '#ef4444' }
+                    }, item.value)
+                )
+            ),
+
+            // High priority issues
+            highPri.length > 0
+                ? wp.element.createElement('div', { style: { marginTop: 12 } },
+                    wp.element.createElement('p', {
+                        style: { fontSize: 12, fontWeight: 600, color: '#991b1b', margin: '0 0 6px' }
+                    }, highPri.length + ' issue' + (highPri.length > 1 ? 's' : '') + ' to fix:'),
+                    highPri.slice(0, 3).map((s, i) =>
+                        wp.element.createElement('div', {
+                            key: i,
+                            style: {
+                                fontSize: 11, padding: '4px 8px', marginBottom: 3,
+                                background: '#fef2f2', borderLeft: '2px solid #ef4444',
+                                borderRadius: '0 4px 4px 0', color: '#991b1b'
+                            }
+                        }, s.message)
+                    )
+                )
+                : null,
+
+            // Pro upsell
+            !isPro && score < 80
+                ? wp.element.createElement('div', {
+                    style: {
+                        marginTop: 12, padding: '10px 12px',
+                        background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)',
+                        borderRadius: 6, textAlign: 'center'
+                    }
+                },
+                    wp.element.createElement('p', {
+                        style: { fontSize: 12, color: '#312e81', margin: '0 0 6px', fontWeight: 600 }
+                    }, 'Fix all issues with one click'),
+                    wp.element.createElement(Button, {
+                        variant: 'primary',
+                        href: window.seobetterData?.settingsUrl || '/wp-admin/admin.php?page=seobetter-settings',
+                        style: {
+                            background: 'linear-gradient(135deg, #764ba2, #667eea)',
+                            border: 'none', fontSize: 12, height: 30
+                        }
+                    }, 'Upgrade to Pro →')
+                )
+                : null
+        );
+    };
+
     registerPlugin('seobetter', {
-        render: SEOBetterSidebar,
+        render: () => wp.element.createElement(wp.element.Fragment, {},
+            wp.element.createElement(SEOBetterSidebar, {}),
+            wp.element.createElement(SEOBetterPrePublish, {})
+        ),
         icon: 'chart-line'
     });
 
