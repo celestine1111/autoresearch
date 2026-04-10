@@ -473,6 +473,58 @@ class Content_Formatter {
     private function format_classic( array $sections, array $options ): string {
         $output = [];
         $accent = $options['accent_color'] ?? '#764ba2';
+        $uid = 'sb-' . substr( md5( uniqid() ), 0, 6 );
+
+        // Self-contained scoped CSS — no external dependencies
+        $css = "<style>.{$uid}{font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#1f2937;line-height:1.7;max-width:65ch;margin:0 auto}";
+        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{font-family:ui-serif,Georgia,serif;text-wrap:balance;color:#111827}";
+        $css .= ".{$uid} h1{font-size:clamp(1.8em,4vw,2.4em);font-weight:800;line-height:1.2;margin:0 0 0.5em}";
+        $css .= ".{$uid} h2{font-size:clamp(1.3em,3vw,1.6em);font-weight:700;line-height:1.3;color:{$accent};margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22}";
+        $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;margin:1.5em 0 0.5em;color:#374151}";
+        $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;text-wrap:pretty;font-size:1.05em}";
+        $css .= ".{$uid} p:first-of-type::first-letter{float:left;font-size:3.2em;line-height:0.8;font-weight:700;color:{$accent};margin:0.05em 0.1em 0 0;font-family:ui-serif,Georgia,serif}";
+        $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151}";
+        $css .= ".{$uid} li{margin-bottom:0.4em}";
+        $css .= ".{$uid} ul li{list-style-type:'\\2022  ';color:#374151}";
+        $css .= ".{$uid} ul li::marker{color:{$accent};font-weight:700}";
+        $css .= ".{$uid} blockquote{border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563;line-height:1.7}";
+        $css .= ".{$uid} blockquote p{margin:0}";
+        $css .= ".{$uid} table{width:100%;border-collapse:collapse;font-size:0.95em;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:1.5em 0}";
+        $css .= ".{$uid} thead th{background:{$accent};color:#fff;padding:0.75em 1em;text-align:left;font-weight:600;font-size:0.9em;letter-spacing:0.03em}";
+        $css .= ".{$uid} tbody td{padding:0.75em 1em;border-bottom:1px solid #e5e7eb;color:#374151}";
+        $css .= ".{$uid} tbody tr:nth-child(even){background:#f9fafb}";
+        $css .= ".{$uid} img{max-width:100%;height:auto;border-radius:8px;margin:1.5em auto;display:block}";
+        $css .= ".{$uid} hr{border:none;border-top:2px solid #e5e7eb;margin:2.5em 0}";
+        $css .= ".{$uid} a{color:{$accent};text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}";
+        $css .= ".{$uid} a:hover{text-decoration-thickness:2px}";
+        $css .= ".{$uid} code{background:#f3f4f6;padding:0.15em 0.4em;border-radius:4px;font-size:0.9em}";
+        $css .= ".{$uid} pre{background:#1f2937;color:#e5e7eb;padding:1.25em;border-radius:8px;overflow-x:auto;font-size:0.9em;line-height:1.6;margin:1.5em 0}";
+        // Callout boxes
+        $css .= ".{$uid} .sb-callout{padding:1em 1.25em;border-radius:0 8px 8px 0;margin:1.5em 0;line-height:1.7;font-size:0.95em}";
+        $css .= ".{$uid} .sb-callout-tip{background:#eff6ff;border-left:4px solid #3b82f6;color:#1e3a5f}";
+        $css .= ".{$uid} .sb-callout-note{background:#fffbeb;border-left:4px solid #f59e0b;color:#78350f}";
+        $css .= ".{$uid} .sb-callout-warn{background:#fef2f2;border-left:4px solid #ef4444;color:#991b1b}";
+        // Key takeaways box
+        $css .= ".{$uid} .sb-takeaways{border-left:4px solid {$accent};background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0}";
+        // Pros/cons
+        $css .= ".{$uid} .sb-pros{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
+        $css .= ".{$uid} .sb-cons{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
+        $css .= ".{$uid} .sb-ingredients{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
+        // Dark mode
+        $css .= "@media(prefers-color-scheme:dark){.{$uid}{color:#e5e7eb;background:#111827}";
+        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{color:#f3f4f6}";
+        $css .= ".{$uid} h2{border-bottom-color:{$accent}44}";
+        $css .= ".{$uid} p,.{$uid} li{color:#d1d5db}";
+        $css .= ".{$uid} blockquote{background:#1f2937;color:#9ca3af}";
+        $css .= ".{$uid} tbody td{border-bottom-color:#374151;color:#d1d5db}";
+        $css .= ".{$uid} tbody tr:nth-child(even){background:#1f293780}";
+        $css .= ".{$uid} code{background:#374151;color:#e5e7eb}";
+        $css .= ".{$uid} hr{border-top-color:#374151}";
+        $css .= ".{$uid} a{color:#93c5fd}}";
+        $css .= "</style>";
+
+        $output[] = $css;
+        $output[] = "<article class=\"{$uid}\">";
 
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
@@ -480,13 +532,7 @@ class Content_Formatter {
                 case 'heading':
                     $level = $section['level'];
                     $text = $section['content'];
-                    if ( $level === 1 ) {
-                        $output[] = "<h1 style=\"font-size:2em;font-weight:800;line-height:1.2;margin:0 0 0.5em;color:#111827\">{$text}</h1>";
-                    } elseif ( $level === 2 ) {
-                        $output[] = "<h2 style=\"font-size:1.5em;font-weight:700;line-height:1.3;color:{$accent};margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22\">{$text}</h2>";
-                    } else {
-                        $output[] = "<h{$level} style=\"font-size:1.2em;font-weight:700;line-height:1.4;color:#1f2937;margin:1.5em 0 0.5em\">{$text}</h{$level}>";
-                    }
+                    $output[] = "<h{$level}>{$text}</h{$level}>";
                     break;
 
                 case 'paragraph':
@@ -497,23 +543,20 @@ class Content_Formatter {
                     if ( preg_match( '/^last\s*updated/i', $plain ) ) {
                         $output[] = "<p style=\"color:#6b7280;font-size:0.85em;font-style:italic;margin-bottom:0.5em\">{$text}</p>";
                     } elseif ( preg_match( '/^(pro\s*tip|tip)\s*[:—-]/i', $plain ) ) {
-                        // Tip callout box
-                        $output[] = "<div style=\"background:#eff6ff;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;font-size:1em;color:#1e3a5f;line-height:1.7\"><strong style=\"color:#1e40af\">&#128161; Tip</strong><br>{$text}</div>";
+                        $output[] = "<div class=\"sb-callout sb-callout-tip\"><strong>Tip:</strong> {$text}</div>";
                     } elseif ( preg_match( '/^(note|important)\s*[:—-]/i', $plain ) ) {
-                        // Note callout box
-                        $output[] = "<div style=\"background:#fffbeb;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;font-size:1em;color:#78350f;line-height:1.7\"><strong style=\"color:#92400e\">&#9888; Note</strong><br>{$text}</div>";
+                        $output[] = "<div class=\"sb-callout sb-callout-note\"><strong>Note:</strong> {$text}</div>";
                     } elseif ( preg_match( '/^(warning|caution)\s*[:—-]/i', $plain ) ) {
-                        // Warning callout box
-                        $output[] = "<div style=\"background:#fef2f2;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;font-size:1em;color:#991b1b;line-height:1.7\"><strong style=\"color:#b91c1c\">&#9888; Warning</strong><br>{$text}</div>";
+                        $output[] = "<div class=\"sb-callout sb-callout-warn\"><strong>Warning:</strong> {$text}</div>";
                     } else {
-                        $output[] = "<p style=\"line-height:1.75;margin:0 0 1.25em;color:#374151;font-size:1.05em\">{$text}</p>";
+                        $output[] = "<p>{$text}</p>";
                     }
                     break;
 
                 case 'list':
                     $tag = $section['list_type'];
 
-                    // Detect context from preceding heading for smart styling
+                    // Detect context from preceding heading
                     $prev_heading = '';
                     for ( $j = $i - 1; $j >= 0; $j-- ) {
                         if ( $sections[ $j ]['type'] === 'heading' ) {
@@ -524,72 +567,31 @@ class Content_Formatter {
                     }
 
                     $is_takeaways = preg_match( '/key\s*takeaway/i', $prev_heading );
-                    $is_pros = preg_match( '/\bpros?\b|advantage|strength|benefit/i', $prev_heading );
+                    $is_pros = preg_match( '/\bpros?\b|advantage|strength|benefit/i', $prev_heading ) && ! preg_match( '/cons/i', $prev_heading );
                     $is_cons = preg_match( '/\bcons?\b|disadvantage|weakness|drawback/i', $prev_heading );
-                    $is_pros_cons = preg_match( '/pros.*cons|cons.*pros|advantage.*disadvantage/i', $prev_heading );
                     $is_ingredients = preg_match( '/ingredient|you.ll need|what you need|supplies|materials/i', $prev_heading );
-                    $is_steps = preg_match( '/step|instruction|how to|process|procedure/i', $prev_heading ) && $tag === 'ol';
-                    $is_faq_list = preg_match( '/faq|frequently|question/i', $prev_heading );
-                    $is_tips = preg_match( '/tip|trick|hack|advice|suggestion/i', $prev_heading );
 
-                    // Key Takeaways — gradient box with accent border
-                    if ( $is_takeaways ) {
-                        $output[] = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0">';
-                    }
-                    // Pros — green themed
-                    elseif ( $is_pros && ! $is_pros_cons ) {
-                        $output[] = '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
-                        $output[] = '<div style="font-size:0.85em;font-weight:600;color:#166534;margin-bottom:0.5em">&#10003; Pros</div>';
-                    }
-                    // Cons — red themed
-                    elseif ( $is_cons ) {
-                        $output[] = '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
-                        $output[] = '<div style="font-size:0.85em;font-weight:600;color:#991b1b;margin-bottom:0.5em">&#10007; Cons</div>';
-                    }
-                    // Ingredients — checklist style
-                    elseif ( $is_ingredients ) {
-                        $output[] = '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
-                        $output[] = '<div style="font-size:0.85em;font-weight:600;color:#92400e;margin-bottom:0.5em">&#127860; Ingredients</div>';
-                    }
-                    // Tips — blue info box
-                    elseif ( $is_tips ) {
-                        $output[] = '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
-                        $output[] = '<div style="font-size:0.85em;font-weight:600;color:#1e40af;margin-bottom:0.5em">&#128161; Tips</div>';
-                    }
+                    // Wrapper class
+                    $wrapper = '';
+                    if ( $is_takeaways ) $wrapper = 'sb-takeaways';
+                    elseif ( $is_pros ) $wrapper = 'sb-pros';
+                    elseif ( $is_cons ) $wrapper = 'sb-cons';
+                    elseif ( $is_ingredients ) $wrapper = 'sb-ingredients';
 
-                    // Styled list with custom bullets/numbers
-                    if ( $is_steps ) {
-                        // Numbered steps with accent color
-                        $output[] = "<ol style=\"line-height:1.8;padding-left:0;margin:1em 0;color:#374151;list-style:none;counter-reset:step-counter\">";
-                        foreach ( $section['items'] as $item ) {
-                            $output[] = "<li style=\"margin-bottom:0.75em;padding-left:2.5em;position:relative;counter-increment:step-counter\"><span style=\"position:absolute;left:0;top:0.1em;width:1.8em;height:1.8em;background:{$accent};color:#fff;border-radius:50%;font-size:0.8em;font-weight:700;display:flex;align-items:center;justify-content:center\"></span>{$item}</li>";
-                        }
-                        $output[] = "</ol>";
-                    } else {
-                        // Standard styled list with accent-colored bullets
-                        $bullet_color = $is_pros ? '#22c55e' : ( $is_cons ? '#ef4444' : $accent );
-                        $output[] = "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151\">";
-                        foreach ( $section['items'] as $item ) {
-                            $marker = ( $tag === 'ul' ) ? "style=\"margin-bottom:0.5em;padding-left:0.5em;list-style-type:none;position:relative\" " : "style=\"margin-bottom:0.5em\"";
-                            if ( $tag === 'ul' ) {
-                                $bullet = $is_pros ? '&#10003;' : ( $is_cons ? '&#10007;' : '&#8226;' );
-                                $output[] = "<li {$marker}><span style=\"position:absolute;left:-1.2em;color:{$bullet_color};font-weight:700\">{$bullet}</span>{$item}</li>";
-                            } else {
-                                $output[] = "<li style=\"margin-bottom:0.5em\">{$item}</li>";
-                            }
-                        }
-                        $output[] = "</{$tag}>";
-                    }
+                    if ( $wrapper ) $output[] = "<div class=\"{$wrapper}\">";
 
-                    // Close wrapper divs
-                    if ( $is_takeaways || ( $is_pros && ! $is_pros_cons ) || $is_cons || $is_ingredients || $is_tips ) {
-                        $output[] = '</div>';
+                    $output[] = "<{$tag}>";
+                    foreach ( $section['items'] as $item ) {
+                        $output[] = "<li>{$item}</li>";
                     }
+                    $output[] = "</{$tag}>";
+
+                    if ( $wrapper ) $output[] = '</div>';
                     break;
 
                 case 'quote':
                     $text = $this->inline_markdown( $section['content'] );
-                    $output[] = "<blockquote style=\"border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563;line-height:1.7\"><p style=\"margin:0\">{$text}</p></blockquote>";
+                    $output[] = "<blockquote><p>{$text}</p></blockquote>";
                     break;
 
                 case 'table':
@@ -597,18 +599,15 @@ class Content_Formatter {
                     if ( empty( $rows ) ) continue 2;
 
                     $output[] = '<div style="overflow-x:auto;margin:1.5em 0">';
-                    $output[] = '<table style="width:100%;border-collapse:collapse;font-size:0.95em;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">';
-                    $output[] = '<thead><tr>';
+                    $output[] = '<table><thead><tr>';
                     foreach ( $rows[0] as $cell ) {
-                        $output[] = '<th style="background:' . $accent . ';color:#ffffff;padding:0.75em 1em;text-align:left;font-weight:600;font-size:0.9em;text-transform:uppercase;letter-spacing:0.05em">' . $this->inline_markdown( $cell ) . '</th>';
+                        $output[] = '<th>' . $this->inline_markdown( $cell ) . '</th>';
                     }
                     $output[] = '</tr></thead><tbody>';
-
                     for ( $r = 1; $r < count( $rows ); $r++ ) {
-                        $bg = ( $r % 2 === 0 ) ? 'background:#f9fafb;' : '';
                         $output[] = '<tr>';
                         foreach ( $rows[ $r ] as $cell ) {
-                            $output[] = '<td style="padding:0.75em 1em;border-bottom:1px solid #e5e7eb;color:#374151;' . $bg . '">' . $this->inline_markdown( $cell ) . '</td>';
+                            $output[] = '<td>' . $this->inline_markdown( $cell ) . '</td>';
                         }
                         $output[] = '</tr>';
                     }
@@ -616,14 +615,18 @@ class Content_Formatter {
                     break;
 
                 case 'separator':
-                    $output[] = '<hr style="border:none;border-top:2px solid #e5e7eb;margin:2.5em 0" />';
+                    $output[] = '<hr />';
                     break;
 
                 case 'image':
-                    $output[] = Stock_Image_Inserter::markdown_image_to_classic( $section['alt'], $section['url'] );
+                    $alt = esc_attr( $section['alt'] );
+                    $url = esc_url( $section['url'] );
+                    $output[] = "<figure><img src=\"{$url}\" alt=\"{$alt}\" loading=\"lazy\" decoding=\"async\" style=\"aspect-ratio:16/9;object-fit:cover\" /></figure>";
                     break;
             }
         }
+
+        $output[] = '</article>';
 
         return implode( "\n", $output );
     }

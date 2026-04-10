@@ -544,6 +544,54 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 
 ---
 
+## 12B. ARTICLE HTML FORMAT (Self-Contained)
+
+### Structure
+- Output: single `<article class="sb-[uid]">` with scoped `<style>` at top
+- Every CSS selector prefixed with the unique scoping class to prevent CMS collisions
+- No Tailwind, Bootstrap, or framework classes
+- No `<link>`, `@import`, or `<script>` tags
+- Works on any CMS: WordPress, Shopify, Magento, Ghost
+
+### Typography
+- System font stacks: `ui-serif, Georgia, serif` for headings, `ui-sans-serif, system-ui, sans-serif` for body
+- `text-wrap: balance` on headings, `text-wrap: pretty` on paragraphs
+- `clamp()` for fluid heading sizes
+- `line-height: 1.7`, `max-width: 65ch` for body copy
+- `::first-letter` drop cap on opening paragraph
+
+### Color System
+CSS custom properties at article scope level:
+- `--accent` (user's accent color)
+- Dark mode via `@media (prefers-color-scheme: dark)` scoped to article wrapper
+
+### Icons in Articles — Strict Rules
+- NEVER place icons next to headings, list items, or inline with sentences
+- NEVER use emoji as icons in body copy
+- No checkmarks before list items, no icons before H2s
+- Icons permitted ONLY in: callout box corners (inline SVG, 1em, currentColor), key takeaways box header, author byline
+- Default: zero icons in article body
+
+### Images
+- `loading="lazy"` and `decoding="async"` on all images
+- `aspect-ratio` inline to prevent layout shift (CLS)
+- `max-width: 100%; height: auto` for responsive sizing
+
+### Performance
+- Single `<style>` block (no external CSS)
+- No JavaScript in article output
+- Lazy-loaded images
+- Minimal DOM nodes
+- Scoped CSS prevents style recalculation cascading to host page
+
+### Research Sources
+- DuckDuckGo web search provides real URLs for all articles
+- All inline citations are clickable Markdown links to real web pages
+- References section at article footer contains all cited sources
+- No hallucinated citations — only cite sources from research data
+
+---
+
 ## 13. CONTENT FRESHNESS STRATEGY
 
 ### When to Refresh
