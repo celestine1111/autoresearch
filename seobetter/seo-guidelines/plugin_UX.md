@@ -188,15 +188,53 @@ Save Draft:
 → POST /seobetter/v1/save-draft with: title, markdown, content,
    accent_color, keyword, content_type, meta_title, meta_description,
    og_title, post_type
+→ Formats markdown using format_hybrid() → native Gutenberg blocks
+   + wp:html blocks for styled elements
+→ Injects JSON-LD schema as wp:html block at end of post_content
 → Returns: post_id, edit_url, schema_dest
 ```
 
 ---
 
-## 7. VERIFICATION CHECKLIST
+## 7. SAVED ARTICLE FORMAT (Hybrid)
 
-After ANY code change to content-generator.php, verify ALL of these render:
+### Editable Blocks (Native Gutenberg)
+Users can edit these directly in the WordPress block editor:
+- `wp:heading` — H1, H2, H3 headings
+- `wp:paragraph` — body text paragraphs
+- `wp:list` — standard bullet/numbered lists
+- `wp:image` — images (centered, lazy loaded)
+- `wp:separator` — horizontal rules
 
+### Styled HTML Blocks (wp:html with inline styles)
+These preserve visual styling but require HTML editing:
+- **Key Takeaways** — gradient background, accent left border
+- **Pros list** — green background (#f0fdf4), green border
+- **Cons list** — red background (#fef2f2), red border
+- **Ingredients list** — amber background (#fffbeb), amber border
+- **Tip callout** — blue left border, blue background
+- **Note callout** — amber left border, amber background
+- **Warning callout** — red left border, red background
+- **Tables** — accent colored headers, zebra striping, rounded corners
+- **Blockquotes** — accent left border, gray background, italic
+
+### Schema (wp:html)
+- JSON-LD `<script type="application/ld+json">` appended at the end
+- Contains Article/Review/Recipe/HowTo/FAQPage schema
+- Present in EVERY article regardless of SEO plugin
+
+### Styling Rules
+- All styled elements use `!important` on colors to override theme CSS
+- Inline styles only (no scoped `<style>` block in hybrid mode)
+- Theme fonts and colors apply to editable blocks naturally
+
+---
+
+## 8. VERIFICATION CHECKLIST
+
+After ANY code change to content-generator.php or seobetter.php, verify ALL of these:
+
+### Plugin UI (content-generator.php)
 - [ ] Form: all 11 fields present and collecting data
 - [ ] Progress panel appears during generation
 - [ ] GEO score SVG ring renders with score
@@ -213,6 +251,20 @@ After ANY code change to content-generator.php, verify ALL of these render:
 - [ ] Schema destination feedback shows after save
 - [ ] Sidebar cards all present (tips, upsell, topics, protocol)
 
+### Saved Article (seobetter.php + Content_Formatter.php)
+- [ ] Headings are editable wp:heading blocks
+- [ ] Paragraphs are editable wp:paragraph blocks
+- [ ] Standard lists are editable wp:list blocks
+- [ ] Key Takeaways has styled gradient background
+- [ ] Pros list has green background
+- [ ] Cons list has red background
+- [ ] Tables have accent colored headers
+- [ ] Blockquotes have accent left border
+- [ ] Tip/Note/Warning callouts have colored borders
+- [ ] JSON-LD schema present at end of post_content
+- [ ] Text is readable (dark on white) on published page
+- [ ] All !important colors survive theme CSS
+
 ---
 
-*This document is the definitive UI specification. NEVER remove a feature listed here without explicit user approval. When editing content-generator.php, use this file as the reference to verify nothing was lost.*
+*This document is the definitive UI specification. NEVER remove a feature listed here without explicit user approval. When editing content-generator.php, seobetter.php, or Content_Formatter.php, use this file as the reference to verify nothing was lost.*

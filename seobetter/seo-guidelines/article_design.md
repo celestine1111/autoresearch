@@ -6,7 +6,7 @@
 >
 > **Referenced by:** `Content_Formatter.php` (classic mode), `Async_Generator.php`, `seobetter.php`
 >
-> **CRITICAL:** Saved drafts use `format_classic()` wrapped in `<!-- wp:html -->`. This outputs a self-contained `<article>` with scoped `<style>` block. ALL styling comes from this scoped CSS. If the draft has no styling, check that `seobetter.php rest_save_draft()` calls `format('classic')` not `format('hybrid')`.
+> **CRITICAL:** Saved drafts use `format_hybrid()` — native Gutenberg blocks for editable content (headings, paragraphs, lists, images) + `wp:html` blocks with inline styles for styled elements (takeaways, pros/cons, tables, callouts, blockquotes). If styled elements have no styling, check that `format_hybrid()` is detecting context from preceding headings. If the entire article is uneditable, check that `rest_save_draft()` calls `format('hybrid')` not `format('classic')`.
 >
 > **Last updated:** April 2026
 
@@ -17,17 +17,61 @@
 Articles must look like they came from a design-conscious publication (The Verge, Stripe Press, NYT Magazine) — not a Notion page full of emoji headers or a chatbot response.
 
 ### Core Principles
-1. **Self-contained** — Single `<article>` element with scoped `<style>` block. No external CSS, no JavaScript, no framework dependencies.
-2. **Portable** — Works on WordPress, Shopify, Magento, Ghost, or any CMS that accepts HTML.
-3. **Scoped** — Every CSS selector prefixed with a unique class (e.g., `.sb-a1b2c3`) to prevent collisions with the host site's CSS.
-4. **Responsive** — Fluid typography via `clamp()`, responsive images, mobile-friendly tables.
-5. **Performant** — No external requests, lazy-loaded images, minimal DOM nodes.
+1. **Hybrid format** — Native Gutenberg blocks for editable content + `wp:html` blocks with inline styles for styled elements only.
+2. **Editable** — Headings, paragraphs, standard lists, images are native WordPress blocks. Users can edit them in the block editor.
+3. **Styled where needed** — Key takeaways, pros/cons, tables, callouts, blockquotes use `wp:html` with inline styles and `!important` to override theme CSS.
+4. **Schema injected** — JSON-LD schema is appended as a `wp:html` block at the end of every article's `post_content`.
+5. **Responsive** — Responsive images with `loading="lazy"`, mobile-friendly tables with `overflow-x:auto`.
 6. **Accessible** — Semantic HTML, sufficient contrast ratios, no color-only indicators.
-7. **Dark mode ready** — `@media (prefers-color-scheme: dark)` scoped to the article wrapper.
+7. **Theme-compatible** — Uses `!important` on styled elements to override any WordPress theme CSS. Editable blocks inherit theme fonts and colors.
 
 ---
 
-## 2. HTML STRUCTURE
+## 2. HTML STRUCTURE (Hybrid Format)
+
+### Saved Draft Structure
+```
+<!-- wp:heading -->                    ← EDITABLE
+<h1 class="wp-block-heading">Title</h1>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"fontSize":"small"} -->   ← EDITABLE
+<p class="has-small-font-size"><em>Last Updated: April 2026</em></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->                    ← EDITABLE
+<h2 class="wp-block-heading">Key Takeaways</h2>
+<!-- /wp:heading -->
+
+<!-- wp:html -->                       ← STYLED (inline CSS)
+<div style="border-left:4px solid #764ba2;background:linear-gradient(...)">
+  <ul><li>...</li></ul>
+</div>
+<!-- /wp:html -->
+
+<!-- wp:heading -->                    ← EDITABLE
+<h2 class="wp-block-heading">Section</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->                  ← EDITABLE
+<p>Content text...</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:list -->                       ← EDITABLE
+<ul><li>Item</li></ul>
+<!-- /wp:list -->
+
+<!-- wp:html -->                       ← STYLED TABLE
+<div style="overflow-x:auto"><table>...</table></div>
+<!-- /wp:html -->
+
+<!-- wp:html -->                       ← SCHEMA
+<script type="application/ld+json">{"@context":"https://schema.org",...}</script>
+<!-- /wp:html -->
+```
+
+### Preview Structure (Classic Format)
+The plugin preview uses `format_classic()` which outputs a self-contained `<div>` with scoped `<style>` block for the admin preview panel only. This is NOT what gets saved to WordPress.
 
 ```html
 <style>
