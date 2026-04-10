@@ -100,17 +100,35 @@ Every generated article MUST follow this structure. This is the foundation for G
 7. **H2: Frequently Asked Questions** — 3-5 Q&A pairs
 8. **H2: References** — 5-8 cited sources with years
 
-### 3.2 Introduction Paragraph Rule (CRITICAL — SEO plugins check this)
-The **very first content paragraph** of the article (the first `<p>` after Key Takeaways and the first H2) is the **introduction**. SEO plugins (AIOSEO, Yoast, RankMath) specifically check this paragraph for the focus keyword. It MUST:
-- Contain the **exact primary keyword** in the **first sentence**
-- Be 40-60 words
-- Directly state what the article is about
+### 3.2 Focus Keyword in First Paragraph (CRITICAL — SEO plugins check this)
+
+SEO plugins scan the **first `<p>` tag** in `post_content` for the focus keyword. In SEOBetter articles, the first content is the Key Takeaways section. Therefore:
+
+**Rule 1: Key Takeaways MUST contain the keyword**
+The **first bullet** of Key Takeaways MUST include the exact primary keyword. This is the very first text content SEO plugins encounter.
+
+**Rule 2: First content section MUST contain the keyword in the first sentence**
+The introduction paragraph (first H2 section after Key Takeaways) must contain the **exact primary keyword** in the **first sentence**. This makes the topic clear immediately.
+
+**Combined effect:** The keyword appears in both the Key Takeaways (first `<li>`) AND the introduction paragraph (first `<p>` after first content H2). Both locations are checked by different SEO plugins.
+
+**Rules for the introduction paragraph:**
 - Bold the keyword on first mention: `**keyword phrase**`
+- Directly state what the article is about
 - Do NOT start with "[Keyword] is..." or "[Keyword] refers to..." — those are AI patterns
 - Jump into a specific fact, opinion, or context that includes the keyword naturally
-- Example: "**Reptile shop Melbourne** owners know the difference between a good heat lamp and a cheap one. The right supplier stocks veterinary-grade equipment alongside everyday essentials."
 
-**Why this matters:** AIOSEO/Yoast flag "Focus keyword not in introduction" if the keyword is missing from the first `<p>` tag. This is the #1 most common SEO plugin warning.
+**Example:**
+> **Key Takeaways:**
+> - **Reptile shop Melbourne** stocks vary widely — the best ones carry vet-grade supplies alongside basics
+>
+> **First section:**
+> **Reptile shop Melbourne** owners know the difference between a good heat lamp and a cheap one.
+
+**Implementation:** In Async_Generator.php:
+- Key Takeaways prompt: "The FIRST bullet MUST contain the exact keyword"
+- First content section (index === 1): INTRODUCTION RULE applied with keyword-in-first-sentence requirement
+- Key Takeaways is index 0, first content is index 1 — intro rule applies to index 1 only
 
 ### 3.2b Section Opening Rule
 Every H2/H3 section MUST begin with a paragraph that:

@@ -740,6 +740,15 @@ final class SEOBetter {
         $schema_type = $content_type ? $this->content_type_to_schema( $content_type ) : $this->detect_schema_type( $seo_title, $content );
         $schema_data = $this->build_aioseo_schema( $schema_type, $post_id, $seo_title, $content, $keyword );
 
+        // Store schema in post meta for wp_head output (used when no SEO plugin active)
+        $schema_with_context = [ '@context' => 'https://schema.org' ];
+        if ( count( $schema_data ) === 1 ) {
+            $schema_with_context = array_merge( $schema_with_context, $schema_data[0] );
+        } else {
+            $schema_with_context['@graph'] = $schema_data;
+        }
+        update_post_meta( $post_id, '_seobetter_schema', wp_json_encode( $schema_with_context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) );
+
         // AIOSEO table
         $table = $wpdb->prefix . 'aioseo_posts';
 
