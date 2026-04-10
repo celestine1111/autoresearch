@@ -1,5 +1,7 @@
 # SEOBetter Plugin Functionality — Complete Technical Reference
 
+> **CODE WORD: When the user starts a prompt with `/seobetter` — READ ALL 4 .md files before coding.**
+>
 > **MANDATORY: Read this file + plugin_UX.md + article_design.md + SEO-GEO-AI-GUIDELINES.md before making ANY code changes.**
 >
 > **Purpose:** Documents every feature implemented in the SEOBetter WordPress plugin — research APIs, AI generation, content formatting, schema, scoring, and user interface.
@@ -427,18 +429,19 @@ The AI invents plausible-looking URL paths. Real domains (rspca.org.au) with fak
 
 **Layer 2 — Post-Generation URL Validator (guarantee):**
 `validate_outbound_links()` in seobetter.php runs BEFORE the article is formatted and saved:
-1. Extracts every `[text](url)` link from the markdown
-2. Sends HTTP HEAD request to each URL (4s timeout)
+1. Extracts both markdown `[text](url)` AND HTML `href="url"` links
+2. Sends HTTP HEAD request to each URL (4s timeout, Mozilla/5.0 user-agent)
 3. Based on response:
-   - **200-399**: Keep the URL (it's real)
-   - **404/410**: Replace with homepage domain (e.g., rspca.org.au/)
-   - **403**: Keep (site is real but blocks bots)
+   - **200-399**: Keep the URL (verified real)
+   - **404/410**: Replace with homepage domain (e.g., `https://rspca.org.au/`)
+   - **403**: Replace with homepage (site blocks bots, URL may be fake)
    - **Network error**: Replace with homepage domain
    - **Homepage also dead**: Remove the link entirely (keep text only)
 4. Results cached per URL to avoid duplicate checks
 5. Internal links (same domain) are skipped
+6. Runs on BOTH `$markdown` AND `$content` fallback paths
 
-This validator works regardless of which AI model generates the content — Claude, GPT, Gemini, Llama, Mistral, or any model via OpenRouter.
+This validator works regardless of which AI model generates the content — Claude, GPT, Gemini, Llama, Mistral, or any model via OpenRouter. It is the final safety net that guarantees zero 404 links in published articles.
 
 ### wp:more Block
 A `<!-- wp:more -->` block is inserted after the 2nd regular paragraph in every article. This creates the "Read More" break on archive/listing pages in WordPress.
@@ -467,9 +470,20 @@ Also shows:
 **Data source:** `GET /seobetter/v1/analyze/{post_id}` REST endpoint
 **Pro detection:** `window.seobetterData.isPro` via `wp_localize_script`
 
-### 11.2 Editor Sidebar Panel (PluginSidebar)
+### 11.2 Post Sidebar Panel (PluginDocumentSettingPanel)
 
-Full GEO analysis available via the SEOBetter icon in the Gutenberg sidebar:
+Shows in the Post tab of the right sidebar (same location as AIOSEO's score):
+- Title: "SEOBetter: XX/100 (Grade)"
+- 5 items: GEO Score, Words, Citations count, Quotes count, Readability grade
+- Green/red indicators per item
+- Pro upsell link when score < 80
+- Auto-loads when post is opened
+
+**File:** `assets/js/editor-sidebar.js` — `SEOBetterDocPanel` component
+
+### 11.3 Full Sidebar Panel (PluginSidebar)
+
+Full GEO analysis available via the SEOBetter chart icon in the Gutenberg sidebar toolbar:
 - GEO Score ring gauge (SVG)
 - Word count
 - 11 individual check scores with progress bars

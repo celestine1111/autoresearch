@@ -1,9 +1,10 @@
 # SEOBetter Master Guidelines — SEO, GEO & AI Search Optimization
 
-> **MANDATORY PRE-CHECK: Before making ANY code changes, READ these files first:**
-> 1. **plugin_UX.md** — UI elements that must never be removed
-> 2. **article_design.md** — Article styling specification
-> 3. **This file (SEO-GEO-AI-GUIDELINES.md)** — SEO/GEO rules for content generation
+> **CODE WORD: When the user starts a prompt with `/seobetter` — READ ALL 4 .md files before making any changes:**
+> 1. **plugin_UX.md** — UI elements that must never be removed (verification checklist)
+> 2. **article_design.md** — Article HTML/styling specification
+> 3. **plugin_functionality_wordpress.md** — Complete technical reference
+> 4. **This file (SEO-GEO-AI-GUIDELINES.md)** — SEO/GEO rules for content generation
 > **After changes, verify the plugin_UX.md checklist. If anything is missing, restore it.**
 >
 > **Single source of truth** for all article generation, scoring, and optimization in the SEOBetter WordPress plugin. Every prompt, scorer, and formatter MUST reference this document.

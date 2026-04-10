@@ -1,5 +1,7 @@
 # SEOBetter Plugin UX Specification
 
+> **CODE WORD: When the user starts a prompt with `/seobetter` — READ ALL 4 .md files before coding.**
+>
 > **CRITICAL: This file is the single source of truth for the plugin's user interface.**
 > **Before editing any UI code, read this file. After editing, verify nothing was removed.**
 > **If a feature listed here is missing from the code, it's a bug — restore it.**
@@ -276,8 +278,15 @@ After ANY code change to content-generator.php or seobetter.php, verify ALL of t
 - [ ] Shows Pro upsell banner when score < 80 and not Pro
 - [ ] "Upgrade to Pro" button links to settings page
 
-### Editor Sidebar Panel (editor-sidebar.js)
-- [ ] SEOBetter GEO icon in sidebar
+### Post Sidebar Panel — PluginDocumentSettingPanel (editor-sidebar.js)
+- [ ] "SEOBetter: XX/100 (Grade)" shows in Post tab of right sidebar
+- [ ] 5 check items: GEO Score, Words, Citations, Quotes, Readability
+- [ ] Green checkmark / red X per item
+- [ ] Pro upsell link when score < 80
+- [ ] Auto-loads on post open
+
+### Full Sidebar Panel — PluginSidebar (editor-sidebar.js)
+- [ ] SEOBetter GEO icon in sidebar toolbar
 - [ ] GEO Score ring gauge (SVG circle)
 - [ ] Word count display
 - [ ] GEO Checks panel (11 bars, collapsible)
