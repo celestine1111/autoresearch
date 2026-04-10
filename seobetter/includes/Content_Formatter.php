@@ -476,63 +476,65 @@ class Content_Formatter {
         $uid = 'sb-' . substr( md5( uniqid() ), 0, 6 );
 
         // Self-contained scoped CSS — no external dependencies
-        $css = "<style>.{$uid}{font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#1f2937;line-height:1.7;max-width:65ch;margin:0 auto}";
-        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{font-family:ui-serif,Georgia,serif;text-wrap:balance;color:#111827}";
-        $css .= ".{$uid} h1{font-size:clamp(1.8em,4vw,2.4em);font-weight:800;line-height:1.2;margin:0 0 0.5em;text-transform:capitalize}";
-        $css .= ".{$uid} h2{font-size:clamp(1.3em,3vw,1.6em);font-weight:700;line-height:1.3;color:{$accent};margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22}";
-        $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;margin:1.5em 0 0.5em;color:#374151}";
-        $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;text-wrap:pretty;font-size:1.05em}";
-        // Drop cap targets the first non-italic paragraph (skip Last Updated)
-        $css .= ".{$uid} h2+p::first-letter,.{$uid} h2+div+p::first-letter{float:left;font-size:3.2em;line-height:0.8;font-weight:700;color:{$accent};margin:0.05em 0.1em 0 0;font-family:ui-serif,Georgia,serif}";
-        $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151}";
-        $css .= ".{$uid} li{margin-bottom:0.4em}";
-        $css .= ".{$uid} ul li{list-style-type:'\\2022  ';color:#374151}";
-        $css .= ".{$uid} ul li::marker{color:{$accent};font-weight:700}";
-        $css .= ".{$uid} blockquote{border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563;line-height:1.7}";
-        $css .= ".{$uid} blockquote p{margin:0}";
+        // Use !important on critical properties to override any theme CSS
+        $css = "<style>.{$uid}{font-family:inherit;color:#1f2937 !important;line-height:1.7;background:#fff !important;padding:2em;border-radius:12px}";
+        $css .= ".{$uid} *{color:inherit}";
+        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{font-family:inherit;color:#111827 !important}";
+        $css .= ".{$uid} h1{font-size:2em;font-weight:800;line-height:1.2;margin:0 0 0.5em;text-transform:capitalize}";
+        $css .= ".{$uid} h2{font-size:1.5em;font-weight:700;line-height:1.3;color:{$accent} !important;margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22}";
+        $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;margin:1.5em 0 0.5em;color:#374151 !important}";
+        $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;font-size:1.05em;color:#374151 !important}";
+        // Drop cap on first paragraph after an H2
+        $css .= ".{$uid} h2+p::first-letter,.{$uid} h2+div+p::first-letter{float:left;font-size:3.2em;line-height:0.8;font-weight:700;color:{$accent} !important;margin:0.05em 0.1em 0 0}";
+        $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151 !important}";
+        $css .= ".{$uid} li{margin-bottom:0.4em;color:#374151 !important}";
+        $css .= ".{$uid} ul li::marker{color:{$accent} !important;font-weight:700}";
+        $css .= ".{$uid} blockquote{border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb !important;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563 !important;line-height:1.7}";
+        $css .= ".{$uid} blockquote p{margin:0;color:#4b5563 !important}";
         $css .= ".{$uid} table{width:100%;border-collapse:collapse;font-size:0.95em;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:1.5em 0}";
-        $css .= ".{$uid} thead th{background:{$accent};color:#fff;padding:0.75em 1em;text-align:left;font-weight:600;font-size:0.9em;letter-spacing:0.03em}";
-        $css .= ".{$uid} tbody td{padding:0.75em 1em;border-bottom:1px solid #e5e7eb;color:#374151}";
+        $css .= ".{$uid} thead th{background:{$accent} !important;color:#fff !important;padding:0.75em 1em;text-align:left;font-weight:600;font-size:0.9em;letter-spacing:0.03em}";
+        $css .= ".{$uid} tbody td{padding:0.75em 1em;border-bottom:1px solid #e5e7eb;color:#374151 !important}";
         $css .= ".{$uid} tbody tr:nth-child(even){background:#f9fafb}";
         $css .= ".{$uid} img{max-width:100%;height:auto;border-radius:8px;margin:1.5em auto;display:block}";
         $css .= ".{$uid} hr{border:none;border-top:2px solid #e5e7eb;margin:2.5em 0}";
-        $css .= ".{$uid} a{color:{$accent};text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}";
+        $css .= ".{$uid} a{color:{$accent} !important;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}";
         $css .= ".{$uid} a:hover{text-decoration-thickness:2px}";
-        $css .= ".{$uid} code{background:#f3f4f6;padding:0.15em 0.4em;border-radius:4px;font-size:0.9em}";
-        $css .= ".{$uid} pre{background:#1f2937;color:#e5e7eb;padding:1.25em;border-radius:8px;overflow-x:auto;font-size:0.9em;line-height:1.6;margin:1.5em 0}";
+        $css .= ".{$uid} code{background:#f3f4f6;padding:0.15em 0.4em;border-radius:4px;font-size:0.9em;color:#374151 !important}";
+        $css .= ".{$uid} pre{background:#1f2937 !important;color:#e5e7eb !important;padding:1.25em;border-radius:8px;overflow-x:auto;font-size:0.9em;line-height:1.6;margin:1.5em 0}";
         // Callout boxes
         $css .= ".{$uid} .sb-callout{padding:1em 1.25em;border-radius:0 8px 8px 0;margin:1.5em 0;line-height:1.7;font-size:0.95em}";
-        $css .= ".{$uid} .sb-callout-tip{background:#eff6ff;border-left:4px solid #3b82f6;color:#1e3a5f}";
-        $css .= ".{$uid} .sb-callout-note{background:#fffbeb;border-left:4px solid #f59e0b;color:#78350f}";
-        $css .= ".{$uid} .sb-callout-warn{background:#fef2f2;border-left:4px solid #ef4444;color:#991b1b}";
+        $css .= ".{$uid} .sb-callout-tip{background:#eff6ff !important;border-left:4px solid #3b82f6;color:#1e3a5f !important}";
+        $css .= ".{$uid} .sb-callout-note{background:#fffbeb !important;border-left:4px solid #f59e0b;color:#78350f !important}";
+        $css .= ".{$uid} .sb-callout-warn{background:#fef2f2 !important;border-left:4px solid #ef4444;color:#991b1b !important}";
         // Key takeaways box
-        $css .= ".{$uid} .sb-takeaways{border-left:4px solid {$accent};background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0}";
+        $css .= ".{$uid} .sb-takeaways{border-left:4px solid {$accent};background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%) !important;padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0}";
         // Pros/cons
-        $css .= ".{$uid} .sb-pros{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
-        $css .= ".{$uid} .sb-cons{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
-        $css .= ".{$uid} .sb-ingredients{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
-        // Dark mode — no forced background, inherit from page
-        $css .= "@media(prefers-color-scheme:dark){.{$uid}{color:#e5e7eb}";
-        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{color:#f3f4f6}";
-        $css .= ".{$uid} h2{border-bottom-color:{$accent}44}";
-        $css .= ".{$uid} p,.{$uid} li{color:#d1d5db}";
-        $css .= ".{$uid} blockquote{background:#1f2937;color:#9ca3af}";
-        $css .= ".{$uid} .sb-takeaways{background:linear-gradient(135deg,#1f2937 0%,#1e293b 100%)}";
-        $css .= ".{$uid} .sb-pros{background:#052e16;border-color:#166534}";
-        $css .= ".{$uid} .sb-cons{background:#450a0a;border-color:#991b1b}";
-        $css .= ".{$uid} .sb-callout-tip{background:#172554;border-color:#1d4ed8;color:#93c5fd}";
-        $css .= ".{$uid} .sb-callout-note{background:#451a03;border-color:#d97706;color:#fcd34d}";
-        $css .= ".{$uid} .sb-callout-warn{background:#450a0a;border-color:#dc2626;color:#fca5a5}";
-        $css .= ".{$uid} tbody td{border-bottom-color:#374151;color:#d1d5db}";
+        $css .= ".{$uid} .sb-pros{background:#f0fdf4 !important;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
+        $css .= ".{$uid} .sb-cons{background:#fef2f2 !important;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
+        $css .= ".{$uid} .sb-ingredients{background:#fffbeb !important;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
+        // Dark mode
+        $css .= "@media(prefers-color-scheme:dark){.{$uid}{color:#e5e7eb !important;background:#111827 !important}";
+        $css .= ".{$uid} *{color:#d1d5db}";
+        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{color:#f3f4f6 !important}";
+        $css .= ".{$uid} h2{border-bottom-color:{$accent}44;color:{$accent} !important}";
+        $css .= ".{$uid} p,.{$uid} li{color:#d1d5db !important}";
+        $css .= ".{$uid} blockquote{background:#1f2937 !important;color:#9ca3af !important}";
+        $css .= ".{$uid} .sb-takeaways{background:linear-gradient(135deg,#1f2937 0%,#1e293b 100%) !important}";
+        $css .= ".{$uid} .sb-pros{background:#052e16 !important;border-color:#166534}";
+        $css .= ".{$uid} .sb-cons{background:#450a0a !important;border-color:#991b1b}";
+        $css .= ".{$uid} .sb-callout-tip{background:#172554 !important;border-color:#1d4ed8;color:#93c5fd !important}";
+        $css .= ".{$uid} .sb-callout-note{background:#451a03 !important;border-color:#d97706;color:#fcd34d !important}";
+        $css .= ".{$uid} .sb-callout-warn{background:#450a0a !important;border-color:#dc2626;color:#fca5a5 !important}";
+        $css .= ".{$uid} tbody td{border-bottom-color:#374151;color:#d1d5db !important}";
         $css .= ".{$uid} tbody tr:nth-child(even){background:#1f293780}";
-        $css .= ".{$uid} thead th{background:{$accent}cc}";
-        $css .= ".{$uid} code{background:#374151;color:#e5e7eb}";
+        $css .= ".{$uid} thead th{background:{$accent}cc !important}";
+        $css .= ".{$uid} code{background:#374151 !important;color:#e5e7eb !important}";
         $css .= ".{$uid} hr{border-top-color:#374151}";
-        $css .= ".{$uid} a{color:#93c5fd}}";
+        $css .= ".{$uid} a{color:#93c5fd !important}}";
         $css .= "</style>";
 
         $output[] = $css;
-        $output[] = "<article class=\"{$uid}\">";
+        $output[] = "<div class=\"{$uid}\">";
 
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
@@ -639,7 +641,7 @@ class Content_Formatter {
             }
         }
 
-        $output[] = '</article>';
+        $output[] = '</div>';
 
         return implode( "\n", $output );
     }
