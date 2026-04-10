@@ -478,11 +478,12 @@ class Content_Formatter {
         // Self-contained scoped CSS — no external dependencies
         $css = "<style>.{$uid}{font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#1f2937;line-height:1.7;max-width:65ch;margin:0 auto}";
         $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{font-family:ui-serif,Georgia,serif;text-wrap:balance;color:#111827}";
-        $css .= ".{$uid} h1{font-size:clamp(1.8em,4vw,2.4em);font-weight:800;line-height:1.2;margin:0 0 0.5em}";
+        $css .= ".{$uid} h1{font-size:clamp(1.8em,4vw,2.4em);font-weight:800;line-height:1.2;margin:0 0 0.5em;text-transform:capitalize}";
         $css .= ".{$uid} h2{font-size:clamp(1.3em,3vw,1.6em);font-weight:700;line-height:1.3;color:{$accent};margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22}";
         $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;margin:1.5em 0 0.5em;color:#374151}";
         $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;text-wrap:pretty;font-size:1.05em}";
-        $css .= ".{$uid} p:first-of-type::first-letter{float:left;font-size:3.2em;line-height:0.8;font-weight:700;color:{$accent};margin:0.05em 0.1em 0 0;font-family:ui-serif,Georgia,serif}";
+        // Drop cap targets the first non-italic paragraph (skip Last Updated)
+        $css .= ".{$uid} h2+p::first-letter,.{$uid} h2+div+p::first-letter{float:left;font-size:3.2em;line-height:0.8;font-weight:700;color:{$accent};margin:0.05em 0.1em 0 0;font-family:ui-serif,Georgia,serif}";
         $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151}";
         $css .= ".{$uid} li{margin-bottom:0.4em}";
         $css .= ".{$uid} ul li{list-style-type:'\\2022  ';color:#374151}";
@@ -510,14 +511,21 @@ class Content_Formatter {
         $css .= ".{$uid} .sb-pros{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
         $css .= ".{$uid} .sb-cons{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
         $css .= ".{$uid} .sb-ingredients{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
-        // Dark mode
-        $css .= "@media(prefers-color-scheme:dark){.{$uid}{color:#e5e7eb;background:#111827}";
+        // Dark mode — no forced background, inherit from page
+        $css .= "@media(prefers-color-scheme:dark){.{$uid}{color:#e5e7eb}";
         $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{color:#f3f4f6}";
         $css .= ".{$uid} h2{border-bottom-color:{$accent}44}";
         $css .= ".{$uid} p,.{$uid} li{color:#d1d5db}";
         $css .= ".{$uid} blockquote{background:#1f2937;color:#9ca3af}";
+        $css .= ".{$uid} .sb-takeaways{background:linear-gradient(135deg,#1f2937 0%,#1e293b 100%)}";
+        $css .= ".{$uid} .sb-pros{background:#052e16;border-color:#166534}";
+        $css .= ".{$uid} .sb-cons{background:#450a0a;border-color:#991b1b}";
+        $css .= ".{$uid} .sb-callout-tip{background:#172554;border-color:#1d4ed8;color:#93c5fd}";
+        $css .= ".{$uid} .sb-callout-note{background:#451a03;border-color:#d97706;color:#fcd34d}";
+        $css .= ".{$uid} .sb-callout-warn{background:#450a0a;border-color:#dc2626;color:#fca5a5}";
         $css .= ".{$uid} tbody td{border-bottom-color:#374151;color:#d1d5db}";
         $css .= ".{$uid} tbody tr:nth-child(even){background:#1f293780}";
+        $css .= ".{$uid} thead th{background:{$accent}cc}";
         $css .= ".{$uid} code{background:#374151;color:#e5e7eb}";
         $css .= ".{$uid} hr{border-top-color:#374151}";
         $css .= ".{$uid} a{color:#93c5fd}}";

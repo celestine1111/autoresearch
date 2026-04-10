@@ -472,9 +472,10 @@ class Async_Generator {
      */
     private static function assemble_markdown( array $job ): string {
         $keyword = $job['keyword'];
+        $title = ucwords( $keyword );
         $date = wp_date( 'F Y' );
-        // H1 first, then Last Updated as metadata — keyword in first real text
-        $md = "# {$keyword}\n\n*Last Updated: {$date}*\n\n";
+        // H1 first (title-cased), then Last Updated as metadata
+        $md = "# {$title}\n\n*Last Updated: {$date}*\n\n";
 
         $section_keys = array_filter( array_keys( $job['results'] ), fn( $k ) => str_starts_with( $k, 'section_' ) );
         ksort( $section_keys );
