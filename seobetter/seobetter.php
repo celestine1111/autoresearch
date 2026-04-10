@@ -671,11 +671,35 @@ final class SEOBetter {
             update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
         }
 
+        // Build and inject JSON-LD schema directly into the post content
+        // This guarantees schema is in the article regardless of SEO plugin
+        $content_type_param = sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' );
+        $schema_type_for_ld = $this->content_type_to_schema( $content_type_param );
+        $schema_array = $this->build_aioseo_schema( $schema_type_for_ld, $post_id, $meta_title ?: $title, $post_content, $keyword );
+
+        if ( ! empty( $schema_array ) ) {
+            $schema_ld = [ '@context' => 'https://schema.org' ];
+            if ( count( $schema_array ) === 1 ) {
+                $schema_ld = array_merge( $schema_ld, $schema_array[0] );
+            } else {
+                $schema_ld['@graph'] = $schema_array;
+            }
+            $schema_json = wp_json_encode( $schema_ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
+
+            // Append JSON-LD as a wp:html block at the end of post content
+            $schema_block = "\n\n<!-- wp:html -->\n<script type=\"application/ld+json\">\n{$schema_json}\n</script>\n<!-- /wp:html -->";
+
+            wp_update_post( [
+                'ID'           => $post_id,
+                'post_content' => $post_content . $schema_block,
+            ] );
+
+            // Also store in post meta for wp_head fallback
+            update_post_meta( $post_id, '_seobetter_schema', wp_json_encode( $schema_ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) );
+        }
+
         // Detect where schema is going for user feedback
-        $schema_dest = 'seobetter';
-        if ( defined( 'AIOSEO_VERSION' ) ) $schema_dest = 'aioseo';
-        elseif ( defined( 'WPSEO_VERSION' ) ) $schema_dest = 'yoast';
-        elseif ( class_exists( 'RankMath' ) ) $schema_dest = 'rankmath';
+        $schema_dest = 'article';
 
         return new \WP_REST_Response( [
             'success'     => true,
