@@ -418,10 +418,27 @@ The AI invents plausible-looking URL paths. Real domains (rspca.org.au) with fak
 5. References section: only URLs from research data, no invented links
 
 ### Where This Is Enforced
-- System prompt (line ~609): "NEVER guess or invent a page path"
-- Section prompt (line ~462): "link to homepage domain only if URL not in research data"
-- References prompt (line ~446): "Use ONLY the URLs listed above"
-- Prose template shared suffix (line ~329): "Every outgoing link must lead to a real page"
+
+**Layer 1 — AI Prompt Rules (prevention):**
+- System prompt: "NEVER guess or invent a page path"
+- Section prompt: "link to homepage domain only if URL not in research data"
+- References prompt: "Use ONLY the URLs listed above"
+- Prose template: "Every outgoing link must lead to a real page"
+
+**Layer 2 — Post-Generation URL Validator (guarantee):**
+`validate_outbound_links()` in seobetter.php runs BEFORE the article is formatted and saved:
+1. Extracts every `[text](url)` link from the markdown
+2. Sends HTTP HEAD request to each URL (4s timeout)
+3. Based on response:
+   - **200-399**: Keep the URL (it's real)
+   - **404/410**: Replace with homepage domain (e.g., rspca.org.au/)
+   - **403**: Keep (site is real but blocks bots)
+   - **Network error**: Replace with homepage domain
+   - **Homepage also dead**: Remove the link entirely (keep text only)
+4. Results cached per URL to avoid duplicate checks
+5. Internal links (same domain) are skipped
+
+This validator works regardless of which AI model generates the content — Claude, GPT, Gemini, Llama, Mistral, or any model via OpenRouter.
 
 ### wp:more Block
 A `<!-- wp:more -->` block is inserted after the 2nd regular paragraph in every article. This creates the "Read More" break on archive/listing pages in WordPress.

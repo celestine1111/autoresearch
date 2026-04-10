@@ -613,6 +613,12 @@ final class SEOBetter {
 
         $post_content = '';
 
+        // Validate all outbound URLs in markdown before formatting
+        // Checks each link with HEAD request — replaces 404s with homepage or removes link
+        if ( ! empty( $markdown ) ) {
+            $markdown = $this->validate_outbound_links( $markdown );
+        }
+
         if ( ! empty( $markdown ) ) {
             // Hybrid format: native Gutenberg blocks for headings, paragraphs, lists, images
             // (editable in block editor) + wp:html blocks for styled elements only
@@ -1081,6 +1087,86 @@ final class SEOBetter {
      * Uses Pexels API (free, 15K req/month) for keyword-relevant photos.
      * Falls back to downloading a generic image if Pexels unavailable.
      */
+    /**
+     * Validate all outbound URLs in markdown content.
+     * Does HEAD requests to check each link. Replaces 404s with homepage or removes link.
+     * Runs before formatting to catch hallucinated URLs from any AI model.
+     */
+    private function validate_outbound_links( string $markdown ): string {
+        // Extract all markdown links: [text](url)
+        if ( ! preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
+            return $markdown;
+        }
+
+        $checked = []; // Cache results to avoid checking same domain twice
+        $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+
+        foreach ( $matches as $match ) {
+            $full_match = $match[0];
+            $link_text = $match[1];
+            $url = $match[2];
+
+            // Skip internal links
+            $host = wp_parse_url( $url, PHP_URL_HOST );
+            if ( ! $host || $host === $site_host ) continue;
+
+            // Check cache first
+            if ( isset( $checked[ $url ] ) ) {
+                if ( $checked[ $url ] === 'remove' ) {
+                    $markdown = str_replace( $full_match, $link_text, $markdown );
+                } elseif ( $checked[ $url ] !== $url ) {
+                    $markdown = str_replace( $full_match, "[{$link_text}]({$checked[$url]})", $markdown );
+                }
+                continue;
+            }
+
+            // HEAD request with 4 second timeout
+            $response = wp_remote_head( $url, [
+                'timeout'     => 4,
+                'redirection' => 3,
+                'sslverify'   => false,
+                'user-agent'  => 'SEOBetter Link Validator/1.0',
+            ] );
+
+            if ( is_wp_error( $response ) ) {
+                // Network error — fall back to homepage
+                $homepage = 'https://' . $host . '/';
+                $checked[ $url ] = $homepage;
+                $markdown = str_replace( $full_match, "[{$link_text}]({$homepage})", $markdown );
+                continue;
+            }
+
+            $code = wp_remote_retrieve_response_code( $response );
+
+            if ( $code >= 200 && $code < 400 ) {
+                // Valid URL — keep it
+                $checked[ $url ] = $url;
+            } elseif ( $code === 404 || $code === 410 ) {
+                // Dead page — replace with homepage
+                $homepage = 'https://' . $host . '/';
+                $homepage_check = wp_remote_head( $homepage, [ 'timeout' => 3, 'sslverify' => false ] );
+                if ( ! is_wp_error( $homepage_check ) && wp_remote_retrieve_response_code( $homepage_check ) < 400 ) {
+                    $checked[ $url ] = $homepage;
+                    $markdown = str_replace( $full_match, "[{$link_text}]({$homepage})", $markdown );
+                } else {
+                    // Even homepage is dead — remove link entirely
+                    $checked[ $url ] = 'remove';
+                    $markdown = str_replace( $full_match, $link_text, $markdown );
+                }
+            } elseif ( $code === 403 ) {
+                // Forbidden — site is real but blocks bots. Keep the link.
+                $checked[ $url ] = $url;
+            } else {
+                // Other error — fall back to homepage
+                $homepage = 'https://' . $host . '/';
+                $checked[ $url ] = $homepage;
+                $markdown = str_replace( $full_match, "[{$link_text}]({$homepage})", $markdown );
+            }
+        }
+
+        return $markdown;
+    }
+
     private function set_featured_image( int $post_id, string $keyword ): void {
         if ( ! function_exists( 'media_sideload_image' ) ) {
             require_once ABSPATH . 'wp-admin/includes/media.php';
