@@ -361,11 +361,21 @@ class Content_Formatter {
                 case 'paragraph':
                     $text = $this->inline_markdown( $section['content'] );
                     if ( empty( trim( $text ) ) ) continue 2;
+                    $plain = strip_tags( $text );
 
-                    if ( preg_match( '/^last\s*updated/i', strip_tags( $text ) ) ) {
+                    if ( preg_match( '/^last\s*updated/i', $plain ) ) {
                         $output[] = '<!-- wp:paragraph {"fontSize":"small"} -->';
                         $output[] = "<p class=\"has-small-font-size\"><em>{$text}</em></p>";
                         $output[] = '<!-- /wp:paragraph -->';
+                    } elseif ( preg_match( '/^(pro\s*tip|tip)\s*[:—-]/i', $plain ) ) {
+                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\"><strong>Tip:</strong> {$text}</div>";
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    } elseif ( preg_match( '/^(note|important)\s*[:—-]/i', $plain ) ) {
+                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\"><strong>Note:</strong> {$text}</div>";
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    } elseif ( preg_match( '/^(warning|caution)\s*[:—-]/i', $plain ) ) {
+                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\"><strong>Warning:</strong> {$text}</div>";
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } else {
                         $output[] = '<!-- wp:paragraph -->';
                         $output[] = "<p>{$text}</p>";
@@ -387,12 +397,40 @@ class Content_Formatter {
                     }
 
                     $is_takeaways = preg_match( '/key\s*takeaway/i', $prev_heading );
+                    $prev_context = strtolower( $prev_heading );
+                    $is_pros = ( preg_match( '/\bpros?\b|advantage|strength|benefit/i', $prev_context ) && ! preg_match( '/cons/i', $prev_context ) );
+                    $is_cons = preg_match( '/\bcons?\b|disadvantage|weakness|drawback/i', $prev_context );
+                    $is_ingredients = preg_match( '/ingredient|you.ll need|what you need|supplies/i', $prev_context );
+
                     if ( $is_takeaways ) {
-                        // Styled key takeaways — wp:html to preserve styling
                         $html = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0">';
-                        $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151\">";
+                        $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
                         foreach ( $section['items'] as $item ) {
-                            $html .= "<li style=\"margin-bottom:0.5em\">{$item}</li>";
+                            $html .= "<li style=\"margin-bottom:0.5em;color:#374151 !important\">{$item}</li>";
+                        }
+                        $html .= "</{$tag}></div>";
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    } elseif ( $is_pros ) {
+                        $html = '<div style="background:#f0fdf4 !important;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
+                        $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
+                        foreach ( $section['items'] as $item ) {
+                            $html .= "<li style=\"margin-bottom:0.5em;color:#166534 !important\">{$item}</li>";
+                        }
+                        $html .= "</{$tag}></div>";
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    } elseif ( $is_cons ) {
+                        $html = '<div style="background:#fef2f2 !important;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
+                        $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
+                        foreach ( $section['items'] as $item ) {
+                            $html .= "<li style=\"margin-bottom:0.5em;color:#991b1b !important\">{$item}</li>";
+                        }
+                        $html .= "</{$tag}></div>";
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    } elseif ( $is_ingredients ) {
+                        $html = '<div style="background:#fffbeb !important;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
+                        $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
+                        foreach ( $section['items'] as $item ) {
+                            $html .= "<li style=\"margin-bottom:0.5em;color:#92400e !important\">{$item}</li>";
                         }
                         $html .= "</{$tag}></div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
@@ -416,7 +454,7 @@ class Content_Formatter {
                 case 'quote':
                     // Styled blockquote — wp:html to preserve styling
                     $text = $this->inline_markdown( $section['content'] );
-                    $html = "<blockquote style=\"border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563;line-height:1.7\"><p style=\"margin:0\">{$text}</p></blockquote>";
+                    $html = "<blockquote style=\"border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563 !important;line-height:1.7\"><p style=\"margin:0;color:#4b5563 !important\">{$text}</p></blockquote>";
                     $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     break;
 

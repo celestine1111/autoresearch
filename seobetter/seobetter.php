@@ -596,15 +596,13 @@ final class SEOBetter {
         $post_content = '';
 
         if ( ! empty( $markdown ) ) {
-            // Classic format: self-contained <article> with scoped CSS
-            // Produces publication-quality HTML with styled lists, callouts,
-            // tables, blockquotes, pros/cons boxes, drop caps, dark mode
-            // Wrapped in wp:html block to preserve all styling in Gutenberg
+            // Hybrid format: native Gutenberg blocks for headings, paragraphs, lists, images
+            // (editable in block editor) + wp:html blocks for styled elements only
+            // (key takeaways, tables, blockquotes, pros/cons, callout boxes, tips)
             $formatter = new SEOBetter\Content_Formatter();
-            $styled_html = $formatter->format( $markdown, 'classic', [
+            $post_content = $formatter->format( $markdown, 'hybrid', [
                 'accent_color' => $accent,
             ] );
-            $post_content = "<!-- wp:html -->\n" . $styled_html . "\n<!-- /wp:html -->";
         }
 
         // Fallback to raw content if gutenberg formatting produced nothing
