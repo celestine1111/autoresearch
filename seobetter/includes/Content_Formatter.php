@@ -556,20 +556,25 @@ class Content_Formatter {
                 case 'list':
                     $tag = $section['list_type'];
 
-                    // Detect context from preceding heading
-                    $prev_heading = '';
+                    // Detect context from preceding heading OR paragraph
+                    $prev_context = '';
                     for ( $j = $i - 1; $j >= 0; $j-- ) {
                         if ( $sections[ $j ]['type'] === 'heading' ) {
-                            $prev_heading = strtolower( $sections[ $j ]['content'] );
+                            $prev_context = strtolower( $sections[ $j ]['content'] );
                             break;
                         }
-                        if ( $sections[ $j ]['type'] === 'paragraph' && ! empty( trim( $sections[ $j ]['content'] ) ) ) break;
+                        if ( $sections[ $j ]['type'] === 'paragraph' && ! empty( trim( $sections[ $j ]['content'] ) ) ) {
+                            $prev_context = strtolower( strip_tags( $sections[ $j ]['content'] ) );
+                            break;
+                        }
                     }
+                    // Also check first item for "Pro:" / "Con:" patterns
+                    $first_item = strtolower( $section['items'][0] ?? '' );
 
-                    $is_takeaways = preg_match( '/key\s*takeaway/i', $prev_heading );
-                    $is_pros = preg_match( '/\bpros?\b|advantage|strength|benefit/i', $prev_heading ) && ! preg_match( '/cons/i', $prev_heading );
-                    $is_cons = preg_match( '/\bcons?\b|disadvantage|weakness|drawback/i', $prev_heading );
-                    $is_ingredients = preg_match( '/ingredient|you.ll need|what you need|supplies|materials/i', $prev_heading );
+                    $is_takeaways = preg_match( '/key\s*takeaway/i', $prev_context );
+                    $is_pros = ( preg_match( '/\bpros?\b|advantage|strength|benefit/i', $prev_context ) && ! preg_match( '/cons/i', $prev_context ) ) || preg_match( '/^\s*pros?\s*[:—-]/i', $prev_context );
+                    $is_cons = preg_match( '/\bcons?\b|disadvantage|weakness|drawback/i', $prev_context ) || preg_match( '/^\s*cons?\s*[:—-]/i', $prev_context );
+                    $is_ingredients = preg_match( '/ingredient|you.ll need|what you need|supplies|materials/i', $prev_context );
 
                     // Wrapper class
                     $wrapper = '';

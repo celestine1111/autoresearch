@@ -584,11 +584,14 @@ CSS custom properties at article scope level:
 - Minimal DOM nodes
 - Scoped CSS prevents style recalculation cascading to host page
 
-### Research Sources
+### Research Sources and Citation Rules
 - DuckDuckGo web search provides real URLs for all articles
-- All inline citations are clickable Markdown links to real web pages
-- References section at article footer contains all cited sources
+- All inline citations MUST be clickable Markdown links to real web pages
+- ALWAYS link to the **specific page URL**, not the homepage (e.g., `thekitchn.com/sourdough-guide-224367` not `thekitchn.com/`)
+- References section at article footer MUST contain all cited sources with clickable links
 - No hallucinated citations — only cite sources from research data
+- If no source exists for a claim, state the claim without any citation
+- Every article MUST have a References section with 5-10 real links
 
 ---
 

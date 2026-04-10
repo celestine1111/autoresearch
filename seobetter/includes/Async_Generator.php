@@ -356,8 +356,8 @@ class Async_Generator {
         $prose = self::get_prose_template( $content_type );
 
         $year = wp_date( 'Y' );
-        $min_kw_headings = max( 1, round( $content_sections * 0.3 ) );
-        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "\n\nRequirements:\n- Follow the REQUIRED SECTIONS structure above — use those as your H2 headings\n- Adapt the section names to fit the specific keyword naturally\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant\n- Make headings sound natural, not like SEO templates\n- Target word count: {$total_words} words\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
+        $min_kw_headings = max( 2, round( $content_sections * 0.5 ) );
+        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "\n\nRequirements:\n- Follow the REQUIRED SECTIONS structure above — use those as your H2 headings\n- Adapt the section names to fit the specific keyword naturally\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. SEO plugins check this — headings without the keyword get flagged.\n- Make headings sound natural, not like SEO templates\n- Target word count: {$total_words} words\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
 
         $result = self::send_request( $prompt, 'You are an SEO content strategist. Return only the numbered list of headings.', [ 'max_tokens' => 500 ] );
 
@@ -422,12 +422,28 @@ class Async_Generator {
             if ( $trends ) {
                 // Extract markdown links from the research data
                 preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)\s*[—-]\s*(.+)/i', $trends, $link_matches, PREG_SET_ORDER );
+                // Also extract bare URLs with surrounding context
+                if ( empty( $link_matches ) ) {
+                    preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i', $trends, $link_matches, PREG_SET_ORDER );
+                }
+                // Also try to find URLs directly
+                if ( empty( $link_matches ) ) {
+                    preg_match_all( '/(https?:\/\/[^\s\)]+)/i', $trends, $url_only );
+                    if ( ! empty( $url_only[1] ) ) {
+                        foreach ( array_unique( array_slice( $url_only[1], 0, 10 ) ) as $u ) {
+                            try {
+                                $host = parse_url( $u, PHP_URL_HOST );
+                                $link_matches[] = [ $u, str_replace( 'www.', '', $host ?: $u ), $u, 'Web source' ];
+                            } catch ( \Exception $e ) {}
+                        }
+                    }
+                }
                 if ( ! empty( $link_matches ) ) {
                     $sources_list = "\n\nREAL SOURCES TO USE (these are verified URLs — use them as outbound links):\n";
-                    foreach ( array_slice( $link_matches, 0, 10 ) as $lm ) {
-                        $sources_list .= "- [{$lm[1]}]({$lm[2]}) — {$lm[3]}\n";
+                    foreach ( array_slice( $link_matches, 0, 15 ) as $lm ) {
+                        $sources_list .= "- [{$lm[1]}]({$lm[2]})" . ( isset( $lm[3] ) ? " — {$lm[3]}" : '' ) . "\n";
                     }
-                    $sources_list .= "\nIMPORTANT: Use ONLY the URLs above. Do NOT invent or hallucinate any URLs.";
+                    $sources_list .= "\nIMPORTANT: Use ONLY the URLs above. Do NOT invent or hallucinate any URLs. Link to the specific page, not the homepage.";
                 }
             }
             $domain_hint = ( $domain && $domain !== 'general' ) ? "\nDomain: {$domain} — prioritize authoritative sources for this field." : '';
@@ -443,7 +459,7 @@ class Async_Generator {
                 $intro_rule = "\n\nINTRODUCTION RULE (SEO PLUGINS CHECK THIS PARAGRAPH):\n- The FIRST SENTENCE of this section must contain the exact phrase \"{$keyword}\" naturally\n- Bold the keyword once: **{$keyword}**\n- SEO plugins (AIOSEO, Yoast, RankMath) check this paragraph for the focus keyword\n- Write the intro like a human opening a conversation — not a definition or press release\n- Do NOT start with '[Keyword] is...' or '[Keyword] refers to...' — those are AI patterns\n- Jump into a specific fact, opinion, or context that includes the keyword naturally";
             }
 
-            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nWORD LIMIT: Write {$words_per_section} words for this section. Do not exceed this. Stop when you reach it.{$trends_inject}{$readability_rule}{$intro_rule}\n\nKEYWORD RULES:\n- The phrase \"{$keyword}\" should appear 2-3 times in this section, naturally\n- Include it in the first paragraph\n- Also use variations and rearrangements\n\nWRITING RULES:\n- Start with: ## {$heading}\n- Open with a paragraph that directly answers the heading. Do not restate the heading.\n- Vary paragraph lengths — some short (2-3 sentences), some longer (4-5). Do not make every paragraph the same size.\n- Include statistics from the RESEARCH DATA if available. Do NOT invent numbers or statistics.\n- Include expert quotes from the research data if available. Use real names and organizations.\n- When citing a source, use a clickable Markdown link with the exact URL from research data: [Source Name](https://real-url.com). Do NOT use plain text citations like [Source, Year] — always link them.\n- NEVER cite a source that is not in the RESEARCH DATA above. If you want to make a claim but have no source for it, state the claim without any citation. Never invent a source name, book title, study name, or year.\n- Add a comparison table ONLY if the section genuinely compares things. Do not force tables.\n- Use a bullet list ONLY when listing items. Do not default to bullets for every section.\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- No bold except the keyword once in the intro section\n- Vary your sentence rhythm. Mix short direct statements with longer explanations. Do not write every sentence the same length.\n- Write like someone who knows this topic well and has an opinion about it.\n\nOutput Markdown only.";
+            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nWORD LIMIT: Write {$words_per_section} words for this section. Do not exceed this. Stop when you reach it.{$trends_inject}{$readability_rule}{$intro_rule}\n\nKEYWORD RULES:\n- The phrase \"{$keyword}\" should appear 2-3 times in this section, naturally\n- Include it in the first paragraph\n- Also use variations and rearrangements\n\nWRITING RULES:\n- Start with: ## {$heading}\n- Open with a paragraph that directly answers the heading. Do not restate the heading.\n- Vary paragraph lengths — some short (2-3 sentences), some longer (4-5). Do not make every paragraph the same size.\n- Include statistics from the RESEARCH DATA if available. Do NOT invent numbers or statistics.\n- Include expert quotes from the research data if available. Use real names and organizations.\n- When citing a source, use a clickable Markdown link with the exact URL from research data: [Source Name](https://real-url.com/specific-page). Link to the SPECIFIC PAGE, not the homepage URL. Do NOT use plain text citations like [Source, Year] — always link them.\n- NEVER cite a source that is not in the RESEARCH DATA above. If you want to make a claim but have no source for it, state the claim without any citation. Never invent a source name, book title, study name, or year.\n- Add a comparison table ONLY if the section genuinely compares things. Do not force tables.\n- Use a bullet list ONLY when listing items. Do not default to bullets for every section.\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- No bold except the keyword once in the intro section\n- Vary your sentence rhythm. Mix short direct statements with longer explanations. Do not write every sentence the same length.\n- Write like someone who knows this topic well and has an opinion about it.\n\nOutput Markdown only.";
             $max = 4096;
         }
 
@@ -455,8 +471,10 @@ class Async_Generator {
      * Assemble markdown from completed sections.
      */
     private static function assemble_markdown( array $job ): string {
+        $keyword = $job['keyword'];
         $date = wp_date( 'F Y' );
-        $md = "*Last Updated: {$date}*\n\n# {$job['keyword']}\n\n";
+        // H1 first, then Last Updated as metadata — keyword in first real text
+        $md = "# {$keyword}\n\n*Last Updated: {$date}*\n\n";
 
         $section_keys = array_filter( array_keys( $job['results'] ), fn( $k ) => str_starts_with( $k, 'section_' ) );
         ksort( $section_keys );
@@ -587,7 +605,7 @@ KEYWORD DENSITY (CRITICAL FOR SEO PLUGINS):
 GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
 - Expert quotes with full attribution: name, title, organization (+41% visibility)
 - Statistics with specific numbers and source: '85% of users prefer X (Source, Year)' (+40% visibility)
-- Inline citations as clickable Markdown links: [Source Name](https://real-url.com) — 5+ per article (+30% visibility). NEVER use plain text citations like [Source, Year] — always link to the actual URL from research data. NEVER invent or hallucinate source names, book titles, or URLs.
+- Inline citations as clickable Markdown links: [Source Name](https://real-url.com/specific-page) — 5+ per article (+30% visibility). Link to the SPECIFIC PAGE, not the homepage. NEVER use plain text citations like [Source, Year]. NEVER invent or hallucinate source names, book titles, or URLs.
 - Fluent, polished writing with smooth transitions (+25-30% visibility)
 - NEVER stuff keywords — this REDUCES AI visibility by 9%
 
