@@ -335,6 +335,8 @@ class Content_Formatter {
     public function format_hybrid( array $sections, array $options ): string {
         $output = [];
         $accent = $options['accent_color'] ?? '#764ba2';
+        $para_count = 0;
+        $more_inserted = false;
 
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
@@ -380,6 +382,12 @@ class Content_Formatter {
                         $output[] = '<!-- wp:paragraph -->';
                         $output[] = "<p>{$text}</p>";
                         $output[] = '<!-- /wp:paragraph -->';
+                        $para_count++;
+                        // Insert wp:more after the 2nd regular paragraph (creates Read More break)
+                        if ( $para_count === 2 && ! $more_inserted ) {
+                            $output[] = "\n<!-- wp:more -->\n<!--more-->\n<!-- /wp:more -->";
+                            $more_inserted = true;
+                        }
                     }
                     break;
 

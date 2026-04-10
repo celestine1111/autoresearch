@@ -405,6 +405,29 @@ delve, tapestry, landscape (metaphorical), paradigm, leverage (verb), harness, n
 
 ---
 
+## 10B. URL INTEGRITY RULES (CRITICAL — No Fake Links)
+
+### The Problem
+The AI invents plausible-looking URL paths. Real domains (rspca.org.au) with fake paths (/adopt-pet/puppy-guide) leading to 404 errors.
+
+### Rules Enforced in Prompts
+1. Use ONLY URLs from the RESEARCH DATA (DuckDuckGo results, API data)
+2. If mentioning an organization NOT in research data, link to homepage domain only
+3. NEVER guess or invent subpage paths — they will be 404 errors
+4. Every outgoing link must lead to a real page
+5. References section: only URLs from research data, no invented links
+
+### Where This Is Enforced
+- System prompt (line ~609): "NEVER guess or invent a page path"
+- Section prompt (line ~462): "link to homepage domain only if URL not in research data"
+- References prompt (line ~446): "Use ONLY the URLs listed above"
+- Prose template shared suffix (line ~329): "Every outgoing link must lead to a real page"
+
+### wp:more Block
+A `<!-- wp:more -->` block is inserted after the 2nd regular paragraph in every article. This creates the "Read More" break on archive/listing pages in WordPress.
+
+---
+
 ## 11. GUTENBERG EDITOR INTEGRATION
 
 ### 11.1 Pre-Publish Panel (PluginPrePublishPanel)
