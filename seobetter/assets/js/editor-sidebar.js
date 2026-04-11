@@ -8,12 +8,22 @@
  * - registerPlugin from wp.plugins
  */
 (function(wp) {
-    if (!wp || !wp.plugins || !wp.element || !wp.components || !wp.data || !wp.editor) return;
+    if (!wp || !wp.plugins || !wp.element || !wp.components || !wp.data) return;
 
     var registerPlugin = wp.plugins.registerPlugin;
-    var PluginSidebar = wp.editor.PluginSidebar;
-    var PluginDocumentSettingPanel = wp.editor.PluginDocumentSettingPanel;
-    var PluginPrePublishPanel = wp.editor.PluginPrePublishPanel;
+    if (!registerPlugin) return;
+
+    // Resolve SlotFills — these moved between packages across WP versions
+    // Try: wp.editor (6.6+) → wp.editPost (older) → null
+    var _e = wp.editor || {};
+    var _ep = wp.editPost || {};
+
+    var PluginSidebar = _e.PluginSidebar || _ep.PluginSidebar || null;
+    var PluginDocumentSettingPanel = _e.PluginDocumentSettingPanel || _ep.PluginDocumentSettingPanel || null;
+    var PluginPrePublishPanel = _e.PluginPrePublishPanel || _ep.PluginPrePublishPanel || null;
+
+    if (!PluginSidebar && !PluginDocumentSettingPanel) return;
+
     var PanelBody = wp.components.PanelBody;
     var PanelRow = wp.components.PanelRow;
     var Button = wp.components.Button;
@@ -24,8 +34,6 @@
     var useEffect = wp.element.useEffect;
     var select = wp.data.select;
     var apiFetch = wp.apiFetch;
-
-    if (!registerPlugin || !PluginSidebar) return;
 
     // ============================================================
     // Shared analysis state
