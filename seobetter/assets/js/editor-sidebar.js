@@ -7,18 +7,27 @@
  * 4. Pre-publish panel with publish readiness
  */
 (function(wp) {
-    if (!wp || !wp.plugins || !wp.editPost || !wp.element) return;
+    if (!wp || !wp.plugins || !wp.element || !wp.components || !wp.data) return;
 
-    const { registerPlugin } = wp.plugins;
-    const { PluginSidebar } = wp.editPost;
-    const { PanelBody, PanelRow, Button, Spinner } = wp.components;
-    const { useState, useEffect, createElement: el, Fragment } = wp.element;
-    const { select } = wp.data;
-    const apiFetch = wp.apiFetch;
+    var registerPlugin = wp.plugins.registerPlugin;
+    var PanelBody = wp.components.PanelBody;
+    var PanelRow = wp.components.PanelRow;
+    var Button = wp.components.Button;
+    var Spinner = wp.components.Spinner;
+    var useState = wp.element.useState;
+    var useEffect = wp.element.useEffect;
+    var el = wp.element.createElement;
+    var Fragment = wp.element.Fragment;
+    var select = wp.data.select;
+    var apiFetch = wp.apiFetch;
 
-    // These moved between wp.editPost and wp.editor across WP versions — safe fallback
-    const PluginPrePublishPanel = (wp.editor && wp.editor.PluginPrePublishPanel) || (wp.editPost && wp.editPost.PluginPrePublishPanel) || null;
-    const PluginDocumentSettingPanel = (wp.editor && wp.editor.PluginDocumentSettingPanel) || (wp.editPost && wp.editPost.PluginDocumentSettingPanel) || null;
+    // All these slots moved from wp.editPost to wp.editor in WP 6.6+
+    // Try wp.editor first (newer), fall back to wp.editPost (older)
+    var PluginSidebar = (wp.editor && wp.editor.PluginSidebar) || (wp.editPost && wp.editPost.PluginSidebar) || null;
+    var PluginPrePublishPanel = (wp.editor && wp.editor.PluginPrePublishPanel) || (wp.editPost && wp.editPost.PluginPrePublishPanel) || null;
+    var PluginDocumentSettingPanel = (wp.editor && wp.editor.PluginDocumentSettingPanel) || (wp.editPost && wp.editPost.PluginDocumentSettingPanel) || null;
+
+    if (!registerPlugin) return;
 
     // ============================================================
     // Shared analysis hook
@@ -253,6 +262,7 @@
     };
 
     const SEOBetterSidebar = () => {
+        if (!PluginSidebar) return null;
         const { analysis, loading, runAnalysis } = useAnalysis();
 
         return el(PluginSidebar, { name: 'seobetter-sidebar', title: 'SEOBetter GEO', icon: 'chart-line' },
@@ -303,6 +313,7 @@
     // 4. PRE-PUBLISH PANEL
     // ============================================================
     const SEOBetterPrePublish = () => {
+        if (!PluginPrePublishPanel) return null;
         const { analysis, loading } = useAnalysis();
         const isPro = window.seobetterData?.isPro || false;
 
