@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.1.0' );
+define( 'SEOBETTER_VERSION', '1.2.0' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -240,7 +240,7 @@ final class SEOBetter {
         wp_enqueue_script(
             'seobetter-editor',
             SEOBETTER_PLUGIN_URL . 'assets/js/editor-sidebar.js',
-            [ 'wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data', 'wp-api-fetch' ],
+            [ 'wp-plugins', 'wp-edit-post', 'wp-editor', 'wp-element', 'wp-components', 'wp-data', 'wp-api-fetch' ],
             SEOBETTER_VERSION,
             true
         );
@@ -860,7 +860,7 @@ final class SEOBetter {
             'news_article'       => 'news',
             'opinion'            => 'opinion',
             'how_to'             => 'howto',
-            'listicle'           => 'article_with_faq',
+            'listicle'           => 'listicle',
             'review'             => 'review',
             'comparison'         => 'article_with_faq',
             'buying_guide'       => 'article_with_faq',
@@ -930,6 +930,7 @@ final class SEOBetter {
         $type_map = [
             'article'          => 'Article',
             'article_with_faq' => 'Article',
+            'listicle'         => 'Article',
             'news'             => 'NewsArticle',
             'opinion'          => 'OpinionNewsArticle',
             'howto'            => 'HowTo',
@@ -1069,6 +1070,31 @@ final class SEOBetter {
                     'name'  => $keyword ?: $title,
                 ],
             ];
+        }
+
+        // Add ItemList schema for listicle content type
+        if ( $type === 'listicle' ) {
+            $list_items = [];
+            if ( preg_match_all( '/<h2[^>]*>(.*?)<\/h2>/is', $content, $h2_matches ) ) {
+                $pos = 0;
+                foreach ( $h2_matches[1] as $h2_text ) {
+                    $clean = wp_strip_all_tags( $h2_text );
+                    // Skip non-item headings (Key Takeaways, FAQ, References, Conclusion, Introduction)
+                    if ( preg_match( '/key\s*takeaway|faq|frequently|reference|conclusion|introduction/i', $clean ) ) continue;
+                    $pos++;
+                    $list_items[] = [
+                        '@type'    => 'ListItem',
+                        'position' => $pos,
+                        'name'     => $clean,
+                    ];
+                }
+            }
+            if ( ! empty( $list_items ) ) {
+                $schemas[] = [
+                    '@type'           => 'ItemList',
+                    'itemListElement' => $list_items,
+                ];
+            }
         }
 
         // Store content type in post meta for future reference
