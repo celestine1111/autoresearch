@@ -7,13 +7,18 @@
  * 4. Pre-publish panel with publish readiness
  */
 (function(wp) {
+    if (!wp || !wp.plugins || !wp.editPost || !wp.element) return;
+
     const { registerPlugin } = wp.plugins;
-    const { PluginSidebar, PluginSidebarMoreMenuItem, PluginPrePublishPanel } = wp.editPost;
-    const { PanelBody, PanelRow, Button, Spinner, Fill } = wp.components;
+    const { PluginSidebar } = wp.editPost;
+    const { PanelBody, PanelRow, Button, Spinner } = wp.components;
     const { useState, useEffect, createElement: el, Fragment } = wp.element;
-    const { select, subscribe } = wp.data;
+    const { select } = wp.data;
     const apiFetch = wp.apiFetch;
-    const PluginDocumentSettingPanel = (wp.editor && wp.editor.PluginDocumentSettingPanel) || (wp.editPost && wp.editPost.PluginDocumentSettingPanel);
+
+    // These moved between wp.editPost and wp.editor across WP versions — safe fallback
+    const PluginPrePublishPanel = (wp.editor && wp.editor.PluginPrePublishPanel) || (wp.editPost && wp.editPost.PluginPrePublishPanel) || null;
+    const PluginDocumentSettingPanel = (wp.editor && wp.editor.PluginDocumentSettingPanel) || (wp.editPost && wp.editPost.PluginDocumentSettingPanel) || null;
 
     // ============================================================
     // Shared analysis hook
@@ -65,51 +70,48 @@
         const color = scoreColor(score);
         const grade = analysis.grade || '?';
 
-        // Inject into the editor header via a portal-style approach
         useEffect(() => {
-            // Find the editor header toolbar
-            const injectBadge = () => {
-                const toolbar = document.querySelector('.edit-post-header__toolbar') ||
-                                document.querySelector('.editor-header__toolbar') ||
-                                document.querySelector('.edit-post-header');
-                if (!toolbar) return;
+            var t1, t2;
+            var injectBadge = function() {
+                try {
+                    var toolbar = document.querySelector('.edit-post-header__toolbar') ||
+                                    document.querySelector('.editor-header__toolbar') ||
+                                    document.querySelector('.edit-post-header');
+                    if (!toolbar) return;
+                    if (document.getElementById('seobetter-toolbar-badge')) return;
 
-                // Don't add twice
-                if (document.getElementById('seobetter-toolbar-badge')) return;
+                    var badge = document.createElement('div');
+                    badge.id = 'seobetter-toolbar-badge';
+                    badge.title = 'SEOBetter GEO Score: ' + score + '/100 (' + grade + ')';
+                    badge.style.cssText = 'display:flex;align-items:center;gap:6px;padding:0 12px;cursor:pointer;height:36px;border-radius:4px;margin-left:8px;background:' + color + '14;border:1px solid ' + color + '33;';
+                    badge.onclick = function() {
+                        try { wp.data.dispatch('core/edit-post').openGeneralSidebar('seobetter/seobetter-sidebar'); } catch(e) {}
+                    };
 
-                const badge = document.createElement('div');
-                badge.id = 'seobetter-toolbar-badge';
-                badge.title = 'SEOBetter GEO Score: ' + score + '/100 (' + grade + ')';
-                badge.style.cssText = 'display:flex;align-items:center;gap:6px;padding:0 12px;cursor:pointer;height:36px;border-radius:4px;margin-left:8px;background:' + color + '14;border:1px solid ' + color + '33;';
-                badge.onclick = () => {
-                    // Open SEOBetter sidebar
-                    wp.data.dispatch('core/edit-post').openGeneralSidebar('seobetter/seobetter-sidebar');
-                };
+                    var circle = document.createElement('div');
+                    circle.style.cssText = 'width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;background:' + color + ';';
+                    circle.textContent = score;
 
-                // Score circle
-                const circle = document.createElement('div');
-                circle.style.cssText = 'width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;background:' + color + ';';
-                circle.textContent = score;
+                    var lbl = document.createElement('span');
+                    lbl.style.cssText = 'font-size:12px;font-weight:600;color:' + color + ';';
+                    lbl.textContent = 'GEO ' + grade;
 
-                // Label
-                const label = document.createElement('span');
-                label.style.cssText = 'font-size:12px;font-weight:600;color:' + color + ';';
-                label.textContent = 'GEO ' + grade;
-
-                badge.appendChild(circle);
-                badge.appendChild(label);
-                toolbar.appendChild(badge);
+                    badge.appendChild(circle);
+                    badge.appendChild(lbl);
+                    toolbar.appendChild(badge);
+                } catch(e) {
+                    // Silently fail — toolbar badge is non-critical
+                }
             };
 
-            // Try immediately and on short delay (editor may not be fully rendered)
             injectBadge();
-            const t1 = setTimeout(injectBadge, 500);
-            const t2 = setTimeout(injectBadge, 1500);
+            t1 = setTimeout(injectBadge, 500);
+            t2 = setTimeout(injectBadge, 1500);
 
-            return () => { clearTimeout(t1); clearTimeout(t2); };
+            return function() { clearTimeout(t1); clearTimeout(t2); };
         }, [analysis]);
 
-        return null; // Renders via DOM injection, not React
+        return null;
     };
 
     // ============================================================
