@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.4.2' );
+define( 'SEOBETTER_VERSION', '1.5.0' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -85,6 +85,10 @@ final class SEOBetter {
         add_filter( 'manage_edit-post_sortable_columns', [ $this, 'sortable_columns' ] );
         add_filter( 'manage_edit-page_sortable_columns', [ $this, 'sortable_columns' ] );
         add_action( 'pre_get_posts', [ $this, 'sort_by_geo_score' ] );
+
+        // Footer metabox (like AIOSEO's settings panel below the editor)
+        add_action( 'add_meta_boxes', [ $this, 'register_metabox' ] );
+        add_action( 'save_post', [ $this, 'save_metabox' ], 10, 2 );
 
         register_activation_hook( __FILE__, [ $this, 'activate' ] );
         register_deactivation_hook( __FILE__, [ $this, 'deactivate' ] );
@@ -1468,6 +1472,299 @@ final class SEOBetter {
             $query->set( 'meta_key', '_seobetter_geo_score' );
             $query->set( 'orderby', 'meta_value_num' );
         }
+    }
+
+    /**
+     * Save metabox data (focus keyword) when post is saved.
+     */
+    public function save_metabox( int $post_id, \WP_Post $post ): void {
+        if ( ! isset( $_POST['seobetter_metabox_nonce_field'] ) ) return;
+        if ( ! wp_verify_nonce( $_POST['seobetter_metabox_nonce_field'], 'seobetter_metabox_nonce' ) ) return;
+        if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) return;
+        if ( ! current_user_can( 'edit_post', $post_id ) ) return;
+
+        if ( isset( $_POST['seobetter_focus_keyword'] ) ) {
+            $keyword = sanitize_text_field( wp_unslash( $_POST['seobetter_focus_keyword'] ) );
+            update_post_meta( $post_id, '_seobetter_focus_keyword', $keyword );
+        }
+    }
+
+    /**
+     * Register the SEOBetter metabox below the post editor.
+     */
+    public function register_metabox(): void {
+        $screens = [ 'post', 'page' ];
+        foreach ( $screens as $screen ) {
+            add_meta_box(
+                'seobetter-settings',
+                'SEOBetter Settings',
+                [ $this, 'render_metabox' ],
+                $screen,
+                'normal',
+                'low'
+            );
+        }
+    }
+
+    /**
+     * Render the SEOBetter metabox with SERP preview + page analysis.
+     */
+    public function render_metabox( \WP_Post $post ): void {
+        $keyword = get_post_meta( $post->ID, '_seobetter_focus_keyword', true )
+                ?: get_post_meta( $post->ID, '_yoast_wpseo_focuskw', true )
+                ?: get_post_meta( $post->ID, 'rank_math_focus_keyword', true )
+                ?: '';
+
+        $meta_title = get_post_meta( $post->ID, '_seobetter_meta_title', true ) ?: $post->post_title;
+        $meta_desc = get_post_meta( $post->ID, '_seobetter_meta_description', true ) ?: wp_trim_words( wp_strip_all_tags( $post->post_content ), 25 );
+        $url = get_permalink( $post->ID );
+        $site_name = get_bloginfo( 'name' );
+
+        // Run GEO analysis
+        $score_data = get_post_meta( $post->ID, '_seobetter_geo_score', true );
+        $score = is_array( $score_data ) ? ( $score_data['geo_score'] ?? 0 ) : 0;
+        $grade = is_array( $score_data ) ? ( $score_data['grade'] ?? '?' ) : '?';
+        $checks = is_array( $score_data ) ? ( $score_data['checks'] ?? [] ) : [];
+        $suggestions = is_array( $score_data ) ? ( $score_data['suggestions'] ?? [] ) : [];
+        $word_count = is_array( $score_data ) ? ( $score_data['word_count'] ?? 0 ) : 0;
+
+        $score_color = $score >= 80 ? '#22c55e' : ( $score >= 60 ? '#f59e0b' : '#ef4444' );
+
+        // Check keyword placement
+        $content_text = wp_strip_all_tags( $post->post_content );
+        $first_para = implode( ' ', array_slice( explode( ' ', $content_text ), 0, 100 ) );
+        $kw_in_intro = $keyword && stripos( $first_para, $keyword ) !== false;
+        $kw_in_content = $keyword && stripos( $content_text, $keyword ) !== false;
+        $kw_in_meta = $keyword && stripos( $meta_desc, $keyword ) !== false;
+        $kw_in_url = $keyword && stripos( $url, sanitize_title( $keyword ) ) !== false;
+        $kw_len_ok = mb_strlen( $keyword ) >= 3 && mb_strlen( $keyword ) <= 50;
+        $meta_len_ok = mb_strlen( $meta_desc ) >= 120 && mb_strlen( $meta_desc ) <= 160;
+        $content_len_ok = $word_count >= 300;
+
+        // Keyword density
+        $kw_count = $keyword ? substr_count( strtolower( $content_text ), strtolower( $keyword ) ) : 0;
+        $kw_density = $word_count > 0 ? round( ( $kw_count / $word_count ) * 100, 2 ) : 0;
+        $density_ok = $kw_density >= 0.5;
+
+        // Headings with keyword
+        preg_match_all( '/<h[23][^>]*>(.*?)<\/h[23]>/is', $post->post_content, $heading_matches );
+        $total_headings = count( $heading_matches[1] );
+        $kw_headings = 0;
+        foreach ( $heading_matches[1] as $h ) {
+            if ( $keyword && stripos( wp_strip_all_tags( $h ), $keyword ) !== false ) {
+                $kw_headings++;
+            }
+        }
+        $headings_ok = $total_headings > 0 && ( $kw_headings / $total_headings ) >= 0.3;
+
+        // Internal links
+        $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+        preg_match_all( '/<a[^>]+href=["\']([^"\']+)["\']/i', $post->post_content, $link_matches );
+        $internal_count = 0;
+        foreach ( $link_matches[1] as $href ) {
+            $host = wp_parse_url( $href, PHP_URL_HOST );
+            if ( ! $host || $host === $site_host ) {
+                if ( strpos( $href, '#' ) !== 0 && strpos( $href, 'mailto:' ) !== 0 ) {
+                    $internal_count++;
+                }
+            }
+        }
+        $internal_ok = $internal_count >= 1;
+
+        // External links
+        $external_count = 0;
+        foreach ( $link_matches[1] as $href ) {
+            $host = wp_parse_url( $href, PHP_URL_HOST );
+            if ( $host && $host !== $site_host ) {
+                $external_count++;
+            }
+        }
+        $external_ok = $external_count >= 1;
+
+        // Image alt with keyword
+        preg_match_all( '/<img[^>]+alt=["\']([^"\']*)["\']/', $post->post_content, $alt_matches );
+        $alt_with_kw = 0;
+        foreach ( $alt_matches[1] as $alt ) {
+            if ( $keyword && stripos( $alt, $keyword ) !== false ) $alt_with_kw++;
+        }
+        $alt_ok = $alt_with_kw >= 1;
+
+        // Readability
+        $read_score = $checks['readability']['score'] ?? 0;
+        $read_grade = $checks['readability']['flesch_grade'] ?? 0;
+        ?>
+        <div id="seobetter-metabox" style="margin:-6px -12px -12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+            <!-- Tabs -->
+            <div style="display:flex;border-bottom:2px solid #e5e7eb;background:#f9fafb">
+                <button type="button" class="sb-meta-tab sb-meta-tab-active" data-tab="general" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid #764ba2;margin-bottom:-2px;color:#764ba2">General</button>
+                <button type="button" class="sb-meta-tab" data-tab="analysis" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Page Analysis</button>
+                <button type="button" class="sb-meta-tab" data-tab="readability" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Readability</button>
+                <div style="margin-left:auto;display:flex;align-items:center;padding-right:16px;gap:8px">
+                    <span style="font-size:13px;font-weight:700;color:<?php echo esc_attr( $score_color ); ?>"><?php echo esc_html( $score ); ?>/100</span>
+                    <span style="font-size:11px;padding:2px 8px;background:<?php echo esc_attr( $score_color ); ?>20;color:<?php echo esc_attr( $score_color ); ?>;border-radius:4px;font-weight:600"><?php echo esc_html( $grade ); ?></span>
+                </div>
+            </div>
+
+            <!-- General Tab -->
+            <div class="sb-meta-panel" data-panel="general" style="padding:20px">
+                <!-- SERP Preview -->
+                <div style="margin-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;margin-bottom:8px">SERP Preview</div>
+                    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#fff">
+                        <div style="font-size:12px;color:#202124;margin-bottom:2px"><?php echo esc_html( $site_name ); ?> | <?php echo esc_url( $url ); ?></div>
+                        <div style="font-size:18px;color:#1a0dab;margin-bottom:4px;cursor:pointer"><?php echo esc_html( $meta_title ); ?></div>
+                        <div style="font-size:13px;color:#4d5156;line-height:1.5"><?php echo esc_html( $meta_desc ); ?></div>
+                    </div>
+                </div>
+
+                <!-- Focus Keyword -->
+                <div style="margin-bottom:16px">
+                    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Focus Keyword</label>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="text" name="seobetter_focus_keyword" value="<?php echo esc_attr( $keyword ); ?>" placeholder="Enter focus keyword..." style="flex:1;height:38px;padding:0 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px" />
+                        <?php if ( $score > 0 ) : ?>
+                            <span style="font-size:12px;font-weight:600;color:<?php echo esc_attr( $score_color ); ?>;white-space:nowrap"><?php echo esc_html( $score ); ?>/100</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- GEO Score Summary -->
+                <?php if ( $score > 0 ) : ?>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+                    <div style="text-align:center;padding:8px;background:#f9fafb;border-radius:6px">
+                        <div style="font-size:18px;font-weight:700;color:<?php echo esc_attr( $score_color ); ?>"><?php echo esc_html( $score ); ?></div>
+                        <div style="font-size:11px;color:#6b7280">GEO Score</div>
+                    </div>
+                    <div style="text-align:center;padding:8px;background:#f9fafb;border-radius:6px">
+                        <div style="font-size:18px;font-weight:700;color:#1f2937"><?php echo esc_html( number_format( $word_count ) ); ?></div>
+                        <div style="font-size:11px;color:#6b7280">Words</div>
+                    </div>
+                    <div style="text-align:center;padding:8px;background:#f9fafb;border-radius:6px">
+                        <div style="font-size:18px;font-weight:700;color:<?php echo ( $checks['citations']['count'] ?? 0 ) >= 5 ? '#22c55e' : '#ef4444'; ?>"><?php echo esc_html( $checks['citations']['count'] ?? 0 ); ?></div>
+                        <div style="font-size:11px;color:#6b7280">Citations</div>
+                    </div>
+                    <div style="text-align:center;padding:8px;background:#f9fafb;border-radius:6px">
+                        <div style="font-size:18px;font-weight:700;color:<?php echo ( $checks['expert_quotes']['count'] ?? 0 ) >= 2 ? '#22c55e' : '#ef4444'; ?>"><?php echo esc_html( $checks['expert_quotes']['count'] ?? 0 ); ?></div>
+                        <div style="font-size:11px;color:#6b7280">Quotes</div>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Page Analysis Tab -->
+            <div class="sb-meta-panel" data-panel="analysis" style="padding:20px;display:none">
+                <div style="font-size:14px;font-weight:600;margin-bottom:12px">Basic SEO
+                    <?php
+                    $seo_errors = 0;
+                    if ( ! $kw_in_intro ) $seo_errors++;
+                    if ( ! $internal_ok ) $seo_errors++;
+                    if ( ! $headings_ok ) $seo_errors++;
+                    if ( ! $density_ok ) $seo_errors++;
+                    ?>
+                    <?php if ( $seo_errors > 0 ) : ?>
+                        <span style="font-size:12px;color:#f59e0b;margin-left:8px">• <?php echo $seo_errors; ?> Errors</span>
+                    <?php else : ?>
+                        <span style="font-size:12px;color:#22c55e;margin-left:8px">✓ All Good!</span>
+                    <?php endif; ?>
+                </div>
+
+                <?php
+                $seo_checks = [
+                    [ 'label' => 'Focus Keyword in content', 'ok' => $kw_in_content, 'detail' => '' ],
+                    [ 'label' => 'Focus keyword in introduction', 'ok' => $kw_in_intro, 'detail' => $kw_in_intro ? '' : 'Your Focus keyword does not appear in the first paragraph. Make sure the topic is clear immediately.' ],
+                    [ 'label' => 'Focus keyword in meta description', 'ok' => $kw_in_meta, 'detail' => '' ],
+                    [ 'label' => 'Focus Keyword in URL', 'ok' => $kw_in_url, 'detail' => '' ],
+                    [ 'label' => 'Focus keyword length', 'ok' => $kw_len_ok, 'detail' => '' ],
+                    [ 'label' => 'Meta description length', 'ok' => $meta_len_ok, 'detail' => $meta_len_ok ? '' : 'Meta description is ' . mb_strlen( $meta_desc ) . ' chars. Aim for 120-160.' ],
+                    [ 'label' => 'Content length', 'ok' => $content_len_ok, 'detail' => '' ],
+                    [ 'label' => 'Focus Keyword in Subheadings', 'ok' => $headings_ok, 'detail' => $headings_ok ? '' : 'Less than 30% of your H2 and H3 subheadings reflect the topic. Add the keyword to more headings.' ],
+                    [ 'label' => 'Focus keyword density', 'ok' => $density_ok, 'detail' => $density_ok ? '' : 'Keyword density is ' . $kw_density . '%. The keyword appears ' . $kw_count . ' times. Aim for more than 0.5%.' ],
+                    [ 'label' => 'Focus keyword in image alt', 'ok' => $alt_ok, 'detail' => '' ],
+                    [ 'label' => 'Internal links', 'ok' => $internal_ok, 'detail' => $internal_ok ? '' : 'No internal links found. Add internal links to your content.' ],
+                    [ 'label' => 'External links', 'ok' => $external_ok, 'detail' => '' ],
+                ];
+                foreach ( $seo_checks as $check ) :
+                    $icon_color = $check['ok'] ? '#22c55e' : '#ef4444';
+                    $icon = $check['ok'] ? '✓' : '✗';
+                ?>
+                <div style="border-bottom:1px solid #f3f4f6;padding:8px 0">
+                    <div style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                        <span style="color:<?php echo $icon_color; ?>;font-weight:700;font-size:14px"><?php echo $icon; ?></span>
+                        <span style="font-size:13px;font-weight:<?php echo $check['ok'] ? '400' : '600'; ?>"><?php echo esc_html( $check['label'] ); ?></span>
+                    </div>
+                    <?php if ( $check['detail'] ) : ?>
+                        <div style="margin-left:22px;font-size:12px;color:#6b7280;margin-top:4px"><?php echo esc_html( $check['detail'] ); ?></div>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Readability Tab -->
+            <div class="sb-meta-panel" data-panel="readability" style="padding:20px;display:none">
+                <div style="font-size:14px;font-weight:600;margin-bottom:12px">Readability
+                    <?php if ( $read_score < 70 ) : ?>
+                        <span style="font-size:12px;color:#ef4444;margin-left:8px">• Needs improvement</span>
+                    <?php else : ?>
+                        <span style="font-size:12px;color:#22c55e;margin-left:8px">✓ Good</span>
+                    <?php endif; ?>
+                </div>
+
+                <div style="border-bottom:1px solid #f3f4f6;padding:8px 0">
+                    <span style="color:<?php echo $read_grade <= 10 ? '#22c55e' : '#ef4444'; ?>;font-weight:700">•</span>
+                    <span style="font-size:13px;font-weight:600">Reading Grade: <?php echo round( $read_grade, 1 ); ?></span>
+                    <div style="font-size:12px;color:#6b7280;margin-top:2px;margin-left:16px">Target: Grade 6-8. <?php echo $read_grade > 10 ? 'Simplify your language.' : 'Great readability!'; ?></div>
+                </div>
+
+                <div style="border-bottom:1px solid #f3f4f6;padding:8px 0">
+                    <span style="color:<?php echo ( $checks['island_test']['score'] ?? 0 ) >= 80 ? '#22c55e' : '#ef4444'; ?>;font-weight:700">•</span>
+                    <span style="font-size:13px;font-weight:600">Island Test (no pronoun starts)</span>
+                    <div style="font-size:12px;color:#6b7280;margin-top:2px;margin-left:16px"><?php echo esc_html( $checks['island_test']['detail'] ?? 'N/A' ); ?></div>
+                </div>
+
+                <div style="border-bottom:1px solid #f3f4f6;padding:8px 0">
+                    <span style="color:<?php echo ( $checks['section_openings']['score'] ?? 0 ) >= 70 ? '#22c55e' : '#ef4444'; ?>;font-weight:700">•</span>
+                    <span style="font-size:13px;font-weight:600">Section Openings (40-60 words)</span>
+                    <div style="font-size:12px;color:#6b7280;margin-top:2px;margin-left:16px"><?php echo esc_html( $checks['section_openings']['detail'] ?? 'N/A' ); ?></div>
+                </div>
+
+                <?php if ( ! empty( $suggestions ) ) : ?>
+                <div style="margin-top:12px;font-size:13px;font-weight:600;margin-bottom:8px">Suggestions</div>
+                <?php foreach ( array_slice( $suggestions, 0, 5 ) as $s ) : ?>
+                <div style="padding:8px 12px;margin-bottom:4px;background:<?php echo $s['priority'] === 'high' ? '#fef2f2' : '#fffbeb'; ?>;border-left:3px solid <?php echo $s['priority'] === 'high' ? '#ef4444' : '#f59e0b'; ?>;border-radius:0 4px 4px 0;font-size:12px">
+                    <strong>[<?php echo esc_html( ucfirst( $s['type'] ?? 'issue' ) ); ?>]</strong> <?php echo esc_html( $s['message'] ); ?>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Tab switching JS -->
+        <script>
+        (function() {
+            var tabs = document.querySelectorAll('.sb-meta-tab');
+            var panels = document.querySelectorAll('.sb-meta-panel');
+            tabs.forEach(function(tab) {
+                tab.addEventListener('click', function() {
+                    var target = this.getAttribute('data-tab');
+                    tabs.forEach(function(t) {
+                        t.style.borderBottom = 'none';
+                        t.style.color = '#6b7280';
+                        t.classList.remove('sb-meta-tab-active');
+                    });
+                    this.style.borderBottom = '2px solid #764ba2';
+                    this.style.color = '#764ba2';
+                    this.classList.add('sb-meta-tab-active');
+                    panels.forEach(function(p) {
+                        p.style.display = p.getAttribute('data-panel') === target ? 'block' : 'none';
+                    });
+                });
+            });
+        })();
+        </script>
+
+        <?php
+        // Save focus keyword on post save
+        wp_nonce_field( 'seobetter_metabox_nonce', 'seobetter_metabox_nonce_field' );
     }
 
     public function register_llms_txt_rewrite(): void {
