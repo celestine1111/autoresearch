@@ -1413,11 +1413,6 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     }
                 }).catch(function() {
                     self.disabled = false;
-                    self.textContent = 'Failed';
-                        self.style.background = '#ef4444';
-                    }
-                }).catch(function() {
-                    self.disabled = false;
                     self.textContent = 'Error';
                     self.style.background = '#ef4444';
                 });
