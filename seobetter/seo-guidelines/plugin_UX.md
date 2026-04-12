@@ -267,31 +267,51 @@ After ANY code change to content-generator.php or seobetter.php, verify ALL of t
 - [ ] Text is readable (dark on white) on published page
 - [ ] All !important colors survive theme CSS
 
-### Pre-Publish Panel (editor-sidebar.js)
-- [ ] Panel appears when clicking "Publish" in Gutenberg editor
-- [ ] Shows GEO Score with value and grade
-- [ ] Shows Citations count (green if >=5, red if not)
-- [ ] Shows Expert Quotes count (green if >=2, red if not)
-- [ ] Shows Readability grade
-- [ ] Shows Schema types (Article, FAQPage, etc.)
-- [ ] Shows high-priority issues (if any)
-- [ ] Shows Pro upsell banner when score < 80 and not Pro
-- [ ] "Upgrade to Pro" button links to settings page
-
 ### Post Sidebar Panel — PluginDocumentSettingPanel (editor-sidebar.js)
-- [ ] "SEOBetter: XX/100 (Grade)" shows in Post tab of right sidebar
-- [ ] 5 check items: GEO Score, Words, Citations, Quotes, Readability
-- [ ] Green checkmark / red X per item
-- [ ] Pro upsell link when score < 80
-- [ ] Auto-loads on post open
+All editor integration is in a single PluginDocumentSettingPanel (PluginSidebar crashes on WP Engine / WP 6.6+).
 
-### Full Sidebar Panel — PluginSidebar (editor-sidebar.js)
-- [ ] SEOBetter GEO icon in sidebar toolbar
-- [ ] GEO Score ring gauge (SVG circle)
-- [ ] Word count display
-- [ ] GEO Checks panel (11 bars, collapsible)
-- [ ] Suggestions panel (collapsible)
-- [ ] Re-analyze button
+- [ ] Title: "SEOBetter: XX/100" in Post tab of right sidebar
+- [ ] `initialOpen: true` — panel visible by default on post load
+- [ ] **Score Ring** — animated SVG circle (100px), score number, grade, rating text:
+  - 90+: "Excellent! 🔥🔥🔥"
+  - 80+: "Great! 🔥🔥"
+  - 70+: "Good 🔥"
+  - 60+: "Needs work"
+  - <60: "Improve this"
+- [ ] **7 stat rows** with ✓/✗ pass/fail indicators:
+  - 📝 Words (pass: ≥800)
+  - ⏱ Read Time (always pass)
+  - 📖 Readability Grade (pass: grade 6-10)
+  - 🔗 Citations count/5 (pass: ≥5)
+  - 💬 Quotes count/2 (pass: ≥2)
+  - 📋 Tables count (pass: ≥1)
+  - 🕐 Freshness Yes/No (pass: freshness signal present)
+- [ ] **Headline Analyzer** (collapsible, click to expand/collapse):
+  - Headline Type: List / How-to / Question / Comparison / Review / General
+  - Character Count with Good/Too short/May truncate feedback
+  - Word Count with 6-12 word target
+  - Common Words % (goal: 20-30%)
+  - Power Words % with found words listed (goal: at least one)
+  - Emotional Words % with found words listed (goal: 10-15%)
+  - Sentiment: Positive 😊 / Neutral 😐 / Negative 😟
+  - Beginning Words (first 3) + Ending Words (last 3) as pills
+- [ ] **Re-analyze button** — clears cache and re-runs analysis
+- [ ] Auto-loads analysis on post open
+
+### Toolbar Score Badge (DOM injection, not React)
+- [ ] Colored pill badge in editor header settings area (next to Save button)
+- [ ] Shows 📊 icon + score/100
+- [ ] Green (80+), amber (60+), red (<60) border + text color
+- [ ] Injected via DOM manipulation (outside React error boundary — cannot crash plugin)
+- [ ] Retries injection at 0ms, 1000ms, 3000ms (editor renders asynchronously)
+
+### Architecture Notes (editor-sidebar.js)
+- **Single registerPlugin call** — only `PluginDocumentSettingPanel` used
+- **No PluginSidebar** — crashes on WP 6.6+ / WP Engine due to component resolution issues
+- **No PluginPrePublishPanel** — same crash issue
+- **Toolbar badge uses DOM injection** — not React, so it can't crash the plugin
+- **Shared analysis cache** — `cachedData` variable avoids duplicate API calls
+- **All ES5** — no arrow functions, no optional chaining, no destructuring
 
 ---
 

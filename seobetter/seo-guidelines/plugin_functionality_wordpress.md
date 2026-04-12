@@ -462,35 +462,68 @@ Appears in the Gutenberg publish confirmation screen (when user clicks "Publish"
 | Readability | Grade 6-8 | Grade 10+ |
 | Schema | Type detected | Missing |
 
-Also shows:
-- High-priority suggestions (up to 3)
-- Pro upsell banner when score < 80 (gradient background, "Upgrade to Pro" button)
+**Note:** PluginPrePublishPanel was removed in v1.4.1 — crashes on WP Engine / WP 6.6+.
 
-**File:** `assets/js/editor-sidebar.js` — `SEOBetterPrePublish` component
+### 11.2 Post Sidebar Panel (PluginDocumentSettingPanel) — PRIMARY
+
+**This is the main editor integration.** All editor features are in a single PluginDocumentSettingPanel.
+PluginSidebar and PluginPrePublishPanel were removed due to crash issues on WP 6.6+ / WP Engine.
+
+Shows in the Post tab of the right sidebar with `initialOpen: true`:
+
+**Score Ring (SVG, animated):**
+- 100px animated circle with score number and /100 text
+- Color: green (80+), amber (60+), red (<60)
+- Rating text: Excellent! 🔥🔥🔥 / Great! 🔥🔥 / Good 🔥 / Needs work / Improve this
+
+**7 Stat Rows (✓/✗ indicators):**
+| Stat | Pass Threshold | Display |
+|---|---|---|
+| 📝 Words | ≥800 | Formatted number |
+| ⏱ Read Time | always pass | X min (words/200) |
+| 📖 Readability | grade 6-10 | Grade number |
+| 🔗 Citations | ≥5 | count/5 |
+| 💬 Quotes | ≥2 | count/2 |
+| 📋 Tables | ≥1 | count |
+| 🕐 Freshness | score ≥100 | Yes/No |
+
+**Headline Analyzer (collapsible):**
+- Toggle with 📰 icon, ▲/▼ arrows
+- Type detection: List, How-to, Question, Comparison, Review, General
+- Character Count: pass 45-65 chars
+- Word Count: pass 6-12 words
+- Common Words %: goal 20-30%
+- Power Words %: goal ≥1, shows found words
+- Emotional Words %: goal ≥5%
+- Sentiment: Positive 😊 / Neutral 😐 / Negative 😟
+- Beginning & Ending Words: first 3 + last 3 as gray pills
+
+**Re-analyze button:** Clears cached data and re-runs `/seobetter/v1/analyze/{post_id}`
+
+**File:** `assets/js/editor-sidebar.js` — `SEOBetterPanel` function
 **Data source:** `GET /seobetter/v1/analyze/{post_id}` REST endpoint
 **Pro detection:** `window.seobetterData.isPro` via `wp_localize_script`
 
-### 11.2 Post Sidebar Panel (PluginDocumentSettingPanel)
+### 11.3 Toolbar Score Badge (DOM injection)
 
-Shows in the Post tab of the right sidebar (same location as AIOSEO's score):
-- Title: "SEOBetter: XX/100 (Grade)"
-- 5 items: GEO Score, Words, Citations count, Quotes count, Readability grade
-- Green/red indicators per item
-- Pro upsell link when score < 80
-- Auto-loads when post is opened
+Colored pill badge injected into `.edit-post-header__settings` (next to Save button):
+- 📊 icon + score/100 text
+- Color matches score (green/amber/red)
+- Injected via `document.createElement` (not React) — cannot crash the plugin
+- Retries at 0ms, 1000ms, 3000ms to account for async editor rendering
+- Updates when analysis data changes
 
-**File:** `assets/js/editor-sidebar.js` — `SEOBetterDocPanel` component
+**File:** `assets/js/editor-sidebar.js` — `injectToolbarBadge()` function
 
-### 11.3 Full Sidebar Panel (PluginSidebar)
+### 11.4 Architecture Notes
 
-Full GEO analysis available via the SEOBetter chart icon in the Gutenberg sidebar toolbar:
-- GEO Score ring gauge (SVG)
-- Word count
-- 11 individual check scores with progress bars
-- Suggestions list with priority coloring
-- Re-analyze button
-
-**File:** `assets/js/editor-sidebar.js` — `SEOBetterSidebar` component
+- **Single `registerPlugin('seobetter', ...)` call** — only one plugin registration
+- **No PluginSidebar** — removed in v1.4.1, crashes on WP 6.6+ / WP Engine
+- **No PluginPrePublishPanel** — removed in v1.4.1, same crash issue
+- **All ES5 syntax** — no arrow functions, no optional chaining (?.), no const/let destructuring
+- **Component resolution:** `wp.editor.PluginDocumentSettingPanel || wp.editPost.PluginDocumentSettingPanel`
+- **Shared cache:** `cachedData` variable prevents duplicate API calls across re-renders
+- **Error isolation:** toolbar badge is DOM-injected (outside React error boundary)
 
 ---
 
