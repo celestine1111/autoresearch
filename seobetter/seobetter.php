@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.6
+ * Version: 1.5.7
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.6' );
+define( 'SEOBETTER_VERSION', '1.5.7' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1258,6 +1258,12 @@ final class SEOBetter {
      *    which used to fall back to "homepage" links that were also dead.
      */
     private function validate_outbound_links( string $markdown ): string {
+        // ===== Pass 0: Sanitize any References / Sources section =====
+        // The AI often generates a numbered References section with hallucinated
+        // URLs. We strip individual reference lines whose links don't pass the
+        // whitelist. If the whole section ends up empty, we remove the heading too.
+        $markdown = $this->sanitize_references_section( $markdown );
+
         // ===== Pass 1: Strip malformed markdown links =====
         // Matches [text](anything-not-starting-with-http) — catches cases where AI puts
         // literal text in the URL slot, or paths like /wp-admin/... or /blog/whatever
@@ -1341,6 +1347,124 @@ final class SEOBetter {
         );
 
         return $markdown;
+    }
+
+    /**
+     * Remove hallucinated entries from any References / Sources section.
+     *
+     * For each line inside a References/Sources section, we check whether it
+     * contains a markdown link whose URL passes the same whitelist rules used
+     * for inline links (direct article, deep path, trusted domain, not an API,
+     * anchor text not an API name). Lines that fail are dropped. Plain-text
+     * citation lines (no markdown link at all) are also dropped — a References
+     * section with no verifiable URLs has no value.
+     *
+     * If the section ends up empty, the heading itself is removed.
+     */
+    private function sanitize_references_section( string $markdown ): string {
+        // Find the References / Sources / Further Reading / Bibliography heading
+        if ( ! preg_match( '/\n(##+)\s*(references|sources|further reading|bibliography|citations)\b[^\n]*\n/i', $markdown, $heading_match, PREG_OFFSET_CAPTURE ) ) {
+            return $markdown;
+        }
+
+        $heading_start = $heading_match[0][1];
+        $heading_end   = $heading_start + strlen( $heading_match[0][0] );
+        $heading_level = strlen( $heading_match[1][0] );
+
+        // Find where the section ends: either next same-or-higher heading, or end of document
+        $after_heading = substr( $markdown, $heading_end );
+        $next_heading_offset = null;
+        if ( preg_match( '/\n(#{1,' . $heading_level . '})\s/', "\n" . $after_heading, $next_m, PREG_OFFSET_CAPTURE ) ) {
+            // Offset is relative to "\n" + $after_heading, so subtract 1
+            $next_heading_offset = $next_m[0][1] - 1;
+        }
+
+        $section_body = $next_heading_offset !== null
+            ? substr( $after_heading, 0, $next_heading_offset )
+            : $after_heading;
+
+        $rest = $next_heading_offset !== null
+            ? substr( $after_heading, $next_heading_offset )
+            : '';
+
+        // Process each line of the section body
+        $whitelist = $this->get_trusted_domain_whitelist();
+        $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+
+        $lines = explode( "\n", $section_body );
+        $kept_lines = [];
+        $kept_any_reference = false;
+
+        foreach ( $lines as $line ) {
+            $trimmed = trim( $line );
+
+            // Blank lines are passthrough
+            if ( $trimmed === '' ) {
+                $kept_lines[] = $line;
+                continue;
+            }
+
+            // Is this a reference list entry? (numbered, bulleted, or starts with link)
+            $is_list_item = preg_match( '/^(\d+\.|\-|\*)\s+/', $trimmed );
+
+            // Does the line contain a markdown link?
+            if ( preg_match( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $trimmed, $link_match ) ) {
+                $text = $link_match[1];
+                $url  = $link_match[2];
+                $host = wp_parse_url( $url, PHP_URL_HOST );
+                $path = trim( (string) wp_parse_url( $url, PHP_URL_PATH ), '/' );
+
+                $fail = false;
+
+                // Anchor text must not look like an API / dataset / tool name
+                if ( preg_match( '/\b(api|endpoint|dataset|sdk|webhook)\b/i', $text ) ) {
+                    $fail = true;
+                }
+                // URL must not be an API endpoint
+                if ( ! $fail && preg_match( '#/api/|/v[1-9]/|/graphql|/rest/|\.herokuapp\.com|(^|\.)api\.|-api\.#i', $url ) ) {
+                    $fail = true;
+                }
+                // URL must be on trusted whitelist (or internal)
+                if ( ! $fail && $host && $host !== $site_host && ! $this->is_host_trusted( $host, $whitelist ) ) {
+                    $fail = true;
+                }
+                // URL must be a deep link (not homepage)
+                if ( ! $fail && ( $path === '' || $path === 'index.html' || $path === 'index.php' ) ) {
+                    $fail = true;
+                }
+
+                if ( $fail ) {
+                    // Drop the whole reference line
+                    continue;
+                }
+
+                // Link passes all checks — keep it
+                $kept_lines[] = $line;
+                $kept_any_reference = true;
+                continue;
+            }
+
+            // No markdown link. If this looks like a list item, drop it —
+            // a References section entry with no link has no citation value.
+            if ( $is_list_item ) {
+                continue;
+            }
+
+            // Non-list lines (intro paragraph etc.) — keep as-is
+            $kept_lines[] = $line;
+        }
+
+        $cleaned_section_body = implode( "\n", $kept_lines );
+
+        // If we kept NO actual references, remove the heading entirely
+        if ( ! $kept_any_reference ) {
+            return substr( $markdown, 0, $heading_start ) . "\n" . ltrim( $rest );
+        }
+
+        return substr( $markdown, 0, $heading_start )
+            . $heading_match[0][0]
+            . $cleaned_section_body
+            . $rest;
     }
 
     /**

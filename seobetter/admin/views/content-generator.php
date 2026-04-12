@@ -595,10 +595,11 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                     <div id="seobetter-progress-estimate" style="margin-top:8px;font-size:11px;color:var(--sb-text-muted,#888)"></div>
                 </div>
 
-                <!-- Result container for AJAX results -->
-                <div id="seobetter-async-result" style="display:none"></div>
-
             </form>
+
+            <!-- Result container for AJAX results (kept OUTSIDE the form so its
+                 Save Draft button cannot bubble a click into a form submission) -->
+            <div id="seobetter-async-result" style="display:none"></div>
         </div>
 
         <!-- ===== RIGHT: Sidebar ===== -->
@@ -1235,7 +1236,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                 var isFirst = (i === 0);
                 var border = isFirst ? 'border:2px solid '+scoreColor : 'border:1px solid #e0e0e0';
                 h += '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;'+border+';border-radius:6px;margin-bottom:6px;cursor:pointer;background:'+(isFirst?'#f0fff4':'#fff')+'">';
-                h += '<input type="radio" name="async_headline" value="'+esc(item.text)+'" '+(isFirst?'checked':'')+' style="margin:0" onchange="document.getElementById(\'async-draft-title\').value=this.value">';
+                h += '<input type="radio" name="async_headline" value="'+esc(item.text).replace(/"/g,'&quot;')+'" '+(isFirst?'checked':'')+' style="margin:0">';
                 h += '<span style="flex:1;font-size:13px">'+(isFirst?'<strong>':'') + esc(item.text) + (isFirst?'</strong>':'')+'</span>';
                 h += '<span style="font-size:11px;font-weight:600;color:'+scoreColor+'">'+item.score+'/100</span>';
                 h += '<span style="font-size:11px;color:#888">'+item.len+' chars</span>';
@@ -1281,15 +1282,18 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         resultEl.style.display = 'block';
         resultEl.scrollIntoView({ behavior:'smooth', block:'start' });
 
-        // Wire up the save button
-        document.getElementById('seobetter-save-draft-btn').addEventListener('click', function() {
+        // Wire up the save button — use preventDefault to stop form submit even though
+        // the button is type="button" (belt-and-braces; some browsers still bubble)
+        document.getElementById('seobetter-save-draft-btn').addEventListener('click', function(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            if (e && e.stopPropagation) e.stopPropagation();
             var btn = this;
             var statusEl = document.getElementById('seobetter-save-status');
             var draft = window._seobetterDraft;
 
             if (!draft || (!draft.markdown && !draft.content)) {
                 alert('Error: No content to save. Please regenerate.');
-                return;
+                return false;
             }
 
             btn.disabled = true;
