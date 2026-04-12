@@ -817,6 +817,59 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
 var CLOUD = '<?php echo esc_js( $cloud_url ); ?>';
 var SITE  = '<?php echo esc_js( $home ); ?>';
 
+// ===== Topic suggester (defined FIRST so nothing below can prevent it loading) =====
+function escHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+window.sbSuggestTopics = function(btn) {
+    var nicheEl = document.getElementById('sb-niche-input');
+    var niche = nicheEl ? nicheEl.value.trim() : '';
+    if(!niche){alert('Enter your niche.');return;}
+    var st=document.getElementById('sb-topics-status');
+    btn.disabled=true; if(st) st.textContent='Researching real search demand...';
+    fetch(CLOUD + '/api/topic-research', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ niche: niche, site_url: SITE })
+    }).then(function(r){return r.json();}).then(function(d) {
+        btn.disabled=false;
+        if (d && d.success && d.topics && d.topics.length) {
+            var genUrl='<?php echo esc_js( admin_url('admin.php?page=seobetter-generate') ); ?>';
+            var intentColors = { 'informational':'#3b82f6','commercial':'#22c55e','transactional':'#f59e0b' };
+            var html = d.topics.map(function(t) {
+                var color = intentColors[t.intent] || '#6b7280';
+                return '<div style="padding:8px 0;border-bottom:1px solid #e5e7eb">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">' +
+                        '<div style="flex:1;min-width:0">' +
+                            '<div style="font-size:12px;font-weight:600;color:#1f2937;line-height:1.3">' + escHtml(t.topic) + '</div>' +
+                            '<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">' +
+                                '<span style="font-size:9px;padding:1px 5px;background:' + color + '20;color:' + color + ';border-radius:3px;font-weight:600;text-transform:uppercase">' + t.intent + '</span>' +
+                                '<span style="font-size:9px;padding:1px 5px;background:#f3f4f6;color:#6b7280;border-radius:3px">' + escHtml(t.source) + '</span>' +
+                                '<span style="font-size:9px;padding:1px 5px;background:#fef3c7;color:#92400e;border-radius:3px">' + Math.round(t.score) + '</span>' +
+                            '</div>' +
+                            '<div style="font-size:10px;color:#9ca3af;margin-top:2px">' + escHtml(t.reason) + '</div>' +
+                        '</div>' +
+                        '<a href="' + genUrl + '&keyword=' + encodeURIComponent(t.topic) + '" style="font-size:11px;white-space:nowrap;flex-shrink:0">Use &rarr;</a>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+            var summary = '<div style="padding:6px 8px;background:#eef2ff;border-radius:4px;font-size:10px;color:#4338ca;margin-bottom:6px">' +
+                d.topics.length + ' topics from real search data: ' +
+                d.sources.google_suggest + ' Google Suggest, ' +
+                d.sources.reddit + ' Reddit, ' +
+                d.sources.wikipedia + ' Wikipedia, ' +
+                d.sources.datamuse + ' Datamuse' +
+            '</div>';
+            var listEl = document.getElementById('sb-topics-list');
+            if (listEl) { listEl.innerHTML = summary + html; listEl.style.display = 'block'; }
+            if (st) st.textContent = d.topics.length + ' real-data topics';
+        } else {
+            if (st) st.textContent = (d && d.error) || 'No topics found. Try a different niche.';
+        }
+    }).catch(function(e) { btn.disabled=false; if(st) st.textContent='Error: ' + e.message; });
+};
+
 // Content type auto-adjust (tone + word count)
 function sbContentTypeChanged(type) {
     var toneEl = document.querySelector('[name="tone"]');
@@ -852,7 +905,8 @@ function sbContentTypeChanged(type) {
 }
 
 // Auto-suggest keywords
-document.getElementById('seobetter-auto-keywords').addEventListener('click', function() {
+var sbAutoBtn = document.getElementById('seobetter-auto-keywords');
+if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
     var kw = document.getElementById('primary_keyword').value.trim();
     if (!kw) { alert('Enter a keyword first.'); return; }
     var btn = this, st = document.getElementById('seobetter-auto-status');
@@ -897,65 +951,6 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
     }).catch(e => { btn.disabled=false; st.textContent='Error'; });
 });
 <?php endif; ?>
-
-// Topic suggester — defined as a global so the inline onclick on the button
-// always finds it, even if an earlier script block on the page errors out.
-window.sbSuggestTopics = function(btn) {
-    var niche=document.getElementById('sb-niche-input').value.trim();
-    if(!niche){alert('Enter your niche.');return;}
-    var st=document.getElementById('sb-topics-status');
-    btn.disabled=true; st.textContent='Researching real search demand...';
-    // Use new topic-research endpoint (Google Suggest + Reddit + Wikipedia + Datamuse)
-    fetch(CLOUD + '/api/topic-research', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ niche: niche, site_url: SITE })
-    }).then(function(r){return r.json();}).then(function(d) {
-        btn.disabled=false;
-        if (d.success && d.topics && d.topics.length) {
-            var genUrl='<?php echo esc_js( admin_url('admin.php?page=seobetter-generate') ); ?>';
-            var intentColors = {
-                'informational': '#3b82f6',
-                'commercial': '#22c55e',
-                'transactional': '#f59e0b'
-            };
-            var html = d.topics.map(function(t) {
-                var color = intentColors[t.intent] || '#6b7280';
-                return '<div style="padding:8px 0;border-bottom:1px solid var(--sb-border)">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">' +
-                        '<div style="flex:1;min-width:0">' +
-                            '<div style="font-size:12px;font-weight:600;color:#1f2937;line-height:1.3">' + escHtml(t.topic) + '</div>' +
-                            '<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">' +
-                                '<span style="font-size:9px;padding:1px 5px;background:' + color + '20;color:' + color + ';border-radius:3px;font-weight:600;text-transform:uppercase">' + t.intent + '</span>' +
-                                '<span style="font-size:9px;padding:1px 5px;background:#f3f4f6;color:#6b7280;border-radius:3px">' + escHtml(t.source) + '</span>' +
-                                '<span style="font-size:9px;padding:1px 5px;background:#fef3c7;color:#92400e;border-radius:3px">' + Math.round(t.score) + '</span>' +
-                            '</div>' +
-                            '<div style="font-size:10px;color:#9ca3af;margin-top:2px">' + escHtml(t.reason) + '</div>' +
-                        '</div>' +
-                        '<a href="' + genUrl + '&keyword=' + encodeURIComponent(t.topic) + '" style="font-size:11px;white-space:nowrap;flex-shrink:0">Use →</a>' +
-                    '</div>' +
-                '</div>';
-            }).join('');
-            var summary = '<div style="padding:6px 8px;background:#eef2ff;border-radius:4px;font-size:10px;color:#4338ca;margin-bottom:6px">' +
-                d.topics.length + ' topics from real search data: ' +
-                d.sources.google_suggest + ' Google Suggest, ' +
-                d.sources.reddit + ' Reddit, ' +
-                d.sources.wikipedia + ' Wikipedia, ' +
-                d.sources.datamuse + ' Datamuse' +
-            '</div>';
-            document.getElementById('sb-topics-list').innerHTML = summary + html;
-            document.getElementById('sb-topics-list').style.display = 'block';
-            st.textContent = d.topics.length + ' real-data topics';
-        } else {
-            st.textContent = d.error || 'No topics found. Try a different niche.';
-        }
-    }).catch(function(e) { btn.disabled=false; st.textContent='Error: ' + e.message; });
-};
-
-function escHtml(s) {
-    var d = document.createElement('div');
-    d.textContent = s || '';
-    return d.innerHTML;
-}
 
 // ===== ASYNC ARTICLE GENERATION =====
 (function() {
