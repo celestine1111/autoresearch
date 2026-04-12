@@ -7,50 +7,37 @@
 
 ---
 
-## The Rule (in one sentence)
+## 1. The rule in one sentence
 
-**The only legitimate outbound link is one that points to a real, keyword-relevant article page on the web, where "real" is proved by fetching the page and verifying the destination content actually discusses the keyword, and where "keyword-relevant" is proved by the URL coming from a pre-generation web search for that specific keyword — not invented by the AI.**
+**The only hyperlinks that reach a published article are URLs that were retrieved from a real keyword-targeted web search before the AI started writing, verified to contain keyword-relevant content, and cited by the AI with anchor text that matches the destination page.**
 
-This means the allowed set of links is **discovered per-article at generation time**, not fixed in a static whitelist. Any domain is citable if the research pipeline surfaced a real article about the keyword on that domain, and the destination page verifies.
-
-Plain-text citations ("According to a 2026 RSPCA report") are ALWAYS acceptable and count equally toward GEO visibility scoring.
+Plain-text attributions ("According to a 2026 RSPCA report") are always acceptable and count equally toward GEO visibility. The safe default for any claim is a plain-text attribution, not a hyperlink.
 
 ---
 
-## Why this policy exists
+## 2. Why this policy exists
 
-AI models hallucinate URLs constantly. Real examples from Test 1 (`how to choose a calming pet bed`):
+AI models hallucinate URLs constantly. Real examples produced by earlier versions of this plugin:
 
-- `https://dog-facts-api.herokuapp.com/api/v1/resources/dogs?number=1` — dead Heroku app
-- `https://dog-api.kinduff.com/api/facts` — developer API endpoint, not a citable source
-- `https://mindiampets.com.au/wp-admin/Dog%20Facts%20API` — AI put literal text in the URL slot of a markdown link (`[Dog Facts API](Dog Facts API)`), WordPress resolved the "URL" as a relative admin path
-- `https://www.rspca.org.au/` — bare homepage used as a citation for a specific statistic (not a direct source)
+- `https://dog-facts-api.herokuapp.com/api/v1/resources/dogs?number=1` — dead Heroku app, API endpoint
+- `https://dog-api.kinduff.com/api/facts` — developer API, never a citable source
+- `https://mindiampets.com.au/wp-admin/Dog%20Facts%20API` — AI put literal text in the URL slot of a markdown link, WordPress resolved the "URL" as a relative admin path
+- `https://www.rspca.org.au/` — bare homepage cited as the source for a specific statistic
+- `[Dog Facts API](...)` — API/dataset name used as anchor text
 
-Every one of these makes the article look unprofessional, hurts E-E-A-T, wastes the reader's click, and breaks AI citation crawlers. The fix is to be **radically strict** — when in doubt, no link.
+Every one of these makes the article look unprofessional, hurts E-E-A-T, wastes the reader's click, and breaks AI citation crawlers. A hallucinated link is worse than no link at all. The policy is deliberately strict: **when in doubt, no link**.
 
 ---
 
-## Research foundation
+## 3. Research foundation
 
-The architecture is grounded in three recent papers that each address hallucination in LLM-generated content from a different angle. Together they define the "retrieve → verify → filter" loop this plugin implements.
+The architecture is grounded in three recent papers. Together they define the "retrieve → ground → verify → filter" loop this plugin implements.
 
-### Paper 1 — RLFKV: atomic knowledge units
+### Paper 1 — Joshi (2025): RAG is the #1 mitigation lever
 
-> **Yin, T., Hu, H., Fan, Y., Chen, X., Wu, X., Deng, K., Zhang, K., Wang, F.** (2026). *Mitigating Hallucination in Financial Retrieval-Augmented Generation via Fine-Grained Knowledge Verification*. arXiv:2602.05723. Ant Group.
+> Joshi, S. (2025). *Comprehensive Review of AI Hallucinations: Impacts and Mitigation Strategies for Financial and Business Applications*. International Journal of Computer Applications Technology and Research, 14(06), 38–50. DOI:10.7753/IJCATR1406.1003.
 
-**Core insight:** Decompose every model output into minimal factual assertions — atomic knowledge units — and verify each one independently against the retrieved source documents. Units the source doesn't support are hallucinations.
-
-Their quadruple structure `(entity, metric, value, timestamp)` captures financial claims. For citations, we use a simpler analog: `(anchor text, destination URL)`. The anchor text is the "claim"; the destination is the "source document". The verification step is the same — does the source actually contain content supporting the claim?
-
-**Result in paper:** 90.2 → 93.3 faithfulness on FDD-ANT (Qwen3-8B), +3.1 points, stable optimization.
-
-**How we use it:** Pass 3 of the validator. See Layer 2.
-
-### Paper 2 — Comprehensive review of AI hallucinations
-
-> **Joshi, S.** (2025). *Comprehensive Review of AI Hallucinations: Impacts and Mitigation Strategies for Financial and Business Applications*. International Journal of Computer Applications Technology and Research, 14(06), 38-50. DOI:10.7753/IJCATR1406.1003.
-
-A systematic review of 63+ sources on hallucination mitigation. Key empirical findings from the paper's Table 7 (Empirical Hallucination Rates by Approach):
+Systematic review of 63+ sources. Key empirical finding (Table 7, Empirical Hallucination Rates by Approach):
 
 | Mitigation strategy | Error reduction |
 |---|---|
@@ -59,285 +46,338 @@ A systematic review of 63+ sources on hallucination mitigation. Key empirical fi
 | Guardian agents | 72% |
 | Temporal anchoring | 41% |
 
-**Core insight for us:** The paper's single most important conclusion is that **Retrieval-Augmented Generation with real-time data grounding is the #1 proven mitigation** (42-58% reduction). Citations shouldn't be invented by the model — they should be retrieved from verified sources and then passed to the model as bounded context.
-
-The paper also documents "Factual Hallucinations (fake citations)" as the #1 hallucination category, and notes that legal AI systems hallucinate citations in 16.7% of queries. This is precisely the problem we're solving.
-
 **Quote:** *"RAG systems combine LLMs with external knowledge retrieval, significantly reducing hallucinations by grounding responses in verified sources."* (Section 2.7.1)
 
-**How we use it:** The research-pool architecture (below). Instead of letting the AI invent URLs, we pre-fetch real keyword-relevant URLs from the research pipeline and inject them as a bounded "AVAILABLE CITATIONS" list in the prompt. The AI can only cite URLs that were actually retrieved.
+**Application here:** Citations shouldn't be invented by the model and filtered afterwards. They should be **retrieved first** from real sources and injected into the model's context as a bounded pool of allowed URLs. The model can only cite URLs that were actually retrieved. This is the core of the Research Pool architecture.
 
-### Paper 3 — Agentic multi-layer hallucination mitigation
+### Paper 2 — Gosmar & Dahl (2025): measurable FGR metric
 
-> **Gosmar, D., Dahl, D. A.** (2025). *Hallucination Mitigation using Agentic AI Natural Language-Based Frameworks*. arXiv:2501.13946. XCALLY / OVON Initiative.
+> Gosmar, D., Dahl, D. A. (2025). *Hallucination Mitigation using Agentic AI Natural Language-Based Frameworks*. arXiv:2501.13946.
 
-**Core insight:** A multi-agent pipeline where each agent reviews and refines the previous agent's output can reduce hallucination metrics by 2,800% across 310 test prompts. The paper proposes four measurable metrics:
+Multi-agent pipeline achieving 2,800% hallucination-score improvement. Defines four measurable quality metrics:
 
-| Metric | What it measures | Our mapping |
+| Metric | Meaning | How we use it |
 |---|---|---|
-| **FCD** (Factual Claim Density) | Claims per 100 words | How many citations the article contains |
-| **FGR** (Factual Grounding References) | Links to real-world evidence | How many citations point to a verified pool URL |
-| **FDF** (Fictional Disclaimer Frequency) | Explicit uncertainty markers | Plain-text "according to..." attributions |
-| **ECS** (Explicit Contextualization Score) | Disclaimers per 100 words | "As of 2026..." temporal anchors |
+| **FCD** Factual Claim Density | Factual claims per 100 words | How many citations the article contains |
+| **FGR** Factual Grounding References | Links to real-world evidence | Count of pool-matched citations |
+| **FDF** Fictional Disclaimer Frequency | Explicit uncertainty markers | Plain-text attributions ("according to…") |
+| **ECS** Explicit Contextualization Score | Temporal/source disclaimers | "As of 2026…", "A recent report from…" |
 
-Their hallucination score: `THS = [FCD − (FGR + FDF + ECS)] / NA`. Lower is better. An article with many claims but few grounded references scores high (bad). An article with many claims AND matching grounded references OR temporal/source disclaimers scores low (good).
+Their Total Hallucination Score: `THS = [FCD − (FGR + FDF + ECS)] / NA`. Lower is better. An article with many claims but few grounded references scores badly. An article with claims matched to grounded references OR plain-text disclaimers scores well.
 
-**How we use it:** Our validator enforces that every outputted citation must resolve to a pool URL (maximizes FGR), while the prompt encourages plain-text attributions (maximizes FDF) for any claim that can't be grounded. The Pass 3 verifier is the "second-level reviewer" agent in their terminology.
+**Application here:** The validator maximizes FGR (every citation must resolve to a pool URL) while the prompt maximizes FDF (encourages plain-text attributions for any claim that isn't in the pool). The AI is told explicitly: *"3-6 pool citations plus plain-text attributions is a PASS. 5 hyperlinks to homepages or APIs is a FAIL."*
+
+### Paper 3 — Yin et al. (2026): atomic knowledge unit verification
+
+> Yin, T., Hu, H., Fan, Y., Chen, X., Wu, X., Deng, K., Zhang, K., Wang, F. (2026). *Mitigating Hallucination in Financial Retrieval-Augmented Generation via Fine-Grained Knowledge Verification (RLFKV)*. arXiv:2602.05723. Ant Group.
+
+Decompose every LLM output into atomic knowledge units — minimal self-contained factual assertions — and verify each one independently against the retrieved source documents. Their quadruple structure `(entity, metric, value, timestamp)` captures financial claims; any missing element invalidates the assertion.
+
+**Application here:** Each citation is treated as an atomic unit of the form `(anchor text, destination URL)`. The anchor text is the claim; the destination is the source document. For each surviving citation, the plugin fetches the destination and verifies that the anchor text's content words actually appear in the page content. Mismatches are stripped. This catches the failure mode where a URL is real and on-topic at the domain level but the specific page doesn't support the specific claim.
 
 ---
 
-## Synthesis: Research Pool grounding
+## 4. Architecture: Research Pool grounding
 
-Combining the three papers produces this architecture for our specific problem (citation hallucination in WordPress article generation):
+The system is a **retrieve → ground → verify → filter → build** pipeline. Each stage runs in a specific phase of the article lifecycle.
 
-**Step 1 — Retrieve:** Before generation, run a real keyword-targeted web search (not a topic-adjacent API query) and collect 10-30 candidate article URLs that actually discuss the keyword. These become the **Citation Pool** for this article.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  PHASE 1 — BEFORE AI GENERATION (done once per article)         │
+│                                                                 │
+│  Keyword → /api/research (DDG + Brave + Wikipedia)              │
+│          → Citation_Pool::build()                               │
+│              ↓                                                  │
+│          [hygiene filter] [live check] [content verify]         │
+│              ↓                                                  │
+│          Citation Pool: up to 12 verified keyword-relevant URLs │
+│              ↓                                                  │
+│  Inject into every section prompt as AVAILABLE CITATIONS        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  PHASE 2 — DURING AI GENERATION (every section sees the pool)   │
+│                                                                 │
+│  AI writes sections. Closed-menu rule: any hyperlink must be a  │
+│  verbatim URL from the pool. AI is told NOT to write References │
+│  (plugin builds it later).                                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  PHASE 3 — AT SAVE TIME (validate_outbound_links + References)  │
+│                                                                 │
+│  Pass 0: sanitize any References section the AI wrote anyway    │
+│  Pass 1: strip malformed [text](not-a-url) markdown             │
+│  Pass 2: filter inline links — pool membership → whitelist      │
+│          fallback → hard-fail rules                             │
+│  Pass 3: RLFKV fine-grained verification — fetch destination,   │
+│          verify anchor text words appear in page content        │
+│                                                                 │
+│  Then: append_references_section() walks the cleaned body,     │
+│  collects pool URLs the body cited, builds a numbered ##       │
+│  References section from pool metadata titles.                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-**Step 2 — Filter:** Apply static hygiene rules to the pool (no APIs, no homepages, no malformed URLs, no API-name anchor text). Drop everything that fails.
+### Why this is better than a static whitelist
 
-**Step 3 — Verify:** For each surviving pool URL, fetch the destination page and confirm keyword content overlap (Pass 3 atomic verification from RLFKV). URLs that fail content verification are dropped from the pool.
+The plugin pulls data from 100+ free research APIs (Reddit, Hacker News, Wikipedia, NASA, USGS, CoinGecko, openFDA, Nager.Date, and many more). A static allow-list of ~40 domains could never cover every legitimate publisher the research pipeline might surface.
 
-**Step 4 — Ground the AI:** Inject the verified pool into the system prompt as `AVAILABLE CITATIONS` — the AI may ONLY output link URLs from this list. Any other URL it tries to output will be stripped.
-
-**Step 5 — Post-generate validation:** Final pass through the validator. Links matching a pool URL → kept. Links on the static whitelist (fallback) → content-verified and kept if passing. Everything else → stripped, anchor text preserved.
-
-**Step 6 — Build References automatically:** The AI does not output a References section. The plugin programmatically appends a References section at save time, composed of the pool URLs the article body actually cited. This guarantees the references match the body and can't contain hallucinations.
-
-**Why this is better than a static whitelist:**
-
-| Old (static whitelist) | New (research pool) |
+| Static whitelist (old, v1.5.5–1.5.8) | Research Pool (v1.5.9) |
 |---|---|
-| Fixed ~40 domains | Any domain, if research found a real article there |
-| Rejects `petbarn.com.au` even if article exists | Accepts `petbarn.com.au/advice/calming-dog-bed` if it's in the pool |
+| Fixed ~40 domains | Any domain — if the research pipeline found a real article there |
+| Rejects `petbarn.com.au` even if a perfect article exists | Accepts `petbarn.com.au/advice/calming-dog-bed` if it's in the pool |
 | Can't cover 100+ research APIs | Automatically adapts per keyword |
 | AI invents → plugin strips | Plugin retrieves → AI grounds in bounded pool |
-| FGR is unbounded (plugin guesses) | FGR is explicit (every cite is in the pool) |
+| FGR (grounded references) is unbounded — plugin guesses | FGR is explicit — every cite traces to a pool entry |
+| References section written by AI, then stripped | References section built programmatically from pool metadata |
 
-**Why this is better than letting the AI cite freely:**
+The static whitelist still exists as a **fallback** for obscure keywords where the pool is empty — high-authority domains like `*.gov`, `wikipedia.org`, `rspca.org.au` remain citable even without pool membership, subject to the same Pass 3 content verification.
 
-| AI free-for-all | Research pool |
+### Why this is better than letting the AI cite freely
+
+| AI free-for-all | Research Pool |
 |---|---|
-| 15-20% hallucination rate (Joshi 2025) | Pool membership + content verification → near zero |
-| No way to prove a citation is real | Every citation traced back to a retrieved document |
-| References section can be fully fabricated | References section built programmatically from pool |
+| 15–20% hallucination rate (Joshi 2025) | Pool + content verification → near zero |
+| No way to prove a citation is real | Every citation traces back to a retrieved document |
+| References section can be fully fabricated | References section built from verified pool entries |
+| FGR: unknown | FGR: every pool URL the body cited |
 
-**Trade-off:** Articles may have fewer citations than an AI left to its own devices would generate — but every remaining citation is real. Per the Joshi review, *"an article with zero fabricated citations is a pass. An article with 5 hallucinated citations is a FAIL."*
-
----
-
-## Implementation notes for Pass 3 (RLFKV adaptation)
-
-**Limitations of our adaptation:**
-
-1. **No semantic verification** — we only check keyword overlap, not whether the page actually *supports* the specific claim. A page mentioning "dog nutrition study" in passing would still pass. The RLFKV paper uses an evaluation LLM (Qwen3-32B) to do true semantic verification; we can't afford that on every save.
-2. **English stopword list only** — international articles using non-English anchor text may get false negatives. TODO: per-language stopword lists when we productionize i18n.
-3. **24-hour transient cache** — a URL verified today stays verified for 24 hours even if the destination changes. Acceptable trade-off for latency.
-4. **Latency cost** — fetching 5-10 links per article adds ~5-25 seconds worst case to save time. Mitigated by persistent cross-article caching.
-
-**What this still doesn't solve:**
-
-The RLFKV approach catches hallucinated facts by checking them against authoritative documents. Our adaptation catches misattributed citations. Neither stops the AI from *not* citing a claim at all — a completely fabricated statistic with no citation still slips through. That's why the prompt also requires plain-text attribution for every non-trivial claim (Gosmar & Dahl's FDF metric).
+**Trade-off:** Articles may have fewer citations than an AI left to its own devices would generate — but every remaining citation is real. Per Joshi 2025, *"an article with zero fabricated citations is a pass. An article with 5 hallucinated citations is a fail."*
 
 ---
 
-## Enforcement layers (defense in depth)
+## 5. Phase 1: Pool construction
 
-There are **five layers** that each independently prevent hallucinated links from reaching published articles. Any single layer failing is not enough to produce a bad link.
+**Files:**
+- `includes/Citation_Pool.php` — the pool builder
+- `includes/Trend_Researcher.php` — wraps the research API
+- `cloud-api/api/research.js` — Vercel endpoint that runs DDG, Brave, Wikipedia, Reddit, HN, and 100+ category APIs
 
-### Layer 0 — Citation Pool retrieval (NEW in v1.5.9)
+### Pool sources (keyword-targeted only)
 
-**Files:** `includes/Citation_Pool.php` + `cloud-api/api/research.js` (citation_candidates field)
+The pool ONLY draws from sources that perform a real **keyword search** — not from data APIs that return trending/random content. The distinction matters: `/api/research` returns both (a) a list of web search results for the keyword and (b) stats/facts from topic-adjacent data APIs. Only (a) goes into the pool.
 
-Before generation starts, the plugin builds a per-article **Citation Pool** of real keyword-relevant article URLs. This is the "retrieve" step of RAG — the pool is what the AI is grounded in.
+| Source | Method | Why it's in the pool |
+|---|---|---|
+| **DuckDuckGo** | HTML scrape of `html.duckduckgo.com/html/?q={keyword}` | Direct keyword search, no API key needed. ~8 URLs/query. |
+| **Brave Search** (Pro) | Brave Search API with user's key | Higher-quality web search. ~10 URLs/query. |
+| **Wikipedia OpenSearch** | `api.wikipedia.org/...opensearch` | Returns direct article URLs for keyword. Always high authority. |
+| **Reddit search** | Only when the post links out to an external article (not self-posts) | The linked article URL, not the Reddit thread |
+| **Hacker News search** | Only when the submission links out to a real article | Same as Reddit |
 
-**Pool sources (in order of authority):**
+Data APIs (NASA, CoinGecko, openFDA, Nager.Date, etc.) feed **statistics** into the prompt for grounding claims, but their URLs never enter the pool. Their data is cited in plain text only: *"According to NASA data, ..."*.
 
-1. **DuckDuckGo web search** — scraped HTML results for `{keyword}`. Returns up to 8 URLs per query. Most direct keyword-relevance signal available without an API key.
-2. **Brave Search** (Pro users) — higher quality web search results via API. Returns up to 10 URLs per query.
-3. **Wikipedia OpenSearch** — 1-2 direct Wikipedia article URLs for the keyword. Always high authority.
-4. **Reddit/HN search results** — only when the post actually links out to an external article URL (not self-posts). The linked URL, not the Reddit thread, becomes the candidate.
+### Pool filters (applied to every candidate)
 
-**Pool filters (applied to every candidate before admission):**
+Each candidate URL must pass all of the following before admission to the pool:
 
-- Must be `http(s)://` with parseable host
-- Must have a deep path (not `/`, not `index.html`)
-- Host must NOT match API patterns (`api.*`, `*-api.*`, `*.herokuapp.com`)
-- Path must NOT match API patterns (`/api/`, `/v[1-9]/`, `/graphql`, `/rest/`, `/swagger`)
-- HEAD request must return 200-399 (live check, 4s timeout)
-- Content-verify: fetch page, extract title + first 3000 chars, confirm at least one keyword content word appears (Pass 3 rule, lower threshold at this stage because we're building the pool)
+1. Parseable `http(s)://` with a real host
+2. Deep path — not `/`, not `/index.html`, not `/index.php`
+3. Host does NOT match API patterns: `api.*`, `*-api.*`, `*.herokuapp.com`
+4. Path does NOT match API patterns: `/api/`, `/v[1-9]/`, `/graphql`, `/rest/`, `/swagger`, `raw.githubusercontent.com`
+5. HEAD request returns 200–399 (4-second timeout)
+6. **Content verification:** `wp_remote_get` the URL, extract `<title>` + first 4000 chars of body, confirm at least one keyword content word (4+ chars, non-stopword) appears in the extracted text
 
-Pool entries that pass all filters are stored as: `{ url, title, source_name, verified: true, verified_at }`.
+Content verification is what catches scenarios like:
+- DDG returning `joonapp.io` (a kids game company) for "calming pet bed" because of loose keyword matching → fetches the page, finds no "calming" / "pet" / "bed" content words → rejected
+- A retailer category page that doesn't actually discuss the specific product → rejected
+- Dead domains that happen to return 200 with a parked-page body → usually rejected
 
-**Pool is cached** per keyword for 6 hours via transient (`seobetter_pool_{md5(keyword+country)}`). Running the generator twice on the same keyword within 6 hours reuses the pool.
+### Pool storage
 
-**Pool is stored with the job** during async generation (step 0, before outline), so all subsequent steps — section generation, meta, headlines — have access to it.
+Pool entries are stored as:
 
-**Pool is threaded into save** via a new `_seobetter_citation_pool` post meta, so `validate_outbound_links()` can accept the pool as an allowed-URL list.
+```php
+[
+    'url'         => 'https://publisher.example.com/article-slug',
+    'title'       => 'Scraped or guessed article title',
+    'source_name' => 'publisher.example.com',
+    'verified_at' => 1744484400, // unix timestamp
+]
+```
+
+Up to **12 entries** per pool. Cached as a transient (`seobetter_pool_{md5(keyword+country+domain)}`) for 6 hours, so regenerating the same article within that window reuses the pool.
+
+During async generation, the pool is attached to the job state at `$job['results']['citation_pool']` during the `trends` step, making it available to every subsequent section.
 
 ---
 
-### Layer 1 — System prompt instructions
+## 6. Phase 2: AI grounding
 
-**File:** `includes/Async_Generator.php` — `get_system_prompt()` method, "ABSOLUTE URL RULES" section
+**File:** `includes/Async_Generator.php` — `generate_section()` method, CITATION RULES block in system prompt
 
-The prompt now injects the **Citation Pool** built by Layer 0 as an `AVAILABLE CITATIONS` block directly into the system prompt. The AI is told:
+Before each section is generated, `Citation_Pool::format_for_prompt()` formats the pool as a prompt-injection block:
 
-1. **Use ONLY the URLs in the AVAILABLE CITATIONS list.** Any hyperlink you output must be one of these URLs, character-for-character. URLs not in the list will be stripped.
-2. **Match the citation to the claim.** A citation URL should point to a page that directly supports the nearby claim. Don't cite a page about dog beds to support a claim about dog food.
-3. DO NOT invent URL paths — if you're tempted to output a URL, check: is it in the pool? If not, use plain text.
-4. DO NOT use API/dataset/tool names as anchor text (`[Dog Facts API](...)`, `[Pexels API](...)`).
-5. DO NOT link to homepages, APIs, endpoints, or raw data URLs.
-6. DO NOT output a `## References`, `## Sources`, `## Bibliography`, `## Further Reading`, or `## Citations` section. **The plugin will build the References section programmatically** from the citations you actually used in the body. Don't pre-empt it.
-7. Plain-text attributions are encouraged for any claim that isn't in the citation pool. "According to a 2026 RSPCA report" counts equally for GEO visibility — no link required.
-8. **"An article that uses 3 real pool citations and 5 plain-text attributions is a PASS. An article with 5 hyperlinks to homepages, APIs, or hallucinated URLs is a FAIL."**
+```
+AVAILABLE CITATIONS (use ONLY these exact URLs for any hyperlinks you output):
+- [How to Choose a Dog Bed](https://www.akc.org/expert-advice/home-living/how-to-choose-dog-bed/) — akc.org
+- [Best Beds for Anxious Dogs](https://www.rspca.org.au/knowledgebase/anxious-dog-beds/) — rspca.org.au
+- [Orthopedic Pet Beds Guide](https://www.petbarn.com.au/petspot/dog/orthopedic-beds/) — petbarn.com.au
+...
 
-### Layer 2 — Plugin-side validator (post-generation)
+RULES for these citations:
+- Any hyperlink you output must be character-for-character identical to one of the URLs above
+- Match the citation to the claim — don't cite a random pool URL just because it's available
+- Use each URL at most once
+- If a claim isn't supported by any URL in the pool, use a plain-text attribution instead (no link)
+- DO NOT output a References section — the plugin builds it automatically
+- Zero hyperlinks + good plain-text attributions is a PASS. Hallucinated URLs are a FAIL.
+```
 
-**File:** `seobetter.php` — `validate_outbound_links()` method (line ~1260)
+This block is appended to the existing trends/research data and passed to the section generator via the `$trends` parameter. Every section the AI writes sees it.
 
-Runs after the AI generates the article, before it's saved or displayed. Four passes:
+When the pool is empty, the block says instead:
 
-**Pass 0 — References section sanitizer** (`sanitize_references_section()`)
-- Detects any `## References`, `## Sources`, `## Bibliography`, `## Further Reading`, `## Citations` heading
-- Walks each line of the section
-- For each line containing a markdown link, applies the full whitelist rules (anchor text, URL path, host, deep-link, domain)
-- Drops any line that fails
-- Drops list items with no link at all (a citation with no URL has no value)
-- If zero references survive → removes the heading entirely
+```
+AVAILABLE CITATIONS: None — the research pipeline found no keyword-relevant articles for this topic.
+Use plain-text attributions only (e.g. 'According to a 2026 RSPCA report').
+Do NOT output any [text](url) markdown links.
+```
 
-**Pass 1 — Malformed markdown**
-- Regex `/\[([^\]]+)\]\(((?!https?:\/\/)[^)]*)\)/`
-- Catches cases where AI puts literal text in the URL slot (e.g. `[Dog Facts API](Dog Facts API)`)
-- Replaces with just the link text
+The References step in the async pipeline now returns an empty string — the AI never writes References. The plugin builds them programmatically after validation.
 
-**Pass 2 — Inline markdown links `[text](url)`**
-- Runs `filter_link()` on each match
+---
 
-**Pass 3 — HTML anchor tags `<a href="...">text</a>`**
-- Runs the same `filter_link()` on each match
+## 7. Phase 3: Save-time validation
 
-**`filter_link()` rules (all must pass):**
+**File:** `seobetter.php` — `validate_outbound_links($markdown, $citation_pool)` method
+
+Runs as four sequential passes:
+
+### Pass 0 — References section sanitizer
+
+`sanitize_references_section($markdown)` catches any `## References`, `## Sources`, `## Bibliography`, `## Further Reading`, or `## Citations` section the AI may have written despite being told not to. Walks each line, applies the full whitelist rules to every link, drops failing lines, removes the heading entirely if zero references survive.
+
+This is now a safety net — after Layer 3b runs (see below), any remaining AI-written References section has already been deleted and rebuilt from scratch.
+
+### Pass 1 — Malformed markdown stripper
+
+Regex: `/\[([^\]]+)\]\(((?!https?:\/\/)[^)]*)\)/`
+
+Catches cases where the AI puts literal text in the URL slot, like `[Dog Facts API](Dog Facts API)`. These are replaced with just the anchor text. Also catches relative-path attempts like `[Guide](/wp-admin/whatever)`.
+
+### Pass 2 — Inline link filter
+
+For every `[text](url)` and `<a href="url">text</a>` match, `filter_link($url, $text)` checks:
+
+**Hard-fail rules (apply regardless of pool membership):**
 
 | Check | Rule |
 |---|---|
-| Malformed URL | Host must parse. Unparseable → strip. |
-| Internal link | Same host as site → keep unchanged. |
-| Anchor text | Must NOT contain `api`, `endpoint`, `dataset`, `sdk`, `webhook`. |
-| URL path | Must NOT contain `/api/`, `/v[1-9]/`, `/graphql`, `/rest/`, `/swagger`, `raw.githubusercontent.com`. |
-| URL host | Must NOT match `(^\|\.)api\.`, `-api\.`, `\.herokuapp\.com$`. |
-| **Pool membership OR whitelist** | URL must be in **this article's Citation Pool** OR on the static domain whitelist. Pool membership is the primary gate; whitelist is the fallback. |
-| Deep link | Path must not be empty, `/`, `index.html`, or `index.php`. Bare homepages are stripped. |
+| Malformed URL | Host must parse |
+| Anchor text | Must NOT contain `api`, `endpoint`, `dataset`, `sdk`, `webhook` |
+| URL path | Must NOT contain `/api/`, `/v[1-9]/`, `/graphql`, `/rest/`, `/swagger`, `raw.githubusercontent.com` |
+| URL host | Must NOT match `(^\|\.)api\.`, `-api\.`, `\.herokuapp\.com$` |
+| Deep link | Path must not be empty, `/`, `index.html`, or `index.php` |
 
-**Pool membership check** (added in v1.5.9):
+**Allow-list check (pool first, whitelist fallback):**
 
-If the URL appears verbatim in the `_seobetter_citation_pool` post meta OR matches a pool URL after URL normalization (scheme+host+path, query string agnostic), the link passes the whitelist requirement regardless of whether the domain is statically whitelisted. This is how the system supports citations from any publisher domain — as long as the research pipeline retrieved the exact URL from a keyword search, the link is considered legitimate.
+1. **Primary allow-list — pool membership:** If the URL is in this article's Citation Pool, accept it. URL comparison uses `Citation_Pool::normalize_url()` — compares scheme + host + path, ignoring query strings and trailing slashes. Pool membership is the main gate for the Research Pool architecture.
 
-If the URL is NOT in the pool, the legacy static whitelist applies as a fallback. Links to `*.gov`, `*.edu`, `wikipedia.org`, `rspca.org.au`, etc. are always allowed even when the pool is empty — this prevents total citation failure on obscure keywords where the research pipeline returns nothing.
+2. **Fallback allow-list — static whitelist:** If the URL is NOT in the pool, check the static trusted domain list. Used when the pool is empty or doesn't contain a specific URL. Includes `*.gov`, `*.edu`, `wikipedia.org`, major news outlets, `rspca.org.au`, `akc.org`, etc. See Section 8 for the full list. Domains here remain citable even without pool membership, subject to Pass 3 below.
+
+Internal links (same host as the site) are always kept unchanged.
 
 **When a link fails:** the anchor text is preserved as plain text, the link wrapper is removed.
 
-**Pass 3 — Fine-grained knowledge verification** (`verify_citation_atoms()`)
+### Pass 3 — Fine-grained knowledge verification (RLFKV)
 
-Runs after all earlier passes, on links that survived the whitelist. Implements the atomic knowledge unit verification adapted from RLFKV (see Research Foundation above).
+**Method:** `verify_citation_atoms($markdown)`
 
-For each `[anchor text](url)` that's still in the markdown:
+For each link that survived Pass 2:
 
-1. Tokenize the anchor text → extract content words (4+ chars, not in stopword list)
-2. If zero content words → strip (anchors like "here", "this article", "learn more" are low-quality and unverifiable)
-3. Check the 24-hour transient cache keyed by `md5(url + anchor_text)` — if cached result exists, use it
-4. `wp_remote_get($url, timeout=5)` → must return 200-399
-5. Extract destination `<title>` + first 3000 chars of body (tags stripped, whitespace collapsed)
+1. Tokenize the anchor text → extract content words (4+ chars, non-stopword)
+2. If zero content words (e.g. `[here](...)`, `[learn more](...)`) → strip unconditionally
+3. Check 24-hour transient cache keyed by `md5(url + anchor_text)` — if cached, use the cached verdict
+4. `wp_remote_get($url, timeout=5)` → must return 200–399
+5. Extract `<title>` + first 3000 chars of body (tags stripped, whitespace collapsed)
 6. Count how many anchor content words appear in the extracted haystack (case-insensitive `strpos`)
 7. Require `found / total >= 0.5` (50% content-word overlap)
-8. Cache the verdict in a transient (`ok` for 24h, `fail` for 24h if network ok, `fail` for 1h if network error)
-9. Verified → keep the link. Failed → strip the link, keep the anchor text as plain text.
+8. Cache the verdict: 24h on success/content-mismatch, 1h on network error
+9. Verified → keep the link. Failed → strip the link, preserve the anchor text as plain text
 
-After Pass 3 runs, the sanitizer re-runs on any References section — if Pass 3 stripped all the links, the heading gets removed too.
+**Why this matters even with pool grounding:** The pool confirms a URL is a real keyword-relevant article. Pass 3 confirms the AI used it with anchor text that actually matches the destination. Example: pool contains `akc.org/expert-advice/dog-beds-guide`, but the AI wrote `[dog food nutrition study](akc.org/expert-advice/dog-beds-guide)`. Pool membership passes (URL is in pool), but Pass 3 fails (anchor text's words "food", "nutrition", "study" don't appear in a dog-beds page). Link stripped.
 
-**Performance:** 5 citations in a typical article = up to 5 `wp_remote_get()` calls = up to 25 seconds worst-case latency. Mitigated by:
-- Persistent transient cache (24h) — repeat saves of the same article or across articles with shared citations are ~instant
-- Session cache (per-save) — the same URL cited multiple times in one article only fetches once
-- Short timeout (5s) — failed fetches don't block the save indefinitely
+After Pass 3 runs, `sanitize_references_section` re-runs to remove any References heading whose entries were just stripped.
 
-**Why this matters even though earlier layers exist:** The whitelist confirms the URL host is legitimate. The deep-path check confirms it's not a bare homepage. The API-pattern check confirms it's not a data endpoint. But none of those verify that the *specific page* at `https://www.rspca.org.au/knowledgebase/article-42` is actually about dog beds — the AI could cite it for any claim. Pass 3 closes that gap.
+---
 
-### Layer 3 — Content_Injector citations (Fix Now button)
+## 8. Phase 3b: Programmatic References section
 
-**File:** `includes/Content_Injector.php` — `inject_citations()` method
+**File:** `seobetter.php` — `append_references_section($markdown, $citation_pool)` method
 
-Used by the "Add Citations" Fix Now button. Calls `Trend_Researcher::research()` to get source URLs, then:
+Runs after all four validator passes are complete. The body now contains only verified, pool-matched or whitelisted + Pass-3-verified links.
 
-1. Rejects sources with missing/generic titles (`Source`, `Article`, `Untitled`, <8 chars)
-2. Rejects anchor text containing API/endpoint/dataset/SDK/webhook
-3. Rejects URLs containing `/api/`, `/v[1-9]/`, `/graphql`, `/rest/`, `*.herokuapp.com`, `api.*`, `*-api.*`
-4. Rejects bare homepages (no path)
-5. **Live HEAD-checks** every surviving URL (4 second timeout, 3 redirects) — must return 200-399
-6. If zero sources pass → fails with clear error: *"No direct article sources found for this keyword. Citations only link to real article pages, never to homepages or APIs — try a more specific keyword, or skip this fix."*
+**Algorithm:**
 
-The inject-fix REST path ALSO runs `validate_outbound_links()` after injection, so even if this layer adds a link, Layer 2 rules still apply as a safety net.
-
-### Layer 3b — Automatic References section
-
-**File:** `seobetter.php` — `build_references_section()` method, called by `rest_save_draft()` after Layer 2 validation.
-
-Once the validator has finished stripping bad links, the plugin walks the cleaned markdown, collects every markdown link that survived, and appends a programmatic References section:
+1. Strip any AI-written `## References` / `## Sources` / `## Bibliography` / `## Further Reading` / `## Citations` section from the body (belt-and-braces — the AI was told not to write one, but just in case)
+2. Walk every surviving `[text](url)` markdown link in the body
+3. For each URL, look it up in the pool via `Citation_Pool::get_entry()`
+4. Collect the matching pool entries in order of first mention, deduplicated
+5. If zero pool-matching citations → don't append anything (article ends at its last real section)
+6. Otherwise, append:
 
 ```markdown
 ## References
 
-1. [Article title from pool metadata](https://exact-pool-url.example.com/article-slug) — publisher.com
-2. [Another article title](https://another-publisher.com/page) — another-publisher.com
+1. [Pool Entry Title](https://pool-url.example.com/article) — publisher.com
+2. [Another Pool Entry Title](https://another.example.com/page) — another.com
 ```
 
-**Rules for the auto-References section:**
+**Guarantees:**
 
-1. Only URLs that appear as markdown links in the article body are included (not every pool URL — only the ones the article actually cited)
-2. Titles come from the pool metadata (the title scraped at pool-build time, not from the AI)
-3. Entries are numbered and deduplicated by URL
-4. If the article body contains zero valid citations, no References section is appended (rather than an empty heading)
-5. Appended as a proper `<!-- wp:heading -->` block so it's editable in Gutenberg
-
-This guarantees the References section can NEVER contain hallucinations — it's mechanically generated from verified pool entries, not written by the AI. The AI is explicitly told not to write References (Layer 1 rule #6).
+- Titles come from the pool metadata (scraped at pool-build time), NOT from the AI
+- Only pool entries the body actually cited appear — no orphan references
+- Every entry corresponds to a real link in the body
+- Zero fabrication surface — there is no path for a hallucinated entry to appear here
 
 ---
 
-### Layer 4 — External audit (Claude skill)
+## 9. Phase 4: External audit (Claude skill)
 
 **Skill:** `~/.claude/skills/check-citations/`
 **Installed from:** `https://github.com/PHY041/claude-skill-citation-checker.git`
 **Dependencies:** `requests` (Python)
 
-This is an **auditing tool**, not a runtime validator — used from Claude Code sessions to double-check generated articles against remote source state. Invoke by asking Claude to "run the check-citations skill on this article" and paste the markdown.
+This is an **auditing tool**, not a runtime validator. Used from Claude Code sessions to double-check generated articles against remote source state. Invoke by asking Claude to "run the check-citations skill on this article" and paste the markdown.
 
-What it does (high level): extracts every URL from provided content, HEAD-requests each one, reports dead/redirected/suspicious links. Use this on any sample article before committing changes to the prompt or validator, to confirm the enforcement layers are actually working.
+What it does (high level): extracts every URL from provided content, HEAD-requests each one, reports dead/redirected/suspicious links. Use this on any sample article before committing changes to the pool builder, the prompt, or the validator — it confirms the enforcement layers are working.
 
 ---
 
-## Trusted domain whitelist
+## 10. Static domain whitelist (fallback)
 
-Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method.
+Used by Pass 2 when a URL is NOT in the citation pool. Allows high-authority domains to be cited even for obscure keywords where the pool builder returns nothing.
 
-Extensible via the `seobetter_trusted_domains` filter for site owners who want to add their own authoritative sources.
+Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensible via the `seobetter_trusted_domains` filter.
 
 ### Categories
 
 **Government / academic (wildcards)**
+
 - `*.gov`, `*.edu`, `*.mil`
 - `*.gov.au`, `*.gov.uk`, `*.gc.ca`, `*.gov.nz`
 - `*.edu.au`, `*.ac.uk`, `*.ac.nz`
 
 **Major news & reference**
+
 - `wikipedia.org`
 - `reuters.com`, `apnews.com`, `bbc.com`, `bbc.co.uk`
 - `theguardian.com`, `nytimes.com`, `washingtonpost.com`, `ft.com`
 - `bloomberg.com`, `cnbc.com`, `wsj.com`, `economist.com`
 
 **Health & science**
+
 - `who.int`, `cdc.gov`, `nih.gov`
 - `nature.com`, `sciencedirect.com`, `pubmed.ncbi.nlm.nih.gov`
 - `mayoclinic.org`, `clevelandclinic.org`, `webmd.com`, `healthline.com`
 - `harvard.edu`, `ox.ac.uk`
 
-**Pet / animal authority** (relevant for mindiampets.com.au test site)
+**Pet / animal authority** (relevant for the current mindiampets.com.au test site)
+
 - `rspca.org.au`, `rspca.org.uk`, `aspca.org`
 - `akc.org`, `ukcdogs.com`, `avma.org`, `ava.com.au`
 - `pedigree.com`, `royalcanin.com`
@@ -345,11 +385,13 @@ Extensible via the `seobetter_trusted_domains` filter for site owners who want t
 - `bluecross.org.uk`, `dogstrust.org.uk`
 
 **Tech authority**
+
 - `developer.mozilla.org`, `w3.org`, `schema.org`
 - `google.com`, `support.google.com`, `developers.google.com`, `search.google.com`
 - `github.com`, `stackoverflow.com`, `microsoft.com`, `apple.com`
 
 **Research & data**
+
 - `statista.com`, `pewresearch.org`, `ourworldindata.org`
 - `researchgate.net`, `arxiv.org`, `ssrn.com`
 
@@ -361,137 +403,14 @@ Extensible via the `seobetter_trusted_domains` filter for site owners who want t
 2. **Suffix match** — `rspca.org.au` also matches `www.rspca.org.au` and `subdomain.rspca.org.au`
 3. **Wildcard** — `*.gov` matches any host ending in `.gov` (e.g. `cdc.gov`, `nih.gov`)
 
----
+### Adding a domain
 
-## Research APIs (where real URLs come from)
-
-The plugin pulls real data from several free APIs, but the URLs in the research responses are **NOT** automatically trusted — they still have to pass the whitelist. This is deliberate: a Reddit URL or a HackerNews URL is a real page, but not the primary source of a factual claim, so we don't auto-cite them.
-
-### `/api/topic-research` (Vercel)
-
-**File:** `cloud-api/api/topic-research.js`
-**Purpose:** Suggest 10 Topics button — finds what to write about
-**Sources:** Google Suggest, Datamuse, Wikipedia OpenSearch, Reddit search
-**Does it produce article citations?** No — topic ideas only. URLs are for the user to browse, not for the AI to cite.
-
-### `/api/research` (Vercel)
-
-**File:** `cloud-api/api/research.js`
-**Purpose:** Provide real stats, quotes, Reddit posts, HN discussions as prompt context
-**Sources:** Reddit, Hacker News, Wikipedia, Google Trends, Brave Search, several free single-topic APIs (Dog Facts, Cat Facts, Numbers API, Zoo Animals, etc.)
-**Does it produce article citations?** Indirectly — the AI is given this research data as context, but the "ABSOLUTE URL RULES" in the prompt forbid the AI from linking to API endpoints. Even when data comes from `dogapi.dog/api/v2/facts`, the AI is not allowed to cite that URL. Plain-text attribution only ("Dog breed data from [organization name]").
-
-**Important:** URLs in research responses are NEVER passed through to the article automatically. The AI reads the data, synthesizes a claim, and writes a plain-text attribution — or the validator strips the link.
-
-### Layer 3 citation injector (Content_Injector)
-
-When the user clicks "Add Citations" Fix Now button, `Content_Injector::inject_citations()` pulls sources from `Trend_Researcher::research()` and tries to build a `## References` section. But because of the strict rules above, in practice very few sources survive — most research data returns API endpoints, Reddit posts, or homepage URLs. This is **by design**: the button will fail loudly rather than inject dead citations.
-
-If users frequently complain the button fails, the right fix is to improve research data quality (deeper article URLs from real publications), not to relax the citation rules.
-
----
-
-## Known failure modes
-
-### FM-1: AI outputs homepage link
-
-**Symptom:** Article contains `[RSPCA](https://www.rspca.org.au/)`
-**Detection:** Layer 2 Pass 2 catches it — path is empty → stripped
-**Result:** Becomes plain text `RSPCA`
-
-### FM-2: AI outputs API endpoint
-
-**Symptom:** Article contains `[Dog breeds database](https://dog-api.kinduff.com/api/facts)`
-**Detection:** Layer 2 Pass 2 catches it — URL matches `-api\.` pattern and `/api/` path pattern
-**Result:** Becomes plain text `Dog breeds database`
-
-### FM-3: AI outputs malformed link with literal text in URL slot
-
-**Symptom:** Article contains `[Dog Facts API](Dog Facts API)` which WordPress resolves against current URL as `/wp-admin/Dog%20Facts%20API`
-**Detection:** Layer 2 Pass 1 catches it — URL doesn't start with `http://` or `https://`
-**Result:** Becomes plain text `Dog Facts API`
-
-### FM-4: References section with all-bad URLs
-
-**Symptom:** Article ends with `## References` block listing 5 fake sources
-**Detection:** Layer 2 Pass 0 catches it — every line fails the whitelist → heading also removed
-**Result:** Section removed entirely. Article ends at the previous H2.
-
-### FM-5: References section with 1-2 good URLs among bad ones
-
-**Symptom:** `## References` has 1 real Wikipedia link and 4 hallucinated ones
-**Detection:** Layer 2 Pass 0 keeps the good line, drops the bad ones, keeps the heading
-**Result:** References section remains but only contains verified entries
-
-### FM-6: Research data URL is trusted but deep-path
-
-**Symptom:** AI cites `https://www.rspca.org.au/knowledgebase/calming-dog-beds-guide`
-**Detection:** All earlier checks pass — rspca.org.au is whitelisted, path is non-empty, not an API, anchor text is clean. Pass 3 then fetches the page and confirms "calming", "dog", "beds" appear in the title/body.
-**Result:** Link kept as-is. **This is the desired outcome.**
-
-### FM-7: Misattributed citation (URL is real, content doesn't match)
-
-**Symptom:** AI outputs `[dog nutrition study](https://www.rspca.org.au/about-us)` — URL is live, on trusted domain, deep path, clean anchor text
-**Detection:** Pass 3 fetches the page, extracts content words `dog`, `nutrition`, `study`, finds 0/3 in the "About Us" page body
-**Result:** Link stripped (0% < 50% threshold). Becomes plain text `dog nutrition study`. **This is the scenario RLFKV Pass 3 is designed to catch.**
-
-### FM-8: Vague anchor text ("here", "this article", "learn more")
-
-**Symptom:** AI outputs `[here](https://rspca.org.au/knowledgebase/dog-beds)` or `[learn more](...)`
-**Detection:** Pass 3 tokenizes "here" → 1 word, <4 chars → zero content words after filtering
-**Result:** Link stripped unconditionally. A link with no verifiable anchor text provides no citation value and harms readability.
-
-### FM-9: AI cites a URL not in the pool
-
-**Symptom:** Research pool has 7 real keyword-relevant URLs, but the AI outputs an 8th URL it invented
-**Detection:** Layer 2 checks pool membership → not in pool → falls through to static whitelist → either passes static whitelist + Pass 3 OR gets stripped
-**Result:** If the invented URL happens to be a real article on `rspca.org.au` and passes content verification, it's kept (rare but possible). Otherwise stripped. The pool is the primary gate — whitelist is the fallback for exactly these edge cases.
-
-### FM-10: Empty research pool (obscure keyword)
-
-**Symptom:** Keyword is too niche — DDG and Brave return zero keyword-relevant results. Pool is empty after verification.
-**Detection:** Layer 0 builds pool → 0 entries → `_seobetter_citation_pool` meta stores empty array
-**Result:** The AI is told there are no available citations and should use plain-text attributions only. Layer 2 falls back to the static whitelist — so the AI can still cite `wikipedia.org`, `*.gov`, `rspca.org.au` etc. if it finds something there, subject to Pass 3. But typically the article ends up with few or zero external links and many plain-text attributions. **This is the correct behavior** — we prefer zero links over hallucinated ones.
-
-### FM-11: Pool URL is real but irrelevant
-
-**Symptom:** DDG search for "calming pet bed" returns a top result like `joonapp.io` (a kids game company) because the keyword was loosely matched
-**Detection:** Pool-build Pass 3 content verification — fetches `joonapp.io`, finds zero keyword content words, rejects the URL
-**Result:** URL is not added to the pool. AI never sees it. Cannot be cited. **This is what v1.5.9 fixes.**
-
----
-
-## Testing the policy
-
-### Manual test (5 minutes)
-
-1. Generate an article with a topic that tempts AI hallucination (e.g. "how to choose a dog bed")
-2. Save Draft
-3. Open the post in WordPress editor
-4. Scroll through the content looking for `[text](url)` patterns
-5. For each link:
-   - Is the URL on the trusted whitelist? ✓
-   - Is it a deep path (not `/` alone)? ✓
-   - Is the anchor text NOT an API name? ✓
-6. Check the bottom of the article for a References section. If present, every entry must be a real deep-path link.
-
-### Automated audit (Claude skill)
-
-```
-# From a Claude Code session:
-Use the check-citations skill on the markdown of this article: <paste>
-```
-
-Reports: live/dead/redirected/suspicious counts per URL.
-
-### Adding to the whitelist
-
-If a legitimate authoritative source is being stripped:
+If a legitimate authoritative source is consistently getting stripped:
 
 1. Verify it's actually authoritative (not a random blog)
 2. Verify it has deep article pages, not just a homepage
 3. Add to the `$default` array in `get_trusted_domain_whitelist()` in `seobetter.php`
-4. Or, for site-specific additions, use the filter:
+4. For site-specific additions without code changes:
 
 ```php
 add_filter( 'seobetter_trusted_domains', function ( $domains ) {
@@ -500,30 +419,221 @@ add_filter( 'seobetter_trusted_domains', function ( $domains ) {
 } );
 ```
 
+**Prefer the pool over the whitelist.** If a publisher's articles keep surfacing in research but keep getting stripped, the right fix is usually to improve the research API (so their URLs make it into the pool automatically), not to hand-add domains.
+
 ---
 
-## Version history
+## 11. Research APIs (where real URLs come from)
 
-| Version | Date | Change |
+The plugin pulls data from many free APIs. Only **keyword-search sources** feed the citation pool. **Data APIs** feed the prompt context but never produce citable URLs.
+
+### Keyword-search sources → feed the citation pool
+
+| Source | File | Auth required | Role |
+|---|---|---|---|
+| DuckDuckGo HTML | `cloud-api/api/research.js` `searchDuckDuckGo()` | No | Primary — always on |
+| Brave Search | `cloud-api/api/research.js` `searchBrave()` | User's API key (Pro) | Higher quality when available |
+| Wikipedia OpenSearch | `cloud-api/api/research.js` `searchWikipedia()` | No | Deep article URLs on Wikipedia |
+| Reddit search | `cloud-api/api/research.js` `searchReddit()` | No | Only when post links out |
+| Hacker News search | `cloud-api/api/research.js` `searchHackerNews()` | No | Only when post links out |
+
+### Data APIs → feed statistics only, URLs never cited
+
+The Vercel research endpoint calls 100+ category-specific free APIs based on the article's domain (finance, health, crypto, science, weather, sports, etc.) — NASA, USGS, CoinGecko, openFDA, Nager.Date, MusicBrainz, Open Food Facts, Open Library, ArtInstitute, and many more. See `getCategorySearches()` in `research.js`.
+
+These return real stats and facts that the AI uses as writing context ("According to NASA data, ...", "CoinGecko reports ..."). The API URLs themselves are explicitly **excluded** from the references pool — they're `api.*` or `*-api.*` hosts with `/v1/`, `/v2/` paths and fail the hard-fail rules in Section 7 anyway.
+
+**Important:** URLs from these APIs are NEVER passed through to citations automatically. The AI reads the data, synthesizes a claim, and writes a plain-text attribution. This is intentional — an API endpoint is not a publication, it's a data pipeline, and shouldn't be cited even if the underlying stat is real.
+
+### Legacy Content_Injector citation path
+
+The "Add Citations" Fix Now button in `Content_Injector::inject_citations()` predates the Research Pool and uses its own simpler rule set: rejects API URLs, rejects generic titles, HEAD-checks every URL live, requires deep paths. It does NOT currently use the citation pool — instead, it calls `Trend_Researcher::research()` directly and filters the results.
+
+This path is used less often now that the main generation flow handles citations automatically. Long-term we should converge it on the Research Pool too (TODO: v1.6.x).
+
+---
+
+## 12. Known failure modes
+
+Behavior-driven tests — each FM describes a failure scenario, what detects it, and the expected result.
+
+### FM-1: AI outputs homepage link
+
+**Symptom:** Article contains `[RSPCA](https://www.rspca.org.au/)`
+**Detection:** Layer 2 Pass 2 — path is empty → hard-fail (deep link required)
+**Result:** Link stripped. Anchor text becomes plain text: `RSPCA`.
+
+### FM-2: AI outputs API endpoint
+
+**Symptom:** Article contains `[dog database](https://dog-api.kinduff.com/api/facts)`
+**Detection:** Pass 2 — host matches `-api\.` pattern and path matches `/api/` pattern → hard-fail
+**Result:** Link stripped. Becomes plain text `dog database`.
+
+### FM-3: Malformed markdown (literal text in URL slot)
+
+**Symptom:** Article contains `[Dog Facts API](Dog Facts API)` which WordPress resolves as `/wp-admin/Dog%20Facts%20API`
+**Detection:** Pass 1 — URL doesn't start with `http://` or `https://`
+**Result:** Link wrapper stripped, anchor text preserved: `Dog Facts API`.
+
+### FM-4: References section with all-bad URLs
+
+**Symptom:** Article ends with `## References` listing 5 fabricated sources (AI ignored prompt rule #8)
+**Detection:** Pass 0 — every entry fails whitelist → heading also removed. Then Phase 3b builds a fresh References section from the body's actual citations.
+**Result:** Old section deleted, new section built from scratch (or omitted if body has no pool citations).
+
+### FM-5: Mixed References section
+
+**Symptom:** AI-written `## References` has 1 real pool URL and 4 hallucinated ones
+**Detection:** Pass 0 keeps the good line and drops the bad. Then Phase 3b replaces the whole section with a fresh one built from pool metadata.
+**Result:** References section contains only the verified entries, with titles from the pool (not the AI's text).
+
+### FM-6: Legitimate deep-path citation on whitelisted domain
+
+**Symptom:** AI cites `https://www.rspca.org.au/knowledgebase/calming-dog-beds-guide`
+**Detection:** Pass 2 — pool membership check (pass if in pool, otherwise fallback to static whitelist). Then Pass 3 fetches the page and confirms "calming", "dog", "beds" appear in the title/body.
+**Result:** Link kept as-is. **This is the desired outcome.**
+
+### FM-7: Misattributed citation — URL is real, content doesn't match
+
+**Symptom:** Article contains `[dog nutrition study](https://www.rspca.org.au/about-us)` — URL is live, on a whitelisted domain, deep path, clean anchor text
+**Detection:** Pass 3 fetches the page, extracts content words `dog`, `nutrition`, `study`, finds 0/3 in the "About Us" page body
+**Result:** Link stripped (0% < 50% threshold). Anchor text preserved as plain text `dog nutrition study`. **This is the RLFKV scenario Pass 3 is designed to catch.**
+
+### FM-8: Vague anchor text
+
+**Symptom:** `[here](...)`, `[this article](...)`, `[learn more](...)`
+**Detection:** Pass 3 tokenizes "here" → 1 word, <4 chars → zero content words after filtering
+**Result:** Link stripped unconditionally. A link with no verifiable anchor text provides no citation value and harms readability.
+
+### FM-9: AI cites a URL not in the pool
+
+**Symptom:** Pool has 7 real keyword-relevant URLs, but the AI outputs an 8th URL it invented
+**Detection:** Pass 2 — pool membership check fails → falls through to static whitelist → either passes whitelist + Pass 3 OR gets stripped
+**Result:** If the invented URL happens to be on a whitelisted domain AND passes content verification, kept. Otherwise stripped. The pool is the primary gate; whitelist + Pass 3 is the backstop for exactly these edge cases.
+
+### FM-10: Empty research pool (obscure keyword)
+
+**Symptom:** Keyword is too niche — DDG / Brave / Wikipedia all return zero keyword-relevant results. Pool is empty after filtering.
+**Detection:** Phase 1 builds pool → 0 entries → prompt says "AVAILABLE CITATIONS: None, use plain-text attributions only"
+**Result:** AI outputs zero hyperlinks. Validator falls back to static whitelist if the AI cites something anyway. Phase 3b appends no References section. **This is correct behavior** — prefer zero links over hallucinated ones.
+
+### FM-11: Pool candidate is live but irrelevant
+
+**Symptom:** DDG search for "calming pet bed" returns `https://www.joonapp.io/` (kids-game company) because of loose keyword matching
+**Detection:** Pool-build content verification — fetches `joonapp.io`, finds zero keyword content words, rejects the URL
+**Result:** URL is never added to the pool. AI never sees it. Cannot be cited. **This is what the Research Pool architecture fixes.**
+
+### FM-12: AI writes a References section despite being told not to
+
+**Symptom:** Model ignores prompt rule #8 and writes `## References` with 5 entries
+**Detection:** Pass 0 sanitizes each entry against the whitelist. Then Phase 3b removes any remaining `## References` heading entirely and builds its own.
+**Result:** The AI's attempt is completely overwritten. The final References section is always programmatically generated from pool metadata.
+
+---
+
+## 13. Testing procedures
+
+### Manual test (5 minutes)
+
+1. Generate an article with a moderately-searchable keyword (e.g. "how to choose a calming pet bed"). Progress bar should say *"Researching real-time trends + building citation pool..."* during the first step.
+2. Save Draft.
+3. Open the post in the WordPress editor.
+4. Scroll through the body — every `[text](url)` should resolve to a real article page that genuinely discusses the keyword.
+5. Scroll to the bottom — either a `## References` section with 0–6 entries, OR no References section at all.
+6. If References is present, click each link. Every destination must be a real page whose content matches the keyword.
+
+### Edge-case tests
+
+| Test | Keyword | Expected |
 |---|---|---|
-| 1.5.9 | 2026-04-12 | **Research Pool architecture.** New `Citation_Pool` class pre-fetches keyword-relevant URLs via DDG/Brave/Wikipedia at generation time, filters + content-verifies them, stores the pool in a post meta, injects it into the AI prompt as `AVAILABLE CITATIONS`, and uses it as the primary allow-list in the validator (whitelist becomes fallback). References section is now built programmatically at save time from pool URLs the article body cited — never written by the AI. Based on Joshi 2025 (RAG = 58% hallucination reduction) and Gosmar & Dahl 2501.13946 (multi-agent FGR verification). |
-| 1.5.8 | 2026-04-12 | `verify_citation_atoms()` added — fine-grained knowledge verification adapted from RLFKV (arxiv 2602.05723). Fetches every surviving link's destination, verifies anchor text's key terms appear in the page content, rejects mismatches. Session + 24h transient caching. Also strips vague anchor text ("here", "learn more"). |
-| 1.5.7 | 2026-04-12 | `sanitize_references_section()` added. Prompt told AI not to generate References at all. |
-| 1.5.6 | 2026-04-12 | Anchor-text API check, deep-link requirement (no homepages), explicit API path/host patterns. |
-| 1.5.5 | 2026-04-12 | First version of strict whitelist validator. Malformed-link pass. `check-citations` skill installed. |
-| 1.4.x | — | Original HEAD-request validator. Had fatal flaw: fell back dead domains to "homepage" links that were also dead. Replaced in 1.5.5. |
+| **Normal** | `how to choose a calming pet bed` | 3–6 inline pool citations, References section with 3–6 real entries |
+| **Rich research** | `orthopedic dog bed buying guide` | 4–8 inline citations to petbarn, akc, rspca, etc. |
+| **Obscure** | `calming crystal therapy for anxious pugs` | Zero inline hyperlinks, no References section, many plain-text attributions |
+| **Multilingual** | `cómo elegir una cama para perros` | Pool may be empty if research has no Spanish results → fall back to plain-text only |
+
+### Bad signals to report back
+
+- Any URL containing `/api/`, `.herokuapp.com`, `-api.`
+- Any anchor text containing `API`, `endpoint`, `dataset`
+- Any bare homepage link (`https://site.com/`)
+- Any References entry that 404s when clicked
+- Any References entry whose destination page has nothing to do with the keyword
+- Any link whose anchor text doesn't match the destination page topic
+
+### Good signals
+
+- Inline citations point to real deep-path article pages
+- References section (if present) lists 3–6 numbered entries the body actually cited
+- Every linked page, when clicked, actually discusses the keyword
+- Any claim without a link has a plain-text attribution nearby
+- Articles with obscure keywords have zero hyperlinks but still read well
+- The same keyword generated twice within 6 hours reuses the pool (faster second run)
+
+### Automated audit (Claude skill)
+
+From a Claude Code session:
+
+```
+Use the check-citations skill on the markdown of this article: <paste>
+```
+
+Reports live / dead / redirected / suspicious counts per URL.
 
 ---
 
-## When to update this file
+## 14. Implementation notes & limitations
 
-Update this document in the same commit whenever you change:
+### Pass 3 (RLFKV) limitations
 
-- The system prompt URL rules in `Async_Generator.php`
-- `validate_outbound_links()` or any of its helpers (`is_host_trusted`, `get_trusted_domain_whitelist`, `sanitize_references_section`)
-- `Content_Injector::inject_citations()` citation logic
-- Research API data sources that could surface new URL patterns
-- The trusted domain whitelist
+1. **No semantic verification** — only keyword overlap. A page mentioning `dog nutrition study` in passing would still pass even if it's mostly about something else. The RLFKV paper uses an evaluation LLM (Qwen3-32B) for true semantic verification; we can't afford that on every save.
+2. **English stopword list only** — international articles using non-English anchor text may get false negatives. TODO: per-language stopword lists when we productionize i18n.
+3. **24-hour transient cache** — a URL verified today stays verified for 24h even if the destination changes. Acceptable trade-off for latency.
+
+### Pool builder limitations
+
+1. **DDG HTML scraping is fragile** — if DuckDuckGo changes their HTML output format, the parser in `searchDuckDuckGo()` may break. Brave Search API is more stable for Pro users.
+2. **Content verification is a lower bar than Pass 3** — pool-build verification requires at least one keyword content word; Pass 3 requires 50% anchor-word overlap. Some pool URLs may pass pool-build but fail Pass 3 at save time, and get stripped even though they were in the pool. This is correct behavior — the pool is a candidate list, not a commitment.
+3. **Cache staleness** — 6-hour keyword pool cache means a source added to DDG after the first pool build won't appear until the cache expires.
+
+### Latency cost
+
+- Pool build: one HEAD + one GET per candidate (up to ~20 candidates) ≈ 10–30s added to the "trends" step
+- Pass 3 validation: one GET per surviving citation at save time ≈ 5–25s added to save
+- **Both are cached** — repeat generations of the same keyword within 6h reuse the pool; repeat citations of the same URL within 24h skip Pass 3
+
+### What this still doesn't solve
+
+- **Fully fabricated uncited claims:** If the AI invents a statistic but doesn't cite it, there's no URL to verify. The prompt addresses this by encouraging plain-text attributions, but there's no mechanical enforcement. TODO: atomic fact verification against research data (would need the RLFKV paper's approach with an evaluation LLM).
+- **Pool URLs that technically match but are low-quality:** A blog post containing the keyword will pass content verification even if the blog is untrustworthy. Trust ranking is not implemented — we rely on DDG/Brave to prioritize quality in their search ranking.
+- **Outdated destinations:** A pool URL verified yesterday may have changed today. Transient cache means we won't re-fetch for 24h.
+
+---
+
+## 15. When to update this file
+
+Update this document in the **same commit** whenever you change:
+
+- `Citation_Pool::build()` — pool builder logic
+- `Citation_Pool::format_for_prompt()` — how the pool is injected into prompts
+- `Citation_Pool::contains_url()` / `normalize_url()` — how pool membership is checked
+- The CITATION RULES block in `Async_Generator.php::get_system_prompt()`
+- `validate_outbound_links()` or any of its helpers (`sanitize_references_section`, `is_host_trusted`, `get_trusted_domain_whitelist`, `verify_citation_atoms`, `filter_link`)
+- `append_references_section()` — programmatic References builder
+- `Content_Injector::inject_citations()` — Fix Now button citation logic
+- Research APIs in `cloud-api/api/research.js` that could surface new URL patterns
 - Which Claude skills the workflow depends on
 
 Treat this file as the contract. If the code and this file disagree, the code wins — but that means this file is out of date and must be corrected immediately.
+
+---
+
+## 16. Version history
+
+| Version | Date | Change |
+|---|---|---|
+| **1.5.9** | 2026-04-12 | **Research Pool architecture.** New `Citation_Pool` class pre-fetches keyword-relevant URLs via DDG/Brave/Wikipedia at generation time, filters + content-verifies them, stores the pool as part of the job state, injects it into the AI prompt as `AVAILABLE CITATIONS`, and uses it as the primary allow-list in the validator (static whitelist becomes fallback). References section is built programmatically at save time from pool URLs the article body cited — never written by the AI. Based on Joshi 2025 (RAG = 58% hallucination reduction), Gosmar & Dahl 2501.13946 (FGR metric), and RLFKV 2602.05723 (Pass 3 atomic verification). |
+| 1.5.8 | 2026-04-12 | `verify_citation_atoms()` added — Pass 3 fine-grained knowledge verification adapted from RLFKV. Fetches every surviving link's destination, verifies anchor-text key terms appear in the page content, rejects mismatches. Session + 24h transient caching. Also strips vague anchor text ("here", "learn more"). |
+| 1.5.7 | 2026-04-12 | `sanitize_references_section()` added (Pass 0). Prompt told AI not to generate References at all. |
+| 1.5.6 | 2026-04-12 | Anchor-text API check, deep-link requirement (no homepages), explicit API path/host patterns. |
+| 1.5.5 | 2026-04-12 | First version of strict whitelist validator. Malformed-link pass. `check-citations` Claude skill installed. |
+| 1.4.x | — | Original HEAD-request validator. Had a fatal flaw: fell back dead domains to "homepage" links that were also dead. Replaced in 1.5.5. |
