@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.4
+ * Version: 1.5.5
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.4' );
+define( 'SEOBETTER_VERSION', '1.5.5' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -795,6 +795,10 @@ final class SEOBetter {
 
         // Re-format and re-score the updated content
         $updated_markdown = $result['content'];
+
+        // Strip any hallucinated or non-whitelisted links the injector may have added
+        $updated_markdown = $this->validate_outbound_links( $updated_markdown );
+
         $formatter = new SEOBetter\Content_Formatter();
         $html = $formatter->format( $updated_markdown, 'classic', [ 'accent_color' => $accent ] );
 
@@ -1236,103 +1240,147 @@ final class SEOBetter {
      * Does HEAD requests to check each link. Replaces 404s with homepage or removes link.
      * Runs before formatting to catch hallucinated URLs from any AI model.
      */
+    /**
+     * Strip or validate all outbound links in the article.
+     *
+     * This runs in two passes:
+     *
+     * 1. MALFORMED LINK PASS — strips markdown links whose "URL" isn't actually a URL
+     *    (e.g. [Dog Facts API](Dog Facts API) — AI outputs literal text where a URL belongs,
+     *    which WordPress then resolves as a relative URL against /wp-admin/). These are
+     *    always hallucinations and get replaced with plain text.
+     *
+     * 2. DOMAIN WHITELIST PASS — only keeps links pointing to known-authoritative domains.
+     *    Everything else gets unlinked (text preserved). This is deliberately strict because
+     *    AI models frequently hallucinate plausible-looking but dead API/blog URLs (e.g.
+     *    dog-facts-api.herokuapp.com, dog-api.kinduff.com/api/facts), and HEAD-request
+     *    validation isn't reliable enough — dead domains return network errors, not 404s,
+     *    which used to fall back to "homepage" links that were also dead.
+     */
     private function validate_outbound_links( string $markdown ): string {
-        // Extract all markdown links: [text](url)
-        // Match both markdown links [text](url) and HTML links href="url"
-        $md_links = [];
-        preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $md_links, PREG_SET_ORDER );
+        // ===== Pass 1: Strip malformed markdown links =====
+        // Matches [text](anything-not-starting-with-http) — catches cases where AI puts
+        // literal text in the URL slot, or paths like /wp-admin/... or /blog/whatever
+        $markdown = preg_replace_callback(
+            '/\[([^\]]+)\]\(((?!https?:\/\/)[^)]*)\)/',
+            function ( $m ) {
+                // Keep the link text, drop the broken link wrapper
+                return $m[1];
+            },
+            $markdown
+        );
 
-        $html_links = [];
-        preg_match_all( '/href="(https?:\/\/[^"]+)"/', $markdown, $html_links, PREG_SET_ORDER );
-
-        // Combine: normalize to [full_match, link_text_or_empty, url] format
-        $matches = [];
-        foreach ( $md_links as $m ) {
-            $matches[] = [ 'full' => $m[0], 'text' => $m[1], 'url' => $m[2], 'type' => 'md' ];
-        }
-        foreach ( $html_links as $m ) {
-            $matches[] = [ 'full' => $m[0], 'text' => '', 'url' => $m[1], 'type' => 'html' ];
-        }
-
-        if ( empty( $matches ) ) {
-            return $markdown;
-        }
-
-        $checked = []; // Cache results to avoid checking same domain twice
+        // ===== Pass 2: Strip non-whitelisted external links =====
+        $whitelist = $this->get_trusted_domain_whitelist();
         $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
 
-        foreach ( $matches as $match ) {
-            $full_match = $match['full'];
-            $link_text = $match['text'];
-            $url = $match['url'];
-            $type = $match['type'];
-
-            // Skip internal links
-            $host = wp_parse_url( $url, PHP_URL_HOST );
-            if ( ! $host || $host === $site_host ) continue;
-
-            // Check cache first
-            if ( isset( $checked[ $url ] ) ) {
-                $new_url = $checked[ $url ];
-                if ( $new_url === 'remove' ) {
-                    $markdown = ( $type === 'md' ) ? str_replace( $full_match, $link_text, $markdown ) : str_replace( $url, '#', $markdown );
-                } elseif ( $new_url !== $url ) {
-                    $markdown = str_replace( $url, $new_url, $markdown );
+        // Markdown links
+        $markdown = preg_replace_callback(
+            '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/',
+            function ( $m ) use ( $whitelist, $site_host ) {
+                $url  = $m[2];
+                $text = $m[1];
+                $host = wp_parse_url( $url, PHP_URL_HOST );
+                if ( ! $host ) {
+                    return $text;
                 }
-                continue;
-            }
-
-            // HEAD request with 4 second timeout
-            $response = wp_remote_head( $url, [
-                'timeout'     => 4,
-                'redirection' => 3,
-                'sslverify'   => false,
-                'user-agent'  => 'Mozilla/5.0 (compatible; SEOBetter/1.0)',
-            ] );
-
-            if ( is_wp_error( $response ) ) {
-                // Network error — fall back to homepage
-                $homepage = 'https://' . $host . '/';
-                $checked[ $url ] = $homepage;
-                $markdown = str_replace( $url, $homepage, $markdown );
-                continue;
-            }
-
-            $code = wp_remote_retrieve_response_code( $response );
-
-            if ( $code >= 200 && $code < 400 ) {
-                // Valid URL — keep it
-                $checked[ $url ] = $url;
-            } elseif ( $code === 404 || $code === 410 ) {
-                // Dead page — replace with homepage
-                $homepage = 'https://' . $host . '/';
-                $homepage_check = wp_remote_head( $homepage, [ 'timeout' => 3, 'sslverify' => false, 'user-agent' => 'Mozilla/5.0' ] );
-                if ( ! is_wp_error( $homepage_check ) && wp_remote_retrieve_response_code( $homepage_check ) < 400 ) {
-                    $checked[ $url ] = $homepage;
-                    $markdown = str_replace( $url, $homepage, $markdown );
-                } else {
-                    // Even homepage is dead — remove link entirely
-                    $checked[ $url ] = 'remove';
-                    if ( $type === 'md' ) {
-                        $markdown = str_replace( $full_match, $link_text, $markdown );
-                    } else {
-                        $markdown = str_replace( $url, '#', $markdown );
-                    }
+                // Keep internal links unchanged
+                if ( $host === $site_host ) {
+                    return $m[0];
                 }
-            } elseif ( $code === 403 ) {
-                // Forbidden — site blocks bots but probably real. Replace with homepage to be safe.
-                $homepage = 'https://' . $host . '/';
-                $checked[ $url ] = $homepage;
-                $markdown = str_replace( $url, $homepage, $markdown );
-            } else {
-                // Other error — fall back to homepage
-                $homepage = 'https://' . $host . '/';
-                $checked[ $url ] = $homepage;
-                $markdown = str_replace( $url, $homepage, $markdown );
-            }
-        }
+                // Keep links on the trusted whitelist
+                if ( $this->is_host_trusted( $host, $whitelist ) ) {
+                    return $m[0];
+                }
+                // Otherwise: drop the link, keep the text
+                return $text;
+            },
+            $markdown
+        );
+
+        // HTML anchor tags — <a href="...">text</a>
+        $markdown = preg_replace_callback(
+            '/<a\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>(.*?)<\/a>/is',
+            function ( $m ) use ( $whitelist, $site_host ) {
+                $url  = $m[1];
+                $text = $m[2];
+                $host = wp_parse_url( $url, PHP_URL_HOST );
+                if ( ! $host ) {
+                    return $text;
+                }
+                if ( $host === $site_host ) {
+                    return $m[0];
+                }
+                if ( $this->is_host_trusted( $host, $whitelist ) ) {
+                    return $m[0];
+                }
+                return $text;
+            },
+            $markdown
+        );
 
         return $markdown;
+    }
+
+    /**
+     * Check if a host matches any pattern in the whitelist.
+     * Supports wildcards (*.gov, *.edu, *.rspca.org.au).
+     */
+    private function is_host_trusted( string $host, array $whitelist ): bool {
+        $host = strtolower( $host );
+        foreach ( $whitelist as $pattern ) {
+            $pattern = strtolower( $pattern );
+            if ( strpos( $pattern, '*.' ) === 0 ) {
+                $suffix = substr( $pattern, 2 );
+                if ( $host === $suffix || substr( $host, -( strlen( $suffix ) + 1 ) ) === '.' . $suffix ) {
+                    return true;
+                }
+            } elseif ( $host === $pattern || substr( $host, -( strlen( $pattern ) + 1 ) ) === '.' . $pattern ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whitelist of trusted domains AI models are allowed to link to.
+     * Anything not on this list gets stripped (link removed, text kept).
+     *
+     * Filter 'seobetter_trusted_domains' lets site owners extend this.
+     */
+    private function get_trusted_domain_whitelist(): array {
+        $default = [
+            // TLD wildcards — only genuinely authoritative TLDs
+            '*.gov', '*.edu', '*.mil', '*.gov.au', '*.gov.uk', '*.gc.ca', '*.gov.nz',
+            '*.edu.au', '*.ac.uk', '*.ac.nz',
+
+            // Major news & reference
+            'wikipedia.org', 'reuters.com', 'apnews.com', 'bbc.com', 'bbc.co.uk',
+            'theguardian.com', 'nytimes.com', 'washingtonpost.com', 'ft.com',
+            'bloomberg.com', 'cnbc.com', 'wsj.com', 'economist.com',
+
+            // Health & science
+            'who.int', 'cdc.gov', 'nih.gov', 'nature.com', 'sciencedirect.com',
+            'pubmed.ncbi.nlm.nih.gov', 'mayoclinic.org', 'clevelandclinic.org',
+            'webmd.com', 'healthline.com', 'harvard.edu', 'ox.ac.uk',
+
+            // Pet/animal authority (relevant for the current test site)
+            'rspca.org.au', 'rspca.org.uk', 'aspca.org', 'akc.org', 'ukcdogs.com',
+            'avma.org', 'ava.com.au', 'pedigree.com', 'royalcanin.com',
+            'petmd.com', 'vcahospitals.com', 'bluecross.org.uk', 'dogstrust.org.uk',
+
+            // Tech authority
+            'developer.mozilla.org', 'w3.org', 'schema.org', 'google.com',
+            'support.google.com', 'developers.google.com', 'search.google.com',
+            'github.com', 'stackoverflow.com', 'microsoft.com', 'apple.com',
+
+            // Research & data
+            'statista.com', 'pewresearch.org', 'ourworldindata.org',
+            'researchgate.net', 'arxiv.org', 'ssrn.com',
+        ];
+
+        $custom = apply_filters( 'seobetter_trusted_domains', $default );
+        return is_array( $custom ) ? $custom : $default;
     }
 
     private function set_featured_image( int $post_id, string $keyword ): void {

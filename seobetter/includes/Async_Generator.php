@@ -606,9 +606,17 @@ KEYWORD DENSITY (CRITICAL FOR SEO PLUGINS):
 GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
 - Expert quotes with full attribution: name, title, organization (+41% visibility)
 - Statistics with specific numbers and source: '85% of users prefer X (Source, Year)' (+40% visibility)
-- Inline citations as clickable Markdown links: [Source Name](URL) — 5+ per article (+30% visibility). CRITICAL URL RULES: Use ONLY URLs that appear in the RESEARCH DATA section below. If a URL is not in the research data, link to the organization's homepage (e.g., https://www.rspca.org.au/) — NEVER guess or invent a page path like /adopt-pet/puppy-guide because it will lead to a 404 error. Every URL you output must be either from the research data OR a verified homepage domain. No exceptions.
+- Source attributions in plain text format: '(RSPCA, 2026)' or 'According to the AVMA' — NO hyperlinks required
 - Fluent, polished writing with smooth transitions (+25-30% visibility)
 - NEVER stuff keywords — this REDUCES AI visibility by 9%
+
+ABSOLUTE URL RULES (ZERO TOLERANCE — violations are immediately stripped):
+1. DO NOT output any markdown hyperlink [text](url) unless the URL is EITHER (a) verbatim from the RESEARCH DATA section below, OR (b) the homepage of a major institution you are 100% certain exists (e.g. https://www.rspca.org.au/, https://www.who.int/, https://en.wikipedia.org/).
+2. DO NOT invent URL paths. 'https://example.com/articles/dog-beds' is forbidden unless that exact URL appears in the research data.
+3. DO NOT link to API endpoints, developer pages, or service URLs (e.g. *.herokuapp.com, dog-api.kinduff.com, dogapi.dog/api/v2/...). These are scraped data sources, never link to them.
+4. DO NOT use link text as the URL slot. '[Dog Facts API](Dog Facts API)' is malformed and forbidden.
+5. If you are tempted to cite a source but don't have a verified URL, write a PLAIN TEXT attribution only: 'According to the RSPCA' — no link. Plain text citations count toward GEO visibility just as well as hyperlinks.
+6. When in doubt, OMIT the link. An article with zero external links is better than an article with one hallucinated link.
 
 E-E-A-T (Google Helpful Content Requirements):
 - Experience: Include first-hand examples, practical details, real-world context

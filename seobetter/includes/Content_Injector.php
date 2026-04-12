@@ -28,15 +28,40 @@ class Content_Injector {
         $citations_added = 0;
         $ref_list = [];
 
-        // Build reference entries from real sources
-        foreach ( array_slice( $sources, 0, 8 ) as $i => $source ) {
+        // Build reference entries — only keep URLs that pass live validation.
+        // We HEAD-request each URL to confirm it returns 200-399 before citing.
+        // Anything that fails, we DO NOT add — better no citation than a dead one.
+        foreach ( array_slice( $sources, 0, 12 ) as $i => $source ) {
             $url = is_array( $source ) ? ( $source['url'] ?? '' ) : $source;
             $title = is_array( $source ) ? ( $source['title'] ?? 'Source' ) : 'Source';
             $name = is_array( $source ) ? ( $source['source_name'] ?? wp_parse_url( $url, PHP_URL_HOST ) ) : wp_parse_url( $url, PHP_URL_HOST );
 
-            if ( empty( $url ) ) continue;
-            $ref_num = $i + 1;
+            if ( empty( $url ) || ! filter_var( $url, FILTER_VALIDATE_URL ) ) continue;
+
+            // Reject API endpoints and dev-host patterns outright
+            if ( preg_match( '#/(api|v1|v2|v3)/|\.herokuapp\.com|-api\.|api\.#i', $url ) ) {
+                continue;
+            }
+
+            // Live-check the URL
+            $response = wp_remote_head( $url, [
+                'timeout'     => 4,
+                'redirection' => 3,
+                'sslverify'   => false,
+                'user-agent'  => 'Mozilla/5.0 (compatible; SEOBetter/1.0)',
+            ] );
+            if ( is_wp_error( $response ) ) continue;
+            $code = wp_remote_retrieve_response_code( $response );
+            if ( $code < 200 || $code >= 400 ) continue;
+
+            $ref_num = count( $ref_list ) + 1;
             $ref_list[] = "{$ref_num}. [{$title}]({$url}) — {$name}";
+
+            if ( count( $ref_list ) >= 8 ) break;
+        }
+
+        if ( empty( $ref_list ) ) {
+            return [ 'success' => false, 'error' => 'No verifiable sources found (all URLs failed live check). Try a different keyword.' ];
         }
 
         // Append references section if not already present
