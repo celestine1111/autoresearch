@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.3
+ * Version: 1.5.4
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.3' );
+define( 'SEOBETTER_VERSION', '1.5.4' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -937,11 +937,11 @@ final class SEOBetter {
             'how_to'             => 'howto',
             'listicle'           => 'listicle',
             'review'             => 'review',
-            'comparison'         => 'article_with_faq',
-            'buying_guide'       => 'article_with_faq',
-            'pillar_guide'       => 'article_with_faq',
-            'case_study'         => 'article',
-            'interview'          => 'article',
+            'comparison'         => 'comparison',
+            'buying_guide'       => 'buying_guide',
+            'pillar_guide'       => 'pillar_guide',
+            'case_study'         => 'case_study',
+            'interview'          => 'interview',
             'faq_page'           => 'faq',
             'recipe'             => 'recipe',
             'tech_article'       => 'tech',
@@ -950,7 +950,7 @@ final class SEOBetter {
             'live_blog'          => 'liveblog',
             'press_release'      => 'news',
             'personal_essay'     => 'article',
-            'glossary_definition'=> 'article_with_faq',
+            'glossary_definition'=> 'glossary',
             'sponsored'          => 'sponsored',
         ];
         return $map[ $content_type ] ?? 'article';
@@ -1011,13 +1011,19 @@ final class SEOBetter {
             'howto'            => 'HowTo',
             'review'           => 'Review',
             'faq'              => 'FAQPage',
-            'product'          => 'Article',
+            'product'          => 'Product',
+            'buying_guide'     => 'Article',
+            'comparison'       => 'Article',
+            'pillar_guide'     => 'Article',
+            'case_study'       => 'Article',
+            'interview'        => 'Article',
             'tech'             => 'TechArticle',
             'report'           => 'Report',
             'scholarly'        => 'ScholarlyArticle',
             'liveblog'         => 'LiveBlogPosting',
             'sponsored'        => 'AdvertiserContentArticle',
             'recipe'           => 'Recipe',
+            'glossary'         => 'DefinedTerm',
         ];
         $schema_at_type = $type_map[ $type ] ?? 'Article';
 
@@ -1038,9 +1044,9 @@ final class SEOBetter {
         }
         $schemas[] = $article;
 
-        // Extract FAQ Q&A pairs from content
+        // Extract FAQ Q&A pairs from content — most articles have a FAQ section
         $faq_pairs = [];
-        if ( in_array( $type, [ 'faq', 'article_with_faq', 'article', 'howto', 'review', 'product' ], true ) ) {
+        if ( ! in_array( $type, [ 'glossary', 'liveblog', 'recipe' ], true ) ) {
             // Match H3 questions followed by paragraph answers
             if ( preg_match_all( '/<h3[^>]*>(.*?\?)<\/h3>\s*(?:<!--[^>]*-->\s*)*<p[^>]*>(.*?)<\/p>/is', $content, $faq_matches, PREG_SET_ORDER ) ) {
                 foreach ( $faq_matches as $m ) {
@@ -1147,8 +1153,8 @@ final class SEOBetter {
             ];
         }
 
-        // Add ItemList schema for listicle content type
-        if ( $type === 'listicle' ) {
+        // Add ItemList schema for listicle, buying_guide, comparison, pillar_guide
+        if ( in_array( $type, [ 'listicle', 'buying_guide', 'comparison', 'pillar_guide' ], true ) ) {
             $list_items = [];
             if ( preg_match_all( '/<h2[^>]*>(.*?)<\/h2>/is', $content, $h2_matches ) ) {
                 $pos = 0;
@@ -1164,12 +1170,48 @@ final class SEOBetter {
                     ];
                 }
             }
-            if ( ! empty( $list_items ) ) {
+            if ( count( $list_items ) >= 2 ) {
                 $schemas[] = [
                     '@type'           => 'ItemList',
                     'itemListElement' => $list_items,
                 ];
             }
+        }
+
+        // Build DefinedTerm for glossary entries — replaces the base Article schema above
+        if ( $type === 'glossary' ) {
+            // Remove the generic Article we pushed first and replace with DefinedTerm
+            array_shift( $schemas );
+            $schemas[] = [
+                '@type'            => 'DefinedTerm',
+                'name'             => $title,
+                'description'      => wp_trim_words( wp_strip_all_tags( $content ), 60 ),
+                'url'              => $url,
+                'inDefinedTermSet' => [
+                    '@type' => 'DefinedTermSet',
+                    'name'  => get_bloginfo( 'name' ) . ' Glossary',
+                    'url'   => home_url(),
+                ],
+            ];
+        }
+
+        // Add Product schema as a secondary entity for buying guides
+        if ( $type === 'buying_guide' ) {
+            $schemas[] = [
+                '@type'       => 'Product',
+                'name'        => $keyword ?: $title,
+                'description' => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
+                'image'       => $thumbnail ?: '',
+                'review'      => [
+                    '@type'        => 'Review',
+                    'author'       => [ '@type' => 'Person', 'name' => $author_name ],
+                    'reviewRating' => [
+                        '@type'       => 'Rating',
+                        'ratingValue' => '4.5',
+                        'bestRating'  => '5',
+                    ],
+                ],
+            ];
         }
 
         // Store content type in post meta for future reference
