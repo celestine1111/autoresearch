@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.9
+ * Version: 1.5.10
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.9' );
+define( 'SEOBETTER_VERSION', '1.5.10' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1290,7 +1290,7 @@ final class SEOBetter {
         // Matches [text](anything-not-starting-with-http) — catches cases where AI puts
         // literal text in the URL slot, or paths like /wp-admin/... or /blog/whatever
         $markdown = preg_replace_callback(
-            '/\[([^\]]+)\]\(((?!https?:\/\/)[^)]*)\)/',
+            '/(?<!!)\[([^\]]+)\]\(((?!https?:\/\/)[^)]*)\)/',
             function ( $m ) {
                 // Keep the link text, drop the broken link wrapper
                 return $m[1];
@@ -1354,9 +1354,13 @@ final class SEOBetter {
             return [ 'keep' => false, 'text' => $text ];
         };
 
-        // Markdown links
+        // Markdown links — negative lookbehind for `!` so image markdown
+        // `![alt](url)` is NEVER matched. Without this guard, Pass 2 would
+        // strip the inner `[alt](url)` of any image whose URL isn't on the
+        // whitelist, leaving a stray `!` at the start of the line. See FM-13
+        // in seo-guidelines/external-links-policy.md.
         $markdown = preg_replace_callback(
-            '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/',
+            '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/',
             function ( $m ) use ( $filter_link ) {
                 $res = $filter_link( $m[2], $m[1] );
                 return $res['keep'] ? $m[0] : $res['text'];
@@ -1410,7 +1414,8 @@ final class SEOBetter {
      * page on rspca.org.au/about-us.
      */
     private function verify_citation_atoms( string $markdown ): string {
-        if ( ! preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
+        // Negative lookbehind for `!` — do not treat image markdown as a link
+        if ( ! preg_match_all( '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
             return $markdown;
         }
 
@@ -1596,8 +1601,8 @@ final class SEOBetter {
             // Is this a reference list entry? (numbered, bulleted, or starts with link)
             $is_list_item = preg_match( '/^(\d+\.|\-|\*)\s+/', $trimmed );
 
-            // Does the line contain a markdown link?
-            if ( preg_match( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $trimmed, $link_match ) ) {
+            // Does the line contain a markdown link? (images excluded via lookbehind)
+            if ( preg_match( '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $trimmed, $link_match ) ) {
                 $text = $link_match[1];
                 $url  = $link_match[2];
                 $host = wp_parse_url( $url, PHP_URL_HOST );
@@ -1683,8 +1688,8 @@ final class SEOBetter {
             $markdown
         );
 
-        // Find every markdown link that survived the validator
-        if ( ! preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
+        // Find every markdown link that survived the validator (images excluded)
+        if ( ! preg_match_all( '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
             return $markdown;
         }
 

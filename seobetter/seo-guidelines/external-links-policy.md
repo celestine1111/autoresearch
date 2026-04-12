@@ -3,7 +3,7 @@
 > **Single source of truth** for how SEOBetter handles outbound URLs in generated articles.
 > If you change link behavior, UPDATE THIS FILE in the same commit.
 >
-> **Last updated:** v1.5.9 — 2026-04-12
+> **Last updated:** v1.5.10 — 2026-04-12
 
 ---
 
@@ -529,6 +529,19 @@ Behavior-driven tests — each FM describes a failure scenario, what detects it,
 **Detection:** Pass 0 sanitizes each entry against the whitelist. Then Phase 3b removes any remaining `## References` heading entirely and builds its own.
 **Result:** The AI's attempt is completely overwritten. The final References section is always programmatically generated from pool metadata.
 
+### FM-13: Image markdown stripped, leaving stray `!`
+
+**Symptom:** Article body contains `!Key takeaways and highlights for {keyword}` as a plain-text line just below `## Key Takeaways`, and the Key Takeaways list renders as a plain `<ul>` instead of the styled wp:html block with the purple left border.
+
+**Detection (historical):** Pass 2's regex `/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/` had no negative lookbehind for `!`, so when `Stock_Image_Inserter` wrote `![alt](https://picsum.photos/...)` into the markdown, Pass 2 matched the inner `[alt](url)` portion. `picsum.photos` / `unsplash.com` / `images.pexels.com` are not in the citation pool or the static whitelist, so `filter_link()` returned `keep: false` and replaced the match with just the anchor text — leaving the leading `!` stranded.
+
+The stranded `!alt text` line then became a paragraph section in `Content_Formatter::parse_markdown()`, because the image detection at `Content_Formatter.php:137` requires `^!\[` (not just `^!`). `format_hybrid`'s backward walk for Key Takeaways styling at `Content_Formatter.php:398-405` broke on the non-empty paragraph section before reaching the heading, so `$prev_heading` stayed empty and the list rendered as a plain `<!-- wp:list -->`.
+
+**Result (v1.5.10+):** Fixed by two changes:
+
+1. **Regex guard** — all 7 `[text](url)` patterns across `seobetter.php`, `Content_Formatter.php`, and `AI_Content_Generator.php` now use `(?<!!)` negative lookbehind. Image markdown is invisible to the link validator at every layer. Images render as proper `wp:image` blocks.
+2. **Placement rule** — `Stock_Image_Inserter::insert_images()` now skips H2 headings that match `/key\s*takeaway|faq|frequently\s*asked|references|sources|bibliography|further\s*reading/i`. Images are placed at content-bearing H2s (`#2`, `#5`, `#8`), never adjacent to structural sections. This is a defense-in-depth improvement — even if the regex guard ever fails, images can't corrupt Key Takeaways styling.
+
 ---
 
 ## 13. Testing procedures
@@ -631,7 +644,8 @@ Treat this file as the contract. If the code and this file disagree, the code wi
 
 | Version | Date | Change |
 |---|---|---|
-| **1.5.9** | 2026-04-12 | **Research Pool architecture.** New `Citation_Pool` class pre-fetches keyword-relevant URLs via DDG/Brave/Wikipedia at generation time, filters + content-verifies them, stores the pool as part of the job state, injects it into the AI prompt as `AVAILABLE CITATIONS`, and uses it as the primary allow-list in the validator (static whitelist becomes fallback). References section is built programmatically at save time from pool URLs the article body cited — never written by the AI. Based on Joshi 2025 (RAG = 58% hallucination reduction), Gosmar & Dahl 2501.13946 (FGR metric), and RLFKV 2602.05723 (Pass 3 atomic verification). |
+| **1.5.10** | 2026-04-12 | **Image markdown fix (FM-13).** Added `(?<!!)` negative lookbehind to all 7 `[text](url)` regex patterns across `seobetter.php`, `Content_Formatter.php`, and `AI_Content_Generator.php` so image markdown `![alt](url)` is never matched as link markdown. Also: `Stock_Image_Inserter` now skips Key Takeaways / FAQ / References headings and places images on H2 #2, #5, #8 only. Fixes stray-`!` corruption and broken Key Takeaways styling detection. |
+| 1.5.9 | 2026-04-12 | **Research Pool architecture.** New `Citation_Pool` class pre-fetches keyword-relevant URLs via DDG/Brave/Wikipedia at generation time, filters + content-verifies them, stores the pool as part of the job state, injects it into the AI prompt as `AVAILABLE CITATIONS`, and uses it as the primary allow-list in the validator (static whitelist becomes fallback). References section is built programmatically at save time from pool URLs the article body cited — never written by the AI. Based on Joshi 2025 (RAG = 58% hallucination reduction), Gosmar & Dahl 2501.13946 (FGR metric), and RLFKV 2602.05723 (Pass 3 atomic verification). |
 | 1.5.8 | 2026-04-12 | `verify_citation_atoms()` added — Pass 3 fine-grained knowledge verification adapted from RLFKV. Fetches every surviving link's destination, verifies anchor-text key terms appear in the page content, rejects mismatches. Session + 24h transient caching. Also strips vague anchor text ("here", "learn more"). |
 | 1.5.7 | 2026-04-12 | `sanitize_references_section()` added (Pass 0). Prompt told AI not to generate References at all. |
 | 1.5.6 | 2026-04-12 | Anchor-text API check, deep-link requirement (no homepages), explicit API path/host patterns. |

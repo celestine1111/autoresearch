@@ -51,8 +51,17 @@ class Stock_Image_Inserter {
                 $heading_text = trim( $m[1] );
                 $output .= $part;
 
-                // Insert image after 1st H2, then every 3rd H2
-                if ( $image_inserted < $max_images && ( $h2_count === 1 || $h2_count % 3 === 0 ) ) {
+                // Skip structural sections — they don't benefit from an image
+                // and placing one next to Key Takeaways breaks the styled
+                // block detection in Content_Formatter::format_hybrid.
+                $is_structural = preg_match(
+                    '/key\s*takeaway|faq|frequently\s*asked|references|sources|bibliography|further\s*reading/i',
+                    $heading_text
+                );
+
+                // Insert image on content-bearing H2s: #2, #5, #8
+                if ( ! $is_structural && $image_inserted < $max_images
+                    && in_array( $h2_count, [ 2, 5, 8 ], true ) ) {
                     // Get the section content (next part) for context
                     $section_context = isset( $parts[ $i + 1 ] ) ? substr( wp_strip_all_tags( $parts[ $i + 1 ] ), 0, 100 ) : '';
                     $alt_text = $this->generate_alt_text( $keyword, $heading_text, $section_context );

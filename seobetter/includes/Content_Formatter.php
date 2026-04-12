@@ -702,8 +702,10 @@ class Content_Formatter {
         $text = preg_replace( '/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text );
         // Italic
         $text = preg_replace( '/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/', '<em>$1</em>', $text );
-        // Links
-        $text = preg_replace( '/\[([^\]]+)\]\(([^)]+)\)/', '<a href="$2">$1</a>', $text );
+        // Links — negative lookbehind for `!` so image markdown `![alt](url)`
+        // is never rewritten into `<a>`. Images are handled by the image
+        // section type in parse_markdown() / format_hybrid().
+        $text = preg_replace( '/(?<!!)\[([^\]]+)\]\(([^)]+)\)/', '<a href="$2">$1</a>', $text );
         // Inline code
         $text = preg_replace( '/`([^`]+)`/', '<code>$1</code>', $text );
 

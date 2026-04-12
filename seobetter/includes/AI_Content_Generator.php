@@ -684,8 +684,8 @@ Output pure GitHub Flavored Markdown.";
         $html = preg_replace( '/\*\*(.+?)\*\*/', '<strong>$1</strong>', $html );
         $html = preg_replace( '/\*(.+?)\*/', '<em>$1</em>', $html );
 
-        // Links
-        $html = preg_replace( '/\[([^\]]+)\]\(([^)]+)\)/', '<a href="$2">$1</a>', $html );
+        // Links — negative lookbehind for `!` so `![alt](url)` image markdown is not rewritten
+        $html = preg_replace( '/(?<!!)\[([^\]]+)\]\(([^)]+)\)/', '<a href="$2">$1</a>', $html );
 
         // Unordered lists
         $html = preg_replace_callback( '/(?:^- .+\n?)+/m', function ( $matches ) {
