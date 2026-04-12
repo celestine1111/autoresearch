@@ -525,6 +525,73 @@ Colored pill badge injected into `.edit-post-header__settings` (next to Save but
 - **Shared cache:** `cachedData` variable prevents duplicate API calls across re-renders
 - **Error isolation:** toolbar badge is DOM-injected (outside React error boundary)
 
+### 11.5 Footer Metabox (added in v1.5.0)
+
+AIOSEO-style settings panel that appears below the post content area on Post and Page screens.
+
+**Registration:** `add_meta_box('seobetter-settings', 'SEOBetter Settings', ...)` on `add_meta_boxes` hook
+**Render:** `seobetter.php::render_metabox(\WP_Post $post)`
+**Save:** `seobetter.php::save_metabox()` hooked to `save_post`
+
+**Three tabs (vanilla JS tab switching, no React):**
+
+#### Tab 1 — General
+- SERP Preview card showing site name + URL + blue title + meta description
+- Focus Keyword input field (saves to `_seobetter_focus_keyword`)
+- 4-stat grid: GEO Score, Words, Citations count, Quotes count
+
+#### Tab 2 — Page Analysis
+12 SEO checks computed at render time:
+| Check | Pass Criteria |
+|---|---|
+| Focus Keyword in content | Keyword appears in post content |
+| Focus keyword in introduction | Keyword in first 100 words |
+| Focus keyword in meta description | Keyword in meta description |
+| Focus Keyword in URL | Keyword slug in permalink |
+| Focus keyword length | 3-50 chars |
+| Meta description length | 120-160 chars |
+| Content length | ≥300 words |
+| Focus Keyword in Subheadings | ≥30% of H2/H3 contain keyword |
+| Focus keyword density | ≥0.5% (shows current density) |
+| Focus keyword in image alt | At least 1 image alt with keyword |
+| Internal links | ≥1 same-domain link |
+| External links | ≥1 cross-domain link |
+
+#### Tab 3 — Readability
+- Reading Grade level from `checks.readability.flesch_grade`
+- Island Test status from `checks.island_test`
+- Section Openings detail from `checks.section_openings`
+- Top 5 prioritized suggestions (high=red, medium=amber)
+
+**Score badge** in top-right of metabox header — color-coded green/amber/red.
+
+### 11.6 Inject-Only Fix System (v1.5.0)
+
+`includes/Content_Injector.php` provides 8 fix methods that NEVER edit existing content.
+
+**5 Inject Methods (additive — append/insert new content):**
+1. `inject_citations()` — fetches real URLs from Vercel research API, appends `## References` section
+2. `inject_quotes()` — AI generates 2 quotes, inserts as blockquotes after H2 headings (skips Key Takeaways/FAQ/References)
+3. `inject_table()` — AI generates 4-column markdown table, inserts after first content H2
+4. `inject_freshness()` — Prepends `Last Updated: [Month Year]` to article top
+5. `inject_statistics()` — Pulls real stats from research API or AI fallback, inserts `**Key Statistics:**` callout
+
+**3 Flag Methods (read-only — show issues, never edit):**
+6. `flag_readability()` — returns long sentences (>25 words) + complex words with simpler replacements
+7. `flag_pronouns()` — returns paragraphs starting with It/This/They/These/Those/He/She/We
+8. `flag_openers()` — returns H2 headings whose first paragraph isn't 30-70 words
+
+**REST endpoint:** `POST /seobetter/v1/inject-fix`
+- Params: `fix_type`, `markdown`, `keyword`, `accent_color`
+- Returns: `success`, `content`, `markdown`, `geo_score`, `grade`, `checks`, `added`, `type`
+- Routes to appropriate `Content_Injector::inject_*` or `flag_*` method
+- Re-formats and re-scores the updated content
+
+**Why this approach:**
+- Zero hallucinated URLs (citations come from real web search)
+- Never wipes user edits (inject = append/insert, never rewrite)
+- Flag-only fixes educate the user instead of black-box rewriting
+
 ---
 
 *This document is the authoritative technical reference for all SEOBetter functionality. Update when features are added or changed.*

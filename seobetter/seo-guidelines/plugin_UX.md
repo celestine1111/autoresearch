@@ -91,22 +91,30 @@ Appears when Generate is clicked. Contains:
 - **High priority** — red left border, light red background, shown expanded
 - **Medium priority** — amber left border, collapsible `<details>` with count
 
-### 3.4 Analyze & Improve Panel (REQUIRED)
+### 3.4 Analyze & Improve Panel (REQUIRED) — INJECT-ONLY SYSTEM
 - Header: "Analyze & Improve" with improvement count
-- PRO badge if not pro
-- **8 possible fix cards** (shown based on check scores):
-  1. Simplify Readability (+12 pts)
-  2. Add Citations (+12 pts)
-  3. Add Expert Quotes (+8 pts)
-  4. Add Statistics (+12 pts)
-  5. Add Comparison Table (+6 pts)
-  6. Add Freshness Signal (+7 pts)
-  7. Fix Section Openings (+10 pts)
-  8. Fix Pronoun Starts (+10 pts)
+- All buttons currently free (will be gated to Pro after testing)
+- **Two button modes:**
+  - **"Add now" (purple)** — INJECT mode: adds new content WITHOUT editing existing text
+  - **"Check" (gray)** — FLAG mode: shows what to fix manually, doesn't touch content
+
+#### INJECT FIXES (5 buttons — safe, never edit existing text)
+1. **Add Citations & References** (+12 pts) — Fetches real URLs from Vercel research API (Reddit, HN, Wikipedia, DuckDuckGo) and appends a References section. Zero hallucinated links.
+2. **Add Expert Quotes** (+8 pts) — Generates 2 expert quotes via AI and inserts them as blockquotes after H2 sections. Skips Key Takeaways/FAQ/References sections.
+3. **Add Statistics** (+12 pts) — Pulls real stats from Vercel research API or generates via AI as fallback. Inserts as `**Key Statistics:**` callout block.
+4. **Add Comparison Table** (+6 pts) — AI generates a 4-column markdown table (Name, Feature, Price, Best For). Inserts after first content H2.
+5. **Add Freshness Signal** (+7 pts) — Prepends "Last Updated: [Month Year]" to top of article. Skips if already present.
+
+#### FLAG FIXES (3 buttons — show issues, user edits manually)
+6. **Check Readability** (+12 pts) — Lists sentences over 25 words + complex words with simpler replacements (utilize→use, facilitate→help, etc.)
+7. **Check Pronoun Starts** (+10 pts) — Lists each paragraph starting with It/This/They/These/Those/He/She/We with the violating word
+8. **Check Section Openings** (+10 pts) — Lists H2 headings whose first paragraph isn't 30-70 words
+
 - Each card: icon + label + description + impact badge + button
-  - **Pro users:** "Fix now" button (calls AI to fix that specific issue)
-  - **Free users:** "Upgrade" button linking to settings
-- Total impact summary at bottom with "Upgrade to Pro →" link
+- After successful inject: button turns green "✓ [count] added", card opacity 0.6, GEO score updates
+- After flag check: button turns amber "See below", suggestions appear inline below the button
+- Bottom info banner: "💡 Inject fixes add content without editing existing text. Check fixes show what to fix manually. Potential: +X points"
+- **Implementation:** `includes/Content_Injector.php` class with 8 methods, REST endpoint `POST /seobetter/v1/inject-fix`
 
 ### 3.5 Content Preview (REQUIRED)
 - Full styled HTML article preview
@@ -312,6 +320,43 @@ All editor integration is in a single PluginDocumentSettingPanel (PluginSidebar 
 - **Toolbar badge uses DOM injection** — not React, so it can't crash the plugin
 - **Shared analysis cache** — `cachedData` variable avoids duplicate API calls
 - **All ES5** — no arrow functions, no optional chaining, no destructuring
+
+### Metabox Below Post Editor (seobetter.php — `register_metabox()`, `render_metabox()`)
+AIOSEO-style settings panel that appears below the post content area on Post and Page edit screens.
+
+- [ ] Registered via `add_meta_box()` on `add_meta_boxes` hook
+- [ ] Title: "SEOBetter Settings" (normal context, low priority)
+- [ ] Renders on both `post` and `page` screens
+- [ ] **3 Tabs in header:**
+  - General (default active)
+  - Page Analysis
+  - Readability
+- [ ] **Score badge** in top-right of header — XX/100 + grade letter, color-coded
+- [ ] **General Tab:**
+  - SERP Preview card (site name + URL + blue title + description)
+  - Focus Keyword input (saves to `_seobetter_focus_keyword` post meta)
+  - 4-stat grid: GEO Score, Words, Citations, Quotes
+- [ ] **Page Analysis Tab — 12 SEO checks with ✓/✗ icons:**
+  1. Focus Keyword in content
+  2. Focus keyword in introduction (with detail message if missing)
+  3. Focus keyword in meta description
+  4. Focus Keyword in URL
+  5. Focus keyword length (3-50 chars)
+  6. Meta description length (120-160 chars)
+  7. Content length (≥300 words)
+  8. Focus Keyword in Subheadings (30%+ rule)
+  9. Focus keyword density (0.5%+ target, shows current density)
+  10. Focus keyword in image alt
+  11. Internal links (≥1)
+  12. External links (≥1)
+- [ ] **Readability Tab:**
+  - Reading Grade level (target 6-8)
+  - Island Test status (no pronoun starts)
+  - Section Openings (40-60 word rule)
+  - Top 5 prioritized suggestions
+- [ ] Tab switching via vanilla JS (no React dependency)
+- [ ] Focus keyword saves on `save_post` hook with nonce verification
+- [ ] Reads existing keyword from SEOBetter, Yoast, or RankMath meta keys
 
 ---
 
