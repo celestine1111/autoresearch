@@ -1127,14 +1127,14 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
 
         if (res.checks) {
             var c = res.checks;
-            if (c.readability && c.readability.score < 70) fixes.push({id:'readability', label:'Simplify Readability', desc:'Grade '+((c.readability.grade||'?'))+' is too complex. Rewrite at grade 6-8 for maximum AI citations.', icon:'editor-spellcheck', impact:'+12 pts', instruction:'Rewrite the article at a 6th-8th grade reading level. Simplify complex sentences. Replace academic words with everyday language. Keep the same structure and facts.'});
-            if (c.citations && c.citations.score < 80) fixes.push({id:'citations', label:'Add Citations', desc:c.citations.count+' citations found. Top-ranking content has 5+. Citations boost GEO visibility by 30%.', icon:'admin-links', impact:'+12 pts', instruction:'Add more inline citations in [Source, Year] format throughout the article. Use the research data sources provided. Target 5+ total citations.'});
-            if (c.expert_quotes && c.expert_quotes.score < 100) fixes.push({id:'quotes', label:'Add Expert Quotes', desc:c.expert_quotes.count+' quotes found. Expert quotes provide the highest GEO visibility boost at 41%.', icon:'format-quote', impact:'+8 pts', instruction:'Add 2+ expert quotes with full attribution: "Quote text," says [Name], [Title] at [Organization] ([Source, Year]). Use real names and organizations relevant to the topic.'});
-            if (c.factual_density && c.factual_density.score < 70) fixes.push({id:'statistics', label:'Add Statistics', desc:'Not enough hard numbers. Statistics with sources boost visibility by 40%.', icon:'chart-bar', impact:'+12 pts', instruction:'Add more specific statistics with source attribution throughout the article. Format: According to [Source] ([Year]), [specific number/percentage]. Target 3+ stats per 1000 words.'});
-            if (c.tables && c.tables.score < 50) fixes.push({id:'table', label:'Add Comparison Table', desc:'No comparison tables found. Tables get cited 30-40% more than prose by AI models.', icon:'editor-table', impact:'+6 pts', instruction:'Add a comparison table in Markdown format that compares key aspects of the topic. Include 3-5 rows and 3-4 columns with specific data.'});
-            if (c.freshness && c.freshness.score < 100) fixes.push({id:'freshness', label:'Add Freshness Signal', desc:'No "Last Updated" date found. Fresh content gets 3.2x more AI citations.', icon:'calendar-alt', impact:'+7 pts', instruction:'Add "Last Updated: '+new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'})+'" at the very start of the article.'});
-            if (c.section_openings && c.section_openings.score < 70) fixes.push({id:'openers', label:'Fix Section Openings', desc:c.section_openings.detail+'. Each section should open with a direct answer paragraph.', icon:'editor-paragraph', impact:'+10 pts', instruction:'Rewrite the opening paragraph of each H2 section to be 30-60 words that directly answer the heading question. Do not restate the heading. Get to the point immediately.'});
-            if (c.island_test && c.island_test.score < 80) fixes.push({id:'island', label:'Fix Pronoun Starts', desc:c.island_test.detail+'. AI models extract individual paragraphs — each must stand alone.', icon:'editor-removeformatting', impact:'+10 pts', instruction:'Find all paragraphs that start with pronouns (It, This, They, These, Those, He, She, We) and rewrite the first word to use a specific entity name or noun instead.'});
+            if (c.citations && c.citations.score < 80) fixes.push({id:'citations', label:'Add Citations & References', desc:c.citations.count+' citations found. Top content has 5+. Uses real web sources (no hallucinated links).', icon:'admin-links', impact:'+12 pts', mode:'inject'});
+            if (c.expert_quotes && c.expert_quotes.score < 100) fixes.push({id:'quotes', label:'Add Expert Quotes', desc:c.expert_quotes.count+' quotes found. Expert quotes boost GEO visibility by 41%. Inserts 2 quotes without editing existing text.', icon:'format-quote', impact:'+8 pts', mode:'inject'});
+            if (c.factual_density && c.factual_density.score < 70) fixes.push({id:'statistics', label:'Add Statistics', desc:'Not enough numbers. Uses real research data from web search. Inserts stats without editing existing text.', icon:'chart-bar', impact:'+12 pts', mode:'inject'});
+            if (c.tables && c.tables.score < 50) fixes.push({id:'table', label:'Add Comparison Table', desc:'No tables found. Tables get cited 30-40% more by AI. Inserts a table without editing existing text.', icon:'editor-table', impact:'+6 pts', mode:'inject'});
+            if (c.freshness && c.freshness.score < 100) fixes.push({id:'freshness', label:'Add Freshness Signal', desc:'No "Last Updated" date. Adds date at top without editing existing text.', icon:'calendar-alt', impact:'+7 pts', mode:'inject'});
+            if (c.readability && c.readability.score < 70) fixes.push({id:'readability', label:'Check Readability', desc:'Grade '+((c.readability.flesch_grade||'?'))+' is too complex. Shows complex sentences and words to simplify manually.', icon:'editor-spellcheck', impact:'+12 pts', mode:'flag'});
+            if (c.island_test && c.island_test.score < 80) fixes.push({id:'island', label:'Check Pronoun Starts', desc:c.island_test.detail+'. Shows which paragraphs to fix manually.', icon:'editor-removeformatting', impact:'+10 pts', mode:'flag'});
+            if (c.section_openings && c.section_openings.score < 70) fixes.push({id:'openers', label:'Check Section Openings', desc:c.section_openings.detail+'. Shows which sections need better openers.', icon:'editor-paragraph', impact:'+10 pts', mode:'flag'});
         }
 
         if (fixes.length > 0) {
@@ -1153,20 +1153,16 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
                 h += '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1e293b">'+fix.label+'</div>';
                 h += '<div style="font-size:11px;color:#64748b;margin-top:2px">'+fix.desc+'</div></div>';
                 h += '<span style="font-size:11px;font-weight:600;color:#22c55e;white-space:nowrap;margin-right:8px">'+fix.impact+'</span>';
-                if (isPro) {
-                    h += '<button type="button" class="button sb-improve-btn" data-fix-id="'+fix.id+'" data-instruction="'+esc(fix.instruction)+'" style="height:32px;font-size:12px;padding:0 14px;background:#764ba2;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap">Fix now</button>';
-                } else {
-                    h += '<a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>" style="display:inline-block;height:32px;line-height:32px;font-size:12px;padding:0 14px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border-radius:6px;text-decoration:none;white-space:nowrap">Upgrade</a>';
-                }
+                var btnLabel = fix.mode === 'inject' ? 'Add now' : 'Check';
+                var btnColor = fix.mode === 'inject' ? '#764ba2' : '#6b7280';
+                h += '<button type="button" class="button sb-improve-btn" data-fix-id="'+fix.id+'" style="height:32px;font-size:12px;padding:0 14px;background:'+btnColor+';color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap">'+btnLabel+'</button>';
                 h += '</div>';
             });
 
-            if (!isPro && fixes.length > 0) {
-                var totalImpact = fixes.reduce(function(sum, f) { return sum + parseInt(f.impact) }, 0);
-                h += '<div style="margin-top:12px;padding:12px 16px;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-radius:8px;text-align:center">';
-                h += '<span style="font-size:13px;color:#312e81">Fixing all issues could add <strong>up to +'+totalImpact+' points</strong> to your GEO score. <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>" style="color:#4338ca;font-weight:600">Upgrade to Pro →</a></span>';
-                h += '</div>';
-            }
+            var totalImpact = fixes.reduce(function(sum, f) { return sum + parseInt(f.impact) }, 0);
+            h += '<div style="margin-top:12px;padding:10px 16px;background:#f0fdf4;border-radius:8px;text-align:center">';
+            h += '<span style="font-size:12px;color:#166534">💡 Inject fixes add content without editing existing text. Check fixes show what to fix manually. Potential: <strong>+'+totalImpact+' points</strong></span>';
+            h += '</div>';
             h += '</div>';
         }
 
@@ -1305,10 +1301,9 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             });
         });
 
-        // Wire up "Fix now" buttons (Pro only)
+        // Wire up "Fix now" buttons — inject-only (never edits existing content)
         document.querySelectorAll('.sb-improve-btn').forEach(function(fixBtn) {
             fixBtn.addEventListener('click', function() {
-                var instruction = this.getAttribute('data-instruction');
                 var fixId = this.getAttribute('data-fix-id');
                 var draft = window._seobetterDraft;
                 if (!draft || !draft.markdown) { alert('No content to improve.'); return; }
@@ -1317,54 +1312,81 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
                 this.textContent = 'Fixing...';
                 var self = this;
 
-                var cloudUrl = CLOUD || '<?php echo esc_js( SEOBetter\Cloud_API::get_cloud_url() ); ?>';
-                fetch(cloudUrl + '/api/generate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt: 'You are improving an existing article. Here is the current article in Markdown:\n\n' + draft.markdown.substring(0, 6000) + '\n\n---\n\nINSTRUCTION: ' + instruction + '\n\nRETURN the FULL improved article in Markdown. Keep the same structure and headings. Only change what the instruction asks for. Do not shorten the article.',
-                        system_prompt: 'You are an expert SEO editor. Apply the requested improvement while keeping everything else intact. Output complete Markdown.',
-                        max_tokens: 8192,
-                        temperature: 0.5,
-                        site_url: SITE
-                    })
-                }).then(function(r) { return r.json(); }).then(function(d) {
-                    if (d.content) {
-                        // Update the stored draft with improved content
-                        draft.markdown = d.content;
-                        // Re-render: format and re-score via the WP REST API
-                        api('generate/improve', 'POST', {
-                            markdown: d.content,
-                            keyword: draft.keyword,
-                            accent_color: draft.accent_color
-                        }).then(function(improved) {
-                            if (improved.success) {
-                                draft.content = improved.content;
-                                self.textContent = 'Fixed!';
-                                self.style.background = '#22c55e';
-                                // Update score display
-                                var scoreEl = document.querySelector('.sb-geo-ring-score');
-                                if (scoreEl) scoreEl.textContent = improved.geo_score;
-                                var gradeEl = document.querySelector('.sb-geo-ring-grade');
-                                if (gradeEl) gradeEl.textContent = improved.grade;
-                                // Update preview
-                                var preview = document.querySelector('.seobetter-content-preview');
-                                if (preview) {
-                                    var newContent = improved.content || '';
-                                    newContent = newContent.replace(/<style>[\s\S]*?<\/style>/, '');
-                                    preview.innerHTML = newContent;
-                                }
-                                // Disable this fix button permanently
-                                setTimeout(function() { self.parentElement.style.opacity = '0.5'; }, 1000);
-                            } else {
-                                self.disabled = false;
-                                self.textContent = 'Retry';
-                                self.style.background = '#ef4444';
-                            }
-                        });
+                // Use inject-fix endpoint (inject-only, never rewrites)
+                api('inject-fix', 'POST', {
+                    fix_type: fixId,
+                    markdown: draft.markdown,
+                    keyword: draft.keyword,
+                    accent_color: draft.accent_color
+                }).then(function(result) {
+                    if (result.type === 'flag') {
+                        // Flag-only fix — show suggestions, don't edit content
+                        self.textContent = 'See below';
+                        self.style.background = '#f59e0b';
+
+                        var flagHtml = '<div style="margin-top:8px;padding:10px;background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;font-size:12px">';
+                        flagHtml += '<strong>' + esc(result.message || '') + '</strong>';
+
+                        if (result.long_sentences) {
+                            result.long_sentences.forEach(function(s) {
+                                flagHtml += '<div style="margin-top:6px;padding:6px 8px;background:#fff;border-radius:4px;border-left:2px solid #f59e0b">';
+                                flagHtml += '<div style="color:#92400e">"' + esc(s.text) + '"</div>';
+                                flagHtml += '<div style="color:#6b7280;font-size:11px;margin-top:2px">' + esc(s.tip) + '</div></div>';
+                            });
+                        }
+                        if (result.complex_words) {
+                            result.complex_words.forEach(function(w) {
+                                flagHtml += '<div style="margin-top:4px;font-size:11px">Replace "<strong>' + esc(w.word) + '</strong>" → "<strong>' + esc(w.replacement) + '</strong>"</div>';
+                            });
+                        }
+                        if (result.violations) {
+                            result.violations.forEach(function(v) {
+                                flagHtml += '<div style="margin-top:6px;padding:6px 8px;background:#fff;border-radius:4px;border-left:2px solid #f59e0b">';
+                                flagHtml += '<div style="color:#92400e">"' + esc(v.text) + '"</div>';
+                                flagHtml += '<div style="color:#6b7280;font-size:11px;margin-top:2px">' + esc(v.tip) + '</div></div>';
+                            });
+                        }
+                        if (result.sections) {
+                            result.sections.forEach(function(s) {
+                                flagHtml += '<div style="margin-top:4px;font-size:11px"><strong>' + esc(s.heading) + '</strong> — ' + esc(s.tip) + '</div>';
+                            });
+                        }
+                        flagHtml += '</div>';
+
+                        self.parentElement.insertAdjacentHTML('afterend', flagHtml);
+                        return;
+                    }
+
+                    if (result.success && result.content) {
+                        // Inject fix succeeded — update draft
+                        draft.markdown = result.markdown || draft.markdown;
+                        draft.content = result.content;
+                        self.textContent = '✓ ' + (result.added || 'Done');
+                        self.style.background = '#22c55e';
+
+                        // Update score display
+                        var scoreEl = document.querySelector('.sb-geo-ring-score');
+                        if (scoreEl) scoreEl.textContent = result.geo_score;
+                        var gradeEl = document.querySelector('.sb-geo-ring-grade');
+                        if (gradeEl) gradeEl.textContent = result.grade;
+
+                        // Update preview
+                        var preview = document.querySelector('.seobetter-content-preview');
+                        if (preview) {
+                            var newContent = result.content || '';
+                            newContent = newContent.replace(/<style>[\s\S]*?<\/style>/, '');
+                            preview.innerHTML = newContent;
+                        }
+
+                        setTimeout(function() { self.parentElement.style.opacity = '0.6'; }, 1500);
                     } else {
                         self.disabled = false;
-                        self.textContent = 'Failed';
+                        self.textContent = 'Retry';
+                        self.style.background = '#ef4444';
+                    }
+                }).catch(function() {
+                    self.disabled = false;
+                    self.textContent = 'Failed';
                         self.style.background = '#ef4444';
                     }
                 }).catch(function() {

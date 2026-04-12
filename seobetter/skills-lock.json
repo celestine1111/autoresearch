@@ -31,6 +31,11 @@
       "sourceType": "github",
       "computedHash": "94e0195dfd712fe427c701a66e32193463639ad5b3f1506438c36434b5207a5b"
     },
+    "blueprint": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "1bac422b386d74aba6abac2e8db31645a9a126d08673afa04d65604dbc5e6c0d"
+    },
     "churn-prevention": {
       "source": "coreyhaines31/marketingskills",
       "sourceType": "github",
@@ -107,14 +112,19 @@
       "computedHash": "4e3260f053e87792b9732f0cab12f75548e979d93513f9652465e0f095af244b"
     },
     "copywriting": {
-      "source": "coreyhaines31/marketingskills",
+      "source": "TheCraigHewitt/seomachine",
       "sourceType": "github",
-      "computedHash": "2e83eda2221e97166172a0798e9b0379e34080595e107e2fc0cf580e9b3bbf7b"
+      "computedHash": "8572a200869f6032fa7815a64e51aa15d6cce566e762dae5e85dd072c1a41b49"
     },
     "customer-research": {
       "source": "coreyhaines31/marketingskills",
       "sourceType": "github",
       "computedHash": "62fa7be6f387c021c2ced299b9b37b6a5dbfb938fd9325de461e31abd067ccbf"
+    },
+    "design-systems": {
+      "source": "Automattic/wordpress-agent-skills",
+      "sourceType": "github",
+      "computedHash": "8d8bdab552acbc58446a63c74cf39991a1eecddcc4d688d5dc016081411bec0e"
     },
     "domain-authority-auditor": {
       "source": "aaron-he-zhu/seo-geo-claude-skills",
@@ -141,10 +151,85 @@
       "sourceType": "github",
       "computedHash": "52dbcf576e0576e2985466e5162a2cd68d92f3ab7fc7441a3feb4263b1a241f7"
     },
+    "geo": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "2488a0aee2fb8f80e19cb4761b40679238735165f2c96c99655ea7ee468b6991"
+    },
+    "geo-audit": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "58b48daf1393f78a75e9507c221b35279ec9fd932a9349aa00f535ec6406d9fb"
+    },
+    "geo-brand-mentions": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "315afe44113947117d43085142e2de2f6dc5a01b5172adb12013045a1c1d60d1"
+    },
+    "geo-citability": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "376a4a0914ccffacb0c18453da72a1cec4c7599c1a7111d2383926c964672076"
+    },
+    "geo-compare": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "060b9bd33be88e564a91921dd65feab50c8d38b3638cd1d4d8eddb5d652b7b63"
+    },
+    "geo-content": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "de19dbe946a80f2fb9e0be71200ed54bf1d8bb1e954f9be6369d03f80db69fc5"
+    },
     "geo-content-optimizer": {
       "source": "aaron-he-zhu/seo-geo-claude-skills",
       "sourceType": "github",
       "computedHash": "924d32f867ca0b615f58bca730e0dad562494d226622cb65bdf17e2c3f5615d5"
+    },
+    "geo-crawlers": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "e20d72ef0bbde88ae2be22b4a5af887c2937cd116a8de630b1f121b3e616ce5d"
+    },
+    "geo-llmstxt": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "65395ae15cea6236e9800f60f5fc7a5083451d825f4640d457750c7480b38871"
+    },
+    "geo-platform-optimizer": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "6fb24c54eefc174257dea23a7eae0f19d20dc1d6503ca1068e3a35bc2fe38ae3"
+    },
+    "geo-proposal": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "a855688f1c163f8a997bb3539c72201816d5a6483e5ba618fe3e8c0816bc3802"
+    },
+    "geo-prospect": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "9efbc4e964de998404239a606f6c990d682a8ac5483176abe460e6e5e5ad06b1"
+    },
+    "geo-report": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "980de035c0f177d74d15e26f4e014729ce87be369c07699a83e65710b55e3350"
+    },
+    "geo-report-pdf": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "2d51933fe0a60234d747692bcce8fe8480cd5f85f8bf90e38ca5aaf5b31e220a"
+    },
+    "geo-schema": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "468e5a9f1d02d47562c0ed871474cb4da8cf82a86aac9b73e0ed3072a438a986"
+    },
+    "geo-technical": {
+      "source": "zubair-trabzada/geo-seo-claude",
+      "sourceType": "github",
+      "computedHash": "2afcecca69952b5abc9072754e39f27fe02c14554c5889a17e898c358574846a"
     },
     "internal-linking-optimizer": {
       "source": "aaron-he-zhu/seo-geo-claude-skills",
@@ -197,14 +282,14 @@
       "computedHash": "4febe44b70f4c824c5cc6a7978b4608add0cca22f099b75b0fd5fd4050195ded"
     },
     "onboarding-cro": {
-      "source": "coreyhaines31/marketingskills",
+      "source": "TheCraigHewitt/seomachine",
       "sourceType": "github",
-      "computedHash": "9d935c024e0768c8b805852fbf9419c2e8c56be2b9e62e89d43a390008bd1229"
+      "computedHash": "ea075be664fe77cfee8c074540fd88213f2e31ed39787ae02082d19fc43b48fa"
     },
     "page-cro": {
-      "source": "coreyhaines31/marketingskills",
+      "source": "TheCraigHewitt/seomachine",
       "sourceType": "github",
-      "computedHash": "9505748dba2319487b285f8ab8c1e5417fce38a512d596e1c9e2e87b34b196e1"
+      "computedHash": "23cc8d7a10674586d432f56c5aa6709d5b3180e97e4f885dac0d545682e5ecc9"
     },
     "paid-ads": {
       "source": "TheCraigHewitt/seomachine",
@@ -227,14 +312,14 @@
       "computedHash": "d3a71fc81f4165b41c341ba0a2b45164475851f4a31951424b4c1e782fbe2073"
     },
     "pricing-strategy": {
-      "source": "coreyhaines31/marketingskills",
+      "source": "TheCraigHewitt/seomachine",
       "sourceType": "github",
-      "computedHash": "4312095789cc328883428b1f9bd61549ca44b376aeda8d62bb977efad017e594"
+      "computedHash": "8767dd7523b3183876030d1aaf6ea702806edf24b66b4a0b50d73c0f6e3e1c5f"
     },
     "product-marketing-context": {
-      "source": "coreyhaines31/marketingskills",
+      "source": "TheCraigHewitt/seomachine",
       "sourceType": "github",
-      "computedHash": "21dd05f970ba54406d7405f92240853f809d0fed09ef6ca2a9204abcdd21548a"
+      "computedHash": "81387c26d53c9f642dc29ea0899e1f676fb51b3a3f4f662d2c9943a20821f39b"
     },
     "programmatic-seo": {
       "source": "TheCraigHewitt/seomachine",
@@ -281,6 +366,11 @@
       "sourceType": "github",
       "computedHash": "be1172a44a549939aa2d0ec19996095b9ddd1a1117c15df1e3790ecee81321ff"
     },
+    "seo-geo": {
+      "source": "resciencelab/opc-skills",
+      "sourceType": "github",
+      "computedHash": "56f90ba46b36563bb5461feb8462aed9283e74dfc4cdac2a98c42c4bc86a95be"
+    },
     "serp-analysis": {
       "source": "aaron-he-zhu/seo-geo-claude-skills",
       "sourceType": "github",
@@ -296,6 +386,11 @@
       "sourceType": "github",
       "computedHash": "4cdfd1ba49925184462a7524586a5ec0b127668498e7bf2972ef0d4c112e9585"
     },
+    "site-specification": {
+      "source": "Automattic/wordpress-agent-skills",
+      "sourceType": "github",
+      "computedHash": "ea88d1c7eebef0bb062c16256ef5a0f7993eddcd168c0ea7d7fc58543bf9b63c"
+    },
     "social-content": {
       "source": "TheCraigHewitt/seomachine",
       "sourceType": "github",
@@ -310,6 +405,81 @@
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",
       "computedHash": "0a413bf988d06481f69bb81df2070741c3ba12dd9f1be2706d57f259c905992d"
+    },
+    "wordpress-block-theming": {
+      "source": "Automattic/wordpress-agent-skills",
+      "sourceType": "github",
+      "computedHash": "d9b1952864a27c634968429b384383d03f9a04efa3e56ba547ee9cb441cb374a"
+    },
+    "wordpress-router": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "7e1ab6a500f78ecbadde3b9f8277370f7f5d8bc01c014c7bb94f6d5948f2d109"
+    },
+    "wp-abilities-api": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "55cf587899a61413f42139915b35637fcf61c9526eedf291f3e4f49114253466"
+    },
+    "wp-block-development": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "663b1974050e443c3888e714a7204768a45459d07ad0d8102a2f2eca56bb8f9d"
+    },
+    "wp-block-themes": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "ec31dc2e2a224299225fed1be6f6a94085b3fbfdcf57f22d673949063abf24bc"
+    },
+    "wp-interactivity-api": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "50ffcda715b63dfb0f9ca2a2543b9a070fe68f7da89b321295902426e918966c"
+    },
+    "wp-performance": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "580d879ffecd41835e297cbf222443bff6bebf7aaa0efb46852d743249330f9b"
+    },
+    "wp-performance-review": {
+      "source": "elvismdev/claude-wordpress-skills",
+      "sourceType": "github",
+      "computedHash": "72d2022915e4a905ad57753552a73a8d210f554388991f41a271c441f19a81a8"
+    },
+    "wp-phpstan": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "66fc5a465493bfa6993459d56d0781f5bfed31dbf0d98f2d538cd5400a10cf65"
+    },
+    "wp-playground": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "1125d6cd0d9097ae478d4b067cf02f2b2e5f0c6690209aa05c97a3e13dbb8921"
+    },
+    "wp-plugin-development": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "3c13a9d2e6e346c9f933918fdf4d191cdba9f2cfe24f87cbcd763d090bbd8014"
+    },
+    "wp-project-triage": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "8df079d09f518217580c8eae57d6edf1827b6a8aabe7d6ec5858ca07cdd81e4d"
+    },
+    "wp-rest-api": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "07d98b54fb41b6dccb0bae9f1a5b0d786776e9438ff5eba17d9dec7db89e5104"
+    },
+    "wp-wpcli-and-ops": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "b04471067f1577112c37870ee564cd06f0787487dc764edf4229f73e3b5981ca"
+    },
+    "wpds": {
+      "source": "WordPress/agent-skills",
+      "sourceType": "github",
+      "computedHash": "1a05f741c9a43026507c8c9641b2dbde4b4928a14038f97322c36ee8b1e88470"
     }
   }
 }

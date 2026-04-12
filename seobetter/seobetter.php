@@ -442,6 +442,13 @@ final class SEOBetter {
             },
         ]);
 
+        register_rest_route( 'seobetter/v1', '/inject-fix', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_inject_fix' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
         register_rest_route( 'seobetter/v1', '/save-draft', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_save_draft' ],
@@ -738,6 +745,70 @@ final class SEOBetter {
     /**
      * Re-format and re-score improved content (called by Fix Now buttons).
      */
+    public function rest_inject_fix( \WP_REST_Request $request ): \WP_REST_Response {
+        $fix_type = sanitize_text_field( $request->get_param( 'fix_type' ) ?? '' );
+        $markdown = $request->get_param( 'markdown' ) ?? '';
+        $keyword  = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
+        $accent   = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
+
+        if ( empty( $markdown ) || empty( $fix_type ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Missing markdown or fix_type.' ], 400 );
+        }
+
+        // Run the appropriate fix
+        switch ( $fix_type ) {
+            case 'citations':
+                $result = SEOBetter\Content_Injector::inject_citations( $markdown, $keyword );
+                break;
+            case 'quotes':
+                $result = SEOBetter\Content_Injector::inject_quotes( $markdown, $keyword );
+                break;
+            case 'table':
+                $result = SEOBetter\Content_Injector::inject_table( $markdown, $keyword );
+                break;
+            case 'freshness':
+                $result = SEOBetter\Content_Injector::inject_freshness( $markdown );
+                break;
+            case 'statistics':
+                $result = SEOBetter\Content_Injector::inject_statistics( $markdown, $keyword );
+                break;
+            case 'readability':
+                $result = SEOBetter\Content_Injector::flag_readability( $markdown );
+                return new \WP_REST_Response( $result );
+            case 'island':
+                $result = SEOBetter\Content_Injector::flag_pronouns( $markdown );
+                return new \WP_REST_Response( $result );
+            case 'openers':
+                $result = SEOBetter\Content_Injector::flag_openers( $markdown );
+                return new \WP_REST_Response( $result );
+            default:
+                return new \WP_REST_Response( [ 'success' => false, 'error' => 'Unknown fix type.' ], 400 );
+        }
+
+        if ( ! $result['success'] ) {
+            return new \WP_REST_Response( $result, 400 );
+        }
+
+        // Re-format and re-score the updated content
+        $updated_markdown = $result['content'];
+        $formatter = new SEOBetter\Content_Formatter();
+        $html = $formatter->format( $updated_markdown, 'classic', [ 'accent_color' => $accent ] );
+
+        $analyzer = new SEOBetter\GEO_Analyzer();
+        $score = $analyzer->analyze( $html, $keyword );
+
+        return new \WP_REST_Response( [
+            'success'   => true,
+            'content'   => $html,
+            'markdown'  => $updated_markdown,
+            'geo_score' => $score['geo_score'],
+            'grade'     => $score['grade'],
+            'checks'    => $score['checks'],
+            'added'     => $result['added'] ?? '',
+            'type'      => $result['type'] ?? $fix_type,
+        ] );
+    }
+
     public function rest_improve_content( \WP_REST_Request $request ): \WP_REST_Response {
         $markdown = $request->get_param( 'markdown' ) ?? '';
         $keyword  = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
