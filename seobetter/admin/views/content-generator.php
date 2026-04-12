@@ -814,6 +814,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
 
 <!-- ===== JAVASCRIPT ===== -->
 <script>
+console.log('[SEOBetter] content-generator.php script loaded — v1.5.3');
 var CLOUD = '<?php echo esc_js( $cloud_url ); ?>';
 var SITE  = '<?php echo esc_js( $home ); ?>';
 
