@@ -63,7 +63,40 @@
             var badge = document.createElement('div');
             badge.id = 'seobetter-toolbar-badge';
             badge.title = 'SEOBetter GEO Score';
-            badge.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:0 10px;height:32px;border-radius:4px;margin-right:8px;border:1px solid ' + color + ';background:' + color + '12;cursor:default;';
+            badge.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:0 10px;height:32px;border-radius:4px;margin-right:8px;border:1px solid ' + color + ';background:' + color + '12;cursor:pointer;';
+            badge.onclick = function() {
+                // Open the Post tab in the sidebar if not already open
+                try {
+                    var postTab = document.querySelector('.edit-post-sidebar__panel-tab[data-label="Post"]') ||
+                                  document.querySelector('button[aria-label="Post"]') ||
+                                  document.querySelector('.editor-sidebar__panel-tabs button:first-child');
+                    if (postTab) postTab.click();
+                } catch(e) {}
+                // Scroll to the SEOBetter panel
+                setTimeout(function() {
+                    var panel = document.querySelector('[data-wb-id="seobetter-panel"]') ||
+                                document.querySelector('.components-panel__body:has([class*="seobetter"])');
+                    // Fallback: find by title text
+                    if (!panel) {
+                        var allPanels = document.querySelectorAll('.components-panel__body');
+                        for (var i = 0; i < allPanels.length; i++) {
+                            var btn = allPanels[i].querySelector('.components-panel__body-title button');
+                            if (btn && btn.textContent.indexOf('SEOBetter') !== -1) {
+                                panel = allPanels[i];
+                                break;
+                            }
+                        }
+                    }
+                    if (panel) {
+                        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        // Open the panel if it's collapsed
+                        var toggleBtn = panel.querySelector('.components-panel__body-title button');
+                        if (toggleBtn && panel.querySelector('.components-panel__body-toggle-icon svg[style*="rotate"]')) {
+                            toggleBtn.click();
+                        }
+                    }
+                }, 200);
+            };
 
             var icon = document.createElement('span');
             icon.textContent = '📊';
