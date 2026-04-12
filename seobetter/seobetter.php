@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.8
+ * Version: 1.5.9
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.8' );
+define( 'SEOBETTER_VERSION', '1.5.9' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -622,12 +622,22 @@ final class SEOBetter {
             $accent = '#764ba2';
         }
 
+        // Retrieve the citation pool that was built during generation.
+        // Pool entries = [ { url, title, source_name, verified_at }, ... ]
+        $pool_raw = $request->get_param( 'citation_pool' );
+        $citation_pool = is_array( $pool_raw ) ? $pool_raw : [];
+
         $post_content = '';
 
-        // Validate all outbound URLs in markdown before formatting
-        // Checks each link with HEAD request — replaces 404s with homepage or removes link
+        // Validate all outbound URLs in markdown before formatting.
+        // The citation pool is passed as the primary allow-list — any URL in
+        // the pool is citable, any URL not in the pool falls back to the
+        // static whitelist and Pass 3 content verification.
         if ( ! empty( $markdown ) ) {
-            $markdown = $this->validate_outbound_links( $markdown );
+            $markdown = $this->validate_outbound_links( $markdown, $citation_pool );
+            // Append auto-generated References section for pool URLs the
+            // article body actually cited
+            $markdown = $this->append_references_section( $markdown, $citation_pool );
         }
 
         if ( ! empty( $markdown ) ) {
@@ -642,7 +652,7 @@ final class SEOBetter {
 
         // Fallback to raw content if gutenberg formatting produced nothing
         if ( empty( trim( $post_content ) ) && ! empty( $content ) ) {
-            $content = $this->validate_outbound_links( $content );
+            $content = $this->validate_outbound_links( $content, $citation_pool );
             $post_content = $content;
         }
 
@@ -1257,7 +1267,14 @@ final class SEOBetter {
      *    validation isn't reliable enough — dead domains return network errors, not 404s,
      *    which used to fall back to "homepage" links that were also dead.
      */
-    private function validate_outbound_links( string $markdown ): string {
+    /**
+     * @param string $markdown       Raw article markdown
+     * @param array  $citation_pool  Optional per-article pool of verified URLs
+     *                               (from Citation_Pool::build). When provided,
+     *                               any URL in the pool passes the whitelist
+     *                               requirement regardless of domain.
+     */
+    private function validate_outbound_links( string $markdown, array $citation_pool = [] ): string {
         // ===== Pass 0: Sanitize any References / Sources section =====
         // The AI often generates a numbered References section with hallucinated
         // URLs. We strip individual reference lines whose links don't pass the
@@ -1285,7 +1302,7 @@ final class SEOBetter {
         $whitelist = $this->get_trusted_domain_whitelist();
         $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
 
-        $filter_link = function ( $url, $text ) use ( $whitelist, $site_host ) {
+        $filter_link = function ( $url, $text ) use ( $whitelist, $site_host, $citation_pool ) {
             $host = wp_parse_url( $url, PHP_URL_HOST );
             $path = wp_parse_url( $url, PHP_URL_PATH );
 
@@ -1299,36 +1316,42 @@ final class SEOBetter {
                 return [ 'keep' => true ];
             }
 
-            // Rule: anchor text must not be an API / dataset / tool name
-            // ('Dog Facts API', 'Pexels API', 'GitHub REST API', 'Reddit API', etc.)
+            // Hard-fail rules (apply regardless of pool membership)
+            //
+            // Anchor text must not be an API / dataset / tool name
             if ( preg_match( '/\b(api|endpoint|dataset|sdk|webhook)\b/i', $text ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
-
-            // Rule: URL must not be an API or developer endpoint
+            // URL must not be an API or developer endpoint
             if ( preg_match( '#/api/|/v[1-9]/|/graphql|/rest/|/swagger|raw\.githubusercontent\.com#i', $url ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
-
-            // Rule: host must not look like an API host
+            // Host must not look like an API host
             if ( preg_match( '/(^|\.)api\.|-api\.|\.herokuapp\.com$/i', $host ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
-
-            // Rule: URL must be on the trusted domain whitelist
-            if ( ! $this->is_host_trusted( $host, $whitelist ) ) {
-                return [ 'keep' => false, 'text' => $text ];
-            }
-
-            // Rule: URL must be a DEEP link (has a real path) — not a bare homepage.
-            // Citations should point to the specific article, study, or report,
-            // not the publication's homepage.
+            // URL must be a DEEP link (has a real path) — not a bare homepage
             $trimmed_path = trim( (string) $path, '/' );
             if ( $trimmed_path === '' || $trimmed_path === 'index.html' || $trimmed_path === 'index.php' ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
 
-            return [ 'keep' => true ];
+            // Primary allow-list: citation pool membership
+            // If the URL is in this article's verified pool, accept it even
+            // if the domain isn't on the static whitelist.
+            if ( ! empty( $citation_pool ) && \SEOBetter\Citation_Pool::contains_url( $citation_pool, $url ) ) {
+                return [ 'keep' => true ];
+            }
+
+            // Fallback allow-list: static domain whitelist
+            // Used when the pool is empty (obscure keyword) or doesn't contain
+            // this specific URL. Domains like *.gov, wikipedia.org, rspca.org.au
+            // etc. remain citable even without pool membership.
+            if ( $this->is_host_trusted( $host, $whitelist ) ) {
+                return [ 'keep' => true ];
+            }
+
+            return [ 'keep' => false, 'text' => $text ];
         };
 
         // Markdown links
@@ -1356,6 +1379,11 @@ final class SEOBetter {
         // the destination and verify the anchor text's key terms appear in the
         // page content. A live URL on a whitelisted domain is not enough — the
         // linked page must actually be about what we claim it is.
+        //
+        // Pool URLs already passed content verification at pool-build time,
+        // but we re-verify against the ANCHOR TEXT here — because a pool URL
+        // about "dog beds" shouldn't be cited with anchor text "dog food",
+        // even though both are dog-related.
         $markdown = $this->verify_citation_atoms( $markdown );
 
         return $markdown;
@@ -1626,6 +1654,70 @@ final class SEOBetter {
             . $heading_match[0][0]
             . $cleaned_section_body
             . $rest;
+    }
+
+    /**
+     * Build and append a programmatic References section from the citation pool.
+     *
+     * Runs AFTER validate_outbound_links() has cleaned the body. Walks every
+     * surviving markdown link in the cleaned body, checks if it's in the pool,
+     * and appends a numbered References section listing each pool entry that
+     * the article body actually cited. Titles come from the pool metadata
+     * (scraped at pool-build time), NOT from the AI.
+     *
+     * If the body contains zero pool-matching citations, no References section
+     * is appended. This guarantees the References section can never contain
+     * hallucinations — every entry is a pool URL the article body referenced.
+     */
+    private function append_references_section( string $markdown, array $citation_pool ): string {
+        if ( empty( $citation_pool ) ) {
+            return $markdown;
+        }
+
+        // Remove any existing References heading the sanitizer may have left
+        // (e.g. if the AI ignored the prompt and wrote one anyway and it was
+        // all empty after stripping). We always build our own.
+        $markdown = preg_replace(
+            '/\n(##+)\s*(references|sources|further reading|bibliography|citations)\b[^\n]*(\n[\s\S]*?)?(?=\n#{1,6}\s|\z)/i',
+            "\n",
+            $markdown
+        );
+
+        // Find every markdown link that survived the validator
+        if ( ! preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
+            return $markdown;
+        }
+
+        // Keep only the pool entries the body actually cited (in order of first mention)
+        $cited_entries = [];
+        $cited_urls = [];
+        foreach ( $matches as $m ) {
+            $url = $m[2];
+            $entry = \SEOBetter\Citation_Pool::get_entry( $citation_pool, $url );
+            if ( $entry && ! in_array( $url, $cited_urls, true ) ) {
+                $cited_urls[] = $url;
+                $cited_entries[] = $entry;
+            }
+        }
+
+        if ( empty( $cited_entries ) ) {
+            return $markdown;
+        }
+
+        $lines = [ '', '## References', '' ];
+        $i = 1;
+        foreach ( $cited_entries as $entry ) {
+            $title = trim( (string) ( $entry['title'] ?? '' ) );
+            $url   = $entry['url'];
+            $src   = trim( (string) ( $entry['source_name'] ?? wp_parse_url( $url, PHP_URL_HOST ) ) );
+            if ( $title === '' ) {
+                $title = $src ?: 'Source';
+            }
+            $lines[] = "{$i}. [{$title}]({$url}) — {$src}";
+            $i++;
+        }
+
+        return rtrim( $markdown ) . "\n" . implode( "\n", $lines ) . "\n";
     }
 
     /**

@@ -1262,7 +1262,11 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             content_type: (document.querySelector('[name="content_type"]')||{}).value||'blog_post',
             meta_title: (res.meta && res.meta.title) || bestTitle || '',
             meta_description: (res.meta && res.meta.description) || '',
-            og_title: (res.meta && res.meta.og_title) || bestTitle || ''
+            og_title: (res.meta && res.meta.og_title) || bestTitle || '',
+            // Citation pool from generation — used at save time by
+            // validate_outbound_links() as the primary allow-list and by
+            // build_references_section() to build References programmatically.
+            citation_pool: res.citation_pool || []
         };
 
         h += '<div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">';

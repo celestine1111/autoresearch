@@ -150,12 +150,22 @@ class Async_Generator {
         try {
             if ( $step === 'trends' ) {
                 $step_label = Trend_Researcher::is_available()
-                    ? 'Researching real-time trends (Reddit, X, YouTube, Web)...'
-                    : 'Researching recent trends...';
+                    ? 'Researching real-time trends + building citation pool...'
+                    : 'Researching recent trends + building citation pool...';
 
                 $research = Trend_Researcher::research( $keyword, $options['domain'] ?? 'general', $options['country'] ?? '' );
                 $job['results']['trends'] = $research['for_prompt'] ?? '';
                 $job['results']['trend_source'] = $research['source'] ?? 'unknown';
+
+                // Build the verified citation pool (real keyword-relevant URLs)
+                // This drives both the AI prompt grounding and the post-save validator.
+                $pool = Citation_Pool::build(
+                    $keyword,
+                    $options['country'] ?? '',
+                    $options['domain'] ?? 'general'
+                );
+                $job['results']['citation_pool'] = $pool;
+                $job['results']['citation_pool_prompt'] = Citation_Pool::format_for_prompt( $pool );
 
                 // Detect search intent from keyword to adapt article structure
                 $job['results']['intent'] = self::detect_intent( $keyword );
@@ -185,10 +195,18 @@ class Async_Generator {
                 $total_sections = count( $headings );
                 $step_label = "Writing section " . ( $section_idx + 1 ) . " of {$total_sections}...";
 
+                // Append the citation pool prompt to the trends context so every
+                // section generation sees the AVAILABLE CITATIONS block. This
+                // grounds the AI in a bounded pool of real URLs (Joshi 2025 RAG
+                // approach) and is the primary defense against citation
+                // hallucination — the validator's filter is just the safety net.
+                $trends_context = ( $job['results']['trends'] ?? '' )
+                    . ( $job['results']['citation_pool_prompt'] ?? '' );
+
                 $section_content = self::generate_section(
                     $keyword, $heading, $section_idx, $options,
                     $secondary, $lsi, $system,
-                    $job['results']['trends'] ?? '',
+                    $trends_context,
                     $job['results']['intent'] ?? 'informational'
                 );
                 $job['results'][ 'section_' . $section_idx ] = $section_content;
@@ -417,38 +435,11 @@ class Async_Generator {
             $prompt = "Write an FAQ section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\nWrite 5 question-answer pairs. Vary the answer lengths — some short (25-35 words), some longer (50-80 words). Do not make every answer the same length or structure.{$readability_rule}\n\nRules:\n- Phrase questions exactly how real people search (use 'you' and natural language)\n- Answer directly in the first sentence — no throat-clearing\n- Include the keyword \"{$keyword}\" in at least 2 questions\n- Use a real statistic or fact from the research data in at least one answer\n- Never start answers with pronouns (It, This, They)\n- Never start with 'Yes,' or 'No,' followed by a restatement\n- Match the tone specified above\n\nFormat:\n\n## Frequently Asked Questions\n\n### [Question]?\n[Answer]";
             $max = 2000;
         } elseif ( $is_references ) {
-            // Inject real source URLs from research data
-            $sources_list = '';
-            if ( $trends ) {
-                // Extract markdown links from the research data
-                preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)\s*[—-]\s*(.+)/i', $trends, $link_matches, PREG_SET_ORDER );
-                // Also extract bare URLs with surrounding context
-                if ( empty( $link_matches ) ) {
-                    preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i', $trends, $link_matches, PREG_SET_ORDER );
-                }
-                // Also try to find URLs directly
-                if ( empty( $link_matches ) ) {
-                    preg_match_all( '/(https?:\/\/[^\s\)]+)/i', $trends, $url_only );
-                    if ( ! empty( $url_only[1] ) ) {
-                        foreach ( array_unique( array_slice( $url_only[1], 0, 10 ) ) as $u ) {
-                            try {
-                                $host = parse_url( $u, PHP_URL_HOST );
-                                $link_matches[] = [ $u, str_replace( 'www.', '', $host ?: $u ), $u, 'Web source' ];
-                            } catch ( \Exception $e ) {}
-                        }
-                    }
-                }
-                if ( ! empty( $link_matches ) ) {
-                    $sources_list = "\n\nREAL SOURCES TO USE (these are verified URLs — use them as outbound links):\n";
-                    foreach ( array_slice( $link_matches, 0, 15 ) as $lm ) {
-                        $sources_list .= "- [{$lm[1]}]({$lm[2]})" . ( isset( $lm[3] ) ? " — {$lm[3]}" : '' ) . "\n";
-                    }
-                    $sources_list .= "\nIMPORTANT: Use ONLY the URLs listed above. Do NOT invent any URLs or page paths. If you mention an organization not in this list, link to their homepage domain only (e.g., https://www.rspca.org.au/) — never guess subpages.";
-                }
-            }
-            $domain_hint = ( $domain && $domain !== 'general' ) ? "\nDomain: {$domain} — prioritize authoritative sources for this field." : '';
-            $prompt = "Write a References section for an article about \"{$keyword}\".{$domain_hint}{$sources_list}\n\nFormat each reference as a clickable Markdown link:\n## References\n1. [Source Title](https://real-url.com) — One sentence describing what this source covers.\n2. ...\n\nRules:\n- Include 5-10 references\n- Every URL must be a REAL, working link from the sources provided above\n- If you do not have enough real URLs, include the source name and year without a fake URL\n- Prioritize authoritative sources (government, academic, established organizations) over community sources\n- Do not include API documentation URLs or developer tool links as references\n- Write each description differently — do not use the same sentence structure for every reference";
-            $max = 800;
+            // The References section is now built programmatically by the plugin
+            // at save time from the verified citation pool — the AI no longer
+            // generates it. Return an empty string so the section slot is skipped.
+            // See seo-guidelines/external-links-policy.md, Layer 3b.
+            return '';
         } else {
             $trends_inject = $trends ? "\n\nREAL-TIME RESEARCH DATA (use these real statistics and sources — do NOT hallucinate numbers):\n{$trends}" : '';
 
@@ -510,18 +501,22 @@ class Async_Generator {
         $score = $analyzer->analyze( $html, $keyword, $options['content_type'] ?? '' );
 
         return [
-            'success'     => true,
-            'content'     => $html,
-            'markdown'    => $markdown,
-            'keyword'     => $keyword,
-            'geo_score'   => $score['geo_score'],
-            'grade'       => $score['grade'],
-            'word_count'  => str_word_count( wp_strip_all_tags( $html ) ),
-            'model_used'  => 'async-chained',
-            'suggestions' => $score['suggestions'],
-            'checks'      => $score['checks'],
-            'headlines'   => $job['results']['headlines'] ?? [],
-            'meta'        => $job['results']['meta'] ?? [],
+            'success'       => true,
+            'content'       => $html,
+            'markdown'      => $markdown,
+            'keyword'       => $keyword,
+            'geo_score'     => $score['geo_score'],
+            'grade'         => $score['grade'],
+            'word_count'    => str_word_count( wp_strip_all_tags( $html ) ),
+            'model_used'    => 'async-chained',
+            'suggestions'   => $score['suggestions'],
+            'checks'        => $score['checks'],
+            'headlines'     => $job['results']['headlines'] ?? [],
+            'meta'          => $job['results']['meta'] ?? [],
+            // Thread the citation pool through to the save path so
+            // validate_outbound_links() can use it as the primary allow-list
+            // and build_references_section() can auto-generate References.
+            'citation_pool' => $job['results']['citation_pool'] ?? [],
         ];
     }
 
@@ -610,20 +605,20 @@ GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
 - Fluent, polished writing with smooth transitions (+25-30% visibility)
 - NEVER stuff keywords — this REDUCES AI visibility by 9%
 
-ABSOLUTE URL RULES (ZERO TOLERANCE — violations are immediately stripped):
-The ONLY legitimate hyperlink is one that points to the SPECIFIC article, study, page, or report you are citing — the actual source of the fact you just stated. Not a homepage. Not a category page. Not an API. If you don't have the exact source URL in the research data below, DO NOT LINK — use a plain-text citation instead.
+CITATION RULES (closed-menu grounding — the plugin injects an AVAILABLE CITATIONS list below):
 
-1. DO NOT output any markdown hyperlink [text](url) unless the URL is verbatim from the RESEARCH DATA section below AND is the direct article/study/page that supports the specific claim being made. One URL = one direct source.
-2. DO NOT link to homepages. 'https://www.rspca.org.au/' as a citation for a specific statistic is forbidden. Either link to the exact article/report page (/knowledgebase/article-id), or don't link at all.
-3. DO NOT link to APIs, endpoints, developer pages, or raw data URLs. Patterns forbidden: anything containing /api/, /v1/, /v2/, api.*, *-api.*, *.herokuapp.com, *.github.io/api, raw.githubusercontent.com, etc. These are data pipelines, never citations.
-4. DO NOT use API names, dataset names, or tool names as anchor text. '[Dog Facts API](...)', '[Pexels API](...)', '[Reddit API](...)' are forbidden. These are not publications, they cannot be cited.
-5. DO NOT invent URL paths. Never guess '/articles/dog-beds', '/research/2026-study', '/blog/how-to'. If the exact path isn't in the research data, don't output it.
-6. DO NOT use link text as the URL slot. '[Dog Facts API](Dog Facts API)' is malformed markdown and will be stripped.
-7. For ANY source you can't link directly, use plain-text attribution: 'According to a 2026 RSPCA report', 'Research from the AVMA found that...', '(Mayo Clinic)'. Plain-text citations count EQUALLY toward GEO visibility — no hyperlink required.
-8. When in doubt, OMIT the link. Zero external links is always better than one hallucinated or indirect link.
-9. TARGET: an article with good plain-text attributions and zero hyperlinks is a pass. An article with 5 hyperlinks to homepages or APIs is a FAIL.
-10. DO NOT output a '## References', '## Sources', '## Bibliography', '## Further Reading', or '## Citations' section at the end of the article. These sections are processed automatically and will be stripped if they contain hallucinated URLs. Use inline plain-text attributions throughout the article body instead.
-11. ATOMIC KNOWLEDGE UNITS: Treat each citation as a minimal knowledge unit — (claim + source). Before outputting any [text](url), silently ask yourself: 'Does the destination page actually contain content about this exact claim?' If the answer is no, or 'probably', or 'I don't know', DO NOT OUTPUT THE LINK. Every citation you output is verified by fetching the destination page and checking that your anchor text's key terms appear in the page content. Mismatches are detected and stripped automatically, and repeated hallucinations are a quality failure signal. The safe default is plain-text attribution: 'According to a 2026 study' — no link needed.
+The plugin pre-fetches real keyword-relevant article URLs before you write and injects them below as AVAILABLE CITATIONS. Those URLs are the ONLY URLs you may output as hyperlinks. Think of it as a closed menu — if a URL isn't on the menu, you can't order it.
+
+1. Use ONLY URLs from the AVAILABLE CITATIONS list. Copy them character-for-character. Any URL you output that is not in the list is automatically stripped.
+2. Match the citation to the claim. Pick the pool URL whose title is closest to the specific point you're making. Don't cite a dog-beds article for a claim about dog food.
+3. Use each pool URL at most once. Spread citations across sections — don't pile them all in one.
+4. Plain-text attributions are fully encouraged and count equally for GEO visibility. If no pool URL supports a claim, write 'According to a 2026 RSPCA report' or 'Research from the AVMA found that...' — no link needed.
+5. DO NOT invent URL paths, modify pool URLs, or output URLs that aren't in the pool. Don't guess. Don't approximate.
+6. DO NOT use API/dataset/tool names as anchor text. '[Dog Facts API](...)', '[Pexels API](...)', '[Reddit API](...)' are stripped unconditionally.
+7. DO NOT use link text as the URL slot. '[Dog Facts API](Dog Facts API)' is malformed markdown.
+8. DO NOT output a '## References', '## Sources', '## Bibliography', '## Further Reading', or '## Citations' section. The plugin builds References programmatically from the pool URLs you actually cited in the body. Don't pre-empt it.
+9. If the AVAILABLE CITATIONS list is empty (obscure topic, no sources found), use plain-text attributions only and output ZERO hyperlinks.
+10. TARGET: an article using 3-6 pool citations (matched to their claims) plus plenty of plain-text attributions is a PASS. An article with 5 hyperlinks to homepages, APIs, or URLs not in the pool is a FAIL.
 
 E-E-A-T (Google Helpful Content Requirements):
 - Experience: Include first-hand examples, practical details, real-world context
