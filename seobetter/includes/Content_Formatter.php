@@ -523,13 +523,22 @@ class Content_Formatter {
 
         // Self-contained scoped CSS — no external dependencies
         // Use !important on critical properties to override any theme CSS
-        $css = "<style>.{$uid}{font-family:inherit;color:#1f2937 !important;line-height:1.7;background:#fff !important;padding:2em;border-radius:12px}";
+        //
+        // Typography spec (article_design.md §3, SEO-GEO-AI-GUIDELINES.md §12B):
+        // - System font stacks (ui-serif for headings, ui-sans-serif for body)
+        // - clamp() fluid heading sizes
+        // - text-wrap: balance on headings, pretty on paragraphs
+        // - max-width 65ch on body copy
+        $sans = "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+        $serif = "ui-serif,Georgia,'Times New Roman',serif";
+
+        $css = "<style>.{$uid}{font-family:{$sans};color:#1f2937 !important;line-height:1.7;background:#fff !important;padding:2em;border-radius:12px;max-width:100%}";
         $css .= ".{$uid} *{color:inherit}";
-        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{font-family:inherit;color:#111827 !important}";
-        $css .= ".{$uid} h1{font-size:2em;font-weight:800;line-height:1.2;margin:0 0 0.5em;text-transform:capitalize}";
-        $css .= ".{$uid} h2{font-size:1.5em;font-weight:700;line-height:1.3;color:{$accent} !important;margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22}";
-        $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;margin:1.5em 0 0.5em;color:#374151 !important}";
-        $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;font-size:1.05em;color:#374151 !important}";
+        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3,.{$uid} h4{font-family:{$serif};color:#111827 !important;text-wrap:balance}";
+        $css .= ".{$uid} h1{font-size:clamp(1.8em,4vw,2.4em);font-weight:800;line-height:1.2;margin:0 0 0.5em;text-transform:capitalize}";
+        $css .= ".{$uid} h2{font-size:clamp(1.3em,3vw,1.6em);font-weight:700;line-height:1.3;color:{$accent} !important;margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22}";
+        $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;line-height:1.4;margin:1.5em 0 0.5em;color:#374151 !important}";
+        $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;font-size:1.05em;color:#374151 !important;text-wrap:pretty;max-width:65ch}";
         // Drop cap on first paragraph after an H2
         $css .= ".{$uid} h2+p::first-letter,.{$uid} h2+div+p::first-letter{float:left;font-size:3.2em;line-height:0.8;font-weight:700;color:{$accent} !important;margin:0.05em 0.1em 0 0}";
         $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151 !important}";
@@ -705,7 +714,28 @@ class Content_Formatter {
         // Links — negative lookbehind for `!` so image markdown `![alt](url)`
         // is never rewritten into `<a>`. Images are handled by the image
         // section type in parse_markdown() / format_hybrid().
-        $text = preg_replace( '/(?<!!)\[([^\]]+)\]\(([^)]+)\)/', '<a href="$2">$1</a>', $text );
+        //
+        // External links get rel="noopener nofollow" target="_blank" per
+        // SEO-GEO-AI-GUIDELINES §11 (Internal Linking Rules) and article_design.md.
+        // Internal links (same host as the site) keep bare <a> tags.
+        $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+        $text = preg_replace_callback(
+            '/(?<!!)\[([^\]]+)\]\(([^)]+)\)/',
+            function ( $m ) use ( $site_host ) {
+                $anchor = $m[1];
+                $url    = $m[2];
+                $host   = wp_parse_url( $url, PHP_URL_HOST );
+                if ( $host && $host !== $site_host ) {
+                    return sprintf(
+                        '<a href="%s" target="_blank" rel="noopener nofollow">%s</a>',
+                        esc_url( $url ),
+                        $anchor
+                    );
+                }
+                return sprintf( '<a href="%s">%s</a>', esc_url( $url ), $anchor );
+            },
+            $text
+        );
         // Inline code
         $text = preg_replace( '/`([^`]+)`/', '<code>$1</code>', $text );
 

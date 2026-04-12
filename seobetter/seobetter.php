@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.10
+ * Version: 1.5.11
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.10' );
+define( 'SEOBETTER_VERSION', '1.5.11' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -326,7 +326,11 @@ final class SEOBetter {
 
             if ( $content_hash !== $cached_hash ) {
                 $analyzer = new SEOBetter\GEO_Analyzer();
-                $score = $analyzer->analyze( $post->post_content, $post->post_title );
+                // Prefer the saved focus keyword for keyword-density scoring;
+                // fall back to the post title for organic posts.
+                $kw_or_title = get_post_meta( $post_id, '_seobetter_focus_keyword', true ) ?: $post->post_title;
+                $content_type = get_post_meta( $post_id, '_seobetter_content_type', true ) ?: '';
+                $score = $analyzer->analyze( $post->post_content, $kw_or_title, $content_type );
                 update_post_meta( $post_id, '_seobetter_geo_score', $score );
                 update_post_meta( $post_id, '_seobetter_content_hash', $content_hash );
 
@@ -460,6 +464,43 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
+        // Full 80-item CORE-EEAT audit (guideline §15B)
+        register_rest_route( 'seobetter/v1', '/core-eeat/(?P<post_id>\d+)', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_core_eeat_audit' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+    }
+
+    /**
+     * REST: full 80-item CORE-EEAT audit with VETO items.
+     *
+     * GET /seobetter/v1/core-eeat/{post_id}
+     *
+     * Returns a comprehensive rubric score across CORE (Content Body) and
+     * EEAT (Source Credibility), plus any triggered VETO items (C01 title
+     * mismatch, R10 contradictions, T04 missing disclosures).
+     */
+    public function rest_core_eeat_audit( \WP_REST_Request $request ): \WP_REST_Response {
+        $rate_check = $this->check_rate_limit( 'core_eeat' );
+        if ( $rate_check ) return $rate_check;
+
+        $post = get_post( $request->get_param( 'post_id' ) );
+        if ( ! $post ) {
+            return new \WP_REST_Response( [ 'error' => 'Post not found' ], 404 );
+        }
+
+        $keyword = get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: '';
+        $content_type = get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: '';
+        $auditor = new SEOBetter\CORE_EEAT_Auditor();
+        $result = $auditor->audit( $post->post_content, $post->post_title, $keyword, $content_type );
+
+        // Cache the audit result
+        update_post_meta( $post->ID, '_seobetter_core_eeat', wp_json_encode( $result ) );
+
+        return new \WP_REST_Response( $result );
     }
 
     /**
@@ -488,7 +529,10 @@ final class SEOBetter {
         }
         $content_type = get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: '';
         $analyzer = new SEOBetter\GEO_Analyzer();
-        $result = $analyzer->analyze( $post->post_content, $post->post_title, $content_type );
+        // Prefer the saved focus keyword over the title so keyword-density
+        // scoring (§5A) uses the actual keyword, not the headline text.
+        $kw_or_title = get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: $post->post_title;
+        $result = $analyzer->analyze( $post->post_content, $kw_or_title, $content_type );
 
         // Add schema info for pre-publish panel
         $schema = get_post_meta( $post->ID, '_seobetter_schema', true );
@@ -698,6 +742,16 @@ final class SEOBetter {
         }
         if ( $meta_desc ) {
             update_post_meta( $post_id, '_seobetter_meta_description', $meta_desc );
+        }
+
+        // Store 5-Part Framework phase report (§28) if provided by generator
+        $framework_raw = $request->get_param( 'framework' );
+        if ( is_array( $framework_raw ) && ! empty( $framework_raw ) ) {
+            update_post_meta( $post_id, '_seobetter_framework_report', wp_json_encode( $framework_raw ) );
+            $q5 = $framework_raw['phase_5_quality_gate'] ?? [];
+            if ( isset( $q5['passed'] ) ) {
+                update_post_meta( $post_id, '_seobetter_quality_gate', $q5['passed'] ? 'passed' : 'failed' );
+            }
         }
 
         // Populate AIOSEO fields if the plugin is active

@@ -170,6 +170,23 @@ class Async_Generator {
                 // Detect search intent from keyword to adapt article structure
                 $job['results']['intent'] = self::detect_intent( $keyword );
 
+                // 5-Part Content Ranking Framework (§28) — record Phase 1-3
+                // completion. Actual quality gate (Phase 5) runs at save time.
+                $job['results']['framework'] = [
+                    'phase_1_topic_selection' => [
+                        'passed'        => count( $pool ) > 0 || ! empty( $research['sources'] ),
+                        'sources_found' => count( $pool ),
+                    ],
+                    'phase_2_keyword_research' => [
+                        'passed'        => str_word_count( $keyword ) >= 2 && str_word_count( $keyword ) <= 12,
+                        'word_count'    => str_word_count( $keyword ),
+                    ],
+                    'phase_3_intent_grouping' => [
+                        'passed' => true,
+                        'intent' => $job['results']['intent'],
+                    ],
+                ];
+
             } elseif ( $step === 'outline' ) {
                 $step_label = 'Creating article outline...';
                 $outline = self::generate_outline( $keyword, $options, $secondary, $lsi );
@@ -500,6 +517,10 @@ class Async_Generator {
         $analyzer = new GEO_Analyzer();
         $score = $analyzer->analyze( $html, $keyword, $options['content_type'] ?? '' );
 
+        // 5-Part Framework (§28) Phase 5 — Quality Gate on the assembled article
+        $framework = new Content_Ranking_Framework();
+        $quality_gate = $framework->quality_gate( $html, $keyword, $options['content_type'] ?? '' );
+
         return [
             'success'       => true,
             'content'       => $html,
@@ -517,6 +538,17 @@ class Async_Generator {
             // validate_outbound_links() can use it as the primary allow-list
             // and build_references_section() can auto-generate References.
             'citation_pool' => $job['results']['citation_pool'] ?? [],
+            // 5-Part Framework phase tracking (§28)
+            'framework'     => array_merge(
+                $job['results']['framework'] ?? [],
+                [
+                    'phase_4_writing' => [
+                        'passed'   => true,
+                        'pipeline' => 'Async_Generator',
+                    ],
+                    'phase_5_quality_gate' => $quality_gate,
+                ]
+            ),
         ];
     }
 

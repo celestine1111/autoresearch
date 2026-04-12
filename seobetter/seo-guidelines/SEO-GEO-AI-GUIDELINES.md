@@ -1,15 +1,25 @@
 # SEOBetter Master Guidelines — SEO, GEO & AI Search Optimization
 
-> **CODE WORD: When the user starts a prompt with `/seobetter` — READ ALL 4 .md files before making any changes:**
+> **CODE WORD: When the user starts a prompt with `/seobetter` — READ ALL 5 .md files before making any changes:**
 > 1. **plugin_UX.md** — UI elements that must never be removed (verification checklist)
 > 2. **article_design.md** — Article HTML/styling specification
 > 3. **plugin_functionality_wordpress.md** — Complete technical reference
-> 4. **This file (SEO-GEO-AI-GUIDELINES.md)** — SEO/GEO rules for content generation
+> 4. **external-links-policy.md** — Outbound link / citation / whitelist rules
+> 5. **This file (SEO-GEO-AI-GUIDELINES.md)** — SEO/GEO rules for content generation
 > **After changes, verify the plugin_UX.md checklist. If anything is missing, restore it.**
 >
 > **Single source of truth** for all article generation, scoring, and optimization in the SEOBetter WordPress plugin. Every prompt, scorer, and formatter MUST reference this document.
 >
-> **Last updated:** April 2026 (v2)
+> **Last updated:** v1.5.11 — 2026-04-12
+>
+> **v1.5.11 integration additions:**
+> - §5A keyword density: now enforced post-generation (`GEO_Analyzer::check_keyword_density()`, 10% weight)
+> - §4B humanizer: banned-word scanner runs on every save (`check_humanizer()`, 4% weight)
+> - §15B CORE-EEAT lite: 10-item rubric scored per save (`check_core_eeat()`, 5% weight)
+> - §15B CORE-EEAT full: 80-item rubric + VETO items on demand (`CORE_EEAT_Auditor::audit()`, `GET /seobetter/v1/core-eeat/{post_id}`)
+> - §28 5-Part Framework: phase tracking scaffolding (`Content_Ranking_Framework.php`, wired into Async_Generator)
+> - §12B typography: system fonts, `clamp()` fluid sizes, `text-wrap: balance/pretty` now in Content_Formatter classic mode
+> - §11 External links: `rel="noopener nofollow" target="_blank"` on all external `<a>` tags
 > **Sources:** KDD 2024 GEO Research, Princeton University (arxiv.org/pdf/2311.09735), SE Ranking (129K domain study), Semrush, CORE-EEAT Benchmark, Google Search Quality Guidelines, Google Helpful Content Guidelines, Google Cloud NLP, 5-Part Content Ranking Framework, Last30Days v2.9.6 (multi-source trend research), installed Claude Skills (ai-seo, geo-content-optimizer, seo-content-writer, content-quality-auditor, meta-tags-optimizer, serp-analysis, last30days)
 
 ---
@@ -217,6 +227,16 @@ Sources: [Wikipedia Signs of AI Writing](https://en.wikipedia.org/wiki/Wikipedia
 
 AI-generated articles that "sound AI" get lower engagement, lower trust, and lower E-E-A-T scores. Google's helpful content guidelines penalize content that reads as mass-produced. Every generated article MUST avoid these patterns.
 
+**Post-generation enforcement (v1.5.11+):** `GEO_Analyzer::check_humanizer()` scans the generated text for Tier-1 and Tier-2 banned words plus 8 banned patterns (`not only / but also`, `at its core`, `in today's world`, `delve into`, `let's dive in`, `future looks bright`, `serves as`, `ever-evolving`). Contributes **4% weight** to the final GEO score:
+
+- Start at 100
+- −15 per Tier-1 word
+- −10 per Tier-2 word beyond the 2 allowed
+- −10 per banned pattern
+- Floor at 0
+
+High-priority suggestion appears in the Analyze & Improve panel when score < 70, listing the specific Tier-1 words found.
+
 ### Banned Words (Never Use)
 | Category | Words to Avoid | Use Instead |
 |---|---|---|
@@ -320,6 +340,8 @@ AI detection tools measure sentence length variation ("burstiness"). Low burstin
 
 These rules ensure articles pass AIOSEO, Yoast, and RankMath analysis on first publish. Every generated article MUST follow all of these.
 
+**Post-generation enforcement (v1.5.11+):** The `GEO_Analyzer::check_keyword_density()` method measures all three sub-checks (density, H2 coverage, intro placement) and contributes **10% weight** to the final GEO score. If the score falls below 60, a high-priority suggestion appears in the Analyze & Improve panel. Before v1.5.11 these rules were only in the prompt — now they're verified after the AI writes.
+
 ### 5A.1 Mandatory Keyword Placements
 The **exact primary keyword** (e.g., "reptile shop melbourne") MUST appear in ALL of these locations:
 
@@ -378,21 +400,26 @@ The introduction paragraph MUST:
 
 ## 6. GEO SCORING RUBRIC (0-100)
 
-This is the scoring system used by `GEO_Analyzer.php`. Each check is weighted.
+This is the scoring system used by `GEO_Analyzer.php`. Each check is weighted. **Updated in v1.5.11** — three new checks added (keyword density, humanizer, CORE-EEAT lite). Existing weights reduced proportionally to keep the total at 100.
 
 | Check | Weight | Score 100 | Score 0 |
 |---|:---:|---|---|
-| Readability | 12% | Grade 6-8 | Grade 14+ |
-| BLUF Header | 10% | Key Takeaways present with 3 bullets | Missing |
-| Section Openings | 10% | All sections have 40-60 word openers | None do |
-| Island Test | 10% | No pronoun starts | 20%+ violate |
-| Factual Density | 12% | 3+ stats per 1000 words | 0 stats |
-| Citations | 12% | 5+ inline citations | 0 citations |
-| Expert Quotes | 8% | 2+ attributed quotes | 0 quotes |
-| Tables | 6% | 2+ comparison tables | 0 tables |
-| Lists | 5% | 4+ lists | 0 lists |
-| Freshness Signal | 7% | "Last Updated" present | Missing |
-| Entity Usage | 8% | 5%+ named entity density | Under 1% |
+| Readability | 10% | Grade 6-8 | Grade 14+ |
+| BLUF Header | 8% | Key Takeaways present with 3 bullets | Missing |
+| Section Openings | 8% | All sections have 40-60 word openers | None do |
+| Island Test | 8% | No pronoun starts | 20%+ violate |
+| Factual Density | 10% | 3+ stats per 1000 words | 0 stats |
+| Citations | 10% | 5+ inline citations | 0 citations |
+| Expert Quotes | 6% | 2+ attributed quotes | 0 quotes |
+| Tables | 5% | 2+ comparison tables | 0 tables |
+| Lists | 4% | 4+ lists | 0 lists |
+| Freshness Signal | 6% | "Last Updated" present | Missing |
+| Entity Usage | 6% | 5%+ named entity density | Under 1% |
+| **Keyword Density** ⭐ | **10%** | 0.5-1.5% density, ≥30% H2 coverage, keyword in first 150 chars | No keyword or 0% density or >2.5% stuffing |
+| **Humanizer** ⭐ | **4%** | Zero Tier-1 AI words, ≤2 Tier-2, no banned patterns | 4+ Tier-1 words |
+| **CORE-EEAT Lite** ⭐ | **5%** | 10/10 items pass (see §15B rubric) | 0/10 |
+
+⭐ = added in v1.5.11 (guideline §5A, §4B, §15B integration).
 
 ### Grade Scale
 - **A+ (90-100):** Publish immediately — optimized for AI citations
@@ -530,6 +557,14 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 - Generic ("this guide", "learn more"): 40-50%
 - Never "click here"
 
+### External Link Attributes (v1.5.11+)
+- All **external** links get `rel="noopener nofollow" target="_blank"` automatically
+- `target="_blank"` opens in new tab (keeps user on the article)
+- `rel="noopener"` prevents the new tab from accessing `window.opener` (security)
+- `rel="nofollow"` tells search engines not to pass link equity (required by Google for AI-generated citations in many cases)
+- **Internal** links (same host as the site) keep bare `<a>` tags with no `rel`/`target`
+- Implemented in `Content_Formatter::inline_markdown()` via `preg_replace_callback`
+
 ### Orphan Page Rule
 - Every published page must have 2+ internal links pointing to it
 - Pages with 0 internal links = orphan = invisible to search engines
@@ -560,12 +595,14 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 - No `<link>`, `@import`, or `<script>` tags
 - Works on any CMS: WordPress, Shopify, Magento, Ghost
 
-### Typography
-- System font stacks: `ui-serif, Georgia, serif` for headings, `ui-sans-serif, system-ui, sans-serif` for body
-- `text-wrap: balance` on headings, `text-wrap: pretty` on paragraphs
-- `clamp()` for fluid heading sizes
+### Typography (implemented in v1.5.11)
+- System font stacks: `ui-serif, Georgia, 'Times New Roman', serif` for headings, `ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif` for body
+- `text-wrap: balance` on H1/H2/H3/H4 headings
+- `text-wrap: pretty` on paragraphs
+- `clamp(1.8em, 4vw, 2.4em)` for H1, `clamp(1.3em, 3vw, 1.6em)` for H2 (fluid sizing)
 - `line-height: 1.7`, `max-width: 65ch` for body copy
-- `::first-letter` drop cap on opening paragraph
+- `::first-letter` drop cap on opening paragraph after each H2
+- Implemented in `Content_Formatter::format_classic()` scoped CSS (line ~526)
 
 ### Color System
 CSS custom properties at article scope level:
@@ -692,7 +729,24 @@ Reference: [Google Cloud Natural Language](https://cloud.google.com/natural-lang
 
 ## 15B. CORE-EEAT SCORING DIMENSIONS
 
-### Content Body (CORE) — 40 items
+**v1.5.11 implementation:** Two levels of enforcement now exist:
+
+1. **Lite version (10 items)** in `GEO_Analyzer::check_core_eeat()` — runs on every save, contributes 5% to the GEO score.
+2. **Full 80-item rubric** in `CORE_EEAT_Auditor::audit()` — runs on demand via `GET /seobetter/v1/core-eeat/{post_id}`. Includes VETO items that can block publication.
+
+### Lite rubric (10 items — 1 point each, scored by GEO_Analyzer)
+- **C1** Direct answer in first 150 words
+- **C2** FAQ section present
+- **O1** Heading hierarchy (no skipped levels, ≥3 headings)
+- **O2** At least one table
+- **R1** ≥5 specific numbers (%, dollars, quantities, years)
+- **R2** ≥1 citation per 500 words
+- **E1** First-hand language ("we tested", "in our review", "I've used")
+- **Exp1** Practical examples ("for example", "such as", "e.g.")
+- **A1** ≥3 named experts or organizations (proper-noun phrases)
+- **T1** Acknowledges tradeoffs ("however", "while", "drawback")
+
+### Full Content Body (CORE) — 40 items
 | Dimension | Items | Key Checks |
 |---|:---:|---|
 | **C** Contextual Clarity | 10 | Intent alignment, direct answer in first 150 words, FAQ section |
@@ -700,7 +754,7 @@ Reference: [Google Cloud Natural Language](https://cloud.google.com/natural-lang
 | **R** Referenceability | 10 | 5+ precise numbers, 1 citation per 500 words, source quality |
 | **E** Exclusivity | 10 | Original data, unique angle, case studies, proprietary details |
 
-### Source Credibility (EEAT) — 40 items
+### Full Source Credibility (EEAT) — 40 items
 | Dimension | Items | Key Checks |
 |---|:---:|---|
 | **Exp** Experience | 10 | First-hand experience, practical examples, mistakes acknowledged |
@@ -709,9 +763,11 @@ Reference: [Google Cloud Natural Language](https://cloud.google.com/natural-lang
 | **T** Trust | 10 | Disclosures, balanced perspective, factual accuracy |
 
 ### Veto Items (publication blockers)
-- **C01:** Title must match content (misleading = block)
-- **R10:** No contradictions between claims (inconsistency = block)
-- **T04:** Required disclosures must be present (missing = block)
+- **C01:** Title must match content (keyword absent from first 1500 chars = block)
+- **R10:** No contradictions between claims (inconsistency = block — placeholder, needs LLM)
+- **T04:** Required disclosures must be present (affiliate/sponsored content without disclosure = block)
+
+When any veto item triggers, the audit returns `veto: true` and the `Content_Ranking_Framework::quality_gate()` method returns `passed: false` regardless of the raw score. The normalized score is capped at 40 when vetoed. Access the full audit at `GET /seobetter/v1/core-eeat/{post_id}`.
 
 ---
 
@@ -1186,6 +1242,20 @@ Supported by: Bing, Yandex, Seznam, Naver. Google uses its own Indexing API.
 Proven framework for creating content that ranks on Google, gets cited by AI, and drives traffic. Based on the Princeton GEO study (arxiv.org/pdf/2311.09735) and real-world ranking results.
 
 **Core principle:** No one-shot AI prompt can generate content that ranks. Research-first, structure second, writing third.
+
+**v1.5.11 implementation:** `Content_Ranking_Framework.php` wraps the existing Async_Generator pipeline with explicit phase tracking. Each of the 5 phases is recorded to post meta as the pipeline runs. Phase 5 (Quality Gate) runs at save time and can block publication if the GEO score < 60 OR any CORE-EEAT VETO item triggers.
+
+**Phase tracking in post meta:**
+- `_seobetter_framework_report` — JSON report of all 5 phases with passed/failed status and details
+- `_seobetter_quality_gate` — `passed` / `failed` / `pending`
+- `_seobetter_framework_phase` — current phase (1-5) or `complete`
+
+**Async_Generator wiring:**
+- Phase 1 (Topic Selection) — recorded during the `trends` step (pool + research data present = passed)
+- Phase 2 (Keyword Research) — recorded during `trends` step (2-12 word long-tail check)
+- Phase 3 (Intent Grouping) — recorded during `trends` step (`detect_intent()` result)
+- Phase 4 (Research-First Writing) — recorded during `assemble_final()` (always true if we got there)
+- Phase 5 (Quality Gate) — runs in `assemble_final()` via `Content_Ranking_Framework::quality_gate()`; report passed to JS, stored on save
 
 ### 28.1 Step 1: Topic Selection via Competitor Analysis
 Before writing, analyze the top 10 Google results for your target keyword:

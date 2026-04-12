@@ -1266,7 +1266,10 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             // Citation pool from generation — used at save time by
             // validate_outbound_links() as the primary allow-list and by
             // build_references_section() to build References programmatically.
-            citation_pool: res.citation_pool || []
+            citation_pool: res.citation_pool || [],
+            // 5-Part Framework phase report (§28) — persisted to post meta
+            // so future audits can see which phases passed/failed.
+            framework: res.framework || {}
         };
 
         h += '<div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">';

@@ -500,7 +500,10 @@ Every generated article MUST have:
 
 **Typography & styling**
 - [ ] System font stacks (no external fonts)
-- [ ] Fluid heading sizes via `clamp()` (classic mode preview only)
+- [x] Fluid heading sizes via `clamp()` — `clamp(1.8em,4vw,2.4em)` H1, `clamp(1.3em,3vw,1.6em)` H2 (v1.5.11+)
+- [x] `text-wrap: balance` on headings, `text-wrap: pretty` on paragraphs (v1.5.11+)
+- [x] System font stacks: `ui-serif, Georgia, serif` for headings, `ui-sans-serif, system-ui, sans-serif` for body (v1.5.11+)
+- [x] External links have `rel="noopener nofollow" target="_blank"` (v1.5.11+)
 - [ ] Accent color applied: H2 text, borders, links, table headers (user's color picker value, default `#764ba2`)
 - [ ] No emoji in article body
 - [ ] No AI tells (delve, tapestry, pivotal, cornerstone, etc.) — see `Async_Generator.php::get_system_prompt()` banned words list

@@ -12,6 +12,11 @@ namespace SEOBetter;
  * - BLUF header presence
  * - Factual density (statistics, citations, quotes)
  * - EEAT signals
+ *
+ * Added in v1.5.11 (guideline §5A, §4B, §15B integration):
+ * - Keyword density check (0.5-1.5% target, per SEO plugin compatibility)
+ * - Banned-word / humanizer post-check (Tier 1 + Tier 2 AI word detection)
+ * - CORE-EEAT lite scoring (top 10 items from the 80-item rubric)
  */
 class GEO_Analyzer {
 
@@ -20,14 +25,33 @@ class GEO_Analyzer {
     private const SECTION_WORD_MAX    = 75;
     private const STATS_PER_1000      = 3;
 
+    /** Tier 1 banned words — immediate AI red flags (SEO-GEO-AI-GUIDELINES §4B). */
+    private const TIER1_BANNED_WORDS = [
+        'delve', 'tapestry', 'landscape', 'paradigm', 'leverage', 'harness',
+        'navigate', 'realm', 'embark', 'myriad', 'plethora', 'multifaceted',
+        'groundbreaking', 'revolutionize', 'synergy', 'ecosystem', 'resonate',
+        'streamline', 'testament', 'pivotal', 'cornerstone', 'game-changer',
+        'nestled', 'breathtaking', 'stunning', 'seamless', 'vibrant', 'renowned',
+    ];
+
+    /** Tier 2 banned words — fine alone, 3+ in one article is a tell. */
+    private const TIER2_BANNED_WORDS = [
+        'robust', 'cutting-edge', 'innovative', 'comprehensive', 'nuanced',
+        'compelling', 'transformative', 'bolster', 'underscore', 'evolving',
+        'fostering', 'imperative', 'intricate', 'overarching', 'unprecedented',
+        'profound', 'showcasing', 'garner', 'crucial', 'vital',
+    ];
+
     /**
      * Run full GEO analysis on content.
      *
-     * @param string $content Post content (HTML).
-     * @param string $title   Post title.
+     * @param string $content      Post content (HTML).
+     * @param string $keyword_or_title  Focus keyword (preferred) or post title (fallback).
+     *                             Used for keyword density scoring in §5A.
+     * @param string $content_type 21 content types affect which checks are relaxed.
      * @return array Analysis results with overall score and breakdown.
      */
-    public function analyze( string $content, string $title = '', string $content_type = '' ): array {
+    public function analyze( string $content, string $keyword_or_title = '', string $content_type = '' ): array {
         $text = wp_strip_all_tags( $content );
         $sections = $this->extract_sections( $content );
         $word_count = str_word_count( $text );
@@ -48,20 +72,30 @@ class GEO_Analyzer {
             'lists'            => $this->check_lists( $content ),
             'freshness'        => $this->check_freshness_signal( $content ),
             'entity_usage'     => $this->check_entity_usage( $text ),
+            // v1.5.11 additions — guideline §5A, §4B, §15B
+            'keyword_density'  => $this->check_keyword_density( $content, $text, $keyword_or_title, $word_count ),
+            'humanizer'        => $this->check_humanizer( $text, $word_count ),
+            'core_eeat'        => $this->check_core_eeat( $content, $text ),
         ];
 
+        // Weights sum to 100 — keyword_density is critical (SEO plugin compatibility),
+        // humanizer is a quality signal, core_eeat is Google E-E-A-T alignment.
+        // Reduced other weights proportionally to fit the 3 new checks.
         $weights = [
-            'readability'      => 12,
-            'bluf_header'      => 10,
-            'section_openings' => 10,
-            'island_test'      => 10,
-            'factual_density'  => 12,
-            'citations'        => 12,
-            'expert_quotes'    => 8,
-            'tables'           => 6,
-            'lists'            => 5,
-            'freshness'        => 7,
-            'entity_usage'     => 8,
+            'readability'      => 10,   // was 12
+            'bluf_header'      => 8,    // was 10
+            'section_openings' => 8,    // was 10
+            'island_test'      => 8,    // was 10
+            'factual_density'  => 10,   // was 12
+            'citations'        => 10,   // was 12
+            'expert_quotes'    => 6,    // was 8
+            'tables'           => 5,    // was 6
+            'lists'            => 4,    // was 5
+            'freshness'        => 6,    // was 7
+            'entity_usage'     => 6,    // was 8
+            'keyword_density'  => 10,   // NEW — SEO plugin compatibility (§5A)
+            'humanizer'        => 4,    // NEW — AI tell detection (§4B)
+            'core_eeat'        => 5,    // NEW — E-E-A-T lite (§15B)
         ];
 
         $weighted_score = 0;
@@ -322,6 +356,283 @@ class GEO_Analyzer {
     }
 
     /**
+     * Keyword density check — guideline §5A.
+     *
+     * SEO plugins (AIOSEO, Yoast, RankMath) flag articles that don't hit their
+     * keyword density windows. This check measures:
+     *
+     *   1. Primary keyword density (0.5%-1.5% target, 100 pts)
+     *   2. Percentage of H2 headings containing the keyword (≥30% target)
+     *   3. Keyword in first 150 chars (intro rule)
+     *
+     * All three are blended into a single score.
+     */
+    private function check_keyword_density( string $content, string $text, string $keyword, int $word_count ): array {
+        $keyword = trim( (string) $keyword );
+        if ( $keyword === '' || $word_count < 100 ) {
+            return [
+                'score'  => 0,
+                'detail' => 'Keyword density not analyzed (no keyword or content too short)',
+            ];
+        }
+
+        // Count exact-phrase occurrences (case-insensitive)
+        $lower_text = strtolower( $text );
+        $lower_kw   = strtolower( $keyword );
+        $kw_count   = substr_count( $lower_text, $lower_kw );
+        $density    = $word_count > 0 ? ( $kw_count / max( 1, $word_count / count( explode( ' ', $keyword ) ) ) ) * 100 : 0;
+
+        // Proper density: (keyword occurrences × keyword word count) / total words × 100
+        $kw_word_count = max( 1, str_word_count( $keyword ) );
+        $density       = ( $kw_count * $kw_word_count / $word_count ) * 100;
+
+        // Density component (0-100) — 100 at 0.5-1.5%, scales off outside
+        if ( $density >= 0.5 && $density <= 1.5 ) {
+            $density_score = 100;
+        } elseif ( $density > 0 && $density < 0.5 ) {
+            $density_score = round( $density / 0.5 * 100 ); // 0.3% = 60
+        } elseif ( $density > 1.5 && $density <= 2.5 ) {
+            $density_score = max( 40, round( 100 - ( ( $density - 1.5 ) * 60 ) ) );
+        } elseif ( $density > 2.5 ) {
+            $density_score = 0; // keyword stuffing
+        } else {
+            $density_score = 0;
+        }
+
+        // H2 heading coverage component (0-100)
+        preg_match_all( '/<h2[^>]*>(.*?)<\/h2>/is', $content, $h2_matches );
+        $h2_total   = count( $h2_matches[1] ?? [] );
+        $h2_with_kw = 0;
+        if ( $h2_total > 0 ) {
+            foreach ( $h2_matches[1] as $h2 ) {
+                if ( stripos( wp_strip_all_tags( $h2 ), $keyword ) !== false ) {
+                    $h2_with_kw++;
+                }
+            }
+        }
+        $h2_coverage = $h2_total > 0 ? ( $h2_with_kw / $h2_total ) : 0;
+        // 30% H2 coverage = 100, scales linearly below and plateaus above
+        $h2_score = min( 100, round( ( $h2_coverage / 0.30 ) * 100 ) );
+
+        // Intro-paragraph keyword component (0-100) — must be in first 150 chars of plain text
+        $intro_slice = substr( $lower_text, 0, 150 );
+        $intro_score = strpos( $intro_slice, $lower_kw ) !== false ? 100 : 0;
+
+        // Blend: density 50%, H2 coverage 30%, intro 20%
+        $score = round( $density_score * 0.5 + $h2_score * 0.3 + $intro_score * 0.2 );
+
+        return [
+            'score'       => $score,
+            'density'     => round( $density, 2 ),
+            'count'       => $kw_count,
+            'h2_total'    => $h2_total,
+            'h2_with_kw'  => $h2_with_kw,
+            'h2_coverage' => round( $h2_coverage * 100 ),
+            'intro_match' => $intro_score === 100,
+            'detail'      => sprintf(
+                'Density %.2f%% (%d×), %d/%d H2s contain keyword (%d%%), intro: %s',
+                $density, $kw_count, $h2_with_kw, $h2_total,
+                round( $h2_coverage * 100 ),
+                $intro_score === 100 ? 'yes' : 'no'
+            ),
+        ];
+    }
+
+    /**
+     * Humanizer / anti-AI writing pattern check — guideline §4B.
+     *
+     * Scans the text for Tier 1 banned words (immediate red flags) and Tier 2
+     * banned words (fine alone, 3+ in an article is a tell). Scores:
+     *
+     *   - 100 if zero Tier 1 words and ≤2 Tier 2 words
+     *   - Drops 15 per Tier 1 word found
+     *   - Drops 10 per Tier 2 word beyond the allowed 2
+     *   - Drops 10 per banned pattern detected ("Not only X, but also Y", etc.)
+     *
+     * The goal is post-generation validation — the prompt already tells the AI
+     * to avoid these, but drift happens and we need a mechanical backstop.
+     */
+    private function check_humanizer( string $text, int $word_count ): array {
+        if ( $word_count < 100 ) {
+            return [ 'score' => 0, 'detail' => 'Content too short for humanizer check' ];
+        }
+
+        $lower = strtolower( $text );
+        $tier1_hits = [];
+        $tier2_hits = [];
+
+        foreach ( self::TIER1_BANNED_WORDS as $word ) {
+            // Word boundary match to avoid false positives (e.g. "landscape" in "landscapes")
+            if ( preg_match_all( '/\b' . preg_quote( $word, '/' ) . '\b/i', $lower, $m ) ) {
+                $tier1_hits[] = [ 'word' => $word, 'count' => count( $m[0] ) ];
+            }
+        }
+        foreach ( self::TIER2_BANNED_WORDS as $word ) {
+            if ( preg_match_all( '/\b' . preg_quote( $word, '/' ) . '\b/i', $lower, $m ) ) {
+                $tier2_hits[] = [ 'word' => $word, 'count' => count( $m[0] ) ];
+            }
+        }
+
+        // Banned pattern detection
+        $pattern_hits = [];
+        $patterns = [
+            'not_only'   => '/\bnot only\b.*?\bbut also\b/i',
+            'at_its_core' => '/\bat its core\b/i',
+            'ever_evolving' => '/\bever.evolving\b/i',
+            'in_todays'   => '/\bin today\'?s (fast.paced|digital|modern) (world|landscape|era)\b/i',
+            'delve_into' => '/\bdelve into\b/i',
+            'dive_in'    => '/\b(let\'?s |we\'?ll )dive in\b/i',
+            'future_bright' => '/\bfuture (looks bright|is bright)\b/i',
+            'serves_as'  => '/\bserves as\b/i',
+        ];
+        foreach ( $patterns as $name => $regex ) {
+            if ( preg_match( $regex, $text ) ) {
+                $pattern_hits[] = $name;
+            }
+        }
+
+        $tier1_count = array_sum( array_column( $tier1_hits, 'count' ) );
+        $tier2_count = array_sum( array_column( $tier2_hits, 'count' ) );
+        $pattern_count = count( $pattern_hits );
+
+        $score = 100;
+        $score -= $tier1_count * 15;
+        $score -= max( 0, $tier2_count - 2 ) * 10; // tolerate 2 Tier 2 words
+        $score -= $pattern_count * 10;
+        $score = max( 0, $score );
+
+        return [
+            'score'         => $score,
+            'tier1_count'   => $tier1_count,
+            'tier2_count'   => $tier2_count,
+            'pattern_count' => $pattern_count,
+            'tier1_words'   => array_slice( array_column( $tier1_hits, 'word' ), 0, 5 ),
+            'tier2_words'   => array_slice( array_column( $tier2_hits, 'word' ), 0, 5 ),
+            'patterns'      => $pattern_hits,
+            'detail'        => sprintf(
+                '%d Tier-1 AI words, %d Tier-2 AI words, %d banned patterns',
+                $tier1_count, $tier2_count, $pattern_count
+            ),
+        ];
+    }
+
+    /**
+     * CORE-EEAT lite scoring — top 10 items from the 80-item rubric (§15B).
+     *
+     * This is a quick proxy for Google's E-E-A-T signals. The full 80-item
+     * CORE-EEAT benchmark is too heavy to run on every save, so we extract
+     * the 10 highest-signal items and score each as 10 points.
+     *
+     * 10 items (1 point each × 10):
+     *
+     *  C1. Direct answer in first 150 words
+     *  C2. FAQ section present
+     *  O1. Heading hierarchy (H1 → H2 → H3, no jumps)
+     *  O2. Tables for comparative data
+     *  R1. Specific numbers (≥5 precise figures)
+     *  R2. At least 1 citation per 500 words
+     *  E1. First-hand language ("we found", "in our tests", "I've used")
+     *  Exp1. Practical examples (preg: /for example|for instance|such as|e\.g\./)
+     *  A1. Named experts/organizations (≥3 proper-noun entities)
+     *  T1. Acknowledges limitations or tradeoffs (preg: /however|but|though|while|limit|drawback|caveat/)
+     */
+    private function check_core_eeat( string $content, string $text ): array {
+        $word_count = str_word_count( $text );
+        if ( $word_count < 200 ) {
+            return [ 'score' => 0, 'detail' => 'Content too short for E-E-A-T analysis' ];
+        }
+
+        $score = 0;
+        $details = [];
+
+        // C1 — Direct answer in first 150 words
+        $first_150 = implode( ' ', array_slice( preg_split( '/\s+/', trim( $text ) ), 0, 150 ) );
+        // A direct answer has at least one declarative sentence ending in a period
+        if ( preg_match( '/[^.!?]{20,}\./', $first_150 ) ) {
+            $score += 10;
+            $details[] = 'C1:answer';
+        }
+
+        // C2 — FAQ section present
+        if ( preg_match( '/faq|frequently\s*asked/i', $content ) ) {
+            $score += 10;
+            $details[] = 'C2:faq';
+        }
+
+        // O1 — Heading hierarchy (H1 → H2 → H3, no skipping levels)
+        preg_match_all( '/<h([1-6])[^>]*>/i', $content, $h_matches );
+        $levels = array_map( 'intval', $h_matches[1] ?? [] );
+        $hierarchy_ok = true;
+        $prev_level = 1;
+        foreach ( $levels as $lvl ) {
+            if ( $lvl > $prev_level + 1 ) {
+                $hierarchy_ok = false;
+                break;
+            }
+            $prev_level = $lvl;
+        }
+        if ( $hierarchy_ok && count( $levels ) >= 3 ) {
+            $score += 10;
+            $details[] = 'O1:hierarchy';
+        }
+
+        // O2 — At least one table
+        if ( stripos( $content, '<table' ) !== false ) {
+            $score += 10;
+            $details[] = 'O2:table';
+        }
+
+        // R1 — At least 5 specific numbers (percentages, dollar amounts, years, quantities)
+        preg_match_all( '/\b\d+[\.,]?\d*\s*(?:%|percent|billion|million|thousand|USD|\$|£|€|kg|lb|mg|km|mi|hours?|minutes?|days?|years?)\b|\b(?:19|20)\d{2}\b/i', $text, $num_matches );
+        if ( count( $num_matches[0] ) >= 5 ) {
+            $score += 10;
+            $details[] = 'R1:numbers';
+        }
+
+        // R2 — At least 1 citation per 500 words (inline [Source, Year] or linked)
+        preg_match_all( '/\[[A-Z][^\]]*\d{4}\]|\([A-Z][^)]*\d{4}\)|\[\d+\]/', $text, $cite_matches );
+        $cite_count = count( $cite_matches[0] );
+        // Also count pool-linked markdown (images excluded)
+        preg_match_all( '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $text, $link_matches );
+        $cite_count += count( $link_matches[0] );
+        if ( $cite_count >= max( 1, floor( $word_count / 500 ) ) ) {
+            $score += 10;
+            $details[] = 'R2:citations';
+        }
+
+        // E1 — First-hand language (Experience signal)
+        if ( preg_match( '/\b(we (found|tested|tried|discovered|learned)|in our (test|experience|review)|i\'ve (used|tried|tested)|my experience|from our testing)\b/i', $text ) ) {
+            $score += 10;
+            $details[] = 'E1:firsthand';
+        }
+
+        // Exp1 — Practical examples
+        if ( preg_match( '/\b(for example|for instance|such as|e\.g\.|consider|take [a-z]+ as an example)\b/i', $text ) ) {
+            $score += 10;
+            $details[] = 'Exp1:examples';
+        }
+
+        // A1 — Named experts or organizations (3+ proper-noun phrases)
+        preg_match_all( '/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}\b/', $text, $entity_matches );
+        if ( count( $entity_matches[0] ) >= 3 ) {
+            $score += 10;
+            $details[] = 'A1:entities';
+        }
+
+        // T1 — Acknowledges limitations / tradeoffs
+        if ( preg_match( '/\b(however|but|though|while|limitation|drawback|caveat|tradeoff|trade.off|downside|weakness)\b/i', $text ) ) {
+            $score += 10;
+            $details[] = 'T1:tradeoffs';
+        }
+
+        return [
+            'score'   => $score,
+            'details' => $details,
+            'detail'  => sprintf( '%d/10 CORE-EEAT items passed', count( $details ) ),
+        ];
+    }
+
+    /**
      * Extract H2/H3 sections with their first paragraphs.
      */
     private function extract_sections( string $content ): array {
@@ -452,6 +763,72 @@ class GEO_Analyzer {
                 'priority' => 'medium',
                 'type'     => 'meta',
                 'message'  => 'Add a "Last Updated: [Month Year]" line. Freshness is a critical tiebreaker for AI citations.',
+            ];
+        }
+
+        // Keyword density (§5A) — SEO plugin compatibility
+        if ( ! empty( $checks['keyword_density'] ) && $checks['keyword_density']['score'] < 60 ) {
+            $kd = $checks['keyword_density'];
+            if ( isset( $kd['density'] ) && $kd['density'] < 0.3 ) {
+                $msg = sprintf( 'Keyword density is %.2f%% — below the 0.5%% minimum. AIOSEO/Yoast will flag this. Use the keyword 2-3 more times naturally.', $kd['density'] );
+            } elseif ( isset( $kd['density'] ) && $kd['density'] > 2.5 ) {
+                $msg = sprintf( 'Keyword density is %.2f%% — above the 1.5%% target. This looks like keyword stuffing and REDUCES AI visibility by 9%%. Rewrite a few mentions as variations.', $kd['density'] );
+            } elseif ( isset( $kd['h2_coverage'] ) && $kd['h2_coverage'] < 30 ) {
+                $msg = sprintf( 'Only %d%% of H2 headings contain the keyword. Target 30%%+. Rename 1-2 H2s to include the keyword or a close variant.', $kd['h2_coverage'] );
+            } elseif ( isset( $kd['intro_match'] ) && ! $kd['intro_match'] ) {
+                $msg = 'Keyword missing from first 150 characters of content. SEO plugins check the intro paragraph — move the keyword to the first sentence.';
+            } else {
+                $msg = 'Keyword placement needs work — check density, H2 coverage, and intro paragraph.';
+            }
+            $suggestions[] = [
+                'priority' => 'high',
+                'type'     => 'keyword',
+                'message'  => $msg,
+            ];
+        }
+
+        // Humanizer (§4B) — AI tell detection
+        if ( ! empty( $checks['humanizer'] ) && $checks['humanizer']['score'] < 70 ) {
+            $hm = $checks['humanizer'];
+            $tier1 = $hm['tier1_words'] ?? [];
+            $patterns = $hm['patterns'] ?? [];
+            if ( ! empty( $tier1 ) ) {
+                $msg = sprintf( 'Remove Tier-1 AI red-flag words: %s. These are instant AI tells and hurt Google Helpful Content scoring.', implode( ', ', array_slice( $tier1, 0, 5 ) ) );
+            } elseif ( ! empty( $patterns ) ) {
+                $msg = 'Rewrite banned AI patterns (found: ' . implode( ', ', $patterns ) . '). See guideline §4B for natural alternatives.';
+            } else {
+                $msg = sprintf( 'Too many Tier-2 AI words (%d found, max 2 allowed). Pick different vocabulary.', $hm['tier2_count'] ?? 0 );
+            }
+            $suggestions[] = [
+                'priority' => 'high',
+                'type'     => 'humanizer',
+                'message'  => $msg,
+            ];
+        }
+
+        // CORE-EEAT lite (§15B)
+        if ( ! empty( $checks['core_eeat'] ) && $checks['core_eeat']['score'] < 70 ) {
+            $ceeat = $checks['core_eeat'];
+            $passed = $ceeat['details'] ?? [];
+            $all_items = [ 'C1:answer', 'C2:faq', 'O1:hierarchy', 'O2:table', 'R1:numbers', 'R2:citations', 'E1:firsthand', 'Exp1:examples', 'A1:entities', 'T1:tradeoffs' ];
+            $missing = array_diff( $all_items, $passed );
+            $labels = [
+                'C1:answer'    => 'direct answer in first 150 words',
+                'C2:faq'       => 'FAQ section',
+                'O1:hierarchy' => 'proper heading hierarchy (no skipped levels)',
+                'O2:table'     => 'at least one comparison table',
+                'R1:numbers'   => '5+ specific numbers',
+                'R2:citations' => '1 citation per 500 words',
+                'E1:firsthand' => 'first-hand experience language ("we tested", "in our review")',
+                'Exp1:examples' => 'practical examples ("for example", "such as")',
+                'A1:entities'  => '3+ named experts or organizations',
+                'T1:tradeoffs' => 'acknowledge tradeoffs ("however", "while", "drawback")',
+            ];
+            $missing_labels = array_slice( array_map( fn( $k ) => $labels[ $k ] ?? $k, $missing ), 0, 3 );
+            $suggestions[] = [
+                'priority' => 'medium',
+                'type'     => 'eeat',
+                'message'  => 'CORE-EEAT gaps: missing ' . implode( ', ', $missing_labels ) . '. Adding these boosts Google Helpful Content scoring.',
             ];
         }
 
