@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.5
+ * Version: 1.5.6
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.5' );
+define( 'SEOBETTER_VERSION', '1.5.6' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1270,30 +1270,62 @@ final class SEOBetter {
             $markdown
         );
 
-        // ===== Pass 2: Strip non-whitelisted external links =====
+        // ===== Pass 2: Strict filtering of all real external links =====
         $whitelist = $this->get_trusted_domain_whitelist();
         $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+
+        $filter_link = function ( $url, $text ) use ( $whitelist, $site_host ) {
+            $host = wp_parse_url( $url, PHP_URL_HOST );
+            $path = wp_parse_url( $url, PHP_URL_PATH );
+
+            // Malformed URL — strip
+            if ( ! $host ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+
+            // Internal link — always keep
+            if ( $host === $site_host ) {
+                return [ 'keep' => true ];
+            }
+
+            // Rule: anchor text must not be an API / dataset / tool name
+            // ('Dog Facts API', 'Pexels API', 'GitHub REST API', 'Reddit API', etc.)
+            if ( preg_match( '/\b(api|endpoint|dataset|sdk|webhook)\b/i', $text ) ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+
+            // Rule: URL must not be an API or developer endpoint
+            if ( preg_match( '#/api/|/v[1-9]/|/graphql|/rest/|/swagger|raw\.githubusercontent\.com#i', $url ) ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+
+            // Rule: host must not look like an API host
+            if ( preg_match( '/(^|\.)api\.|-api\.|\.herokuapp\.com$/i', $host ) ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+
+            // Rule: URL must be on the trusted domain whitelist
+            if ( ! $this->is_host_trusted( $host, $whitelist ) ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+
+            // Rule: URL must be a DEEP link (has a real path) — not a bare homepage.
+            // Citations should point to the specific article, study, or report,
+            // not the publication's homepage.
+            $trimmed_path = trim( (string) $path, '/' );
+            if ( $trimmed_path === '' || $trimmed_path === 'index.html' || $trimmed_path === 'index.php' ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+
+            return [ 'keep' => true ];
+        };
 
         // Markdown links
         $markdown = preg_replace_callback(
             '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/',
-            function ( $m ) use ( $whitelist, $site_host ) {
-                $url  = $m[2];
-                $text = $m[1];
-                $host = wp_parse_url( $url, PHP_URL_HOST );
-                if ( ! $host ) {
-                    return $text;
-                }
-                // Keep internal links unchanged
-                if ( $host === $site_host ) {
-                    return $m[0];
-                }
-                // Keep links on the trusted whitelist
-                if ( $this->is_host_trusted( $host, $whitelist ) ) {
-                    return $m[0];
-                }
-                // Otherwise: drop the link, keep the text
-                return $text;
+            function ( $m ) use ( $filter_link ) {
+                $res = $filter_link( $m[2], $m[1] );
+                return $res['keep'] ? $m[0] : $res['text'];
             },
             $markdown
         );
@@ -1301,20 +1333,9 @@ final class SEOBetter {
         // HTML anchor tags — <a href="...">text</a>
         $markdown = preg_replace_callback(
             '/<a\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>(.*?)<\/a>/is',
-            function ( $m ) use ( $whitelist, $site_host ) {
-                $url  = $m[1];
-                $text = $m[2];
-                $host = wp_parse_url( $url, PHP_URL_HOST );
-                if ( ! $host ) {
-                    return $text;
-                }
-                if ( $host === $site_host ) {
-                    return $m[0];
-                }
-                if ( $this->is_host_trusted( $host, $whitelist ) ) {
-                    return $m[0];
-                }
-                return $text;
+            function ( $m ) use ( $filter_link ) {
+                $res = $filter_link( $m[1], wp_strip_all_tags( $m[2] ) );
+                return $res['keep'] ? $m[0] : $res['text'];
             },
             $markdown
         );

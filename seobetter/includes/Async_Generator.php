@@ -611,12 +611,17 @@ GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
 - NEVER stuff keywords — this REDUCES AI visibility by 9%
 
 ABSOLUTE URL RULES (ZERO TOLERANCE — violations are immediately stripped):
-1. DO NOT output any markdown hyperlink [text](url) unless the URL is EITHER (a) verbatim from the RESEARCH DATA section below, OR (b) the homepage of a major institution you are 100% certain exists (e.g. https://www.rspca.org.au/, https://www.who.int/, https://en.wikipedia.org/).
-2. DO NOT invent URL paths. 'https://example.com/articles/dog-beds' is forbidden unless that exact URL appears in the research data.
-3. DO NOT link to API endpoints, developer pages, or service URLs (e.g. *.herokuapp.com, dog-api.kinduff.com, dogapi.dog/api/v2/...). These are scraped data sources, never link to them.
-4. DO NOT use link text as the URL slot. '[Dog Facts API](Dog Facts API)' is malformed and forbidden.
-5. If you are tempted to cite a source but don't have a verified URL, write a PLAIN TEXT attribution only: 'According to the RSPCA' — no link. Plain text citations count toward GEO visibility just as well as hyperlinks.
-6. When in doubt, OMIT the link. An article with zero external links is better than an article with one hallucinated link.
+The ONLY legitimate hyperlink is one that points to the SPECIFIC article, study, page, or report you are citing — the actual source of the fact you just stated. Not a homepage. Not a category page. Not an API. If you don't have the exact source URL in the research data below, DO NOT LINK — use a plain-text citation instead.
+
+1. DO NOT output any markdown hyperlink [text](url) unless the URL is verbatim from the RESEARCH DATA section below AND is the direct article/study/page that supports the specific claim being made. One URL = one direct source.
+2. DO NOT link to homepages. 'https://www.rspca.org.au/' as a citation for a specific statistic is forbidden. Either link to the exact article/report page (/knowledgebase/article-id), or don't link at all.
+3. DO NOT link to APIs, endpoints, developer pages, or raw data URLs. Patterns forbidden: anything containing /api/, /v1/, /v2/, api.*, *-api.*, *.herokuapp.com, *.github.io/api, raw.githubusercontent.com, etc. These are data pipelines, never citations.
+4. DO NOT use API names, dataset names, or tool names as anchor text. '[Dog Facts API](...)', '[Pexels API](...)', '[Reddit API](...)' are forbidden. These are not publications, they cannot be cited.
+5. DO NOT invent URL paths. Never guess '/articles/dog-beds', '/research/2026-study', '/blog/how-to'. If the exact path isn't in the research data, don't output it.
+6. DO NOT use link text as the URL slot. '[Dog Facts API](Dog Facts API)' is malformed markdown and will be stripped.
+7. For ANY source you can't link directly, use plain-text attribution: 'According to a 2026 RSPCA report', 'Research from the AVMA found that...', '(Mayo Clinic)'. Plain-text citations count EQUALLY toward GEO visibility — no hyperlink required.
+8. When in doubt, OMIT the link. Zero external links is always better than one hallucinated or indirect link.
+9. TARGET: an article with good plain-text attributions and zero hyperlinks is a pass. An article with 5 hyperlinks to homepages or APIs is a FAIL.
 
 E-E-A-T (Google Helpful Content Requirements):
 - Experience: Include first-hand examples, practical details, real-world context

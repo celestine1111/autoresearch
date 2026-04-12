@@ -28,18 +28,37 @@ class Content_Injector {
         $citations_added = 0;
         $ref_list = [];
 
-        // Build reference entries — only keep URLs that pass live validation.
-        // We HEAD-request each URL to confirm it returns 200-399 before citing.
-        // Anything that fails, we DO NOT add — better no citation than a dead one.
-        foreach ( array_slice( $sources, 0, 12 ) as $i => $source ) {
+        // Build reference entries — strict rules:
+        // 1. Must be a deep article URL (has a real path — no homepages)
+        // 2. Must not be an API / endpoint / data service
+        // 3. Anchor text must not contain "API"/"endpoint"/"dataset"
+        // 4. Must pass a live HEAD check (200-399)
+        // 5. Title must be a real page title, not just "Source" or a domain
+        foreach ( array_slice( $sources, 0, 20 ) as $source ) {
             $url = is_array( $source ) ? ( $source['url'] ?? '' ) : $source;
-            $title = is_array( $source ) ? ( $source['title'] ?? 'Source' ) : 'Source';
+            $title = is_array( $source ) ? ( $source['title'] ?? '' ) : '';
             $name = is_array( $source ) ? ( $source['source_name'] ?? wp_parse_url( $url, PHP_URL_HOST ) ) : wp_parse_url( $url, PHP_URL_HOST );
 
             if ( empty( $url ) || ! filter_var( $url, FILTER_VALIDATE_URL ) ) continue;
 
+            // Must have a meaningful page title — skip generic "Source" / "Article" / empty
+            if ( empty( $title ) || strlen( $title ) < 8 || preg_match( '/^(source|article|link|untitled)$/i', trim( $title ) ) ) {
+                continue;
+            }
+
+            // Anchor text must not be an API / dataset / tool name
+            if ( preg_match( '/\b(api|endpoint|dataset|sdk|webhook)\b/i', $title ) ) {
+                continue;
+            }
+
             // Reject API endpoints and dev-host patterns outright
-            if ( preg_match( '#/(api|v1|v2|v3)/|\.herokuapp\.com|-api\.|api\.#i', $url ) ) {
+            if ( preg_match( '#/(api|v[1-9])/|/graphql|/rest/|\.herokuapp\.com|(^|\.)api\.|-api\.#i', $url ) ) {
+                continue;
+            }
+
+            // Must be a DEEP link — not a bare homepage
+            $path = trim( (string) wp_parse_url( $url, PHP_URL_PATH ), '/' );
+            if ( $path === '' || $path === 'index.html' || $path === 'index.php' ) {
                 continue;
             }
 
@@ -61,7 +80,7 @@ class Content_Injector {
         }
 
         if ( empty( $ref_list ) ) {
-            return [ 'success' => false, 'error' => 'No verifiable sources found (all URLs failed live check). Try a different keyword.' ];
+            return [ 'success' => false, 'error' => 'No direct article sources found for this keyword. Citations only link to real article pages, never to homepages or APIs — try a more specific keyword, or skip this fix.' ];
         }
 
         // Append references section if not already present
