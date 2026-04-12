@@ -903,28 +903,58 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
     var niche=document.getElementById('sb-niche-input').value.trim();
     if(!niche){alert('Enter your niche.');return;}
     var btn=this, st=document.getElementById('sb-topics-status');
-    btn.disabled=true; st.textContent='Generating...';
-    fetch(CLOUD + '/api/generate', {
+    btn.disabled=true; st.textContent='Researching real search demand...';
+    // Use new topic-research endpoint (Google Suggest + Reddit + Wikipedia + Datamuse)
+    fetch(CLOUD + '/api/topic-research', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ prompt:'Suggest 10 article topics for "'+niche+'".\nFor each: TOPIC: [title]\nINTENT: [type]\nReturn exactly 10.', system_prompt:'SEO strategist.', max_tokens:1500, temperature:0.8, site_url:SITE })
+        body: JSON.stringify({ niche: niche, site_url: SITE })
     }).then(r=>r.json()).then(d => {
         btn.disabled=false;
-        if (d.content) {
-            var topics=[], cur={};
-            d.content.split('\n').forEach(l => {
-                var m;
-                if(m=l.match(/^TOPIC:\s*(.+)/i)){if(cur.t)topics.push(cur);cur={t:m[1].replace(/^["*]+|["*]+$/g,'')};}
-                if(m=l.match(/^INTENT:\s*(.+)/i))cur.i=m[1];
-            });
-            if(cur.t)topics.push(cur);
+        if (d.success && d.topics && d.topics.length) {
             var genUrl='<?php echo esc_js( admin_url('admin.php?page=seobetter-generate') ); ?>';
-            var html=topics.map(t=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--sb-border)"><span>'+t.t+'</span><a href="'+genUrl+'&keyword='+encodeURIComponent(t.t)+'" style="font-size:11px;white-space:nowrap">Generate &rarr;</a></div>').join('');
-            document.getElementById('sb-topics-list').innerHTML=html;
-            document.getElementById('sb-topics-list').style.display='block';
-            st.textContent=topics.length+' topics';
-        } else st.textContent=d.error||'Failed';
-    }).catch(e => { btn.disabled=false; st.textContent='Error'; });
+            var intentColors = {
+                'informational': '#3b82f6',
+                'commercial': '#22c55e',
+                'transactional': '#f59e0b'
+            };
+            var html = d.topics.map(function(t) {
+                var color = intentColors[t.intent] || '#6b7280';
+                return '<div style="padding:8px 0;border-bottom:1px solid var(--sb-border)">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">' +
+                        '<div style="flex:1;min-width:0">' +
+                            '<div style="font-size:12px;font-weight:600;color:#1f2937;line-height:1.3">' + escHtml(t.topic) + '</div>' +
+                            '<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">' +
+                                '<span style="font-size:9px;padding:1px 5px;background:' + color + '20;color:' + color + ';border-radius:3px;font-weight:600;text-transform:uppercase">' + t.intent + '</span>' +
+                                '<span style="font-size:9px;padding:1px 5px;background:#f3f4f6;color:#6b7280;border-radius:3px">' + escHtml(t.source) + '</span>' +
+                                '<span style="font-size:9px;padding:1px 5px;background:#fef3c7;color:#92400e;border-radius:3px">' + Math.round(t.score) + '</span>' +
+                            '</div>' +
+                            '<div style="font-size:10px;color:#9ca3af;margin-top:2px">' + escHtml(t.reason) + '</div>' +
+                        '</div>' +
+                        '<a href="' + genUrl + '&keyword=' + encodeURIComponent(t.topic) + '" style="font-size:11px;white-space:nowrap;flex-shrink:0">Use →</a>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+            var summary = '<div style="padding:6px 8px;background:#eef2ff;border-radius:4px;font-size:10px;color:#4338ca;margin-bottom:6px">' +
+                d.topics.length + ' topics from real search data: ' +
+                d.sources.google_suggest + ' Google Suggest, ' +
+                d.sources.reddit + ' Reddit, ' +
+                d.sources.wikipedia + ' Wikipedia, ' +
+                d.sources.datamuse + ' Datamuse' +
+            '</div>';
+            document.getElementById('sb-topics-list').innerHTML = summary + html;
+            document.getElementById('sb-topics-list').style.display = 'block';
+            st.textContent = d.topics.length + ' real-data topics';
+        } else {
+            st.textContent = d.error || 'No topics found. Try a different niche.';
+        }
+    }).catch(function(e) { btn.disabled=false; st.textContent='Error: ' + e.message; });
 });
+
+function escHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
 
 // ===== ASYNC ARTICLE GENERATION =====
 (function() {
