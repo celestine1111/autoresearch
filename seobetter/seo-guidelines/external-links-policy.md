@@ -635,8 +635,17 @@ Update this document in the **same commit** whenever you change:
 - `Content_Injector::inject_citations()` — Fix Now button citation logic
 - Research APIs in `cloud-api/api/research.js` that could surface new URL patterns
 - Which Claude skills the workflow depends on
+- **Any of the 7 regex patterns that match `[text](url)` markdown** in `seobetter.php`, `Content_Formatter.php`, or `AI_Content_Generator.php`. All 7 must include `(?<!!)` negative lookbehind to avoid FM-13. Run the regex sanity check from Section 13 before committing.
+- **`Stock_Image_Inserter::insert_images()` placement rules.** Image placement is now part of the anti-FM-13 defense (images never placed adjacent to structural sections). If you change the placement logic, also update `article_design.md` Section 7.2.
 
 Treat this file as the contract. If the code and this file disagree, the code wins — but that means this file is out of date and must be corrected immediately.
+
+### Cross-references
+
+- **[article_design.md](article_design.md)** — visual design spec, image placement rules (Section 7.2), References rendering, content-type schema matrix
+- **[plugin_UX.md](plugin_UX.md)** — UI verification checklist
+- **[plugin_functionality_wordpress.md](plugin_functionality_wordpress.md)** — complete technical reference
+- **[SEO-GEO-AI-GUIDELINES.md](SEO-GEO-AI-GUIDELINES.md)** — SEO/GEO content generation rules
 
 ---
 
