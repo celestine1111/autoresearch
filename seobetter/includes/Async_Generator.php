@@ -623,6 +623,7 @@ The ONLY legitimate hyperlink is one that points to the SPECIFIC article, study,
 8. When in doubt, OMIT the link. Zero external links is always better than one hallucinated or indirect link.
 9. TARGET: an article with good plain-text attributions and zero hyperlinks is a pass. An article with 5 hyperlinks to homepages or APIs is a FAIL.
 10. DO NOT output a '## References', '## Sources', '## Bibliography', '## Further Reading', or '## Citations' section at the end of the article. These sections are processed automatically and will be stripped if they contain hallucinated URLs. Use inline plain-text attributions throughout the article body instead.
+11. ATOMIC KNOWLEDGE UNITS: Treat each citation as a minimal knowledge unit — (claim + source). Before outputting any [text](url), silently ask yourself: 'Does the destination page actually contain content about this exact claim?' If the answer is no, or 'probably', or 'I don't know', DO NOT OUTPUT THE LINK. Every citation you output is verified by fetching the destination page and checking that your anchor text's key terms appear in the page content. Mismatches are detected and stripped automatically, and repeated hallucinations are a quality failure signal. The safe default is plain-text attribution: 'According to a 2026 study' — no link needed.
 
 E-E-A-T (Google Helpful Content Requirements):
 - Experience: Include first-hand examples, practical details, real-world context

@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.7
+ * Version: 1.5.8
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.7' );
+define( 'SEOBETTER_VERSION', '1.5.8' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1264,6 +1264,11 @@ final class SEOBetter {
         // whitelist. If the whole section ends up empty, we remove the heading too.
         $markdown = $this->sanitize_references_section( $markdown );
 
+        // ===== Pass -1 (runs LAST) is scheduled at end of this method =====
+        // See verify_citation_atoms() — fine-grained knowledge verification adapted
+        // from arxiv 2602.05723 (RLFKV). Fetches each surviving link and confirms
+        // the destination page content matches the anchor text.
+
         // ===== Pass 1: Strip malformed markdown links =====
         // Matches [text](anything-not-starting-with-http) — catches cases where AI puts
         // literal text in the URL slot, or paths like /wp-admin/... or /blog/whatever
@@ -1345,6 +1350,162 @@ final class SEOBetter {
             },
             $markdown
         );
+
+        // ===== Pass 3: Fine-grained knowledge verification =====
+        // Adapted from RLFKV (arxiv 2602.05723). For each remaining link, fetch
+        // the destination and verify the anchor text's key terms appear in the
+        // page content. A live URL on a whitelisted domain is not enough — the
+        // linked page must actually be about what we claim it is.
+        $markdown = $this->verify_citation_atoms( $markdown );
+
+        return $markdown;
+    }
+
+    /**
+     * Fine-grained knowledge unit verification for surviving citations.
+     *
+     * Adapted from "Mitigating Hallucination in Financial RAG via Fine-Grained
+     * Knowledge Verification" (Yin et al., arxiv 2602.05723). The paper proposes
+     * decomposing model responses into atomic knowledge units (entity, metric,
+     * value, timestamp quadruples) and verifying each unit against the retrieved
+     * source documents before accepting the output.
+     *
+     * For our citation system, each [anchor text](url) pair is an atomic unit.
+     * We verify by fetching the destination page and checking that at least
+     * half of the anchor text's content words (4+ chars, non-stopword) appear
+     * in the destination's title or first ~3000 chars of body text. Links that
+     * fail verification are unlinked (text preserved). Results are cached in
+     * WordPress transients for 24 hours per URL to keep latency bounded.
+     *
+     * This catches failures the earlier whitelist passes miss — for example,
+     * an AI citing "dog nutrition study" and linking to a real but unrelated
+     * page on rspca.org.au/about-us.
+     */
+    private function verify_citation_atoms( string $markdown ): string {
+        if ( ! preg_match_all( '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
+            return $markdown;
+        }
+
+        $stopwords = [
+            'about','above','after','again','against','all','and','any','are',
+            'because','been','before','being','below','between','both','but',
+            'can','did','does','doing','down','during','each','few','for',
+            'from','further','had','has','have','having','here','how','into',
+            'its','itself','just','more','most','myself','nor','not','now',
+            'off','once','only','other','our','ours','out','over','own','same',
+            'she','should','some','such','than','that','the','their','theirs',
+            'them','themselves','then','there','these','they','this','those',
+            'through','too','under','until','very','was','were','what','when',
+            'where','which','while','who','whom','why','will','with','you',
+            'your','yours','with','inc','llc','ltd','org','com',
+        ];
+
+        $session_cache = [];
+
+        foreach ( $matches as $match ) {
+            $full_match = $match[0];
+            $anchor_text = $match[1];
+            $url = $match[2];
+
+            // Already-decided URLs don't refetch
+            if ( isset( $session_cache[ $url ] ) ) {
+                if ( ! $session_cache[ $url ] ) {
+                    $markdown = str_replace( $full_match, $anchor_text, $markdown );
+                }
+                continue;
+            }
+
+            // Persistent cache across article saves (24 hours)
+            $cache_key = 'sb_cite_' . md5( $url . '|' . $anchor_text );
+            $cached = get_transient( $cache_key );
+            if ( $cached !== false ) {
+                $verified = ( $cached === 'ok' );
+                $session_cache[ $url ] = $verified;
+                if ( ! $verified ) {
+                    $markdown = str_replace( $full_match, $anchor_text, $markdown );
+                }
+                continue;
+            }
+
+            // Extract key terms from anchor text
+            $raw_terms = preg_split( '/\s+/', strtolower( wp_strip_all_tags( $anchor_text ) ) );
+            $key_terms = [];
+            foreach ( $raw_terms as $t ) {
+                $t = preg_replace( '/[^\w]/', '', $t );
+                if ( strlen( $t ) >= 4 && ! in_array( $t, $stopwords, true ) ) {
+                    $key_terms[] = $t;
+                }
+            }
+
+            // Anchor text with no verifiable content words (e.g. "here", "this article")
+            // gets stripped entirely — we can't verify it and it's low-quality anyway
+            if ( empty( $key_terms ) ) {
+                $session_cache[ $url ] = false;
+                set_transient( $cache_key, 'fail', DAY_IN_SECONDS );
+                $markdown = str_replace( $full_match, $anchor_text, $markdown );
+                continue;
+            }
+
+            // Fetch the destination page
+            $response = wp_remote_get( $url, [
+                'timeout'     => 5,
+                'redirection' => 3,
+                'sslverify'   => false,
+                'user-agent'  => 'Mozilla/5.0 (compatible; SEOBetter/1.0; +https://seobetter.com)',
+            ] );
+
+            if ( is_wp_error( $response ) ) {
+                $session_cache[ $url ] = false;
+                set_transient( $cache_key, 'fail', HOUR_IN_SECONDS );
+                $markdown = str_replace( $full_match, $anchor_text, $markdown );
+                continue;
+            }
+
+            $code = wp_remote_retrieve_response_code( $response );
+            if ( $code < 200 || $code >= 400 ) {
+                $session_cache[ $url ] = false;
+                set_transient( $cache_key, 'fail', DAY_IN_SECONDS );
+                $markdown = str_replace( $full_match, $anchor_text, $markdown );
+                continue;
+            }
+
+            // Extract destination content — title + first 3000 chars of body
+            $body = wp_remote_retrieve_body( $response );
+            $title = '';
+            if ( preg_match( '/<title[^>]*>(.*?)<\/title>/is', $body, $tm ) ) {
+                $title = wp_strip_all_tags( $tm[1] );
+            }
+            $text = wp_strip_all_tags( $body );
+            // Collapse whitespace so "dog\n\nbed" doesn't hide "dog bed" matches
+            $text = preg_replace( '/\s+/', ' ', $text );
+            $haystack = strtolower( $title . ' ' . substr( $text, 0, 3000 ) );
+
+            // Count how many anchor key terms appear in the haystack
+            $found = 0;
+            foreach ( $key_terms as $t ) {
+                if ( strpos( $haystack, $t ) !== false ) {
+                    $found++;
+                }
+            }
+            $ratio = $found / count( $key_terms );
+
+            // Require at least 50% of key terms to appear in the destination.
+            // This is the "fine-grained verification" step — link is only kept
+            // if the destination content actually relates to what we cited it for.
+            $verified = $ratio >= 0.5;
+
+            $session_cache[ $url ] = $verified;
+            set_transient( $cache_key, $verified ? 'ok' : 'fail', DAY_IN_SECONDS );
+
+            if ( ! $verified ) {
+                $markdown = str_replace( $full_match, $anchor_text, $markdown );
+            }
+        }
+
+        // After stripping verified-fail links, the References section may have
+        // become empty — re-run the section sanitizer to remove a heading with
+        // no surviving entries
+        $markdown = $this->sanitize_references_section( $markdown );
 
         return $markdown;
     }
