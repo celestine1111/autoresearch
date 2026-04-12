@@ -632,7 +632,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                 <div class="sb-field" style="margin-bottom:8px">
                     <input type="text" id="sb-niche-input" placeholder="Your niche (e.g. equine health)" style="height:36px;font-size:12px" />
                 </div>
-                <button type="button" id="sb-suggest-btn" class="button sb-btn-sm" style="width:100%">Suggest 10 Topics</button>
+                <button type="button" id="sb-suggest-btn" class="button sb-btn-sm" style="width:100%" onclick="sbSuggestTopics(this)">Suggest 10 Topics</button>
                 <span id="sb-topics-status" style="display:block;font-size:11px;color:var(--sb-text-muted);margin-top:6px"></span>
                 <div id="sb-topics-list" style="display:none;margin-top:10px;font-size:12px;line-height:1.8"></div>
             </div>
@@ -898,17 +898,18 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
 });
 <?php endif; ?>
 
-// Topic suggester
-document.getElementById('sb-suggest-btn').addEventListener('click', function() {
+// Topic suggester — defined as a global so the inline onclick on the button
+// always finds it, even if an earlier script block on the page errors out.
+window.sbSuggestTopics = function(btn) {
     var niche=document.getElementById('sb-niche-input').value.trim();
     if(!niche){alert('Enter your niche.');return;}
-    var btn=this, st=document.getElementById('sb-topics-status');
+    var st=document.getElementById('sb-topics-status');
     btn.disabled=true; st.textContent='Researching real search demand...';
     // Use new topic-research endpoint (Google Suggest + Reddit + Wikipedia + Datamuse)
     fetch(CLOUD + '/api/topic-research', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ niche: niche, site_url: SITE })
-    }).then(r=>r.json()).then(d => {
+    }).then(function(r){return r.json();}).then(function(d) {
         btn.disabled=false;
         if (d.success && d.topics && d.topics.length) {
             var genUrl='<?php echo esc_js( admin_url('admin.php?page=seobetter-generate') ); ?>';
@@ -948,7 +949,7 @@ document.getElementById('sb-suggest-btn').addEventListener('click', function() {
             st.textContent = d.error || 'No topics found. Try a different niche.';
         }
     }).catch(function(e) { btn.disabled=false; st.textContent='Error: ' + e.message; });
-});
+};
 
 function escHtml(s) {
     var d = document.createElement('div');
