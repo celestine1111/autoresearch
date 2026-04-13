@@ -19,7 +19,7 @@
 ## v1.5.22 — Auto-suggest uses real keyword data (fixes silent failures)
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `0cf267c`
 
 ### Context
 
