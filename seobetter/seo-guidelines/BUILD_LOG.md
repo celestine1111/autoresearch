@@ -19,7 +19,7 @@
 ## v1.5.19 — Delete duplicate renderResult in admin.js (race condition fix)
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `374dc2f`
 
 ### Context
 
