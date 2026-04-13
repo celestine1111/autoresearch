@@ -48,7 +48,11 @@ if ( isset( $_POST['seobetter_remove_provider'] ) && check_admin_referer( 'seobe
 
 // Handle general settings save
 if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobetter_settings_nonce' ) ) {
-    $settings = [
+    // v1.5.24 — preserve existing settings and merge in only the fields
+    // from this form so other-form fields (e.g. places_integrations save)
+    // don't get wiped when the main settings form is saved.
+    $existing = get_option( 'seobetter_settings', [] );
+    $settings = array_merge( $existing, [
         'auto_schema'        => ! empty( $_POST['auto_schema'] ),
         'auto_analyze'       => ! empty( $_POST['auto_analyze'] ),
         'target_readability' => absint( $_POST['target_readability'] ?? 7 ),
@@ -56,9 +60,23 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
         'llms_txt_enabled'   => ! empty( $_POST['llms_txt_enabled'] ),
         'brave_api_key'      => sanitize_text_field( $_POST['brave_api_key'] ?? '' ),
         'pexels_api_key'     => sanitize_text_field( $_POST['pexels_api_key'] ?? '' ),
-    ];
+    ] );
     update_option( 'seobetter_settings', $settings );
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'seobetter' ) . '</p></div>';
+}
+
+// v1.5.24 — Places Integrations save handler. Lives in its own form so saving
+// one section doesn't clobber the other. Stores three optional API keys that
+// flow through Trend_Researcher → cloud-api for the 5-tier Places waterfall.
+if ( isset( $_POST['seobetter_save_places'] ) && check_admin_referer( 'seobetter_places_nonce' ) ) {
+    $existing = get_option( 'seobetter_settings', [] );
+    $settings = array_merge( $existing, [
+        'foursquare_api_key'    => sanitize_text_field( $_POST['foursquare_api_key'] ?? '' ),
+        'here_api_key'          => sanitize_text_field( $_POST['here_api_key'] ?? '' ),
+        'google_places_api_key' => sanitize_text_field( $_POST['google_places_api_key'] ?? '' ),
+    ] );
+    update_option( 'seobetter_settings', $settings );
+    echo '<div class="notice notice-success"><p>' . esc_html__( 'Places integrations saved.', 'seobetter' ) . '</p></div>';
 }
 
 $settings = get_option( 'seobetter_settings', [] );
@@ -245,6 +263,83 @@ $settings = get_option( 'seobetter_settings', [] );
             </table>
             <?php submit_button( __( 'Save Settings', 'seobetter' ), 'primary', 'seobetter_save_settings' ); ?>
         </form>
+    </div>
+
+    <!-- Places Integrations (v1.5.24) -->
+    <div class="seobetter-card" style="margin-bottom:20px">
+        <h2><?php esc_html_e( 'Places Integrations (Local Business Data)', 'seobetter' ); ?></h2>
+        <p class="description" style="margin-bottom:16px">
+            <?php esc_html_e( 'Configure optional Places API keys to get real local business data for listicles, buying guides, and reviews. Without any keys, SEOBetter uses free OpenStreetMap + Wikidata (covers ~40% of small cities globally). Adding free Foursquare + HERE keys raises coverage to ~85%. Adding Google Places raises it to ~99%.', 'seobetter' ); ?>
+        </p>
+        <p class="description" style="padding:8px 12px;background:#eef2ff;border-radius:4px;color:#3730a3;margin-bottom:16px">
+            <span class="dashicons dashicons-info-outline"></span>
+            <?php esc_html_e( 'All keys are OPTIONAL. The plugin works out of the box with free OSM + Wikidata. Only add keys if you want better coverage for small cities.', 'seobetter' ); ?>
+        </p>
+
+        <form method="post">
+            <?php wp_nonce_field( 'seobetter_places_nonce' ); ?>
+            <table class="form-table">
+
+                <!-- OSM row (always active, no key) -->
+                <tr>
+                    <th><?php esc_html_e( 'OpenStreetMap + Wikidata', 'seobetter' ); ?>
+                        <span class="seobetter-score seobetter-score-good" style="font-size:10px;margin-left:6px"><?php esc_html_e( 'ALWAYS ON', 'seobetter' ); ?></span>
+                    </th>
+                    <td>
+                        <p style="margin:0"><?php esc_html_e( 'Free, no API key required. Powers the v1.5.23+ baseline Places coverage via Nominatim + Overpass + Wikidata SPARQL. Always active for every article — no setup needed.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+
+                <!-- Foursquare -->
+                <tr>
+                    <th><?php esc_html_e( 'Foursquare Places API Key', 'seobetter' ); ?>
+                        <span class="seobetter-score seobetter-score-ok" style="font-size:10px;margin-left:6px"><?php esc_html_e( 'FREE', 'seobetter' ); ?></span>
+                    </th>
+                    <td>
+                        <input type="password" name="foursquare_api_key" value="<?php echo esc_attr( $settings['foursquare_api_key'] ?? '' ); ?>" class="regular-text" placeholder="fsq..." autocomplete="off" />
+                        <a href="https://developer.foursquare.com" target="_blank" rel="noopener" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Free Key', 'seobetter' ); ?></a>
+                        <p class="description">
+                            <?php esc_html_e( 'Free tier: 1,000 calls/day. Best small-city coverage via user check-ins — strong in Italy, Brazil, Portugal, Asia, and other non-Anglophone markets where OSM is weak. 3-minute signup at developer.foursquare.com → create a project → generate an API key → paste it here.', 'seobetter' ); ?>
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- HERE -->
+                <tr>
+                    <th><?php esc_html_e( 'HERE Places API Key', 'seobetter' ); ?>
+                        <span class="seobetter-score seobetter-score-ok" style="font-size:10px;margin-left:6px"><?php esc_html_e( 'FREE', 'seobetter' ); ?></span>
+                    </th>
+                    <td>
+                        <input type="password" name="here_api_key" value="<?php echo esc_attr( $settings['here_api_key'] ?? '' ); ?>" class="regular-text" placeholder="HERE..." autocomplete="off" />
+                        <a href="https://developer.here.com" target="_blank" rel="noopener" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Free Key', 'seobetter' ); ?></a>
+                        <p class="description">
+                            <?php esc_html_e( 'Free tier: 1,000 transactions/day. Strong European and Asian tier-2 city coverage — powers Garmin, BMW, Mercedes nav systems. 5-minute signup at developer.here.com → create a Freemium app → generate API key → paste it here.', 'seobetter' ); ?>
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- Google Places -->
+                <tr>
+                    <th><?php esc_html_e( 'Google Places API Key', 'seobetter' ); ?>
+                        <span class="seobetter-score seobetter-score-poor" style="font-size:10px;margin-left:6px;background:#fef3c7;color:#92400e"><?php esc_html_e( 'PAID', 'seobetter' ); ?></span>
+                    </th>
+                    <td>
+                        <input type="password" name="google_places_api_key" value="<?php echo esc_attr( $settings['google_places_api_key'] ?? '' ); ?>" class="regular-text" placeholder="AIza..." autocomplete="off" />
+                        <a href="https://console.cloud.google.com/apis/library/places-backend.googleapis.com" target="_blank" rel="noopener" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Key', 'seobetter' ); ?></a>
+                        <p class="description">
+                            <?php esc_html_e( 'Paid via Google Cloud, but generous $200/month free credit = approximately 5,000 articles/month free. Best global coverage including remote villages in rural Asia, Africa, and Latin America that other providers miss. 10-minute setup at console.cloud.google.com → create a project → enable "Places API (New)" → generate API key → paste it here. Requires a Google Cloud billing account, but you will NOT be charged unless you exceed ~5,000 articles per month.', 'seobetter' ); ?>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button( __( 'Save Places Integrations', 'seobetter' ), 'primary', 'seobetter_save_places' ); ?>
+        </form>
+
+        <p class="description" style="padding:8px 12px;background:#f0fdf4;border-radius:4px;color:#166534;margin-top:8px">
+            <span class="dashicons dashicons-info-outline"></span>
+            <strong><?php esc_html_e( 'How the waterfall works:', 'seobetter' ); ?></strong>
+            <?php esc_html_e( 'For any article with a local-intent keyword (e.g. "best gelato shops in Lucignano"), the plugin tries OSM → Wikidata → Foursquare → HERE → Google Places in order, stopping at the first tier returning 3+ verified places. Unconfigured tiers are skipped. If no tier returns enough data, the plugin writes a general informational article with a disclaimer — it NEVER invents business names.', 'seobetter' ); ?>
+        </p>
     </div>
 </div>
 

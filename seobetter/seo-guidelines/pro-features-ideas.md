@@ -142,6 +142,29 @@
 
 ## Research Sources Backlog
 
+### ✅ SHIPPED in v1.5.24 — Pluggable Places Provider abstraction (Google / Foursquare / HERE) + Settings UI
+
+**Status:** Shipped 2026-04-13 in v1.5.24 as the Places waterfall. The architecture is slightly different from the originally-proposed PHP abstraction — the 5 providers live inline in `cloud-api/api/research.js` instead of separate PHP classes, because the JS cloud-api is where all the existing research fetchers live and adding a PHP class layer would have duplicated the logic. The user-facing result is the same: a Settings → Places Integrations section with 3 API key fields, a 5-tier waterfall with automatic fallback, and provider-agnostic downstream prompt/validator logic.
+
+**What was shipped:**
+- Tier 1: OSM (already in v1.5.23)
+- Tier 2: Wikidata SPARQL (free, no key)
+- Tier 3: Foursquare Places (free 1K/day, user key in Settings)
+- Tier 4: HERE Places (free 1K/day, user key in Settings)
+- Tier 5: Google Places API New (paid, user key in Settings)
+- Hard refuse fallback (write general informational article with disclaimer if all tiers return <3 places)
+- Settings → Places Integrations card with 3 password fields + setup instructions per provider
+- GEO_Analyzer `local_places` high-priority suggestion pointing users to Settings when the sentinel fires
+- Telemetry: `places_provider_used` + `places_providers_tried` in the research response
+
+**What was NOT included, can come in a follow-up:**
+- Yelp Fusion provider (500/day free, Anglophone markets only — lower priority)
+- Test Connection REST endpoints per provider in Settings
+- Pre-generation coverage card above the Generate button
+- Post-generation provider attribution line in the result panel
+
+**Original entry kept below for reference:**
+
 ### Pluggable Places Provider abstraction (Google / Foursquare / Yelp / HERE) + Settings UI
 
 **Status:** v1.5.23 ships with OSM-only Places integration (Nominatim + Overpass, fully free, no API key). The v1.6.0 follow-up is a full provider abstraction layer so users who want higher-quality Google Maps / Foursquare / Yelp / HERE data can plug in their own API keys. User requested this feature on 2026-04-13 — added here per explicit user ask.

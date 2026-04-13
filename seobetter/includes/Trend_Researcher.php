@@ -100,6 +100,21 @@ class Trend_Researcher {
             $body['brave_key'] = $brave_key;
         }
 
+        // v1.5.24 — Places API keys from Settings → Integrations.
+        // These power the 5-tier waterfall in cloud-api/api/research.js::
+        // fetchPlacesWaterfall(). Tiers with no key are skipped. All three
+        // are optional — the plugin works out of the box with OSM + Wikidata.
+        $places_keys = [];
+        $fsq_key    = $settings['foursquare_api_key'] ?? '';
+        $here_key   = $settings['here_api_key'] ?? '';
+        $google_key = $settings['google_places_api_key'] ?? '';
+        if ( ! empty( $fsq_key ) )    $places_keys['foursquare'] = $fsq_key;
+        if ( ! empty( $here_key ) )   $places_keys['here']       = $here_key;
+        if ( ! empty( $google_key ) ) $places_keys['google']     = $google_key;
+        if ( ! empty( $places_keys ) ) {
+            $body['places_keys'] = $places_keys;
+        }
+
         $response = wp_remote_post( $cloud_url . '/api/research', [
             'timeout' => 20,
             'headers' => [ 'Content-Type' => 'application/json' ],

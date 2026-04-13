@@ -16,6 +16,107 @@
 
 ---
 
+## v1.5.24 — 5-tier Places waterfall (Wikidata + Foursquare + HERE + Google) for any small city worldwide
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Context
+
+v1.5.23 shipped an OSM-only Places lookup that fixed the Lucignano gelato hallucination bug but only covered ~40% of small cities globally. User requested "any really small city in the world" coverage, confirmed free-first with optional paid upgrade path, approved the full 5-tier waterfall architecture from the v1.5.23 research session. User's direction: "ship v1.5.24. but just do it, dont ask for permission".
+
+### Added
+
+- **4 new Places fetchers in `cloud-api/api/research.js`** lines ~**475-680**
+  - **`fetchWikidataPlaces(businessHint, geo)`** — SPARQL `?item wdt:P625` within 15km of the geocoded city, filtered to entities with human-readable labels in en/it/fr/es/de/pt, excludes disambiguation pages. Free, no API key.
+  - **`fetchFoursquarePlaces(businessHint, geo, apiKey)`** — `places-api.foursquare.com/places/search` with `Authorization: Bearer {apiKey}` + `X-Places-Api-Version: 2025-06-17`. Free tier 1K calls/day, user-provided key. Best small-city coverage via user check-ins in non-Anglophone markets.
+  - **`fetchHEREPlaces(businessHint, geo, apiKey)`** — `discover.search.hereapi.com/v1/discover`. Free tier 1K/day, user-provided key. Strong EU and Asian tier-2 city coverage.
+  - **`fetchGooglePlaces(businessHint, geo, apiKey)`** — Google Places API (New) `places.googleapis.com/v1/places:searchText` with field mask + location bias. Paid but generous $200/mo free credit ≈ 5K articles. User-provided key. Gold standard global coverage.
+  - All 4 return the same normalized place shape as OSM's overpassQuery so downstream code is source-agnostic
+  - Verify: `grep -n "^async function fetchWikidataPlaces\|^async function fetchFoursquarePlaces\|^async function fetchHEREPlaces\|^async function fetchGooglePlaces" seobetter/cloud-api/api/research.js`
+
+- **`fetchPlacesWaterfall(keyword, country, placesKeys)`** replaces v1.5.23's `fetchOSMPlaces` as the main entry point — `cloud-api/api/research.js` lines **682-805**
+  - Single `nominatimGeocode` call shared by every tier
+  - Runs Tier 1 (OSM) → if <3 places, runs Tier 2 (Wikidata) → if <3, runs Tier 3 (Foursquare, skipped without key) → if <3, runs Tier 4 (HERE, skipped without key) → if <3, runs Tier 5 (Google Places, skipped without key)
+  - Deduplicates by lowercased name so the same place appearing in multiple tiers is merged not double-listed
+  - Returns `{ places, location, isLocal, business_type, providers_tried, provider_used, lat, lon }`
+  - `providers_tried` is an array of `{ name, count }` per tier attempted, used for telemetry + the LOCAL-INTENT WARNING prompt block
+  - `provider_used` is the winning tier ('OpenStreetMap' / 'Wikidata' / 'Foursquare' / 'HERE' / 'Google Places' / 'partial' / null)
+  - v1.5.23 `fetchOSMPlaces` kept as a backwards-compat alias for any external caller
+  - Verify: `grep -n "^async function fetchPlacesWaterfall" seobetter/cloud-api/api/research.js`
+
+- **`places_keys` in request body** — `cloud-api/api/research.js` line **27**
+  - Main handler now destructures `places_keys` from `req.body` alongside `keyword`, `domain`, `country`
+  - Passed to `fetchPlacesWaterfall(keyword, country, places_keys || {})` in the `freeSearches` parallel batch
+  - Tiers with no configured key are skipped — no wasted API calls, no errors
+
+- **API keys plumbed through `Trend_Researcher::cloud_research()`** — `includes/Trend_Researcher.php` lines **86-110**
+  - Reads `foursquare_api_key`, `here_api_key`, `google_places_api_key` from `seobetter_settings`
+  - Builds a `$places_keys` array containing only the non-empty keys
+  - Adds `places_keys` to the `/api/research` request body
+  - Verify: `grep -n "places_keys" seobetter/includes/Trend_Researcher.php`
+
+- **Places Integrations settings section** — `admin/views/settings.php` new card after main Settings card, with its own form + nonce (`seobetter_places_nonce`)
+  - OSM + Wikidata row with "ALWAYS ON" badge and "no setup" description
+  - Foursquare row with password field + setup link to developer.foursquare.com + "FREE" badge
+  - HERE Places row with password field + setup link to developer.here.com + "FREE" badge
+  - Google Places row with password field + setup link to console.cloud.google.com + "PAID" badge + note about free $200/mo credit
+  - "How the waterfall works" info box at the bottom explaining the fallback order and hard-refuse behavior
+  - Save handler uses `array_merge` against existing settings so it doesn't wipe the main settings card's fields (and vice-versa — the main settings form was also updated to array_merge)
+  - Verify: `grep -n "Places Integrations\|seobetter_save_places" seobetter/admin/views/settings.php`
+
+- **GEO_Analyzer `local_places` high-priority suggestion** — `includes/GEO_Analyzer.php::generate_suggestions()` lines **792-806**
+  - Emitted FIRST (before any other suggestion) when `check_local_places_grounding` returns score 0
+  - Message: "This local-business article has no verified addresses or map URLs — the businesses may be fabricated. Configure free Foursquare + HERE API keys in Settings → Integrations for reliable coverage of small cities worldwide. For truly remote places, add a Google Places key (free $200/month credit). Regenerate after adding keys."
+  - Appears in the existing Analyze & Improve suggestions list — looks like any other suggestion, not a separate upsell modal
+  - Verify: `grep -n "'local_places'\|local_places.*score" seobetter/includes/GEO_Analyzer.php`
+
+- **Extended provider domain whitelist** — `seobetter.php::get_trusted_domain_whitelist()` lines ~**1870-1880**
+  - `wikidata.org`, `www.wikidata.org`, `query.wikidata.org`
+  - `foursquare.com`, `www.foursquare.com`, `fsq.com`
+  - `here.com`, `www.here.com`, `discover.search.hereapi.com`
+  - `maps.google.com`, `maps.googleapis.com`, `places.googleapis.com`, `google.com/maps`
+  - Without these, `validate_outbound_links()` would strip the new provider URLs from References section
+  - Verify: `grep -n "wikidata.org\|foursquare.com\|here.com\|places.googleapis.com" seobetter/seobetter.php`
+
+### Changed
+
+- **REAL LOCAL PLACES prompt block** — `cloud-api/api/research.js::buildResearchResult()` lines ~**2480-2500**
+  - Now labels the source provider in the footer: `"${N} real ${business_type}s verified via ${provider_used}."` (e.g. "verified via Foursquare", "verified via OpenStreetMap + Wikidata")
+  - The LOCAL-INTENT WARNING block (fired when all tiers return 0 places) now lists which providers were tried with counts, and suggests configuring additional API keys in Settings → Integrations
+
+- **Research result telemetry** — `cloud-api/api/research.js::buildResearchResult()` return shape
+  - Added `places_provider_used` (string | null)
+  - Added `places_providers_tried` (array of `{ name, count }` per tier attempted)
+
+### Documentation
+
+- **plugin_functionality_wordpress.md §1.6B** — rewrote to document the full 5-tier waterfall with coverage percentages per tier, architecture walkthrough, and provider-specific fetcher details. The old v1.5.23 OSM-only section is kept as §1.6B-legacy for historical context.
+  - Verify: `grep -n '1.6B Places Waterfall' seobetter/seo-guidelines/plugin_functionality_wordpress.md`
+
+- **SEO-GEO-AI-GUIDELINES.md §4.7B** — updated the PLACES RULES anchor to reference `fetchPlacesWaterfall` (was `fetchOSMPlaces` in v1.5.23) and added the "v1.5.24 — 5-tier waterfall" subsection explaining the upgrade path
+  - Verify: `grep -n 'fetchPlacesWaterfall' seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md`
+
+- **external-links-policy.md** — expanded the "OSM Places" section to cover all 5 tiers with each provider's whitelisted domains and user-key status
+  - Verify: `grep -n 'v1.5.24 — Tier' seobetter/seo-guidelines/external-links-policy.md`
+
+- **plugin_UX.md §8C** — new section documenting the Settings → Places Integrations card with the full required-elements checklist (per plugin_UX.md convention — never remove features listed here)
+  - Verify: `grep -n '§8C — Places Integrations' seobetter/seo-guidelines/plugin_UX.md`
+
+- **pro-features-ideas.md** — marked the "Pluggable Places Provider abstraction" backlog item as ✅ SHIPPED in v1.5.24, noted the architecture difference (inline JS fetchers instead of PHP class abstraction), listed what was shipped vs what wasn't (Yelp, Test Connection endpoints, pre-generation coverage card, post-generation attribution are all follow-up work)
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall. Test sequence:
+  1. Plugin shows **v1.5.24** on Plugins page
+  2. Settings → see new **Places Integrations** card with 3 API key fields
+  3. Retest Lucignano WITHOUT any paid keys — OSM + Wikidata should run, likely still hit the LOCAL-INTENT WARNING path (writes general article with disclaimer)
+  4. Add a free Foursquare key from developer.foursquare.com, retest Lucignano — expect the waterfall to fall through to Tier 3 and return real gelato shops
+  5. Test large city — `best pizza restaurants in rome italy 2026` should stop at Tier 1 (OSM has plenty for Rome)
+  6. Non-local regression — `how to bake sourdough bread` should skip the waterfall entirely
+
+---
+
 ## v1.5.23 — OSM Places anti-hallucination for local businesses
 
 **Date:** 2026-04-13

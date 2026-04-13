@@ -360,6 +360,34 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 ---
 
+## §8C — Places Integrations settings section (v1.5.24)
+
+**Location:** [admin/views/settings.php](../admin/views/settings.php) — new card added after the main Settings card.
+
+**Purpose:** Three optional API key fields for the v1.5.24 Places waterfall (Foursquare, HERE, Google Places) that ground local-intent articles in real business data instead of letting the LLM invent businesses.
+
+**Fields (all optional, stored in `seobetter_settings` option):**
+- `foursquare_api_key` — free 1K calls/day, no payment method required
+- `here_api_key` — free 1K transactions/day, no payment method required
+- `google_places_api_key` — paid but generous $200/month free credit (≈5,000 articles), requires Google Cloud billing account
+
+**Required elements on the Places Integrations card:**
+- [ ] Heading: "Places Integrations (Local Business Data)"
+- [ ] Description paragraph explaining waterfall + coverage percentages
+- [ ] Info callout: "All keys are OPTIONAL. Plugin works out of the box with free OSM + Wikidata"
+- [ ] Row for OSM + Wikidata with "ALWAYS ON" badge and description
+- [ ] Row for Foursquare with password input + "Get Free Key" button linking to developer.foursquare.com
+- [ ] Row for HERE with password input + "Get Free Key" button linking to developer.here.com
+- [ ] Row for Google Places with password input + "Get Key" button linking to console.cloud.google.com (note: PAID badge)
+- [ ] Save button with form nonce `seobetter_places_nonce`
+- [ ] "How the waterfall works" green info box at the bottom explaining the fallback order and the hard-refuse behavior
+
+**Save handler:** `$_POST['seobetter_save_places']` with `seobetter_places_nonce`. Uses `array_merge` against existing settings so it doesn't wipe other settings sections.
+
+**Whitelist dependency:** [seobetter.php::get_trusted_domain_whitelist()](../seobetter.php) must include all provider URL hosts (wikidata.org, foursquare.com, here.com, maps.google.com, etc) so `validate_outbound_links()` doesn't strip them from the saved draft References section. See [external-links-policy.md](../seo-guidelines/external-links-policy.md) for the full list.
+
+---
+
 ## §8B — Single-source-of-truth rule for the result panel renderer (v1.5.19)
 
 The article generator result panel (`#seobetter-async-result`) is rendered by **exactly one** JavaScript function: the `renderResult()` defined inline at [admin/views/content-generator.php](../admin/views/content-generator.php) ~line 744.

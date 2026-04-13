@@ -422,11 +422,27 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 - `dev.to` — DEV.to tech articles
 - `lemmy.world` — Lemmy federated reddit-alternative posts
 
-**OSM Places — anti-hallucination local business grounding (added v1.5.23)** — fetches real local businesses via Nominatim (geocoding) + Overpass (POI query). Fixes the "fake Italian gelato shops" hallucination bug.
+**OSM Places — anti-hallucination local business grounding (added v1.5.23, expanded to waterfall in v1.5.24)** — fetches real local businesses via a 5-tier provider waterfall (OSM → Wikidata → Foursquare → HERE → Google Places). Fixes the "fake Italian gelato shops" hallucination bug for any small city globally.
 
+**v1.5.23 — Tier 1 (OSM, always on, no API key):**
 - `openstreetmap.org`, `www.openstreetmap.org` — OSM page URLs returned by Overpass queries, used as citable sources in the References section
-- `nominatim.openstreetmap.org` — Nominatim geocoding API (called server-side only; URLs don't appear in articles)
-- `overpass-api.de` — Overpass POI query API (called server-side only; URLs don't appear in articles)
+- `nominatim.openstreetmap.org` — Nominatim geocoding API (called server-side only)
+- `overpass-api.de` — Overpass POI query API (called server-side only)
+
+**v1.5.24 — Tier 2 (Wikidata, always on, no API key):**
+- `wikidata.org`, `www.wikidata.org` — Wikidata entity pages used as citable sources
+- `query.wikidata.org` — SPARQL endpoint (server-side only)
+
+**v1.5.24 — Tier 3 (Foursquare, free 1K calls/day, user-provided API key):**
+- `foursquare.com`, `www.foursquare.com`, `fsq.com` — Foursquare venue pages
+
+**v1.5.24 — Tier 4 (HERE Places, free 1K/day, user-provided API key):**
+- `here.com`, `www.here.com` — HERE place pages
+- `discover.search.hereapi.com` — HERE Discover API (server-side only)
+
+**v1.5.24 — Tier 5 (Google Places API New, paid with free credit, user-provided API key):**
+- `maps.google.com`, `google.com/maps` — Google Maps place URLs
+- `maps.googleapis.com`, `places.googleapis.com` — Google Places API endpoints (server-side only)
 
 ### How matching works
 

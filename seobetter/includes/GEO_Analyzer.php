@@ -792,6 +792,19 @@ class GEO_Analyzer {
     private function generate_suggestions( array $checks ): array {
         $suggestions = [];
 
+        // v1.5.24 — Local places grounding sentinel (highest priority — shipped
+        // first so it appears at the top of the suggestions list). Triggered
+        // when a local-intent listicle/buying_guide/review/comparison article
+        // has no verified addresses or map URLs, meaning the LLM probably
+        // invented businesses.
+        if ( ! empty( $checks['local_places'] ) && ( $checks['local_places']['score'] ?? 100 ) === 0 ) {
+            $suggestions[] = [
+                'priority' => 'high',
+                'type'     => 'local_places',
+                'message'  => 'This local-business article has no verified addresses or map URLs — the businesses may be fabricated. Configure free Foursquare + HERE API keys in Settings → Integrations for reliable coverage of small cities worldwide. For truly remote places, add a Google Places key (free $200/month credit). Regenerate after adding keys.',
+            ];
+        }
+
         if ( $checks['bluf_header']['score'] < 100 ) {
             $suggestions[] = [
                 'priority' => 'high',

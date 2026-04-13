@@ -234,8 +234,22 @@ For any article whose keyword triggers local intent (e.g. "best gelato shops in 
 
 **Source locations:**
 - Prompt rules: [Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php#L601) — PLACES RULES block (after CITATION RULES)
-- Research fetcher: [cloud-api/api/research.js::fetchOSMPlaces()](../cloud-api/api/research.js)
-- Sentinel: [GEO_Analyzer.php::check_local_places_grounding()](../includes/GEO_Analyzer.php)
+- Research fetcher: [cloud-api/api/research.js::fetchPlacesWaterfall()](../cloud-api/api/research.js) (v1.5.24 — was `fetchOSMPlaces` in v1.5.23)
+- Sentinel: [GEO_Analyzer.php::check_local_places_grounding()](../includes/GEO_Analyzer.php) + `generate_suggestions()` → emits `local_places` high-priority suggestion
+
+**v1.5.24 — 5-tier waterfall (upgrade from v1.5.23 OSM-only):**
+
+The Places grounding pipeline now fetches from 5 providers in sequence, stopping at the first tier returning ≥3 verified places:
+
+1. **OpenStreetMap** (free, always on) — Tier 1
+2. **Wikidata SPARQL** (free, always on) — Tier 2 adds named landmarks and historical businesses
+3. **Foursquare Places** (free 1K calls/day, optional user API key) — Tier 3 best for small cities via user check-ins
+4. **HERE Places** (free 1K/day, optional user API key) — Tier 4 strong for EU/Asian tier-2 cities
+5. **Google Places API (New)** (paid with $200/mo free credit, optional user API key) — Tier 5 covers remote villages
+
+Users configure API keys in [Settings → Places Integrations](../admin/views/settings.php). Tiers with no configured key are skipped. Free baseline (OSM + Wikidata) works out of the box with no setup.
+
+The PLACES RULES system prompt block is provider-agnostic — it doesn't care which tier produced the places, just that the AI uses only names from the injected list. Hard refuse fallback (write a general informational article with disclaimer) is triggered when all configured tiers return <3 places combined.
 
 ### 4.8 Auto-styled Rich Formatting Triggers (`v1.5.14+`)
 

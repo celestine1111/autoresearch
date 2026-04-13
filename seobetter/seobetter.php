@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.23
+ * Version: 1.5.24
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.23' );
+define( 'SEOBETTER_VERSION', '1.5.24' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1908,6 +1908,17 @@ final class SEOBetter {
             'openstreetmap.org', 'www.openstreetmap.org',
             'nominatim.openstreetmap.org',
             'overpass-api.de',
+
+            // v1.5.24 — Places waterfall providers (Tiers 2-5)
+            // Wikidata (free), Foursquare (free key), HERE (free key),
+            // Google Places (paid). Each tier produces place URLs that must
+            // pass validate_outbound_links() to survive into the References
+            // section. See cloud-api/api/research.js::fetchPlacesWaterfall().
+            'wikidata.org', 'www.wikidata.org', 'query.wikidata.org',
+            'foursquare.com', 'www.foursquare.com', 'fsq.com',
+            'here.com', 'www.here.com', 'discover.search.hereapi.com',
+            'maps.google.com', 'maps.googleapis.com',
+            'places.googleapis.com', 'google.com/maps',
         ];
 
         $custom = apply_filters( 'seobetter_trusted_domains', $default );

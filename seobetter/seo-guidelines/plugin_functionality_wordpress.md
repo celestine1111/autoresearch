@@ -146,7 +146,54 @@ All sources combined into `for_prompt` string containing:
 - **TRENDING DISCUSSIONS** — Reddit titles, HN stories, Google Trends
 - **SOURCES FOR REFERENCES** — real URLs for article citations (up to 20)
 
-### 1.6B OSM Places (Anti-Hallucination Local Businesses — v1.5.23)
+### 1.6B Places Waterfall (Anti-Hallucination Local Businesses — v1.5.24)
+
+Full 5-tier waterfall that fetches real local businesses from multiple providers and stops at the first tier returning ≥3 verified places. Replaces the v1.5.23 OSM-only fetcher. User-provided API keys flow from `seobetter_settings` → `Trend_Researcher::cloud_research()` → `research.js::fetchPlacesWaterfall()` via the `places_keys` field in the request body. Tiers with no key are skipped.
+
+**Tier order and coverage:**
+
+| # | Tier | Cost | User setup | Global small-city coverage |
+|---|---|---|---|---|
+| 1 | **OpenStreetMap** (Nominatim + Overpass) | Free | None | ~40% (70% EU, 20% rural) |
+| 2 | **Wikidata SPARQL** | Free | None | Adds ~15% (landmarks, historical businesses) |
+| 3 | **Foursquare Places** | Free 1K calls/day | API key via Settings → Integrations | Adds ~35% via user check-ins |
+| 4 | **HERE Places** | Free 1K/day | API key via Settings | Adds ~20% for EU/Asian tier-2 cities |
+| 5 | **Google Places API (New)** | Paid ($200/mo free credit ≈ 5K articles) | API key + Google Cloud billing | Adds the final ~15% for remote villages |
+| — | **Hard refuse fallback** | — | — | 100% — writes a general informational article with disclaimer when all tiers return <3 places |
+
+**Architecture:**
+
+1. `detectLocalIntent(keyword)` — 4 regex patterns catch `"X in Y"`, `"best X in Y"`, `"X near me"`, `"what's the best X in Y"`. Non-local keywords return immediately with no API calls.
+2. `matchBusinessType(businessHint)` — ~40-entry lookup map converts business hints (gelato, restaurant, cafe, vet, etc) to OSM tag pairs. Used by Tier 1 to query Overpass by tag.
+3. `nominatimGeocode(location)` — single Nominatim call shared by every tier. Returns lat/lon + bounding box. Required `User-Agent: SEOBetter/1.5.24 (Research)` header per Nominatim ToS.
+4. `fetchPlacesWaterfall(keyword, country, placesKeys)` — runs Tier 1, checks count, runs Tier 2 if needed, checks count, and so on. Stops at first tier with ≥3 places. User-keyless tiers 3-5 are skipped when their key is missing.
+5. **Deduplication** — after all tiers run, places are deduplicated by lowercased name so the same place appearing in Tier 1 + Tier 3 is merged, not double-listed.
+
+**Provider-specific fetchers (all in [cloud-api/api/research.js](../cloud-api/api/research.js)):**
+
+- `fetchWikidataPlaces(businessHint, geo)` — SPARQL `?item wdt:P625 ?coord` within 15km radius of the geocoded city, filtered to entities with human-readable labels in en/it/fr/es/de/pt. Returns up to 20 named landmarks/businesses with website + coordinates + Wikidata Q-id URL.
+- `fetchFoursquarePlaces(businessHint, geo, apiKey)` — `GET https://places-api.foursquare.com/places/search?query=...&ll=...&radius=5000&limit=20` with `Authorization: Bearer {apiKey}` + `X-Places-Api-Version: 2025-06-17`. Best small-city coverage via user check-ins in non-Anglophone markets.
+- `fetchHEREPlaces(businessHint, geo, apiKey)` — `GET https://discover.search.hereapi.com/v1/discover?apiKey={apiKey}&q=...&at=...&limit=20`. Strong European and Asian tier-2 city coverage.
+- `fetchGooglePlaces(businessHint, geo, apiKey)` — `POST https://places.googleapis.com/v1/places:searchText` with `X-Goog-Api-Key` + field mask. Gold standard global coverage.
+
+**Wiring:**
+- Runs in parallel with the 9 other always-on sources (no latency cost on non-local keywords — returns early)
+- Results flow into `buildResearchResult()`:
+  - Each place's URL + optional website → `sources[]` → Citation Pool → References section
+  - Each place name → `stats[]` as `"{name} is a real {type} at {address} ({provider}, {year})"`
+  - Formatted "REAL LOCAL PLACES" block added to `for_prompt` — now labels the source provider (e.g. "verified via OpenStreetMap + Wikidata" or "verified via Foursquare")
+  - If every tier returns 0 places, a "LOCAL-INTENT WARNING" block is added telling the AI not to invent businesses + listing which providers were tried
+- Return object gains `places_provider_used`, `places_providers_tried` for telemetry
+
+**System prompt enforcement** ([Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php#L601)): PLACES RULES block added in v1.5.23 is unchanged — closed-menu grounding works identically regardless of which provider produced the places.
+
+**GEO_Analyzer sentinel** ([GEO_Analyzer.php::check_local_places_grounding()](../includes/GEO_Analyzer.php) + `generate_suggestions()`): for listicle/buying_guide/review/comparison articles with local-intent keywords, checks for map URLs or specific addresses. If neither, scores 0, floors `geo_score` at 40, AND emits a high-priority `local_places` suggestion pointing the user to Settings → Integrations to configure additional providers.
+
+**User-provided API keys** live in [Settings → Places Integrations](../admin/views/settings.php) — 3 password fields for Foursquare / HERE / Google with setup instructions and free-tier limits per provider.
+
+**Whitelisted domains** (v1.5.24): adds `wikidata.org`, `query.wikidata.org`, `foursquare.com`, `fsq.com`, `here.com`, `discover.search.hereapi.com`, `maps.google.com`, `maps.googleapis.com`, `places.googleapis.com`, `google.com/maps` — all new places provider URLs can pass `validate_outbound_links()` without being stripped.
+
+### 1.6B-legacy OSM Places (v1.5.23, superseded by the waterfall above)
 
 Free OpenStreetMap integration that prevents the AI from inventing business names for local-intent queries. Added after the "best gelato shops in Lucignano Italy" hallucination bug.
 
