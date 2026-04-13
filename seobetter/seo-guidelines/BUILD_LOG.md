@@ -19,7 +19,7 @@
 ## v1.5.20 — Remove dropcaps + cap stat callouts + custom SEOBetter icon set
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `3f60abe`
 
 ### Context
 
