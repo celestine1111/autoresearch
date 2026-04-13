@@ -146,6 +146,35 @@ All sources combined into `for_prompt` string containing:
 - **TRENDING DISCUSSIONS** — Reddit titles, HN stories, Google Trends
 - **SOURCES FOR REFERENCES** — real URLs for article citations (up to 20)
 
+### 1.6B OSM Places (Anti-Hallucination Local Businesses — v1.5.23)
+
+Free OpenStreetMap integration that prevents the AI from inventing business names for local-intent queries. Added after the "best gelato shops in Lucignano Italy" hallucination bug.
+
+**Problem:** The 9 always-on sources + 25 category APIs have ZERO place/POI data. For keywords like "best gelato shops in [small town]", the LLM fell back to generating plausible-sounding business names that don't exist on Google Maps or OSM.
+
+**Fix:** New `fetchOSMPlaces(keyword, country)` in [cloud-api/api/research.js](../cloud-api/api/research.js) runs in the always-on parallel batch. Steps:
+
+1. **Local intent detection** via regex patterns — matches `"X in [Location]"`, `"best X in [Location]"`, `"what's the best X in [Location]"`, `"X near me"`. If no match, returns empty immediately (no API calls).
+2. **Business type mapping** via hardcoded OSM tag table (~40 entries: `gelato → amenity=ice_cream`, `restaurant → amenity=restaurant`, `pet shop → shop=pet`, `vet → amenity=veterinary`, etc).
+3. **Nominatim geocoding** — `GET https://nominatim.openstreetmap.org/search?q={location}&format=json&limit=1` (free, no key, rate-limited 1 req/sec, User-Agent header required). Returns lat/lon + bounding box.
+4. **Overpass POI query** — `POST https://overpass-api.de/api/interpreter` with `[out:json][timeout:20];(node[tag]({bbox});way[tag]({bbox});relation[tag]({bbox}););out tags center 20;`. Returns up to 20 real places with name, address, website, phone, opening hours.
+5. **Normalize + return** — each place becomes `{name, type, address, website, phone, osm_url, lat, lon, source}`.
+
+**Wiring:**
+- Runs in parallel with the 9 always-on sources (no latency cost)
+- Results flow into `buildResearchResult()`:
+  - Each place URL → `sources[]` (goes to Citation Pool → References section)
+  - Each place name → `stats[]` as `"{name} is a real {type} at {address} (OpenStreetMap, {year})"`
+  - Formatted "REAL LOCAL PLACES" block added to `for_prompt` with the business names the AI MUST use
+  - If local intent detected but zero places returned, a LOCAL-INTENT WARNING block is added telling the AI not to invent businesses
+- Return object gains `is_local_intent`, `places_count`, `places_location`, `places_business_type` for telemetry
+
+**System prompt enforcement** ([Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php#L601)): new PLACES RULES block with 7 rules mirroring the CITATION RULES pattern — closed-menu grounding, "if it's not in the list, you can't serve it", explicit handling for empty-places case.
+
+**GEO_Analyzer sentinel** ([GEO_Analyzer.php::check_local_places_grounding()](../includes/GEO_Analyzer.php)): post-generation safety check. For listicle/buying_guide/review/comparison articles with local-intent keywords, verifies the content contains map URLs or specific addresses. If neither, floors `geo_score` at 40 so the user sees a red flag and regenerates.
+
+**Whitelisted domains** (v1.5.23): `openstreetmap.org`, `www.openstreetmap.org`, `nominatim.openstreetmap.org`, `overpass-api.de`.
+
 ### 1.7 Topic Research Endpoint (`/api/topic-research`, v1.5.22 enhanced)
 
 Separate endpoint from the main `/api/research` used for generation. Pulls real keyword demand data from 5 sources (no LLM hallucination) and powers TWO UI features:

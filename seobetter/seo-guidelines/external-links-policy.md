@@ -422,6 +422,12 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 - `dev.to` — DEV.to tech articles
 - `lemmy.world` — Lemmy federated reddit-alternative posts
 
+**OSM Places — anti-hallucination local business grounding (added v1.5.23)** — fetches real local businesses via Nominatim (geocoding) + Overpass (POI query). Fixes the "fake Italian gelato shops" hallucination bug.
+
+- `openstreetmap.org`, `www.openstreetmap.org` — OSM page URLs returned by Overpass queries, used as citable sources in the References section
+- `nominatim.openstreetmap.org` — Nominatim geocoding API (called server-side only; URLs don't appear in articles)
+- `overpass-api.de` — Overpass POI query API (called server-side only; URLs don't appear in articles)
+
 ### How matching works
 
 `is_host_trusted()` supports:

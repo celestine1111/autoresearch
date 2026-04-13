@@ -16,6 +16,83 @@
 
 ---
 
+## v1.5.23 — OSM Places anti-hallucination for local businesses
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Context
+
+User reported a severe hallucination bug after testing `Whats The Best Gelato Shops In Lucignano Italy 2026` (Listicle, Authoritative, AU English, 2000w). The generated article listed gelato shops that **don't exist on Google Maps**. User confirmed: "well it made up businesses that were not in that city".
+
+Root cause: the 9 always-on research sources, 25 category APIs, and country APIs had **ZERO place/business data**. For a tiny Italian town + specific business type, Reddit/HN/DDG/Wikipedia returned nothing usable, the `food` category fetchers (Open Food Facts, Fruityvice, Open Brewery DB) don't cover gelato shops, and the system prompt's CITATION RULES only gated URLs — not business names. With no grounding, the LLM invented plausible-sounding Italian shop names.
+
+### Added
+
+- **`fetchOSMPlaces(keyword, country)` + helpers** — `cloud-api/api/research.js` lines **455-665**
+  - `detectLocalIntent(keyword)` — regex-based intent detector supporting 4 patterns: `"X in [Location]"`, `"best/top X in/near [Location]"`, `"X near me"`, `"what's the best X in [Location]"`. Also handles trailing year suffix (`...2026`).
+  - `matchBusinessType(businessHint)` — maps ~40 common business-type keywords (gelato, restaurant, cafe, hotel, bakery, vet, dentist, gym, etc) to OSM tag pairs via the `OSM_TYPE_MAP` constant
+  - `nominatimGeocode(location)` — calls `https://nominatim.openstreetmap.org/search` with a 5s timeout + `User-Agent: SEOBetter/1.5.23 (Research)` header per Nominatim ToS. Returns lat/lon + bounding box.
+  - `overpassQuery(tags, bbox, typeLabel)` — calls `https://overpass-api.de/api/interpreter` with a 15s timeout. Query fetches up to 20 nodes/ways/relations matching the tag filter inside the bbox. Returns normalized place objects with name, address, website, phone, opening_hours, lat, lon, osm_url.
+  - `fetchOSMPlaces` is the main entry point — calls all of the above in sequence, returns `{ places, location, isLocal, business_type }`. Always returns a valid shape (empty places on any error) so generation never breaks.
+  - Verify: `grep -n "^async function fetchOSMPlaces\|^function detectLocalIntent\|^function matchBusinessType" seobetter/cloud-api/api/research.js`
+
+- **OSM Places wired into the always-on `freeSearches` parallel batch** — `cloud-api/api/research.js` line **63**
+  - Runs in parallel with the other 9 sources; no latency cost on non-local queries (returns early when `detectLocalIntent` doesn't match)
+  - Result destructured as `placesData` and passed to `buildResearchResult()` as a new 11th parameter
+  - Verify: `grep -n "fetchOSMPlaces(keyword, country)" seobetter/cloud-api/api/research.js`
+
+- **REAL LOCAL PLACES prompt block** — `cloud-api/api/research.js::buildResearchResult()` lines **2400-2490**
+  - When `placesData.isLocal === true` and `places.length > 0`: formats places as a numbered list with name, type, address, website/OSM URL, opening hours, and a mandatory "use ONLY these" footer
+  - When `placesData.isLocal === true` and `places.length === 0`: writes a `LOCAL-INTENT WARNING` block telling the AI the lookup returned nothing and instructing it to write a general informational article with a disclaimer — NOT a fabricated listicle
+  - Places also flow through `sources[]` → Citation Pool → References section. Each place's OSM URL + optional website are added.
+  - Return object gains `is_local_intent`, `places_count`, `places_location`, `places_business_type` telemetry fields
+  - Verify: `grep -n "REAL LOCAL PLACES\|LOCAL-INTENT WARNING" seobetter/cloud-api/api/research.js`
+
+- **PLACES RULES block in system prompt** — `includes/Async_Generator.php::get_system_prompt()` lines **654-663**
+  - New block immediately after CITATION RULES. Mirrors the closed-menu grounding pattern that already prevents hallucinated URLs
+  - 7 rules: exact character-match names, real addresses, one-use-per-place, explicit ban on inventing "plausible-sounding" businesses, fallback to general article when list is empty, CRITICAL FAIL framing for listicles with invented names
+  - Verify: `grep -n "PLACES RULES" seobetter/includes/Async_Generator.php`
+
+- **`check_local_places_grounding()` GEO_Analyzer sentinel** — `includes/GEO_Analyzer.php` new private method
+  - Only applies to `listicle`, `buying_guide`, `review`, `comparison` content types
+  - Only fires when the keyword matches one of 4 local-intent regex patterns (same patterns as `detectLocalIntent` in research.js)
+  - Checks content for real-world grounding markers: OSM/Google Maps URLs OR specific address patterns (street types in 5 languages, postcodes, explicit `address:` labels, Italian `Via`, French `Rue`, Spanish `Calle`, German `...straße`, Italian `Piazza`)
+  - If neither found, returns `score: 0` with a CRITICAL detail message
+  - The `analyze()` method checks `local_places['score'] === 0` and **floors the final `geo_score` at 40** (F grade) so the user sees the red flag immediately and regenerates
+  - Not added to `$weights` — it's a sentinel override, not a proportional deduction
+  - Verify: `grep -n "check_local_places_grounding\|local_places_check" seobetter/includes/GEO_Analyzer.php`
+
+- **4 new OSM domains whitelisted** — `seobetter.php::get_trusted_domain_whitelist()` lines ~**1855**
+  - `openstreetmap.org`, `www.openstreetmap.org`, `nominatim.openstreetmap.org`, `overpass-api.de`
+  - Without this, `validate_outbound_links()` would strip OSM URLs from the saved draft even though they came from the citation pool
+  - Verify: `grep -n "openstreetmap.org\|overpass-api.de" seobetter/seobetter.php`
+
+### Documentation
+
+- **plugin_functionality_wordpress.md §1.6B** — new section "OSM Places (Anti-Hallucination Local Businesses — v1.5.23)" documenting the full fetcher flow, wiring, system prompt enforcement, and GEO_Analyzer sentinel
+  - Verify: `grep -n '1.6B OSM Places' seobetter/seo-guidelines/plugin_functionality_wordpress.md`
+
+- **SEO-GEO-AI-GUIDELINES.md §4.7B** — new "PLACES RULES — Anti-Hallucination for Local Businesses" section documenting the closed-menu grounding pattern and the 7 rules
+  - Verify: `grep -n 'PLACES RULES — Anti-Hallucination' seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md`
+
+- **external-links-policy.md** — added the 4 OSM domains to the "Research & data" subsection with a note explaining they power the anti-hallucination fix
+  - Verify: `grep -n 'OSM Places — anti-hallucination' seobetter/seo-guidelines/external-links-policy.md`
+
+- **pro-features-ideas.md** — added "Pluggable Places Provider (Google / Foursquare / Yelp / HERE) + Settings UI" as a v1.6.0 roadmap item. **User explicitly asked about this feature in the v1.5.23 session so adding to this normally-write-protected file is permitted per skill rules.**
+  - Verify: `grep -n 'Pluggable Places Provider' seobetter/seo-guidelines/pro-features-ideas.md`
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall + retest. Expected after v1.5.23:
+
+  1. Regenerate the failed keyword `Whats The Best Gelato Shops In Lucignano Italy 2026` (Listicle, Ecommerce, AU, 2000w). In browser Network tab before clicking Generate, observe requests to `nominatim.openstreetmap.org/search?q=Lucignano+Italy` and `overpass-api.de/api/interpreter`. Saved draft either contains real OSM-verified gelato shops with addresses, OR is a general informational article with a disclaimer paragraph. NO invented business names.
+  2. Smoke test with a major city: `best pizza restaurants in rome italy 2026` → expect 5-10 real restaurants with addresses, all findable on Google Maps.
+  3. Non-local regression: `how to introduce raw food to a dog with sensitive stomach` (How-To, Veterinary) → `detectLocalIntent` returns `false`, `places_count: 0`, article generates normally with no behavior change.
+  4. Sentinel test: force a local-intent article with fabricated content (e.g. manually edit a saved draft to remove OSM URLs and addresses). Re-run the analyzer — `check_local_places_grounding` should return `score: 0` and the final `geo_score` should be capped at 40.
+
+---
+
 ## v1.5.22 — Auto-suggest uses real keyword data (fixes silent failures)
 
 **Date:** 2026-04-13

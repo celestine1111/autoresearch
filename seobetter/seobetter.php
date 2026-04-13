@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.22
+ * Version: 1.5.23
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.22' );
+define( 'SEOBETTER_VERSION', '1.5.23' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1898,6 +1898,16 @@ final class SEOBetter {
             'mastodon.social',
             'dev.to',
             'lemmy.world',
+
+            // v1.5.23 — OpenStreetMap (Nominatim + Overpass + OSM URLs)
+            // Powers the anti-hallucination Places lookup for local-intent
+            // keywords (e.g. "best gelato shops in Lucignano Italy"). Real
+            // business URLs from OSM feed the Citation Pool into article
+            // References. Without this whitelist, validate_outbound_links()
+            // would strip OSM URLs as non-trusted.
+            'openstreetmap.org', 'www.openstreetmap.org',
+            'nominatim.openstreetmap.org',
+            'overpass-api.de',
         ];
 
         $custom = apply_filters( 'seobetter_trusted_domains', $default );

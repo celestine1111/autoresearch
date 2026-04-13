@@ -106,12 +106,110 @@ class GEO_Analyzer {
 
         $geo_score = round( $weighted_score );
 
+        // v1.5.23 — Local-places grounding sentinel. Detects local-intent
+        // keywords (e.g. "best gelato shops in Lucignano Italy") whose
+        // generated article has no specific addresses or map URLs, indicating
+        // the LLM invented businesses that don't exist. When this fires we
+        // floor the geo_score at 40 so the user sees a red flag and
+        // regenerates. Added to $checks but NOT in $weights — it's a
+        // sentinel that caps the final score, not a proportional deduction.
+        $local_places_check = $this->check_local_places_grounding( $content, $text, $keyword_or_title, $content_type );
+        $checks['local_places'] = $local_places_check;
+        if ( $local_places_check['score'] === 0 ) {
+            // Catastrophic — cap the final score at 40 (F grade) so the user
+            // is forced to regenerate instead of shipping a hallucinated article
+            $geo_score = min( $geo_score, 40 );
+        }
+
         return [
             'geo_score'  => $geo_score,
             'grade'      => $this->score_to_grade( $geo_score ),
             'word_count' => $word_count,
             'checks'     => $checks,
             'suggestions' => $this->generate_suggestions( $checks ),
+        ];
+    }
+
+    /**
+     * v1.5.23 — Local-places grounding sentinel check.
+     *
+     * Detects articles generated for local-intent keywords (e.g. "best
+     * gelato shops in Lucignano Italy") that have no specific addresses
+     * or map URLs — meaning the LLM probably invented businesses.
+     *
+     * Returns score 0 (catastrophic) if the sentinel fires, 100 otherwise.
+     * When score is 0, the analyze() method floors the final geo_score at
+     * 40 so the user sees a red flag and regenerates.
+     *
+     * @param string $content    The generated HTML/markdown
+     * @param string $text       Plain-text version (wp_strip_all_tags)
+     * @param string $keyword    The primary keyword used for generation
+     * @param string $content_type The content type slug (listicle, buying_guide, etc)
+     */
+    private function check_local_places_grounding( string $content, string $text, string $keyword, string $content_type ): array {
+        // Only applies to listicle / buying_guide / review content types
+        // (the ones that typically name specific businesses)
+        $risky_types = [ 'listicle', 'buying_guide', 'review', 'comparison' ];
+        if ( ! in_array( $content_type, $risky_types, true ) ) {
+            return [ 'score' => 100, 'detail' => 'Not a local-business listicle — sentinel does not apply' ];
+        }
+
+        // Detect local intent in the keyword — matches the same regexes used
+        // in cloud-api/api/research.js::detectLocalIntent()
+        $kw = trim( $keyword );
+        $is_local = false;
+        if ( preg_match( '/\bin\s+[A-Z][\w\s,\'-]+(?:\s+\d{4})?$/i', $kw ) ) $is_local = true;
+        elseif ( preg_match( '/^(?:best|top|greatest|finest)\s+.+?\s+(?:in|near|around)\s+[A-Z]\w+/i', $kw ) ) $is_local = true;
+        elseif ( preg_match( '/\b(?:near\s*me|nearby|local)\b/i', $kw ) ) $is_local = true;
+        elseif ( preg_match( '/^(?:what\'?s?|which|where)\s+.*?(?:best|top).+?\s+(?:in|near|at)\s+[A-Z]\w+/i', $kw ) ) $is_local = true;
+
+        if ( ! $is_local ) {
+            return [ 'score' => 100, 'detail' => 'Keyword is not local-intent — sentinel does not apply' ];
+        }
+
+        // Local-intent article — check for real-world grounding markers
+        // 1. OSM or Google Maps URLs (verified pool-sourced links)
+        $has_map_urls = (bool) preg_match( '#(openstreetmap\.org|maps\.google\.com|goo\.gl/maps|google\.com/maps)#i', $content );
+
+        // 2. Specific address markers (street types in multiple languages,
+        //    postcodes, or explicit "address:" labels)
+        $address_patterns = [
+            '/\b\d+\s+[A-Z][a-z]+\s+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Boulevard|Blvd|Drive|Dr|Way|Place|Pl)\b/i',
+            '/\bVia\s+[A-Z]/', // Italian
+            '/\bRue\s+[A-Z]/', // French
+            '/\bCalle\s+[A-Z]/', // Spanish
+            '/\b[A-Z][a-z]+straße\b/', // German
+            '/\bPiazza\s+[A-Z]/', // Italian square
+            '/\b\d{4,5}\s+[A-Z]/', // Postcode followed by city
+            '/<strong>Address:<\/strong>/i',
+            '/\baddress:\s*[A-Z0-9]/i',
+        ];
+        $has_addresses = false;
+        foreach ( $address_patterns as $p ) {
+            if ( preg_match( $p, $text ) ) {
+                $has_addresses = true;
+                break;
+            }
+        }
+
+        // If it's a local-intent listicle with neither map URLs nor addresses,
+        // the AI almost certainly fabricated the businesses.
+        if ( ! $has_map_urls && ! $has_addresses ) {
+            return [
+                'score'  => 0,
+                'detail' => 'CRITICAL: Local-intent listicle has no OpenStreetMap/Google Maps URLs and no specific addresses — the businesses may be fabricated. Regenerate the article; the cloud-api/research.js OSM Places lookup should populate REAL LOCAL PLACES data into the prompt. If this article is a legitimate listicle, add at least one verifiable map URL or street address per business.',
+                'is_local' => true,
+                'has_map_urls' => false,
+                'has_addresses' => false,
+            ];
+        }
+
+        return [
+            'score'  => 100,
+            'detail' => sprintf( 'Local-intent article grounded: %s %s', $has_map_urls ? 'has map URLs' : 'no map URLs', $has_addresses ? '+ has addresses' : '+ no addresses' ),
+            'is_local' => true,
+            'has_map_urls' => $has_map_urls,
+            'has_addresses' => $has_addresses,
         ];
     }
 

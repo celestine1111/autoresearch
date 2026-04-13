@@ -142,6 +142,44 @@
 
 ## Research Sources Backlog
 
+### Pluggable Places Provider abstraction (Google / Foursquare / Yelp / HERE) + Settings UI
+
+**Status:** v1.5.23 ships with OSM-only Places integration (Nominatim + Overpass, fully free, no API key). The v1.6.0 follow-up is a full provider abstraction layer so users who want higher-quality Google Maps / Foursquare / Yelp / HERE data can plug in their own API keys. User requested this feature on 2026-04-13 — added here per explicit user ask.
+
+**Why v1.5.23 ships OSM-only:**
+- OSM works out of the box for every user — zero setup cost, no signup
+- Global coverage, best in Europe/North America
+- Stops the hallucination bleeding immediately
+- v1.6.0 can layer the abstraction without breaking the v1.5.23 flow
+
+**v1.6.0 target architecture:**
+
+1. **New `Places_Provider` interface** (PHP) — abstract base class with one method: `search_places(location: string, type: string, limit: int): array` returning normalized place entries
+2. **Concrete implementations:**
+   - `Places_OSM` (always available, free) — v1.5.23 fetchOSMPlaces ported to PHP. Already used by the cloud-api JS version; this just wraps it as a PHP class for parity.
+   - `Places_Google` — Google Places API (New). User provides API key. Paid tier ($200/mo free credit ≈ 17K searches). Best data quality globally.
+   - `Places_Foursquare` — Foursquare FSQ Places API. User provides API key. Free tier: 1,000 calls/day. Good POI data with ratings and hours.
+   - `Places_Yelp` — Yelp Fusion. User provides API key. Free tier: 500 calls/day. Strong US/CA/AU/UK coverage.
+   - `Places_Here` — HERE Places API. User provides API key. Free tier: 1,000 transactions/day. Global.
+3. **Settings page** — new "Integrations" tab with:
+   - Dropdown "Places Data Source" (default: OSM)
+   - API key fields per provider (password-masked, stored in wp_options)
+   - "Test Connection" button per provider (REST endpoint validates the key + does a probe query)
+   - Cascade fallback: if the configured provider fails or returns empty, auto-fallback to OSM
+4. **Normalized data shape** — every provider returns the same `{name, type, address, website, phone, lat, lon, source_url, source}` structure so downstream code (Citation Pool, system prompt, GEO_Analyzer sentinel) is source-agnostic
+5. **REST endpoint** `POST /seobetter/v1/places-provider-test` to validate API keys from the settings page without hitting the full research pipeline
+
+**Files the v1.6.0 change will touch:**
+- New: `includes/Places_Provider.php` (abstract)
+- New: `includes/Places_OSM.php`, `Places_Google.php`, `Places_Foursquare.php`, `Places_Yelp.php`, `Places_Here.php`
+- New: `admin/views/settings-integrations.php`
+- Modified: `seobetter.php` — register settings tab + REST routes
+- Modified: `cloud-api/api/research.js` — accept `places_provider` + `places_api_key` in request body, route to the right fetcher, fall back to OSM
+- Modified: `Async_Generator.php::get_system_prompt()` — no change needed; PLACES RULES are source-agnostic
+- Modified: `GEO_Analyzer.php::check_local_places_grounding()` — no change needed; sentinel checks for OSM/Google Maps URLs regardless of which provider populated them
+
+**Estimated effort:** ~300 lines + settings UI + REST validation endpoints. About 4-6 hours of focused work. Too big for a v1.5.x hotfix, natural fit for v1.6.0.
+
 ### X / Twitter integration (research-only — no clean free path)
 
 **Status:** Not started. Added to backlog v1.5.16. The user specifically wants X data because it's where unfiltered real-people skill discussions and trending tech ideas happen — Bluesky, Mastodon, DEV.to, and Lemmy (added in v1.5.16) cover adjacent niches but don't fully replace X for that signal.

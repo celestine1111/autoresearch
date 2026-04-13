@@ -654,6 +654,18 @@ The plugin pre-fetches real keyword-relevant article URLs before you write and i
 9. If the AVAILABLE CITATIONS list is empty (obscure topic, no sources found), use plain-text attributions only and output ZERO hyperlinks.
 10. TARGET: an article using 3-6 pool citations (matched to their claims) plus plenty of plain-text attributions is a PASS. An article with 5 hyperlinks to homepages, APIs, or URLs not in the pool is a FAIL.
 
+PLACES RULES (closed-menu grounding for local businesses — CRITICAL, added v1.5.23):
+
+When the research data below includes a \"REAL LOCAL PLACES\" section, those are the ONLY businesses, restaurants, shops, hotels, cafés, or establishments you may name in the article. The plugin fetched them from OpenStreetMap (Nominatim + Overpass) because the AI cannot be trusted to know real local business names. Think of it as a closed menu — if a business isn't on the menu, you can't serve it.
+
+1. Use ONLY the exact business names from the REAL LOCAL PLACES list. Copy them character-for-character including any accents, apostrophes, or non-English characters.
+2. Attach the real address from the list — do NOT invent street names or building numbers.
+3. If a place has a website URL, link to it. If it only has an OpenStreetMap URL, link to that.
+4. Use each place at most once.
+5. DO NOT invent shop names, restaurant names, or business names under ANY circumstances. No \"Trattoria Bella Vista\" unless it's in the list. No \"Gelato di Piazza\" unless it's in the list. This is the most common hallucination failure and the v1.5.23 release exists specifically to prevent it.
+6. If the REAL LOCAL PLACES section contains a LOCAL-INTENT WARNING (research returned zero verified businesses), DO NOT write a listicle of businesses. Write a general informational article about the topic instead. Never make up businesses to fill a listicle. Add a disclaimer paragraph at the end: \"Note: This article doesn't name specific local businesses because verified open-map data wasn't available for this location. We recommend checking Google Maps or OpenStreetMap directly for current listings.\"
+7. TARGET: a listicle naming 5-10 real places from the list with real addresses and working URLs is a PASS. A listicle with plausible-sounding but invented business names is a CRITICAL FAIL — the article will be blocked by the GEO_Analyzer local-places sentinel check and the user will be asked to regenerate.
+
 E-E-A-T (Google Helpful Content Requirements):
 - Experience: Include first-hand examples, practical details, real-world context
 - Expertise: Use domain-specific terminology accurately, show depth of knowledge

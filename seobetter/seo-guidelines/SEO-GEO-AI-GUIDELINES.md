@@ -219,6 +219,24 @@ These are the specific content patterns that AI models extract and cite. Every a
 ```
 - Must make sense without surrounding context
 
+### 4.7B PLACES RULES — Anti-Hallucination for Local Businesses (`v1.5.23+`)
+
+For any article whose keyword triggers local intent (e.g. "best gelato shops in Lucignano Italy"), the AI system prompt now includes a **PLACES RULES** block that enforces closed-menu grounding for business names — identical pattern to the existing CITATION RULES for URLs.
+
+**What it does:**
+- The cloud-api research pipeline fetches real businesses from OpenStreetMap (Nominatim + Overpass) before the article is written and injects them into the prompt as a `REAL LOCAL PLACES` section.
+- The system prompt tells the AI: "These are the ONLY businesses you may name. If it's not on the list, you can't serve it."
+- 7 rules enforce: exact character-matching of names, real addresses from the list, one-use-per-place, explicit ban on inventing "plausible-sounding" businesses, fallback behavior when zero places returned (write a general article + disclaimer instead of a fake listicle).
+
+**Why:** Before v1.5.23 the plugin had ZERO place data in its research sources. Small towns + specific business types produced 100% hallucinated listicles that got user Ben caught testing `best gelato shops in Lucignano Italy 2026` — every shop listed was invented.
+
+**Post-generation safety:** [GEO_Analyzer::check_local_places_grounding()](../includes/GEO_Analyzer.php) runs a sentinel check after generation. For local-intent listicle/buying_guide/review/comparison content, if the article has no map URLs AND no specific addresses, the sentinel fires and floors `geo_score` at 40 (F grade). The user sees the red flag immediately and regenerates with the grounding data.
+
+**Source locations:**
+- Prompt rules: [Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php#L601) — PLACES RULES block (after CITATION RULES)
+- Research fetcher: [cloud-api/api/research.js::fetchOSMPlaces()](../cloud-api/api/research.js)
+- Sentinel: [GEO_Analyzer.php::check_local_places_grounding()](../includes/GEO_Analyzer.php)
+
 ### 4.8 Auto-styled Rich Formatting Triggers (`v1.5.14+`)
 
 The plugin's `format_hybrid()` formatter auto-detects 12 different content patterns and renders them as colored `wp:html` boxes in the saved draft. The system prompt (`Async_Generator::get_system_prompt()`) now instructs the AI to use the trigger words/structures naturally so the boxes fire reliably. **These patterns are not optional formatting suggestions — they're how the plugin produces visually rich articles.**
