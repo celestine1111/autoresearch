@@ -19,7 +19,7 @@
 ## v1.5.21 — Preview/draft styling parity (format_classic now wraps format_hybrid)
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `096d18b`
 
 ### Context
 
