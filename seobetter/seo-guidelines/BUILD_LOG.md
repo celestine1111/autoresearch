@@ -19,7 +19,7 @@
 ## v1.5.16 — Free social discussion sources (Bluesky, Mastodon, DEV.to, Lemmy)
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `7881cc3`
 
 ### Context
 
