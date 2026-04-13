@@ -401,6 +401,13 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 - `europepmc.org`, `ebi.ac.uk`, `www.ebi.ac.uk`
 - `openalex.org`, `api.openalex.org`
 
+**Social discussion sources (added v1.5.16)** — always-on free fetchers that contribute trending discussions and citable posts to every article
+
+- `bsky.app`, `bsky.social` — Bluesky public posts
+- `mastodon.social` — Mastodon public statuses (largest instance)
+- `dev.to` — DEV.to tech articles
+- `lemmy.world` — Lemmy federated reddit-alternative posts
+
 ### How matching works
 
 `is_host_trusted()` supports:

@@ -16,7 +16,7 @@
 **Called by:** `Trend_Researcher::cloud_research()` in WordPress
 **Parameters:** `keyword`, `domain`, `country`, `site_url`, `brave_key` (optional)
 
-### 1.1 Always-On Sources (5 free — every article)
+### 1.1 Always-On Sources (9 free — every article, v1.5.16+)
 
 | Source | URL Pattern | What It Returns | Timeout |
 |---|---|---|---|
@@ -25,6 +25,12 @@
 | **Hacker News** | `hn.algolia.com/api/v1/search_by_date?query={keyword}&tags=story&hitsPerPage=8` | Tech stories with points, URLs. Best for technology/startup articles. | 8s |
 | **Wikipedia** | `en.wikipedia.org/api/rest_v1/page/summary/{keyword}` | Page extract, definition, URL. Provides quotable definitions and background facts. | 6s |
 | **Google Trends** | `trends.google.com/trends/api/autocomplete/{keyword}?hl=en-US` | Related trending topics and queries. Provides freshness context. | 6s |
+| **Bluesky** *(v1.5.16)* | `api.bsky.app/xrpc/app.bsky.feed.searchPosts?q={keyword}&limit=8` | Public posts with author handle, likes, reposts, replies. Captures post-X tech audience. Free, no auth. | 8s |
+| **Mastodon** *(v1.5.16)* | `mastodon.social/api/v2/search?q={keyword}&type=statuses&limit=8` | Public statuses from the Fediverse with author, favourites, reblogs. Multilingual (strong EU/global coverage). Free, no auth. | 8s |
+| **DEV.to** *(v1.5.16)* | `dev.to/api/articles?per_page=8&search={keyword}` | Tech articles by practitioners with reactions, comments, tags, reading time. Strong for skill/coding topics globally. Free, no auth. | 8s |
+| **Lemmy** *(v1.5.16)* | `lemmy.world/api/v3/search?q={keyword}&type_=Posts&sort=TopMonth` | Posts from federated Reddit-alternative communities with score, comments, community name. Free, no auth. | 8s |
+
+**Why these 9?** As of v1.5.16 the always-on social signal is broad and free. X/Twitter is **deliberately not included** — there is no clean free X API in 2026 (see [pro-features-ideas.md → X / Twitter integration](pro-features-ideas.md) for the cookie-auth path planned for a future release). The 4 new v1.5.16 sources collectively replace ~70% of what X used to provide, across more languages and niches.
 
 ### 1.2 Optional Pro Source
 

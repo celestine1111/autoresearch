@@ -140,4 +140,40 @@
 
 ---
 
+## Research Sources Backlog
+
+### X / Twitter integration (research-only — no clean free path)
+
+**Status:** Not started. Added to backlog v1.5.16. The user specifically wants X data because it's where unfiltered real-people skill discussions and trending tech ideas happen — Bluesky, Mastodon, DEV.to, and Lemmy (added in v1.5.16) cover adjacent niches but don't fully replace X for that signal.
+
+**Why this is hard.** In 2026 X has no clean free API for read/search:
+- X API Free tier ($0/mo) — 1,500 POSTs/month, basically zero read or search → useless for research
+- X API Basic ($200/mo) — 10K reads/month → too expensive to bake into a plugin every user installs
+- Public Nitter mirrors — mostly broken since 2023, surviving instances are unreliable
+- ScrapeCreators / Apify scrapers — $30-100/mo → has to be optional and per-user-paid
+
+**The 3 realistic paths to research:**
+
+1. **Cookie-auth approach (recommended starting point)** — same as the `last30days` skill does.
+   - User logs into X in their browser, copies their `auth_token` and `ct0` cookies into a SEOBetter Settings field.
+   - Plugin uses those cookies to hit X's authenticated search endpoints from the cloud-api.
+   - **Pro:** $0 cost, works for the user's own site, immediate value
+   - **Con:** brittle — breaks whenever X updates anything. Per-user setup overhead. Cookies expire and need refresh. Possibly ToS-grey for commercial plugins.
+   - Files to touch: new `searchXTwitter()` in `cloud-api/api/research.js`, new Settings fields in `admin/views/settings.php`, pass cookies through the research request as headers.
+
+2. **Optional ScrapeCreators integration** — user provides their own ScrapeCreators API key.
+   - **Pro:** legal, reliable, works for any user willing to pay $30+/mo
+   - **Con:** gates X behind a paid third-party. Most users won't subscribe.
+   - Best as a Pro-tier feature where the SEOBetter Pro license includes a metered ScrapeCreators allowance.
+
+3. **Wait for X API pricing reset** — X has talked about lowering Basic tier pricing. Monitor and revisit when affordable.
+
+**Why this didn't ship in v1.5.16:** all paths require either a paid third party, a Settings page redesign, or per-user cookie management. Picking the right path needs the user to decide whether SEOBetter is willing to ship a feature that breaks unpredictably (cookie auth) vs gates a feature behind a third-party paywall (ScrapeCreators) vs waits indefinitely (API price drop).
+
+**Next decision needed:** which of the 3 paths to research first. Cookie-auth has the lowest upfront cost and `last30days` already proves it works in Python — porting to JS for the cloud-api is probably v1.5.17 or v1.5.18 territory.
+
+**Reference implementation available:** the vendored `last30days` skill at `seobetter/.agents/skills/last30days/scripts/lib/vendor/bird-search/` already implements X cookie-auth search. Its approach can be ported to JS for the Vercel cloud-api once the user picks a path.
+
+---
+
 *Add new ideas to this file as they come up. Move items to "implemented" when built and tested.*
