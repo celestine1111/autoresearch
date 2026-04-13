@@ -19,7 +19,7 @@
 ## v1.5.14 — Richer hybrid formatter (more wp:html styled blocks)
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `c621b05`
 
 ### Context
 
