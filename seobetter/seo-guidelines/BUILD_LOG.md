@@ -19,7 +19,7 @@
 ## v1.5.24 — 5-tier Places waterfall (Wikidata + Foursquare + HERE + Google) for any small city worldwide
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `2b099a6`
 
 ### Context
 
