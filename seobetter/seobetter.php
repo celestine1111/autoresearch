@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.17
+ * Version: 1.5.18
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.17' );
+define( 'SEOBETTER_VERSION', '1.5.18' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1446,6 +1446,52 @@ final class SEOBetter {
         // about "dog beds" shouldn't be cited with anchor text "dog food",
         // even though both are dog-related.
         $markdown = $this->verify_citation_atoms( $markdown );
+
+        // ===== Pass 4: URL deduplication (v1.5.18) =====
+        // The system prompt tells the AI "use each pool URL at most once" but
+        // the AI sometimes ignores it (e.g. linking en.wikipedia.org/Dog_food
+        // 3 times to "dog food"). This pass walks all surviving links in
+        // document order and unlinks the 2nd+ occurrence of any URL — the
+        // anchor text is preserved as plain text. Same logic for both markdown
+        // links [text](url) and HTML anchors <a href="url">text</a>. URLs are
+        // normalized (lowercase host, strip trailing slash) so that
+        // example.com/page and Example.com/page/ count as the same.
+        $seen_urls = [];
+        $normalize = function ( $url ) {
+            $parts = wp_parse_url( $url );
+            if ( ! $parts || empty( $parts['host'] ) ) return strtolower( $url );
+            $host = strtolower( $parts['host'] );
+            $path = isset( $parts['path'] ) ? rtrim( $parts['path'], '/' ) : '';
+            $query = isset( $parts['query'] ) ? '?' . $parts['query'] : '';
+            return $host . $path . $query;
+        };
+        // Pass 4a: markdown links — negative lookbehind for `!` so image markdown
+        // `![alt](url)` is never matched
+        $markdown = preg_replace_callback(
+            '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/',
+            function ( $m ) use ( &$seen_urls, $normalize ) {
+                $key = $normalize( $m[2] );
+                if ( isset( $seen_urls[ $key ] ) ) {
+                    return $m[1]; // strip wrapper, keep anchor text
+                }
+                $seen_urls[ $key ] = true;
+                return $m[0];
+            },
+            $markdown
+        );
+        // Pass 4b: HTML anchor tags
+        $markdown = preg_replace_callback(
+            '/<a\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>(.*?)<\/a>/is',
+            function ( $m ) use ( &$seen_urls, $normalize ) {
+                $key = $normalize( $m[1] );
+                if ( isset( $seen_urls[ $key ] ) ) {
+                    return wp_strip_all_tags( $m[2] );
+                }
+                $seen_urls[ $key ] = true;
+                return $m[0];
+            },
+            $markdown
+        );
 
         return $markdown;
     }

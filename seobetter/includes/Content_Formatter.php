@@ -337,6 +337,8 @@ class Content_Formatter {
         $accent = $options['accent_color'] ?? '#764ba2';
         $para_count = 0;
         $more_inserted = false;
+        // v1.5.18 — track whether we've emitted a dropcap yet (only on first body paragraph)
+        $dropcap_used = false;
 
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
@@ -345,9 +347,16 @@ class Content_Formatter {
                     $level = $section['level'];
                     $text = $section['content'];
 
+                    // v1.5.18 — apply accent color to H2 headings via Gutenberg
+                    // style attribute JSON + inline style. This makes saved
+                    // drafts visually match the preview's colored H2s while
+                    // keeping headings editable as native wp:heading blocks.
+                    // H1/H3+ render plain (H1 is the post title, H3+ are
+                    // sub-sub-sections that should inherit theme defaults).
                     if ( $level === 2 ) {
-                        $output[] = '<!-- wp:heading -->';
-                        $output[] = "<h2 class=\"wp-block-heading\">{$text}</h2>";
+                        $hex = $accent;
+                        $output[] = '<!-- wp:heading {"style":{"color":{"text":"' . esc_attr( $hex ) . '"}}} -->';
+                        $output[] = '<h2 class="wp-block-heading has-text-color" style="color:' . esc_attr( $hex ) . '">' . $text . '</h2>';
                         $output[] = '<!-- /wp:heading -->';
                     } elseif ( $level === 1 ) {
                         $output[] = '<!-- wp:heading {"level":1} -->';
@@ -432,9 +441,20 @@ class Content_Formatter {
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     }
                     else {
-                        $output[] = '<!-- wp:paragraph -->';
-                        $output[] = "<p>{$text}</p>";
-                        $output[] = '<!-- /wp:paragraph -->';
+                        // v1.5.18 — emit the very first body paragraph with a dropcap
+                        // (Gutenberg native dropCap attribute) so the saved draft visually
+                        // matches the preview's first-letter styling. Subsequent paragraphs
+                        // are normal. The dropCap attribute is a stable WP 5.x+ feature.
+                        if ( ! $dropcap_used && $para_count === 0 ) {
+                            $output[] = '<!-- wp:paragraph {"dropCap":true} -->';
+                            $output[] = '<p class="has-drop-cap">' . $text . '</p>';
+                            $output[] = '<!-- /wp:paragraph -->';
+                            $dropcap_used = true;
+                        } else {
+                            $output[] = '<!-- wp:paragraph -->';
+                            $output[] = "<p>{$text}</p>";
+                            $output[] = '<!-- /wp:paragraph -->';
+                        }
                         $para_count++;
                         // Insert wp:more after the 2nd regular paragraph (creates Read More break)
                         if ( $para_count === 2 && ! $more_inserted ) {
@@ -686,25 +706,13 @@ class Content_Formatter {
         $css .= ".{$uid} .sb-pros{background:#f0fdf4 !important;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
         $css .= ".{$uid} .sb-cons{background:#fef2f2 !important;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
         $css .= ".{$uid} .sb-ingredients{background:#fffbeb !important;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
-        // Dark mode
-        $css .= "@media(prefers-color-scheme:dark){.{$uid}{color:#e5e7eb !important;background:#111827 !important}";
-        $css .= ".{$uid} *{color:#d1d5db}";
-        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3{color:#f3f4f6 !important}";
-        $css .= ".{$uid} h2{border-bottom-color:{$accent}44;color:{$accent} !important}";
-        $css .= ".{$uid} p,.{$uid} li{color:#d1d5db !important}";
-        $css .= ".{$uid} blockquote{background:#1f2937 !important;color:#9ca3af !important}";
-        $css .= ".{$uid} .sb-takeaways{background:linear-gradient(135deg,#1f2937 0%,#1e293b 100%) !important}";
-        $css .= ".{$uid} .sb-pros{background:#052e16 !important;border-color:#166534}";
-        $css .= ".{$uid} .sb-cons{background:#450a0a !important;border-color:#991b1b}";
-        $css .= ".{$uid} .sb-callout-tip{background:#172554 !important;border-color:#1d4ed8;color:#93c5fd !important}";
-        $css .= ".{$uid} .sb-callout-note{background:#451a03 !important;border-color:#d97706;color:#fcd34d !important}";
-        $css .= ".{$uid} .sb-callout-warn{background:#450a0a !important;border-color:#dc2626;color:#fca5a5 !important}";
-        $css .= ".{$uid} tbody td{border-bottom-color:#374151;color:#d1d5db !important}";
-        $css .= ".{$uid} tbody tr:nth-child(even){background:#1f293780}";
-        $css .= ".{$uid} thead th{background:{$accent}cc !important}";
-        $css .= ".{$uid} code{background:#374151 !important;color:#e5e7eb !important}";
-        $css .= ".{$uid} hr{border-top-color:#374151}";
-        $css .= ".{$uid} a{color:#93c5fd !important}}";
+        // v1.5.18 — dark-mode media query removed. Previously this block
+        // auto-flipped the preview to dark colors when the user's OS was in
+        // dark mode, which was confusing because (a) the published article
+        // on the site never inherits OS dark mode, so the preview was lying
+        // about how the saved post would look, and (b) WordPress admin pages
+        // are always light, so a black article preview inside a white admin
+        // page is visually jarring. Preview now always renders light.
         $css .= "</style>";
 
         $output[] = $css;

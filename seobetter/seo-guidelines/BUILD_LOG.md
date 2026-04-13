@@ -16,6 +16,68 @@
 
 ---
 
+## v1.5.18 — Citation dedup, preview/draft styling parity
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Context
+
+Test 1 (Article: "is fresh meat better than kibble for adult dogs" / Blog Post / veterinary) surfaced four real bugs:
+
+1. The same Wikipedia URL (`en.wikipedia.org/Dog_food`) was linked to "dog food" three times in the same article. The system prompt at line 646 says "use each pool URL at most once" but the AI ignored it and there was no validator enforcing it.
+2. The article preview was rendering all in dark mode (black background, white text), which doesn't match how the saved draft renders on the live site. Caused by a `prefers-color-scheme:dark` media query in `format_classic()` auto-flipping when the user's OS is in dark mode.
+3. The saved draft has plain wp:heading and wp:paragraph blocks with no accent color or dropcap, while the preview shows colored H2s and a dropcap on the first paragraph. The two render paths produced visibly different output.
+4. **Not fixed in this release** but documented: the user reported the title selector, bar charts, and Analyze & Improve panel as "missing" — code review confirms they're all in `renderResult()` JS as of v1.5.12. Likely the user just didn't scroll up far enough in the result panel. Will verify with user after v1.5.18 install.
+
+### Fixed
+
+- **URL deduplication pass** — `seobetter.php::validate_outbound_links()` after the verify_citation_atoms call (Pass 4)
+  - New 4th pass walks all surviving markdown links and HTML anchors in document order, normalizes URLs (lowercase host, strip trailing slash, preserve query string, drop fragment), and on the 2nd+ occurrence of any URL strips the link wrapper while preserving the anchor text as plain text.
+  - Catches the AI's failure to follow "use each pool URL at most once" — guarantees no duplicate outbound URLs in the saved draft.
+  - Verify: `grep -n "Pass 4: URL deduplication" seobetter/seobetter.php`
+
+- **Preview dark mode media query removed** — `Content_Formatter.php::format_classic()` line ~688
+  - Deleted the `@media(prefers-color-scheme:dark)` block (~18 CSS rules) that auto-flipped the preview to dark colors when the user's OS was in dark mode.
+  - Preview now always renders light, matching what gets saved to the draft and what the published article looks like on the front-end (which never inherits OS dark mode).
+  - Verify: `! grep -n 'prefers-color-scheme:dark' seobetter/includes/Content_Formatter.php`
+
+- **Hybrid H2 headings get accent color** — `Content_Formatter.php::format_hybrid()` heading case lines ~344-365
+  - H2 headings now emit Gutenberg style attribute JSON + inline `style="color:..."` so the saved draft visually matches the preview's colored headings, while remaining editable as native wp:heading blocks.
+  - H1 (post title) and H3+ stay plain so theme defaults apply.
+  - Verify: `grep -n 'has-text-color' seobetter/includes/Content_Formatter.php`
+
+- **Hybrid first body paragraph gets dropcap** — `Content_Formatter.php::format_hybrid()` paragraph fallback case lines ~443-462
+  - The first regular paragraph (after any heading) is now emitted as `<!-- wp:paragraph {"dropCap":true} --><p class="has-drop-cap">…</p><!-- /wp:paragraph -->`. WordPress core renders `.has-drop-cap` with a serif-styled `::first-letter` at 3.5em.
+  - Subsequent paragraphs unchanged. The `$dropcap_used` flag prevents multiple dropcaps per article.
+  - Verify: `grep -n 'dropCap":true' seobetter/includes/Content_Formatter.php`
+
+### Documentation
+
+- **external-links-policy.md §6B** — new section "URL deduplication (Pass 4 — added v1.5.18)" with normalization rules, pattern explanation, and reasoning
+  - Verify: `grep -n '## 6B. URL deduplication' seobetter/seo-guidelines/external-links-policy.md`
+
+- **article_design.md §5.16a** — new section "Hybrid heading + dropcap parity (v1.5.18+)" documenting the H2 accent color emission, dropcap on first paragraph, and the dark-mode removal
+  - Verify: `grep -n '5.16a Hybrid heading' seobetter/seo-guidelines/article_design.md`
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall + retest article 1. Expected:
+  - Wikipedia URL appears at most once in References
+  - Preview is light-themed, not dark
+  - Saved draft has colored H2 headings (purple/accent) in Gutenberg editor
+  - Saved draft has a dropcap on the first paragraph
+  - GEO Score panel shows the bar chart graph (existed since v1.5.12, user just needs to scroll up)
+  - Headlines panel shows radio buttons + tag descriptors (existed since v1.5.12)
+  - Analyze & Improve panel shows clickable Fix buttons (existed since v1.5.12)
+
+### NOT addressed in v1.5.18 (separate concerns)
+
+- **Social citation cards** — v1.5.17 just shipped. The detection regex exists, but the AI may not be producing the marker syntax yet (prompt instruction needs more reinforcement OR a test article specifically with social references). Test #1 used `domain=veterinary` which pulls Crossref/EuropePMC/OpenAlex, not Bluesky/Mastodon — the social fetchers may have returned 0 hits for that vet topic. To verify v1.5.17 social cards work, generate an article with a tech keyword (e.g. `domain=technology`) and check if the AI emits `> [bluesky @handle]` markers.
+- **GEO score auto-fix as Pro feature?** — `/seobetter/v1/generate/improve` and `/seobetter/v1/inject-fix` endpoints already exist and are wired to the Analyze & Improve buttons (line 907 of content-generator.php). They use the user's BYOK API key or cloud quota — no extra cost. No Pro gating recommended. The "Add now" buttons ARE the auto-fix; user just needs to find them in the rendered dashboard.
+
+---
+
 ## v1.5.17 — Social media citation blocks (human-in-the-loop for AI-unreliable sources)
 
 **Date:** 2026-04-13

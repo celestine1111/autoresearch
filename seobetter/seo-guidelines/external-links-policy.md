@@ -241,6 +241,20 @@ The References step in the async pipeline now returns an empty string — the AI
 
 ---
 
+## 6B. URL deduplication (Pass 4 — added v1.5.18)
+
+After the four whitelist/verification passes complete, `validate_outbound_links()` runs one final pass that walks every surviving link in document order and **strips the wrapper from any URL that has already appeared earlier in the article**. The anchor text is preserved as plain text — only the link wrapper is removed.
+
+**Why:** the system prompt at `Async_Generator::get_system_prompt()` instructs the AI "use each pool URL at most once", but the AI sometimes ignores it. v1.5.17 saw test articles linking `en.wikipedia.org/Dog_food` to the keyword "dog food" three times in the same article — visually noisy, hurts the AI-citation signal (LLMs interpret repeated identical URLs as low-quality SEO-stuffing), and creates the Wikipedia-dependence anti-pattern Google penalizes.
+
+**Normalization:** URLs are normalized before comparison so that `example.com/page`, `Example.com/page/`, and `EXAMPLE.com/page` all count as the same URL. The host is lowercased, the trailing slash is stripped from the path, and the query string is preserved as-is. The fragment is dropped.
+
+**Applied to both:** markdown links `[text](url)` and HTML anchor tags `<a href="url">text</a>`. Image markdown `![alt](url)` is excluded via negative lookbehind `(?<!!)`.
+
+**Source:** [seobetter.php::validate_outbound_links()](../seobetter.php) Pass 4 block, immediately before the function returns.
+
+---
+
 ## 7. Phase 3: Save-time validation
 
 **File:** `seobetter.php` — `validate_outbound_links($markdown, $citation_pool)` method

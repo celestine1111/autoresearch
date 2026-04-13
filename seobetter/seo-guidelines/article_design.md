@@ -271,6 +271,15 @@ Auto-detected when `content_type === 'how_to'` AND the list is ordered (`<ol>`) 
 - Threading: `format_hybrid()` reads `$options['content_type']` (passed in by `seobetter.php::rest_save_draft()` and `Async_Generator::assemble_final()`)
 - Source: `Content_Formatter.php::format_hybrid()` list branch — HowTo step boxes
 
+### 5.16a Hybrid heading + dropcap parity (`v1.5.18+`)
+
+To make saved drafts visually match the preview without giving up Gutenberg editability, `format_hybrid()` now emits two extra style hints:
+
+- **H2 headings get the accent color via Gutenberg style attributes:** `<!-- wp:heading {"style":{"color":{"text":"#764ba2"}}} --><h2 class="wp-block-heading has-text-color" style="color:#764ba2">…</h2><!-- /wp:heading -->`. Editable as a normal heading block, but renders colored in the editor and on the front-end. H1 (post title) and H3+ (sub-sub-sections) stay plain so theme defaults apply.
+- **First body paragraph gets a dropcap:** the first regular `<p>` (after any heading) is emitted as `<!-- wp:paragraph {"dropCap":true} --><p class="has-drop-cap">…</p><!-- /wp:paragraph -->`. Subsequent paragraphs render normally. WordPress core renders `.has-drop-cap` with a serif-styled `::first-letter` floated left at 3.5em.
+
+The preview (which uses `format_classic()`) had a `prefers-color-scheme: dark` media query that auto-flipped the article preview to dark colors when the user's OS was in dark mode. **This was removed in v1.5.18** because the published article on the live site never inherits OS dark mode, so the preview was lying about how the saved post would look. Preview now always renders light, matching what users see in the WordPress editor and on the front-end.
+
 ### 5.16 Social Media Citation (`v1.5.17+`)
 
 Auto-detected when a markdown blockquote starts with a `[platform @handle]` marker. Unlike other styled boxes, this one has a **prominent red warning banner** at the top telling the user to review before publishing, and a dashed-border footnote at the bottom explaining why. Social media content is easily AI-generated or fabricated, so every citation from Reddit, Bluesky, Mastodon, DEV.to, Lemmy, or Hacker News MUST be rendered as a dedicated wp:html block the user can review and delete with one click.
