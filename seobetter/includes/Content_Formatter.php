@@ -378,7 +378,60 @@ class Content_Formatter {
                     } elseif ( preg_match( '/^(warning|caution)\s*[:—-]/i', $plain ) ) {
                         $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\"><strong>Warning:</strong> {$text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
-                    } else {
+                    }
+                    // v1.5.14 — Did You Know box: paragraph starts with "Did you know" or "Fun fact"
+                    elseif ( preg_match( '/^(did\s*you\s*know|fun\s*fact)\??\s*[:—-]?\s*(.*)$/is', $plain, $dyk_match ) ) {
+                        $body_text = $this->inline_markdown( trim( $dyk_match[2] ) ) ?: $text;
+                        $html = '<div style="background:#fefce8 !important;border-left:4px solid #eab308;padding:1em 1.25em;border-radius:0 8px 8px 0;margin:1.25em 0;color:#713f12 !important;line-height:1.7">';
+                        $html .= '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#a16207 !important;margin-bottom:0.35em">Did you know?</div>';
+                        $html .= '<div>' . $body_text . '</div>';
+                        $html .= '</div>';
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    }
+                    // v1.5.14 — Definition box: paragraph starts with **Term**: definition
+                    elseif ( preg_match( '/^<strong>([^<]{2,40})<\/strong>\s*[:—-]\s*(.+)$/s', $text, $def_match ) ) {
+                        $term = $def_match[1];
+                        $body_text = trim( $def_match[2] );
+                        $html = '<div style="background:#f8fafc !important;border:1px solid #e2e8f0;border-radius:8px;padding:1em 1.25em;margin:1.25em 0;line-height:1.7">';
+                        $html .= '<span style="color:' . $accent . ' !important;font-weight:700;font-size:1.05em">' . $term . '</span>';
+                        $html .= '<span style="color:#374151 !important"> &middot; ' . $body_text . '</span>';
+                        $html .= '</div>';
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    }
+                    // v1.5.14 — Highlight sentence: entire paragraph is one bold sentence
+                    elseif ( preg_match( '/^<strong>([^<].*?)<\/strong>[\s.!?]*$/s', $text, $hl_match ) && strpos( $hl_match[1], '<' ) === false ) {
+                        $inner = $hl_match[1];
+                        $html = '<div style="border-left:6px solid ' . $accent . ';background:#faf5ff !important;padding:1em 1.5em;margin:1.5em 0;border-radius:0 8px 8px 0;font-size:1.15em;line-height:1.6;color:#1e293b !important;font-weight:600">';
+                        $html .= $inner;
+                        $html .= '</div>';
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    }
+                    // v1.5.14 — Expert quote: "Quote text" — Name, Title
+                    elseif ( preg_match( '/^[\"\x{201C}]([^\"\x{201D}]{20,})[\"\x{201D}]\s*[\x{2014}\x{2013}\-]\s*([A-Z][a-zA-Z\s.\']+?)(?:,\s*(.+?))?[.\s]*$/u', $plain, $q_match ) ) {
+                        $quote_text = $this->inline_markdown( trim( $q_match[1] ) );
+                        $author = trim( $q_match[2] );
+                        $title_part = isset( $q_match[3] ) ? trim( $q_match[3] ) : '';
+                        $html = '<blockquote style="border-left:4px solid ' . $accent . ';margin:1.5em 0;padding:1em 1.5em;background:#f9fafb !important;border-radius:0 8px 8px 0;font-style:italic">';
+                        $html .= '<p style="margin:0 0 0.5em 0;color:#1e293b !important;font-size:1.1em;line-height:1.6">&ldquo;' . $quote_text . '&rdquo;</p>';
+                        $html .= '<footer style="font-style:normal;font-size:0.9em;color:#64748b !important">&mdash; <strong>' . esc_html( $author ) . '</strong>';
+                        if ( $title_part ) {
+                            $html .= ', ' . esc_html( $title_part );
+                        }
+                        $html .= '</footer>';
+                        $html .= '</blockquote>';
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    }
+                    // v1.5.14 — Stat callout: paragraph contains a prominent statistic
+                    elseif ( preg_match( '/(\d{1,3}(?:[.,]\d+)?)\s*%/', $plain, $stat_match )
+                             || preg_match( '/\b(\d{1,3})\s+(?:out\s+of|in)\s+(\d{1,4})\b/i', $plain, $stat_match ) ) {
+                        $stat_value = $stat_match[0];
+                        $html = '<div style="display:flex;gap:1.25em;align-items:center;background:#faf5ff !important;border-left:4px solid ' . $accent . ';padding:1em 1.25em;margin:1.25em 0;border-radius:0 8px 8px 0">';
+                        $html .= '<div style="flex-shrink:0;font-size:2em;font-weight:800;color:' . $accent . ' !important;line-height:1;letter-spacing:-0.02em">' . esc_html( $stat_value ) . '</div>';
+                        $html .= '<div style="flex:1;color:#374151 !important;line-height:1.65;font-size:0.97em">' . $text . '</div>';
+                        $html .= '</div>';
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    }
+                    else {
                         $output[] = '<!-- wp:paragraph -->';
                         $output[] = "<p>{$text}</p>";
                         $output[] = '<!-- /wp:paragraph -->';
@@ -404,11 +457,18 @@ class Content_Formatter {
                         if ( $sections[ $j ]['type'] === 'paragraph' && ! empty( trim( $sections[ $j ]['content'] ) ) ) break;
                     }
 
-                    $is_takeaways = preg_match( '/key\s*takeaway/i', $prev_heading );
+                    // v1.5.14 — widened regex catches synonyms the AI uses naturally
+                    $is_takeaways = (bool) preg_match( '/key\s*takeaway|key\s*insight|main\s*point|at\s*a\s*glance|tl;?dr|what\s*to\s*know|the\s*bottom\s*line/i', $prev_heading );
                     $prev_context = strtolower( $prev_heading );
-                    $is_pros = ( preg_match( '/\bpros?\b|advantage|strength|benefit/i', $prev_context ) && ! preg_match( '/cons/i', $prev_context ) );
-                    $is_cons = preg_match( '/\bcons?\b|disadvantage|weakness|drawback/i', $prev_context );
-                    $is_ingredients = preg_match( '/ingredient|you.ll need|what you need|supplies/i', $prev_context );
+                    $is_pros = ( preg_match( '/\bpros?\b|advantage|strength|benefit|upside|highlight/i', $prev_context ) && ! preg_match( '/cons/i', $prev_context ) );
+                    $is_cons = (bool) preg_match( '/\bcons?\b|disadvantage|weakness|drawback|downside|limitation|trade-?off/i', $prev_context );
+                    $is_ingredients = (bool) preg_match( '/ingredient|you.ll need|what you need|supplies|materials|tools|prerequisite/i', $prev_context );
+
+                    // v1.5.14 — HowTo step boxes: when content_type is how_to AND
+                    // the list is ordered AND it's not already classified as
+                    // takeaways/pros/cons/ingredients, render as numbered step cards.
+                    $content_type = $options['content_type'] ?? '';
+                    $is_howto_steps = ( $content_type === 'how_to' && $tag === 'ol' && ! $is_takeaways && ! $is_pros && ! $is_cons && ! $is_ingredients );
 
                     if ( $is_takeaways ) {
                         $html = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0">';
@@ -441,6 +501,20 @@ class Content_Formatter {
                             $html .= "<li style=\"margin-bottom:0.5em;color:#92400e !important\">{$item}</li>";
                         }
                         $html .= "</{$tag}></div>";
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    } elseif ( $is_howto_steps ) {
+                        // v1.5.14 — HowTo step boxes: each step gets a numbered circle badge
+                        // No icons, no SVG — pure CSS circles with the step number inside.
+                        $html = '<div style="margin:1.5em 0;display:flex;flex-direction:column;gap:0.75em">';
+                        $step_num = 0;
+                        foreach ( $section['items'] as $item ) {
+                            $step_num++;
+                            $html .= '<div style="display:flex;gap:1em;align-items:flex-start;background:#f8fafc !important;border:1px solid #e2e8f0;border-radius:10px;padding:1em 1.25em">';
+                            $html .= '<div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:' . $accent . ';color:#ffffff !important;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.95em;line-height:1">' . $step_num . '</div>';
+                            $html .= '<div style="flex:1;line-height:1.7;color:#374151 !important;padding-top:0.35em">' . $item . '</div>';
+                            $html .= '</div>';
+                        }
+                        $html .= '</div>';
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } else {
                         // Standard list — native Gutenberg block

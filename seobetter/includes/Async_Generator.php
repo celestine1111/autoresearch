@@ -511,6 +511,8 @@ class Async_Generator {
         $formatter = new Content_Formatter();
         $html = $formatter->format( $markdown, 'classic', [
             'accent_color' => $options['accent_color'] ?? '#764ba2',
+            // v1.5.14 — thread content_type for HowTo step-box detection
+            'content_type' => $options['content_type'] ?? '',
         ] );
 
         // GEO score — pass content type so scorer adjusts checks
@@ -722,7 +724,19 @@ WORD COUNT: Always write the FULL number of words requested. Being too short is 
 
 STRUCTURE: Start every H2/H3 section with a 40-60 word paragraph that directly answers the heading. Never start paragraphs with pronouns (It, This, They, These, Those, He, She, We). Every paragraph must make sense in isolation (AI extracts individual paragraphs).
 
-FORMAT: Output GitHub Flavored Markdown. Only bold the primary keyword on its FIRST mention in the article — no other bold. Use tables for comparisons. Use bullet/numbered lists for features and steps.";
+RICH FORMATTING (use these patterns naturally — the plugin auto-styles them into colored boxes in the published article):
+- For actionable advice, start the paragraph with 'Tip:' (max 2 per article)
+- For important context the reader should not miss, start with 'Note:' (max 2 per article)
+- For safety or risk warnings, start with 'Warning:' (only when truly relevant — never force one)
+- For one interesting fact per article, start a paragraph with 'Did you know?' followed by the fact (max 1 per article)
+- When you introduce a technical term for the first time, format the definition on its own paragraph as: **Term**: explanation here. (1-2 per article)
+- For ONE key insight per major section, write the whole sentence as a single bold line on its own paragraph: **This is the most important point in this section.** (1 per H2 section, max 2 per article)
+- For expert quotes, write on their own line as: \"Quote text here\" — Dr. Name, Title, Organization
+- Use H2 headings 'Key Takeaways', 'Pros and Cons', 'What You'll Need', or 'Key Insights' verbatim where they fit naturally — these auto-style the following list into colored boxes
+- Statistics with numbers ('78% of dogs prefer X', '3 out of 5 owners report...') are auto pulled-out into stat callouts — write them naturally inside paragraphs
+- These rich formatting hints REPLACE the BANNED WRITING PATTERNS rule against excessive bold ONLY for the specific cases above (definitions, key insights). Everywhere else, no bold.
+
+FORMAT: Output GitHub Flavored Markdown. Use tables for comparisons. Use bullet/numbered lists for features and steps.";
     }
 
     /**

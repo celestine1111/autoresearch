@@ -236,19 +236,33 @@ Each content type has: required sections, writing guidance, schema type, shared 
 - Warning callout — red left border, red bg
 - Tables — accent headers, zebra striping, rounded corners
 - Blockquotes — accent left border, gray bg, italic
+- **Stat callout** (`v1.5.14`) — light purple bg, pulled-out 2em number on the left, body on the right
+- **Expert quote** (`v1.5.14`) — italic blockquote with `<footer>` attribution line
+- **Definition box** (`v1.5.14`) — gray bg, accent term + middot + body text
+- **Did-You-Know box** (`v1.5.14`) — soft yellow bg, amber eyebrow label, no icons
+- **Highlight sentence** (`v1.5.14`) — 1.15em accent-color sentence with 6px accent border
+- **HowTo step boxes** (`v1.5.14`) — numbered circle badge per step, only for `content_type === 'how_to'` ordered lists
 
 ### 3.3 Context Detection
 
-Lists are styled based on the preceding heading text:
-- Contains "pros/advantage/benefit" → green pros box
-- Contains "cons/disadvantage/drawback" → red cons box
-- Contains "ingredient/supplies/what you need" → amber ingredients box
-- Contains "key takeaway" → gradient takeaways box
+Lists are styled based on the preceding heading text. **v1.5.14 widened these regexes** to catch more synonyms:
+- `pros|advantage|benefit|upside|highlight` → green Pros box
+- `cons|disadvantage|drawback|downside|limitation|trade-off` → red Cons box
+- `ingredient|supplies|what you need|materials|tools|prerequisite` → amber Ingredients box
+- `key takeaway|key insight|main point|at a glance|tldr|tl;dr|what to know|the bottom line` → gradient Takeaways box
+- (NEW v1.5.14) ordered list inside `content_type === 'how_to'` not matching above → numbered Step boxes
 
-Paragraphs are styled based on text start:
+Paragraphs are styled based on text content (v1.5.14 added 5 new patterns):
 - Starts with "Tip:" → blue callout
 - Starts with "Note:/Important:" → amber callout
 - Starts with "Warning:/Caution:" → red callout
+- (NEW) Starts with "Did you know?/Fun fact" → yellow Did-You-Know box (capped at 1/article)
+- (NEW) Starts with `**Term**:` → gray Definition box
+- (NEW) Entire paragraph is a single bold sentence `**...**` → accent Highlight box
+- (NEW) Matches `"quote" — Name, Title` pattern → italic Expert Quote with attribution footer
+- (NEW) Contains `\d%` or `\d out of \d` or `\d in \d` → Stat callout with pulled-out number
+
+The system prompt at [Async_Generator::get_system_prompt()](../includes/Async_Generator.php#L601) now includes a `RICH FORMATTING` block (added v1.5.14) that instructs the AI to use these trigger words/structures naturally so the boxes fire reliably. See [SEO-GEO-AI-GUIDELINES.md §4.8](SEO-GEO-AI-GUIDELINES.md#L222) for the full trigger → box mapping.
 
 ---
 

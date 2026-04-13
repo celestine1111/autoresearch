@@ -219,6 +219,27 @@ These are the specific content patterns that AI models extract and cite. Every a
 ```
 - Must make sense without surrounding context
 
+### 4.8 Auto-styled Rich Formatting Triggers (`v1.5.14+`)
+
+The plugin's `format_hybrid()` formatter auto-detects 12 different content patterns and renders them as colored `wp:html` boxes in the saved draft. The system prompt (`Async_Generator::get_system_prompt()`) now instructs the AI to use the trigger words/structures naturally so the boxes fire reliably. **These patterns are not optional formatting suggestions — they're how the plugin produces visually rich articles.**
+
+Trigger → styled box mapping:
+- `Tip:` → blue Tip callout (max 2/article)
+- `Note:` → amber Note callout (max 2/article)
+- `Warning:` → red Warning callout (only when relevant)
+- `Did you know?` → yellow Did-You-Know box (max 1/article)
+- `**Term**: definition` → gray Definition box with accent term
+- `**Whole sentence is bold.**` (own paragraph) → highlighted accent-bordered sentence (1-2/article)
+- `"Quote text" — Name, Title` → italic blockquote with attribution footer
+- `78%` / `3 out of 5` / etc. (anywhere in a paragraph) → stat callout with pulled-out number
+- H2 `Key Takeaways` / `Key Insights` / `What to Know` / `TL;DR` / `The Bottom Line` → followed list becomes Key Takeaways box
+- H2 `Pros` / `Pros and Cons` / `Benefits` / `Upsides` → followed list becomes green Pros box
+- H2 `Cons` / `Drawbacks` / `Downsides` / `Limitations` / `Trade-offs` → followed list becomes red Cons box
+- H2 `Ingredients` / `Materials` / `Tools` / `What You'll Need` / `Prerequisites` → followed list becomes amber Ingredients box
+- For `content_type === 'how_to'`: numbered ordered lists become Step Boxes with circular numbered badges
+
+Reference: [article_design.md §5.9-5.15](article_design.md#L155). Code: [Content_Formatter.php::format_hybrid()](../includes/Content_Formatter.php#L335).
+
 ---
 
 ## 4B. HUMANIZER — ANTI-AI WRITING PATTERNS (CRITICAL)

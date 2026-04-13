@@ -225,6 +225,61 @@ Detected from paragraph text starting with "Tip:", "Note:", or "Warning:"
 - Inline code: light gray background, small padding, rounded corners
 - Code blocks: dark background (#1f2937), light text, rounded corners, horizontal scroll
 
+### 5.9 Stat Callout (`v1.5.14+`)
+Auto-detected from any paragraph containing a prominent statistic — `\d%`, `X out of Y`, `X in N`.
+- Layout: flex row with the extracted stat as a 2em bold number on the left, body text on the right
+- Background: light purple (`#faf5ff`), accent left border (4px)
+- Trigger regex: `(\d{1,3}(?:[.,]\d+)?\s*%)` OR `\b\d{1,3}\s+(?:out\s+of|in)\s+\d{1,4}\b`
+- Source: `Content_Formatter.php::format_hybrid()` paragraph branch — Stat callout
+
+### 5.10 Expert Quote (`v1.5.14+`)
+Auto-detected from any paragraph matching `"Quote text" — Name, Title` (em/en/regular dash, straight or curly quotes).
+- Layout: italic blockquote with the quote in 1.1em, attribution in a smaller `<footer>` line below
+- Background: surface gray (`#f9fafb`), accent left border (4px), border-radius 0 8px 8px 0
+- Trigger regex (Unicode-aware): `^["\x{201C}]([^"\x{201D}]{20,})["\x{201D}]\s*[\x{2014}\x{2013}\-]\s*([A-Z][a-zA-Z\s.\']+?)(?:,\s*(.+?))?[.\s]*$`
+- Source: `Content_Formatter.php::format_hybrid()` paragraph branch — Expert quote
+
+### 5.11 Definition Box (`v1.5.14+`)
+Auto-detected from paragraphs starting with `**Term**:` (i.e. raw markdown `**Term**: explanation`).
+- Layout: term in accent color + semibold, separator middot, explanation in body color
+- Background: light gray (`#f8fafc`), 1px border (`#e2e8f0`), border-radius 8px
+- Trigger regex: `^<strong>([^<]{2,40})</strong>\s*[:—-]\s*(.+)$`
+- Source: `Content_Formatter.php::format_hybrid()` paragraph branch — Definition box
+
+### 5.12 Did-You-Know Box (`v1.5.14+`)
+Auto-detected from paragraphs starting with `Did you know` or `Fun fact`.
+- Layout: small uppercase eyebrow label "DID YOU KNOW?" in amber, body text in dark amber underneath
+- Background: soft yellow (`#fefce8`), amber-yellow left border (`#eab308`)
+- **No icon, no emoji** — typography only per §6
+- Trigger regex (case-insensitive): `^(did\s*you\s*know|fun\s*fact)\??\s*[:—-]?\s*(.*)$`
+- Cap: max 1 per article (the AI prompt also enforces this)
+- Source: `Content_Formatter.php::format_hybrid()` paragraph branch — Did You Know box
+
+### 5.13 Highlight Sentence (`v1.5.14+`)
+Auto-detected when an entire paragraph is a single bold sentence (raw markdown `**The whole sentence is bold.**`).
+- Layout: large 1.15em font, accent text color, 6px accent left border
+- Background: light surface purple (`#faf5ff`), border-radius 0 8px 8px 0
+- Used by the AI to mark the single most important takeaway sentence in a section (max 2 per article — prompt-enforced)
+- Trigger regex: `^<strong>([^<].*?)</strong>[\s.!?]*$` plus structural check that inner content has no nested HTML
+- Source: `Content_Formatter.php::format_hybrid()` paragraph branch — Highlight sentence
+
+### 5.14 HowTo Step Boxes (`v1.5.14+`)
+Auto-detected when `content_type === 'how_to'` AND the list is ordered (`<ol>`) AND it's not already classified as Pros/Cons/Ingredients/Takeaways. Each `<li>` becomes its own row.
+- Layout: flex row per step — circular numbered badge (36px) on the left in accent color with white number, step text on the right
+- Step card: light surface background (`#f8fafc`), 1px border (`#e2e8f0`), border-radius 10px, 1em gap between steps
+- **No SVG icons, no checkmarks** — the number itself is the visual marker
+- Threading: `format_hybrid()` reads `$options['content_type']` (passed in by `seobetter.php::rest_save_draft()` and `Async_Generator::assemble_final()`)
+- Source: `Content_Formatter.php::format_hybrid()` list branch — HowTo step boxes
+
+### 5.15 Widened triggers for existing boxes (`v1.5.14+`)
+Existing boxes 5.1–5.5 now match more synonyms in the preceding H2:
+- **Takeaways**: also `key insight`, `main point`, `at a glance`, `tldr`, `tl;dr`, `what to know`, `the bottom line`
+- **Pros**: also `upside`, `highlight`
+- **Cons**: also `downside`, `limitation`, `trade-off`
+- **Ingredients**: also `materials`, `tools`, `prerequisites`
+
+This roughly doubles the existing styled-block hit rate without changing the prompt.
+
 ---
 
 ## 6. ICON RULES (STRICT)
