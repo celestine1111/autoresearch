@@ -19,7 +19,7 @@
 ## v1.5.17 — Social media citation blocks (human-in-the-loop for AI-unreliable sources)
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `9abfce3`
 
 ### Context
 
