@@ -16,6 +16,56 @@
 
 ---
 
+## v1.5.12 — Restore full result UI + kill legacy sync POST fallback
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Generate button form-submit fallback** — `admin/views/content-generator.php` `<button id="seobetter-async-generate">` line ~**396**
+  - Changed from `<button type="submit" name="seobetter_generate_article">` to `<button type="button">`
+  - Also added `onsubmit="return false"` on the outer form at line ~**60**
+  - Root cause: dual-purpose button fell back to legacy sync POST when JS failed to intercept (Enter key, any JS error, etc.), rendering the minimal legacy UI instead of the full async dashboard
+  - Verify: `grep -n 'id="seobetter-async-generate"' seobetter/admin/views/content-generator.php`
+
+- **Legacy server-side result block removed** — `admin/views/content-generator.php` previously lines 666-818 deleted
+  - Was an entire `<?php if ( $result ) : ?>` branch that rendered a stripped-down result panel (GEO Score + Words + suggestions + a Save Draft form with nonce-prone submit buttons) when the sync POST path ran
+  - Included a "Save as WordPress Draft" button and "Fix X Issues & Re-optimize" button that both used `seobetter_draft_nonce` form nonces prone to "link expired" errors
+  - Now replaced with an HTML comment pointing to `plugin_UX.md §3` for the required result panel
+  - Verify: `grep -c 'legacy server-side $result' seobetter/admin/views/content-generator.php` (should be 1)
+
+- **Legacy PHP handlers removed** — `admin/views/content-generator.php` previously lines 10-186 deleted
+  - `seobetter_generate_article` (sync article generation)
+  - `seobetter_generate_outline` (unused)
+  - `seobetter_reoptimize` (replaced by `POST /seobetter/v1/generate/improve`)
+  - `seobetter_create_draft` (replaced by `POST /seobetter/v1/save-draft`)
+  - Verify: `grep -n "seobetter_create_draft" seobetter/admin/views/content-generator.php` (should return 0 results)
+
+### Changed
+
+- **renderResult bar chart list** — `admin/views/content-generator.php` `barItems` array in `renderResult()`, line ~**915**
+  - Was 11 items matching v1.5.10 weights
+  - Now 14 items matching v1.5.11 weights (added Keyword Density 10%, CORE-EEAT 5%, Humanizer 4%)
+  - Keyword Density promoted to top of the list because it's the highest-weighted SEO plugin compatibility check
+  - Verify: `grep -A 16 'var barItems' seobetter/admin/views/content-generator.php | grep -c label`
+
+- **Analyze & Improve fix builder** — `admin/views/content-generator.php` `fixes` array builder, line ~**983**
+  - Added 3 flag-mode "Check" buttons for the v1.5.11 checks: `keyword` (Check Keyword Placement), `humanizer` (Check AI Writing Patterns), `core_eeat` (Check E-E-A-T Signals)
+  - Rebalanced impact labels on existing 8 fixes to match v1.5.11 weights (Citations +12 → +10, Statistics +12 → +10, Expert Quotes +8 → +6, Comparison Table +6 → +5, Freshness +7 → +6, Check Readability +12 → +10, Check Pronoun Starts +10 → +8, Check Section Openings +10 → +8)
+  - Verify: `grep -c "Check Keyword Placement\|Check AI Writing Patterns\|Check E-E-A-T Signals" seobetter/admin/views/content-generator.php`
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall + Test 3 regeneration. Expected visible changes after reinstall:
+  - Plugin version shows **1.5.12** on Plugins page
+  - Generate button runs async flow (no page reload)
+  - Result panel renders full dashboard: SVG ring + 3 stat cards + **14** bar charts + Pro upsell + Analyze & Improve with 8–11 fix buttons + headline selector + Save Draft with **Post/Page dropdown**
+  - Save Draft button does NOT show "link followed has expired"
+  - Pressing Enter in any form field does NOT reload the page
+
+---
+
 ## v1.5.11 — Guideline integration
 
 **Date:** 2026-04-12

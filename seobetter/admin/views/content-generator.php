@@ -1,189 +1,29 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// ============================================================================
+// v1.5.12 — Legacy synchronous POST handlers removed.
+//
+// Previously this file had 4 synchronous handlers (seobetter_generate_article,
+// seobetter_generate_outline, seobetter_reoptimize, seobetter_create_draft)
+// that ran when the Generate button was submitted as a form. They rendered a
+// minimal server-side result panel that bypassed the async UI spec in
+// plugin_UX.md §3 (score ring, stat cards, bar charts, Pro upsell,
+// Analyze & Improve panel, headline selector, Post/Page dropdown).
+//
+// All article generation now flows through the async REST path:
+//   POST /seobetter/v1/generate/start → step → step → result
+// rendered by renderResult() in content-generator.php JS.
+//
+// Article saves go through POST /seobetter/v1/save-draft (REST) which uses
+// the standard X-WP-Nonce header — no more stale 'seobetter_draft_nonce'
+// form nonces that triggered "The link you followed has expired" errors.
+//
+// See plugin_UX.md §3 for the full required result-panel spec.
+// ============================================================================
+
 $status = SEOBetter\Cloud_API::check_status();
-$result = null;
-$outline_result = null;
-$affiliates = [];
-
-// Handle article generation
-if ( isset( $_POST['seobetter_generate_article'] ) && check_admin_referer( 'seobetter_generate_nonce' ) ) {
-    $generator = new SEOBetter\AI_Content_Generator();
-
-    $primary = sanitize_text_field( $_POST['primary_keyword'] ?? '' );
-    $secondary = array_filter( array_map( 'trim', explode( ',', sanitize_text_field( $_POST['secondary_keywords'] ?? '' ) ) ) );
-    $lsi = array_filter( array_map( 'trim', explode( ',', sanitize_text_field( $_POST['lsi_keywords'] ?? '' ) ) ) );
-
-    // Parse affiliate links
-    $affiliates = [];
-    if ( ! empty( $_POST['affiliates'] ) && is_array( $_POST['affiliates'] ) ) {
-        foreach ( $_POST['affiliates'] as $aff ) {
-            $url = esc_url_raw( $aff['url'] ?? '' );
-            $keyword = sanitize_text_field( $aff['keyword'] ?? '' );
-            $name = sanitize_text_field( $aff['name'] ?? $keyword );
-            if ( $url && $keyword ) {
-                $affiliates[] = [ 'url' => $url, 'keyword' => $keyword, 'name' => $name ];
-            }
-        }
-    }
-
-    $raw_color = sanitize_text_field( $_POST['accent_color'] ?? '#764ba2' );
-    $accent_color = preg_match( '/^#[0-9a-fA-F]{6}$/', $raw_color ) ? $raw_color : '#764ba2';
-
-    $result = $generator->generate( $primary, [
-        'word_count'         => absint( $_POST['word_count'] ?? 2000 ),
-        'tone'               => sanitize_text_field( $_POST['tone'] ?? 'authoritative' ),
-        'audience'           => sanitize_text_field( $_POST['audience'] ?? 'general' ),
-        'domain'             => sanitize_text_field( $_POST['domain'] ?? 'general' ),
-        'secondary_keywords' => $secondary,
-        'lsi_keywords'       => $lsi,
-        'editor_mode'        => 'classic',
-        'accent_color'       => $accent_color,
-    ] );
-
-    // Apply affiliate links to generated content
-    if ( $result['success'] && ! empty( $affiliates ) ) {
-        $linker = new SEOBetter\Affiliate_Linker();
-        $add_cta = ! empty( $_POST['affiliate_cta'] );
-        if ( ! $add_cta ) {
-            // Still link keywords but skip CTAs
-            foreach ( $affiliates as &$aff_item ) {
-                $aff_item['skip_cta'] = true;
-            }
-        }
-        $result['content'] = $linker->process( $result['content'], $affiliates, 'classic', $accent_color );
-    }
-}
-
-// Handle outline generation
-if ( isset( $_POST['seobetter_generate_outline'] ) && check_admin_referer( 'seobetter_generate_nonce' ) ) {
-    $generator = new SEOBetter\AI_Content_Generator();
-    $primary = sanitize_text_field( $_POST['primary_keyword'] ?? '' );
-    $outline_result = $generator->generate_outline( $primary );
-}
-
-// Handle "Re-optimize" — fix GEO issues flagged by the analyzer
-if ( isset( $_POST['seobetter_reoptimize'] ) && check_admin_referer( 'seobetter_draft_nonce' ) ) {
-    $content_to_fix = wp_kses_post( $_POST['draft_content'] ?? '' );
-    $suggestions = json_decode( stripslashes( $_POST['reoptimize_suggestions'] ?? '[]' ), true );
-    $keyword = sanitize_text_field( $_POST['draft_keyword'] ?? '' );
-
-    if ( $content_to_fix && ! empty( $suggestions ) ) {
-        // Strip HTML to clean text so the AI gets readable content, not messy HTML
-        $clean_text = wp_strip_all_tags( $content_to_fix );
-        // Preserve headings structure by converting HTML headings to markdown first
-        $md_content = preg_replace( '/<h1[^>]*>(.*?)<\/h1>/is', '# $1', $content_to_fix );
-        $md_content = preg_replace( '/<h2[^>]*>(.*?)<\/h2>/is', '## $1', $md_content );
-        $md_content = preg_replace( '/<h3[^>]*>(.*?)<\/h3>/is', '### $1', $md_content );
-        $md_content = preg_replace( '/<li[^>]*>(.*?)<\/li>/is', '- $1', $md_content );
-        $md_content = preg_replace( '/<blockquote[^>]*>(.*?)<\/blockquote>/is', '> $1', $md_content );
-        $md_content = preg_replace( '/<strong>(.*?)<\/strong>/is', '**$1**', $md_content );
-        $md_content = preg_replace( '/<em>(.*?)<\/em>/is', '*$1*', $md_content );
-        $md_content = wp_strip_all_tags( $md_content );
-
-        // Only include the specific issues that need fixing
-        $fix_list = [];
-        foreach ( $suggestions as $s ) {
-            $fix_list[] = '- ' . ( $s['message'] ?? $s );
-        }
-        $fix_instructions = implode( "\n", $fix_list );
-
-        $fix_prompt = "You are re-optimizing an existing article about \"{$keyword}\". Fix ONLY these specific issues:\n\n{$fix_instructions}\n\nCRITICAL RULES:\n- Keep the EXACT same structure, headings, and topic coverage\n- Keep all existing statistics, quotes, citations, and tables — only ADD more where needed\n- Do NOT remove or shorten any content — only enhance\n- Do NOT rewrite sections that are already good\n- Keep the article at least the same length (2000+ words)\n- Start with \"Last Updated: " . wp_date( 'F Y' ) . "\" freshness signal\n- Include ## Key Takeaways with 3 bullets near the top\n- Every H2/H3 section must open with a 40-60 word paragraph answering the heading\n- Never start paragraphs with pronouns (It, This, They)\n- Include 3+ stats per 1000 words with (Source, Year)\n- Include 2+ expert quotes\n- Include 5+ inline citations in [Source, Year] format\n- Include at least 1 comparison table in Markdown format\n- End with FAQ section (3-5 Q&A) and References section\n\nOriginal article:\n\n{$md_content}\n\nReturn the FULL improved article in GitHub Flavored Markdown. Do not truncate or shorten it.";
-
-        $system = "You are an expert content optimizer specializing in Generative Engine Optimization (GEO). Your job is to fix the specific flagged issues while preserving everything else. The output must be LONGER and MORE detailed than the input, never shorter. Write at a grade 6-8 reading level. Output complete GitHub Flavored Markdown with tables, lists, blockquotes, and all formatting.";
-
-        $provider = SEOBetter\AI_Provider_Manager::get_active_provider();
-        $request_options = [ 'max_tokens' => 8192, 'temperature' => 0.5 ];
-
-        if ( $provider ) {
-            $reopt_result = SEOBetter\AI_Provider_Manager::send_request( $provider['provider_id'], $fix_prompt, $system, $request_options );
-        } else {
-            $reopt_result = SEOBetter\Cloud_API::generate( $fix_prompt, $system, $request_options );
-        }
-
-        if ( ! empty( $reopt_result['success'] ) && ! empty( $reopt_result['content'] ) ) {
-            // Use the full Content_Formatter for proper HTML output
-            $formatter = new SEOBetter\Content_Formatter();
-            $accent = sanitize_text_field( $_POST['accent_color'] ?? '#764ba2' );
-            $html = $formatter->format( $reopt_result['content'], 'classic', [
-                'accent_color' => preg_match( '/^#[0-9a-fA-F]{6}$/', $accent ) ? $accent : '#764ba2',
-            ] );
-
-            $analyzer = new SEOBetter\GEO_Analyzer();
-            $score = $analyzer->analyze( $html, $keyword );
-
-            $result = [
-                'success'    => true,
-                'content'    => $html,
-                'markdown'   => $reopt_result['content'],
-                'keyword'    => $keyword,
-                'geo_score'  => $score['geo_score'],
-                'grade'      => $score['grade'],
-                'word_count' => str_word_count( wp_strip_all_tags( $html ) ),
-                'model_used' => $reopt_result['model'] ?? 'unknown',
-                'suggestions' => $score['suggestions'],
-                'reoptimized' => true,
-            ];
-        } else {
-            $result = [
-                'success' => false,
-                'error'   => $reopt_result['error'] ?? 'Re-optimization failed.',
-            ];
-        }
-    }
-}
-
-// Handle "Create as Draft"
-if ( isset( $_POST['seobetter_create_draft'] ) && check_admin_referer( 'seobetter_draft_nonce' ) ) {
-    $title    = sanitize_text_field( $_POST['draft_title'] ?? $_POST['draft_keyword'] ?? 'New Article' );
-    $markdown = wp_unslash( $_POST['draft_markdown'] ?? '' );
-    $accent   = sanitize_text_field( $_POST['draft_accent_color'] ?? '#764ba2' );
-    if ( ! preg_match( '/^#[0-9a-fA-F]{6}$/', $accent ) ) {
-        $accent = '#764ba2';
-    }
-
-    $content = '';
-
-    if ( ! empty( $markdown ) ) {
-        // Format as Gutenberg blocks
-        $formatter = new SEOBetter\Content_Formatter();
-        $content   = $formatter->format( $markdown, 'gutenberg', [
-            'accent_color' => $accent,
-        ] );
-
-        // Re-apply affiliate links
-        $draft_affiliates = json_decode( wp_unslash( $_POST['draft_affiliates'] ?? '[]' ), true );
-        if ( ! empty( $draft_affiliates ) && is_array( $draft_affiliates ) ) {
-            $linker  = new SEOBetter\Affiliate_Linker();
-            $content = $linker->process( $content, $draft_affiliates, 'classic', $accent );
-        }
-    }
-
-    // If Gutenberg formatting produced empty content, use raw HTML fallback
-    if ( empty( trim( $content ) ) ) {
-        $raw_html = wp_unslash( $_POST['draft_content'] ?? '' );
-        if ( ! empty( $raw_html ) ) {
-            $content = $raw_html;
-        } elseif ( ! empty( $markdown ) ) {
-            // Last resort: wrap raw markdown in a single HTML block
-            $content = "<!-- wp:html -->\n" . nl2br( esc_html( $markdown ) ) . "\n<!-- /wp:html -->";
-        }
-    }
-
-    $post_id = wp_insert_post( [
-        'post_title'   => $title,
-        'post_content' => $content,
-        'post_status'  => 'draft',
-        'post_type'    => 'post',
-    ] );
-
-    if ( $post_id && ! is_wp_error( $post_id ) ) {
-        echo '<div class="notice notice-success"><p>' . sprintf(
-            esc_html__( 'Draft created! %s', 'seobetter' ),
-            '<a href="' . esc_url( get_edit_post_link( $post_id ) ) . '">' . esc_html__( 'Edit post', 'seobetter' ) . '</a>'
-        ) . '</p></div>';
-    }
-}
+$affiliates = [];  // kept for form field compatibility — async path passes its own
 
 $license = SEOBetter\License_Manager::get_info();
 $is_pro = $license['is_pro'];
@@ -234,7 +74,9 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
 
         <!-- ===== LEFT: Main Form ===== -->
         <div class="sb-generator-main">
-            <form method="post">
+            <!-- onsubmit="return false" — belt-and-braces so Enter key on any input
+                 cannot accidentally submit the form. Generation is exclusively async JS. -->
+            <form method="post" onsubmit="return false">
                 <?php wp_nonce_field( 'seobetter_generate_nonce' ); ?>
 
                 <!-- Keywords Section -->
@@ -568,9 +410,13 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                     </div>
                 </div>
 
-                <!-- Generate Button -->
+                <!-- Generate Button —
+                     type="button" (NOT submit) so the form can NEVER submit via Enter
+                     key or any fallback path. Generation is handled EXCLUSIVELY by the
+                     async JS handler at #seobetter-async-generate. If JS fails, the
+                     button does nothing — it never falls back to legacy sync PHP. -->
                 <div style="display:flex;gap:12px;margin-bottom:24px">
-                    <button type="submit" name="seobetter_generate_article" id="seobetter-async-generate" class="button sb-btn-primary" style="font-size:15px;padding:12px 32px;height:50px">
+                    <button type="button" id="seobetter-async-generate" class="button sb-btn-primary" style="font-size:15px;padding:12px 32px;height:50px">
                         Generate Article
                     </button>
                 </div>
@@ -657,159 +503,14 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
         </div>
     </div>
 
-    <!-- ===== RESULTS (full width, below form) ===== -->
-
-    <?php if ( $result ) : ?>
-    <div class="sb-section" style="margin-top:24px">
-        <h3 class="sb-section-header"><span class="dashicons dashicons-media-document"></span> Generated Article</h3>
-
-        <?php if ( $result['success'] ) : ?>
-            <!-- Score Bar -->
-            <div style="display:flex;gap:16px;align-items:center;padding:12px 16px;background:var(--sb-bg);border-radius:6px;margin-bottom:16px;font-size:13px">
-                <span><strong>GEO Score:</strong>
-                    <span class="seobetter-score seobetter-score-<?php echo $result['geo_score'] >= 80 ? 'good' : ( $result['geo_score'] >= 60 ? 'ok' : 'poor' ); ?>">
-                        <?php echo esc_html( $result['geo_score'] ); ?> (<?php echo esc_html( $result['grade'] ); ?>)
-                    </span>
-                </span>
-                <span><strong>Words:</strong> <?php echo esc_html( number_format( $result['word_count'] ) ); ?></span>
-                <span><strong>Model:</strong> <code style="font-size:11px"><?php echo esc_html( $result['model_used'] ); ?></code></span>
-            </div>
-
-            <!-- Issues -->
-            <?php if ( ! empty( $result['suggestions'] ) ) : ?>
-            <div style="margin-bottom:16px">
-                <?php foreach ( $result['suggestions'] as $s ) : ?>
-                <div class="seobetter-suggestion seobetter-suggestion-<?php echo esc_attr( $s['priority'] ); ?>">
-                    <span class="dashicons dashicons-<?php echo $s['priority'] === 'high' ? 'warning' : 'info-outline'; ?>"></span>
-                    <span class="seobetter-suggestion-type">[<?php echo esc_html( ucfirst( $s['type'] ?? 'issue' ) ); ?>]</span>
-                    <?php echo esc_html( $s['message'] ); ?>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <?php elseif ( $result['geo_score'] >= 80 ) : ?>
-            <div style="padding:12px 16px;background:var(--sb-success-bg);border-radius:6px;margin-bottom:16px;color:var(--sb-success);font-size:13px;font-weight:600">
-                &#10003; All GEO checks passed — optimized for AI search visibility
-            </div>
-            <?php endif; ?>
-
-            <!-- Content Preview -->
-            <?php
-            // Output the <style> block separately — wp_kses_post() strips it
-            if ( preg_match( '/<style>.*?<\/style>/s', $result['content'], $style_match ) ) {
-                echo $style_match[0];
-            }
-            $preview_html = preg_replace( '/<style>.*?<\/style>/s', '', $result['content'] );
-            ?>
-            <div class="seobetter-content-preview"><?php echo wp_kses_post( $preview_html ); ?></div>
-
-            <!-- Actions -->
-            <form method="post" style="margin-bottom:16px">
-                <?php wp_nonce_field( 'seobetter_draft_nonce' ); ?>
-                <input type="hidden" name="draft_content" value="<?php echo esc_attr( $result['content'] ); ?>" />
-                <input type="hidden" name="draft_keyword" value="<?php echo esc_attr( $result['keyword'] ?? '' ); ?>" />
-                <input type="hidden" name="draft_markdown" value="<?php echo esc_attr( $result['markdown'] ?? '' ); ?>" />
-                <input type="hidden" name="draft_accent_color" value="<?php echo esc_attr( $_POST['accent_color'] ?? '#764ba2' ); ?>" />
-                <input type="hidden" name="draft_affiliates" value="<?php echo esc_attr( wp_json_encode( $affiliates ) ); ?>" />
-                <input type="hidden" name="reoptimize_suggestions" value="<?php echo esc_attr( wp_json_encode( $result['suggestions'] ?? [] ) ); ?>" />
-                <input type="hidden" name="draft_title" id="seobetter-draft-title" value="<?php echo esc_attr( $result['headlines'][0] ?? $result['keyword'] ?? '' ); ?>" />
-
-                <!-- Headlines -->
-                <?php if ( ! empty( $result['headlines'] ) ) : ?>
-                <div style="padding:16px;background:var(--sb-primary-light);border-radius:8px;margin-bottom:16px">
-                    <h4 style="margin:0 0 10px;font-size:13px;font-weight:700">Choose Your Headline (used as post title)</h4>
-                    <?php foreach ( $result['headlines'] as $idx => $hl ) :
-                        $len = mb_strlen( $hl );
-                        $ok = $len >= 45 && $len <= 65;
-                    ?>
-                    <label class="seobetter-headline-option">
-                        <input type="radio" name="selected_headline" value="<?php echo esc_attr( $hl ); ?>" <?php if ( $idx === 0 ) echo 'checked'; ?> onchange="document.getElementById('seobetter-draft-title').value=this.value" />
-                        <span class="headline-text"><?php echo esc_html( $hl ); ?></span>
-                        <span class="headline-chars" style="color:<?php echo $ok ? 'var(--sb-success)' : 'var(--sb-error)'; ?>"><?php echo $len; ?> chars</span>
-                    </label>
-                    <?php endforeach; ?>
-                </div>
-                <?php endif; ?>
-
-                <div style="display:flex;gap:10px;flex-wrap:wrap">
-                    <?php if ( ! empty( $result['suggestions'] ) ) : ?>
-                    <button type="submit" name="seobetter_reoptimize" class="button" style="background:var(--sb-warning);border-color:var(--sb-warning);color:#fff;height:44px;padding:0 20px;font-weight:600;border-radius:6px">
-                        Fix <?php echo count( $result['suggestions'] ); ?> Issues &amp; Re-optimize
-                    </button>
-                    <?php endif; ?>
-                    <button type="submit" name="seobetter_create_draft" class="button sb-btn-primary" style="height:44px">Save as WordPress Draft</button>
-                </div>
-            </form>
-
-            <!-- Meta Tags -->
-            <?php if ( ! empty( $result['meta']['title'] ) ) : ?>
-            <div style="padding:16px;background:var(--sb-bg);border:1px solid var(--sb-border);border-radius:8px;margin-bottom:16px">
-                <h4 style="margin:0 0 12px;font-size:13px;font-weight:700">SEO Meta Tags</h4>
-                <div style="margin-bottom:10px">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                        <label style="font-size:12px;font-weight:600">Title</label>
-                        <span style="font-size:11px">
-                            <span class="seobetter-score seobetter-score-<?php echo $result['meta']['title_score'] >= 80 ? 'good' : ( $result['meta']['title_score'] >= 60 ? 'ok' : 'poor' ); ?>"><?php echo $result['meta']['title_score']; ?>/100</span>
-                            <span style="color:var(--sb-text-muted)"><?php echo $result['meta']['title_length']; ?> chars</span>
-                        </span>
-                    </div>
-                    <input type="text" value="<?php echo esc_attr( $result['meta']['title'] ); ?>" readonly onclick="this.select()" style="background:var(--sb-card);width:100%;height:38px;font-size:13px" />
-                </div>
-                <div style="margin-bottom:12px">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                        <label style="font-size:12px;font-weight:600">Description</label>
-                        <span style="font-size:11px">
-                            <span class="seobetter-score seobetter-score-<?php echo $result['meta']['desc_score'] >= 80 ? 'good' : ( $result['meta']['desc_score'] >= 60 ? 'ok' : 'poor' ); ?>"><?php echo $result['meta']['desc_score']; ?>/100</span>
-                            <span style="color:var(--sb-text-muted)"><?php echo $result['meta']['desc_length']; ?> chars</span>
-                        </span>
-                    </div>
-                    <textarea rows="2" readonly onclick="this.select()" style="background:var(--sb-card);width:100%;font-size:13px"><?php echo esc_textarea( $result['meta']['description'] ); ?></textarea>
-                </div>
-                <!-- SERP Preview -->
-                <div class="seobetter-serp-preview">
-                    <div class="serp-url"><?php echo esc_html( $home ); ?> › blog</div>
-                    <div class="serp-title"><?php echo esc_html( $result['meta']['title'] ); ?></div>
-                    <div class="serp-desc"><?php echo esc_html( $result['meta']['description'] ); ?></div>
-                </div>
-                <div class="sb-help" style="margin-top:8px">Copy into Yoast, RankMath, or AIOSEO after saving draft.</div>
-            </div>
-            <?php endif; ?>
-
-            <!-- Social Content -->
-            <div style="padding:16px;background:var(--sb-bg);border:1px solid var(--sb-border);border-radius:8px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-                    <h4 style="margin:0;font-size:13px;font-weight:700">Social Media Content</h4>
-                    <button type="button" id="sb-gen-social" class="button sb-btn-sm" data-keyword="<?php echo esc_attr( $result['keyword'] ?? '' ); ?>">Generate</button>
-                </div>
-                <span id="sb-social-status" style="font-size:12px;color:var(--sb-text-muted)"></span>
-                <div id="sb-social-grid" class="seobetter-social-grid" style="display:none;margin-top:12px">
-                    <div>
-                        <h4>Twitter Thread</h4>
-                        <textarea id="sb-tw" rows="8" readonly onclick="this.select()"></textarea>
-                        <button type="button" class="button sb-btn-sm" style="margin-top:4px" onclick="navigator.clipboard.writeText(document.getElementById('sb-tw').value);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-                    </div>
-                    <div>
-                        <h4>LinkedIn</h4>
-                        <textarea id="sb-li" rows="8" readonly onclick="this.select()"></textarea>
-                        <button type="button" class="button sb-btn-sm" style="margin-top:4px" onclick="navigator.clipboard.writeText(document.getElementById('sb-li').value);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-                    </div>
-                    <div>
-                        <h4>Instagram</h4>
-                        <textarea id="sb-ig" rows="8" readonly onclick="this.select()"></textarea>
-                        <button type="button" class="button sb-btn-sm" style="margin-top:4px" onclick="navigator.clipboard.writeText(document.getElementById('sb-ig').value);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-                    </div>
-                </div>
-            </div>
-
-        <?php else : ?>
-            <div class="notice notice-error" style="margin:0">
-                <p><strong>Generation failed:</strong> <?php echo esc_html( $result['error'] ); ?></p>
-                <?php if ( strpos( $result['error'] ?? '', 'limit' ) !== false ) : ?>
-                <p><a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>">Connect a free API key</a> for unlimited generation.</p>
-                <?php endif; ?>
-            </div>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
+    <!-- ===== RESULTS — rendered by async JS into #seobetter-async-result ===== -->
+    <!-- Legacy server-side $result rendering was REMOVED in v1.5.12.
+         All generation now flows through the async REST path:
+           /seobetter/v1/generate/start → step → step → result
+         → renderResult() JS writes the full dashboard (score ring, stat cards,
+           14 bar charts, Pro upsell, Analyze & Improve, headline selector,
+           Save Draft with Post/Page dropdown) into #seobetter-async-result.
+         See plugin_UX.md §3 for the required UI elements. -->
 
 </div>
 
@@ -1084,20 +785,24 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         h += '<div style="font-size:11px;color:#64748b">Expert Quotes (2+ needed)</div></div>';
         h += '</div>';
 
-        // Score breakdown bars
+        // Score breakdown bars — 14 checks in v1.5.11+ scoring rubric
+        // Weights match includes/GEO_Analyzer.php::analyze() $weights array
         if (res.checks) {
             var barItems = [
-                {label:'Readability',w:12,s:res.checks.readability},
-                {label:'Citations',w:12,s:res.checks.citations},
-                {label:'Statistics',w:12,s:res.checks.factual_density},
-                {label:'Key Takeaways',w:10,s:res.checks.bluf_header},
-                {label:'Section Openers',w:10,s:res.checks.section_openings},
-                {label:'Island Test',w:10,s:res.checks.island_test},
-                {label:'Expert Quotes',w:8,s:res.checks.expert_quotes},
-                {label:'Entity Density',w:8,s:res.checks.entity_usage},
-                {label:'Freshness',w:7,s:res.checks.freshness},
-                {label:'Tables',w:6,s:res.checks.tables},
-                {label:'Lists',w:5,s:res.checks.lists}
+                {label:'Keyword Density',w:10,s:res.checks.keyword_density},
+                {label:'Readability',w:10,s:res.checks.readability},
+                {label:'Citations',w:10,s:res.checks.citations},
+                {label:'Statistics',w:10,s:res.checks.factual_density},
+                {label:'Key Takeaways',w:8,s:res.checks.bluf_header},
+                {label:'Section Openers',w:8,s:res.checks.section_openings},
+                {label:'Island Test',w:8,s:res.checks.island_test},
+                {label:'Expert Quotes',w:6,s:res.checks.expert_quotes},
+                {label:'Entity Density',w:6,s:res.checks.entity_usage},
+                {label:'Freshness',w:6,s:res.checks.freshness},
+                {label:'CORE-EEAT',w:5,s:res.checks.core_eeat},
+                {label:'Tables',w:5,s:res.checks.tables},
+                {label:'Humanizer',w:4,s:res.checks.humanizer},
+                {label:'Lists',w:4,s:res.checks.lists}
             ];
             h += '<div style="display:flex;flex-direction:column;gap:4px">';
             barItems.forEach(function(item) {
@@ -1155,14 +860,29 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
 
         if (res.checks) {
             var c = res.checks;
-            if (c.citations && c.citations.score < 80) fixes.push({id:'citations', label:'Add Citations & References', desc:c.citations.count+' citations found. Top content has 5+. Uses real web sources (no hallucinated links).', icon:'admin-links', impact:'+12 pts', mode:'inject'});
-            if (c.expert_quotes && c.expert_quotes.score < 100) fixes.push({id:'quotes', label:'Add Expert Quotes', desc:c.expert_quotes.count+' quotes found. Expert quotes boost GEO visibility by 41%. Inserts 2 quotes without editing existing text.', icon:'format-quote', impact:'+8 pts', mode:'inject'});
-            if (c.factual_density && c.factual_density.score < 70) fixes.push({id:'statistics', label:'Add Statistics', desc:'Not enough numbers. Uses real research data from web search. Inserts stats without editing existing text.', icon:'chart-bar', impact:'+12 pts', mode:'inject'});
-            if (c.tables && c.tables.score < 50) fixes.push({id:'table', label:'Add Comparison Table', desc:'No tables found. Tables get cited 30-40% more by AI. Inserts a table without editing existing text.', icon:'editor-table', impact:'+6 pts', mode:'inject'});
-            if (c.freshness && c.freshness.score < 100) fixes.push({id:'freshness', label:'Add Freshness Signal', desc:'No "Last Updated" date. Adds date at top without editing existing text.', icon:'calendar-alt', impact:'+7 pts', mode:'inject'});
-            if (c.readability && c.readability.score < 70) fixes.push({id:'readability', label:'Check Readability', desc:'Grade '+((c.readability.flesch_grade||'?'))+' is too complex. Shows complex sentences and words to simplify manually.', icon:'editor-spellcheck', impact:'+12 pts', mode:'flag'});
-            if (c.island_test && c.island_test.score < 80) fixes.push({id:'island', label:'Check Pronoun Starts', desc:c.island_test.detail+'. Shows which paragraphs to fix manually.', icon:'editor-removeformatting', impact:'+10 pts', mode:'flag'});
-            if (c.section_openings && c.section_openings.score < 70) fixes.push({id:'openers', label:'Check Section Openings', desc:c.section_openings.detail+'. Shows which sections need better openers.', icon:'editor-paragraph', impact:'+10 pts', mode:'flag'});
+            // INJECT fixes (add content without editing existing text)
+            if (c.citations && c.citations.score < 80) fixes.push({id:'citations', label:'Add Citations & References', desc:c.citations.count+' citations found. Top content has 5+. Uses real web sources (no hallucinated links).', icon:'admin-links', impact:'+10 pts', mode:'inject'});
+            if (c.expert_quotes && c.expert_quotes.score < 100) fixes.push({id:'quotes', label:'Add Expert Quotes', desc:c.expert_quotes.count+' quotes found. Expert quotes boost GEO visibility by 41%. Inserts 2 quotes without editing existing text.', icon:'format-quote', impact:'+6 pts', mode:'inject'});
+            if (c.factual_density && c.factual_density.score < 70) fixes.push({id:'statistics', label:'Add Statistics', desc:'Not enough numbers. Uses real research data from web search. Inserts stats without editing existing text.', icon:'chart-bar', impact:'+10 pts', mode:'inject'});
+            if (c.tables && c.tables.score < 50) fixes.push({id:'table', label:'Add Comparison Table', desc:'No tables found. Tables get cited 30-40% more by AI. Inserts a table without editing existing text.', icon:'editor-table', impact:'+5 pts', mode:'inject'});
+            if (c.freshness && c.freshness.score < 100) fixes.push({id:'freshness', label:'Add Freshness Signal', desc:'No "Last Updated" date. Adds date at top without editing existing text.', icon:'calendar-alt', impact:'+6 pts', mode:'inject'});
+            // FLAG fixes (show issues, user edits manually)
+            if (c.readability && c.readability.score < 70) fixes.push({id:'readability', label:'Check Readability', desc:'Grade '+((c.readability.flesch_grade||'?'))+' is too complex. Shows complex sentences and words to simplify manually.', icon:'editor-spellcheck', impact:'+10 pts', mode:'flag'});
+            if (c.island_test && c.island_test.score < 80) fixes.push({id:'island', label:'Check Pronoun Starts', desc:c.island_test.detail+'. Shows which paragraphs to fix manually.', icon:'editor-removeformatting', impact:'+8 pts', mode:'flag'});
+            if (c.section_openings && c.section_openings.score < 70) fixes.push({id:'openers', label:'Check Section Openings', desc:c.section_openings.detail+'. Shows which sections need better openers.', icon:'editor-paragraph', impact:'+8 pts', mode:'flag'});
+            // v1.5.11 NEW — flag-mode checks for the three new scoring dimensions
+            if (c.keyword_density && c.keyword_density.score < 60) {
+                var kdDesc = (c.keyword_density.density ? 'Density '+c.keyword_density.density+'%. Target 0.5-1.5%. ' : '') + (c.keyword_density.h2_coverage ? c.keyword_density.h2_coverage+'% of H2s contain the keyword (target 30%+).' : 'Keyword placement needs work.');
+                fixes.push({id:'keyword', label:'Check Keyword Placement', desc:kdDesc+' Shows what AIOSEO/Yoast will flag.', icon:'search', impact:'+10 pts', mode:'flag'});
+            }
+            if (c.humanizer && c.humanizer.score < 70) {
+                var hmDesc = 'Found '+(c.humanizer.tier1_count||0)+' Tier-1 AI red-flag words and '+(c.humanizer.tier2_count||0)+' Tier-2 words. Shows which words to rewrite for more natural prose.';
+                fixes.push({id:'humanizer', label:'Check AI Writing Patterns', desc:hmDesc, icon:'edit', impact:'+4 pts', mode:'flag'});
+            }
+            if (c.core_eeat && c.core_eeat.score < 70) {
+                var ceDesc = (c.core_eeat.details ? c.core_eeat.details.length+'/10 CORE-EEAT items passed. ' : '') + 'Shows which E-E-A-T signals are missing (direct answer, first-hand language, tradeoffs, etc).';
+                fixes.push({id:'core_eeat', label:'Check E-E-A-T Signals', desc:ceDesc, icon:'shield-alt', impact:'+5 pts', mode:'flag'});
+            }
         }
 
         if (fixes.length > 0) {
