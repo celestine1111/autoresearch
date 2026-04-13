@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.14
+ * Version: 1.5.15
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.14' );
+define( 'SEOBETTER_VERSION', '1.5.15' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1837,6 +1837,13 @@ final class SEOBetter {
             // Research & data
             'statista.com', 'pewresearch.org', 'ourworldindata.org',
             'researchgate.net', 'arxiv.org', 'ssrn.com',
+
+            // v1.5.15 — Academic citation APIs (Crossref, EuropePMC, OpenAlex)
+            // These power the Veterinary domain category and the science/books/tech
+            // Crossref fetchers. DOI domain accepts any redirected DOI URL.
+            'crossref.org', 'api.crossref.org', 'doi.org',
+            'europepmc.org', 'ebi.ac.uk', 'www.ebi.ac.uk',
+            'openalex.org', 'api.openalex.org',
         ];
 
         $custom = apply_filters( 'seobetter_trusted_domains', $default );

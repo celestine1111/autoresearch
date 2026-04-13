@@ -32,37 +32,45 @@
 |---|---|---|---|
 | **Brave Search** | `api.search.brave.com/res/v1/web/search?q={keyword}` | User's Brave API key | 10 web results with descriptions, ages. Statistics extracted from snippets. |
 
-### 1.3 Category-Specific APIs (25 categories)
+### 1.3 Category-Specific APIs (25 categories — v1.5.15 fixed)
 
-Selected by the user's **Category** dropdown. All run in parallel with 6s timeout.
+Selected by the user's **Category** dropdown. All run in parallel with 6s timeout. The same 25-category list is exposed in [admin/views/content-generator.php](../admin/views/content-generator.php), [admin/views/bulk-generator.php](../admin/views/bulk-generator.php), and [admin/views/content-brief.php](../admin/views/content-brief.php) — these MUST stay in sync (see plugin_UX.md §9).
 
-| Category | APIs Called | API Count |
+| Category (dropdown value) | APIs Called | API Count |
 |---|---|---|
-| **Animals & Pets** | FishWatch, Zoo Animals, Dog Facts, Cat Facts, MeowFacts | 5 |
-| **Art & Design** | Art Institute of Chicago, Metropolitan Museum | 2 |
-| **Blockchain** | CoinGecko, CoinCap, Mempool, Coinpaprika | 4 |
-| **Books & Literature** | Open Library, PoetryDB, Crossref, Quotable | 4 |
-| **Business** | Econdb, World Bank, Fed Treasury | 3 |
-| **Cryptocurrency** | CoinGecko, CoinCap, CoinDesk BPI, Coinpaprika, Coinlore, CryptoCompare, Mempool | 7 |
-| **Currency & Forex** | Frankfurter, Currency-API, World Bank | 3 |
-| **Ecommerce** | Open Food Facts | 1 |
-| **Education** | Universities List, Nobel Prize, Crossref, Open Library, World Bank | 5 |
-| **Entertainment & Movies** | Open Trivia, OMDb/IMDb, SWAPI, PokéAPI, Quotable | 5 |
-| **Environment & Climate** | OpenAQ, UK Carbon Intensity, CO2 Offset, USGS Water | 4 |
-| **Finance & Economics** | Econdb, Fed Treasury, SEC EDGAR, World Bank | 4 |
-| **Food & Drink** | Open Food Facts, Fruityvice, Open Brewery DB | 3 |
-| **Games & Gaming** | FreeToGame, RAWG, PokéAPI, Open Trivia | 4 |
-| **General** | Quotable, Nager.Date holidays, Numbers API | 3 |
-| **Government & Politics** | Data USA, FBI Wanted, Interpol, Federal Register, Nager.Date | 5 |
-| **Health & Medical** | disease.sh (COVID/flu), openFDA (drug events) | 2 |
-| **Law & Legal** | FBI Wanted, Data USA, Interpol, Federal Register, Nager.Date | 5 |
-| **Music** | MusicBrainz, Bandsintown | 2 |
-| **News & Media** | Spaceflight News, HN Top Stories, Federal Register | 3 |
-| **Science & Space** | NASA, USGS Earthquakes, Launch Library, SpaceX, USGS Water, Sunrise/Sunset, Numbers API, Crossref | 8 |
-| **Sports & Fitness** | balldontlie (NBA), Ergast F1, NHL Stats, CityBikes | 4 |
-| **Technology** | HN Top Stories, Crossref | 2 |
-| **Transportation & Travel** | OpenSky, Open Charge Map, ADS-B Exchange, CityBikes, NHTSA | 5 |
-| **Weather & Climate** | Open-Meteo, US NWS, Sunrise/Sunset, OpenAQ | 4 |
+| **Animals & Pets (Trivia)** (`animals`) | FishWatch, Zoo Animals, Dog Facts, Cat Facts, MeowFacts | 5 |
+| **Art & Design** (`art_design`) | Art Institute of Chicago, Metropolitan Museum | 2 |
+| **Blockchain** (`blockchain`) | CoinGecko, CoinCap, Mempool, Coinpaprika | 4 |
+| **Books & Literature** (`books`) | Open Library, PoetryDB, Crossref, Quotable | 4 |
+| **Business** (`business`) | Econdb, World Bank, Fed Treasury | 3 |
+| **Cryptocurrency** (`cryptocurrency`) | CoinGecko, CoinCap, CoinDesk BPI, Coinpaprika, Coinlore, CryptoCompare, Mempool | 7 |
+| **Currency & Forex** (`currency`) | Frankfurter, Currency-API, World Bank | 3 |
+| **Ecommerce** (`ecommerce`) | Open Food Facts | 1 |
+| **Education** (`education`) | Universities List, Nobel Prize, Crossref, Open Library, World Bank | 5 |
+| **Entertainment & Movies** (`entertainment`) | Open Trivia, OMDb/IMDb, SWAPI, PokéAPI, Quotable | 5 |
+| **Environment & Climate** (`environment`) | OpenAQ, UK Carbon Intensity, CO2 Offset, USGS Water | 4 |
+| **Finance & Economics** (`finance`) | Econdb, Fed Treasury, SEC EDGAR, World Bank | 4 |
+| **Food & Drink** (`food`) | Open Food Facts, Fruityvice, Open Brewery DB | 3 |
+| **Games & Gaming** (`games`) | FreeToGame, RAWG, PokéAPI, Open Trivia | 4 |
+| **General** (`general`) | Quotable, Nager.Date holidays, Numbers API | 3 |
+| **Government, Law & Politics** (`government`) | Data USA, FBI Wanted, Interpol, Federal Register, Nager.Date | 5 |
+| **Health & Medical (Human)** (`health`) | disease.sh (COVID/flu), openFDA (drug events) | 2 |
+| **Music** (`music`) | MusicBrainz, Bandsintown | 2 |
+| **News & Media** (`news`) | Spaceflight News, HN Top Stories, Federal Register | 3 |
+| **Science & Space** (`science`) | NASA, USGS Earthquakes, Launch Library, SpaceX, USGS Water, Sunrise/Sunset, Numbers API, Crossref | 8 |
+| **Sports & Fitness** (`sports`) | balldontlie (NBA), Ergast F1, NHL Stats, CityBikes | 4 |
+| **Technology** (`technology`) | HN Top Stories, Crossref | 2 |
+| **Transportation & Travel** (`transportation`) | OpenSky, Open Charge Map, ADS-B Exchange, CityBikes, NHTSA | 5 |
+| **Veterinary & Pet Health** (`veterinary`) — **NEW v1.5.15** | Crossref (veterinary filtered), EuropePMC, OpenAlex (vet concept), openFDA (vet scoped), Dog Facts | 5 |
+| **Weather & Climate** (`weather`) | Open-Meteo, US NWS, Sunrise/Sunset, OpenAQ | 4 |
+
+#### v1.5.15 changes
+
+- **Added `veterinary` category** with 3 new academic API fetchers: `fetchCrossrefFiltered()`, `fetchEuropePMC()`, `fetchOpenAlex()` — see [cloud-api/api/research.js](../cloud-api/api/research.js) lines ~1689-1735. These return real peer-reviewed veterinary literature (Crossref subject-filtered, EuropePMC biomedical, OpenAlex topic-concept-filtered) so dog/cat/equine articles get vet-grade citations instead of cat-fact trivia.
+- **Merged `government` + `law_government`** into a single `government` entry with backwards-compat alias. The old `law_government` value still resolves to `government` for legacy clients.
+- **Relabeled `health`** to "Health & Medical (Human)" so users don't accidentally pick it for vet topics.
+- **Relabeled `animals`** to "Animals & Pets (Trivia)" so users know it's the trivia bucket, not the research bucket.
+- **All 3 dropdown forms now share the same 25-category list** (was: 25 in main form, 8 in bulk + brief).
 
 ### 1.4 Country-Specific APIs (80+ countries)
 

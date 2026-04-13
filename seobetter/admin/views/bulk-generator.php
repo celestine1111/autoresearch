@@ -132,14 +132,32 @@ if ( $batch_id && ! $batch ) {
                     <div class="sb-field">
                         <label>Domain</label>
                         <select name="domain">
+                            <?php // v1.5.15 — keep this list IDENTICAL to content-generator.php and content-brief.php. See plugin_UX.md §9. ?>
                             <option value="general">General</option>
+                            <option value="animals">Animals &amp; Pets (Trivia)</option>
+                            <option value="art_design">Art &amp; Design</option>
+                            <option value="blockchain">Blockchain</option>
+                            <option value="books">Books &amp; Literature</option>
+                            <option value="business">Business</option>
+                            <option value="cryptocurrency">Cryptocurrency</option>
+                            <option value="currency">Currency &amp; Forex</option>
                             <option value="ecommerce">Ecommerce</option>
-                            <option value="health">Health / Veterinary</option>
-                            <option value="technology">Technology</option>
-                            <option value="business">Business / Finance</option>
-                            <option value="science">Science</option>
                             <option value="education">Education</option>
-                            <option value="law_government">Law / Government</option>
+                            <option value="entertainment">Entertainment &amp; Movies</option>
+                            <option value="environment">Environment &amp; Climate</option>
+                            <option value="finance">Finance &amp; Economics</option>
+                            <option value="food">Food &amp; Drink</option>
+                            <option value="games">Games &amp; Gaming</option>
+                            <option value="government">Government, Law &amp; Politics</option>
+                            <option value="health">Health &amp; Medical (Human)</option>
+                            <option value="music">Music</option>
+                            <option value="news">News &amp; Media</option>
+                            <option value="science">Science &amp; Space</option>
+                            <option value="sports">Sports &amp; Fitness</option>
+                            <option value="technology">Technology</option>
+                            <option value="transportation">Transportation &amp; Travel</option>
+                            <option value="veterinary">Veterinary &amp; Pet Health</option>
+                            <option value="weather">Weather &amp; Climate</option>
                         </select>
                     </div>
                 </div>

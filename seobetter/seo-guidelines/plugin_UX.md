@@ -362,6 +362,30 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 ## §9 — Standalone menu pages (added v1.5.13)
 
+### §9.0 Domain dropdown sync rule (v1.5.15 — MANDATORY)
+
+Three forms expose the **Category / Domain** dropdown: [content-generator.php](../admin/views/content-generator.php), [bulk-generator.php](../admin/views/bulk-generator.php), [content-brief.php](../admin/views/content-brief.php). They MUST share the **identical 25-option list** with identical values, identical labels, and identical order. The backend [research.js getCategorySearches()](../cloud-api/api/research.js) maps each value to a set of API fetchers — if a value isn't in the map, the article gets ZERO category APIs and silently degrades to generic Quotable/NagerDate/NumberFacts only.
+
+**If you add, rename, or remove a category:**
+1. Edit all 3 form files — same `<option value>` and same label
+2. Edit `cloud-api/api/research.js` `getCategorySearches()` map to add/rename/remove the entry
+3. Update [plugin_functionality_wordpress.md §1.3](plugin_functionality_wordpress.md) category table
+4. Add a BUILD_LOG entry with the version anchor
+
+**Drift = silent bug.** v1.5.15 fixed three drift bugs (8 vs 25 options, missing veterinary, duplicated law_government). Don't reintroduce them.
+
+The 25 valid category values (v1.5.15+):
+```
+general, animals, art_design, blockchain, books, business, cryptocurrency,
+currency, ecommerce, education, entertainment, environment, finance, food,
+games, government, health, music, news, science, sports, technology,
+transportation, veterinary, weather
+```
+
+The `law_government` value is a deprecated alias that still resolves to `government` in research.js for backwards compat. Do NOT add it back to the dropdown.
+
+
+
 The plugin admin menu exposes 5 standalone tools beyond the main article generator. As of **v1.5.13** all 5 are temporarily ungated (FREE) so the user can test them end-to-end. Before public release, decide which stay free and which become Pro — see the comment block at the top of `License_Manager::FREE_FEATURES`.
 
 Every page MUST follow the same header pattern: page title (24px, bold) + subtitle (14px, secondary), with a FREE/PRO badge and "Unlock Pro Features →" CTA on the right side. None of these pages may be silently removed — if a feature is regressed, restore it from BUILD_LOG.

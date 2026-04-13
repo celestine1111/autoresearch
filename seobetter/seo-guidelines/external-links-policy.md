@@ -395,6 +395,12 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 - `statista.com`, `pewresearch.org`, `ourworldindata.org`
 - `researchgate.net`, `arxiv.org`, `ssrn.com`
 
+**Academic citation APIs (added v1.5.15)** — power the new Veterinary domain category and the existing Crossref fetchers in science/books/tech/education
+
+- `crossref.org`, `api.crossref.org`, `doi.org`
+- `europepmc.org`, `ebi.ac.uk`, `www.ebi.ac.uk`
+- `openalex.org`, `api.openalex.org`
+
 ### How matching works
 
 `is_host_trusted()` supports:
