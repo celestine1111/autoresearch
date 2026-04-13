@@ -19,7 +19,7 @@
 ## v1.5.23 — OSM Places anti-hallucination for local businesses
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `81fe100`
 
 ### Context
 
