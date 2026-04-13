@@ -1,46 +1,40 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit;
 
-$is_pro = SEOBetter\License_Manager::is_pro();
+// v1.5.13 — gate uses can_use() instead of is_pro() so feature can be moved
+// between FREE/PRO tiers in License_Manager without editing each view.
+$is_pro = SEOBetter\License_Manager::can_use( 'bulk_content_generation' );
 $batch = null;
 $batch_id = absint( $_GET['batch_id'] ?? 0 );
 
 // Handle bulk start
 if ( isset( $_POST['seobetter_bulk_start'] ) && check_admin_referer( 'seobetter_bulk_nonce' ) ) {
     if ( $is_pro ) {
-        $keywords = [];
+        $bulk = new SEOBetter\Bulk_Generator();
+        $rows = [];
 
-        // CSV upload
         if ( ! empty( $_FILES['csv_file']['tmp_name'] ) ) {
-            $handle = fopen( $_FILES['csv_file']['tmp_name'], 'r' );
-            if ( $handle ) {
-                while ( ( $row = fgetcsv( $handle ) ) !== false ) {
-                    $kw = sanitize_text_field( trim( $row[0] ?? '' ) );
-                    if ( $kw ) $keywords[] = $kw;
-                }
-                fclose( $handle );
+            $parsed = $bulk->parse_csv( $_FILES['csv_file']['tmp_name'] );
+            if ( ! empty( $parsed['success'] ) ) {
+                $rows = $parsed['rows'];
             }
         }
 
-        // Textarea keywords
         if ( ! empty( $_POST['keywords_text'] ) ) {
-            $lines = explode( "\n", sanitize_textarea_field( $_POST['keywords_text'] ) );
-            foreach ( $lines as $line ) {
-                $kw = trim( $line );
-                if ( $kw ) $keywords[] = $kw;
-            }
+            $rows = array_merge(
+                $rows,
+                $bulk->parse_textarea( sanitize_textarea_field( wp_unslash( $_POST['keywords_text'] ) ) )
+            );
         }
 
-        $keywords = array_unique( array_filter( $keywords ) );
-
-        if ( ! empty( $keywords ) ) {
-            $bulk = new SEOBetter\Bulk_Generator();
-            $batch = $bulk->create_batch( $keywords, [
+        if ( ! empty( $rows ) ) {
+            $new_batch_id = $bulk->create_batch( $rows, [
                 'word_count' => absint( $_POST['word_count'] ?? 2000 ),
                 'tone'       => sanitize_text_field( $_POST['tone'] ?? 'authoritative' ),
                 'domain'     => sanitize_text_field( $_POST['domain'] ?? 'general' ),
             ] );
-            if ( $batch ) {
-                $batch_id = $batch['id'];
+            if ( $new_batch_id ) {
+                $batch_id = $new_batch_id;
+                $batch = $bulk->get_batch( $batch_id );
             }
         } else {
             echo '<div class="notice notice-error"><p>' . esc_html__( 'No keywords provided. Please upload a CSV or enter keywords.', 'seobetter' ) . '</p></div>';
@@ -189,8 +183,10 @@ if ( $batch_id && ! $batch ) {
                     <td><?php echo esc_html( $item['keyword'] ); ?></td>
                     <td><span class="seobetter-score seobetter-score-<?php echo esc_attr( $status_class ); ?> sb-item-status"><?php echo esc_html( ucfirst( $item['status'] ) ); ?></span></td>
                     <td class="sb-item-title">
-                        <?php if ( ! empty( $item['post_id'] ) ) : ?>
-                            <a href="<?php echo esc_url( get_edit_post_link( $item['post_id'] ) ); ?>"><?php echo esc_html( $item['post_title'] ?? '' ); ?></a>
+                        <?php if ( ! empty( $item['post_id'] ) ) :
+                            $item_title = $item['post_title'] ?? get_the_title( $item['post_id'] );
+                        ?>
+                            <a href="<?php echo esc_url( get_edit_post_link( $item['post_id'] ) ); ?>"><?php echo esc_html( $item_title ); ?></a>
                         <?php else : ?>
                             &mdash;
                         <?php endif; ?>

@@ -360,4 +360,65 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 ---
 
-*This document is the definitive UI specification. NEVER remove a feature listed here without explicit user approval. When editing content-generator.php, seobetter.php, Content_Formatter.php, or editor-sidebar.js, use this file as the reference to verify nothing was lost.*
+## §9 — Standalone menu pages (added v1.5.13)
+
+The plugin admin menu exposes 5 standalone tools beyond the main article generator. As of **v1.5.13** all 5 are temporarily ungated (FREE) so the user can test them end-to-end. Before public release, decide which stay free and which become Pro — see the comment block at the top of `License_Manager::FREE_FEATURES`.
+
+Every page MUST follow the same header pattern: page title (24px, bold) + subtitle (14px, secondary), with a FREE/PRO badge and "Unlock Pro Features →" CTA on the right side. None of these pages may be silently removed — if a feature is regressed, restore it from BUILD_LOG.
+
+### §9.1 Bulk Content Generator — `?page=seobetter-bulk`
+- View: [admin/views/bulk-generator.php](../admin/views/bulk-generator.php)
+- Backend: [includes/Bulk_Generator.php](../includes/Bulk_Generator.php) — `parse_csv()`, `parse_textarea()`, `create_batch()` (returns int batch_id), `process_next()`, `get_batch()`
+- REST: `POST /seobetter/v1/bulk-process/{batch_id}` → [seobetter.php::rest_bulk_process()](../seobetter.php#L616)
+- UI elements (must be present):
+  - CSV upload field + textarea ("paste keywords, one per line")
+  - Word count, tone, domain selectors
+  - "Start Bulk Generation" submit button
+  - Batch progress card with: batch ID, status badge, percentage progress bar, per-item table (keyword, status, post title link, GEO score)
+  - JS poller hits `/bulk-process/{id}` every 3s until status is `completed` or `failed`
+- Wiring rule: the view MUST use `Bulk_Generator::parse_csv()` / `parse_textarea()` to build the structured rows array — never hand-roll into a flat array of strings (that's the bug v1.5.13 fixed)
+
+### §9.2 Content Brief — `?page=seobetter-content-brief`
+- View: [admin/views/content-brief.php](../admin/views/content-brief.php)
+- Backend: [includes/Content_Brief_Generator.php](../includes/Content_Brief_Generator.php) — `generate( $keyword, $options )` returns flat array
+- UI elements:
+  - Keyword + audience + domain + word_count form
+  - Result panel with: title, keywords (primary/secondary/LSI tags), search intent badge, content outline (H2 list with subheadings), required elements checklist, competitor analysis table, content gap opportunities
+  - Action buttons: Copy Brief, Export as Text, Generate Article from Brief
+- Wiring contract (do not break): backend returns `title`, `secondary_keywords` (array), `lsi_keywords` (array), `intent_type`, `intent_description`, `outline` (array of `['heading', 'subheadings']`), `required_elements`, `competitors` (array of `['domain', 'analysis']`), `content_gap`
+
+### §9.3 Citation Tracker — `?page=seobetter-citation-tracker`
+- View: [admin/views/citation-tracker.php](../admin/views/citation-tracker.php)
+- Backend: [includes/Citation_Tracker.php](../includes/Citation_Tracker.php) — `check_post( $post_id )`
+- REST: `POST /seobetter/v1/citation-check/{post_id}` → [seobetter.php::rest_citation_check()](../seobetter.php#L592)
+- UI elements:
+  - Site-wide summary card (Published Posts, Posts Cited by AI, Citation Rate %)
+  - Result card after a check: visibility score circle, Cited badge (YES/NO), reason text, top-10 competitor table
+  - Bottom posts list with per-row "Check Citations" button
+- Wiring contract: backend return shape is `['success', 'is_cited', 'cite_reason', 'visibility_score', 'position', 'competitors[].is_you', 'checked_at']`; cache meta key is `_seobetter_citation_check`. The view MUST read `is_cited`/`cite_reason`/`is_you` (not `cited`/`reason`/`cited` — that was the v1.5.13 bug)
+
+### §9.4 Internal Link Suggestions — `?page=seobetter-link-suggestions`
+- View: [admin/views/link-suggestions.php](../admin/views/link-suggestions.php)
+- Backend: [includes/Internal_Link_Suggester.php](../includes/Internal_Link_Suggester.php) — `suggest_for_post( $post_id, $max )`
+- REST: `POST /seobetter/v1/link-suggestions/{post_id}` → [seobetter.php::rest_link_suggestions()](../seobetter.php#L600)
+- UI elements:
+  - Info card with total published post count + "site-wide overview coming in a future release" note (the orphan-counter feature is deferred until a crawl job ships)
+  - Post selection dropdown + "Get Suggestions" button
+  - Result table: target post, suggested anchor text (code style), relevance bar+score, **Copy** button (puts markdown link `[anchor](url)` on clipboard)
+- Wiring contract: backend returns key `suggestions` (NOT `links` — that was the v1.5.13 bug). Each row has `target_post_id`, `target_title`, `target_url`, `anchor_text`, `relevance_score`, `geo_score`, `edit_url`
+- Known v1.5.13 limitation: there is no `/seobetter/v1/insert-link` REST endpoint. The button is **Copy** (clipboard) not **Insert**. Insert-into-post is on the backlog.
+
+### §9.5 Keyword Cannibalization Detector — `?page=seobetter-cannibalization`
+- View: [admin/views/cannibalization.php](../admin/views/cannibalization.php)
+- Backend: [includes/Cannibalization_Detector.php](../includes/Cannibalization_Detector.php) — `detect()`
+- REST: `POST /seobetter/v1/cannibalization` → [seobetter.php::rest_cannibalization()](../seobetter.php#L608)
+- UI elements:
+  - "Scan for Cannibalization" submit button
+  - Summary card: keyword conflicts count + affected posts count + last scanned timestamp
+  - Per-conflict card: keyword heading, similarity %, recommendation badge (merge / consolidate / differentiate), conflicting posts table (title, URL, words, GEO score, published date, Edit button)
+- Wiring contract: backend returns `['success', 'conflicts', 'total_conflicts', 'total_posts_affected']`. Each conflict has `keyword`, `posts[]` (each with `post_id`, `title`, `url`, `edit_url`, `published`, `word_count`, `geo_score`), `count`, `recommendation` (an **array** with `action`/`keep`/`message`/`severity` — NOT a string), and `similarity` (NOT `similarity_score` — that was the v1.5.13 bug)
+- Caching: after a successful scan the view persists results to `seobetter_cannibalization_results` option with an injected `scanned_at` timestamp so revisits skip re-scanning
+
+---
+
+*This document is the definitive UI specification. NEVER remove a feature listed here without explicit user approval. When editing content-generator.php, seobetter.php, Content_Formatter.php, editor-sidebar.js, or any of the 5 admin/views/*.php files in §9, use this file as the reference to verify nothing was lost.*

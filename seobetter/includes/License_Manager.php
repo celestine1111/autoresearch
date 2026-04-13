@@ -48,6 +48,16 @@ class License_Manager {
     /**
      * Feature tier definitions.
      */
+    // ============================================================================
+     // v1.5.13 — TESTING PHASE: 7 features moved from PRO_FEATURES → FREE_FEATURES
+     // so the user can test them end-to-end without a Pro license:
+     //   - bulk_content_generation, content_brief, citation_tracker,
+     //     internal_link_suggestions, cannibalization_detector,
+     //     freshness_suggestions, content_refresh
+     // BEFORE PUBLIC RELEASE: decide which stay free vs. pro and move the
+     // pro ones back into PRO_FEATURES below. This block is the single source
+     // of truth for the v1.5.13 free/pro split — do NOT silently re-gate.
+     // ============================================================================
     private const FREE_FEATURES = [
         'ai_content_generator',
         'ai_outline_generator',
@@ -64,6 +74,14 @@ class License_Manager {
         'llms_txt',
         'social_meta',
         'single_ai_provider',
+        // v1.5.13 testing phase — these were Pro
+        'bulk_content_generation',
+        'content_brief',
+        'citation_tracker',
+        'internal_link_suggestions',
+        'cannibalization_detector',
+        'freshness_suggestions',
+        'content_refresh',
     ];
 
     private const PRO_FEATURES = [
@@ -76,14 +94,7 @@ class License_Manager {
         'schema_review',
         'schema_event',
         'schema_video',
-        'freshness_suggestions',
-        'cannibalization_detector',
-        'internal_link_suggestions',
         'unlimited_ai_providers',
-        'bulk_content_generation',
-        'citation_tracker',
-        'content_refresh',
-        'content_brief',
         'content_export',
         'decay_alerts',
         'white_label',

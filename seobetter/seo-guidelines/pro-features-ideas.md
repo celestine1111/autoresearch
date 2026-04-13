@@ -72,6 +72,30 @@
 - [ ] Affiliate link auto-linking + CTA buttons
 - [ ] White-label mode
 
+### Internationalization (i18n) — Admin UI Translation
+**Status:** Not started. Currently all admin UI text is hardcoded English even though the plugin has a 90+ country picker for article generation.
+
+**What's missing:**
+- No `/languages` folder or `.pot` template file
+- No `load_plugin_textdomain()` call in main plugin file
+- ~131 strings already use `__()` / `_e()` across admin views, but:
+  - Content type labels ("Blog Post", "How-To Guide", "Listicle", etc.) in `content-generator.php:288-310` are hardcoded English `<option>` text
+  - Other hardcoded strings likely exist throughout admin views — needs full audit
+- No `.mo` files for any language
+
+**What to do (one-time setup, free forever after):**
+1. Add `load_plugin_textdomain( 'seobetter', false, dirname( SEOBETTER_PLUGIN_BASENAME ) . '/languages' );` on `plugins_loaded` hook
+2. Audit all PHP admin views — wrap every user-facing string in `__( 'string', 'seobetter' )`, especially the content type dropdown options
+3. Generate `.pot` template with WP-CLI: `wp i18n make-pot . languages/seobetter.pot`
+4. Ship `seobetter.pot` in plugin zip under `/languages/`
+5. When submitted to WP.org plugin directory → translate.wordpress.org volunteers translate for free into 100+ languages, auto-downloaded per user's WP site language
+
+**Optional Pro feature idea:** "AI Admin UI Translator" button — one-click DeepL/GPT translation of the `.pot` file into any language, compiled to `.mo` and dropped into `/languages/`. This would be a differentiator vs. Yoast/AIOSEO which rely on volunteer translations only.
+
+**Why this matters:** Plugin targets global markets (country picker has Spanish, Japanese, Arabic, Chinese, etc.) but the admin UI that the website owner uses to configure it is English-only. A Spanish WP user installing SEOBetter on their Spanish WP install sees English menus — feels unfinished. Yoast/AIOSEO/RankMath all have 100+ translations because they do this properly.
+
+**Priority:** Not blocking — plugin works in English for now. Should be done **before WP.org submission** since WP.org expects translation-ready plugins and auto-populates volunteer translations.
+
 ---
 
 ## CONVERSION STRATEGY IDEAS

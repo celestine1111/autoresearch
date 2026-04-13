@@ -1,6 +1,7 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit;
 
-$is_pro = SEOBetter\License_Manager::is_pro();
+// v1.5.13 — gate uses can_use() instead of is_pro()
+$is_pro = SEOBetter\License_Manager::can_use( 'citation_tracker' );
 $citation_result = null;
 $checked_post_id = 0;
 
@@ -29,12 +30,16 @@ $posts = get_posts( [
 $total_posts = count( $posts );
 $cited_count = 0;
 foreach ( $posts as $p ) {
-    $cached = get_post_meta( $p->ID, '_seobetter_citation_data', true );
-    if ( ! empty( $cached['cited'] ) ) {
+    $cached = get_post_meta( $p->ID, '_seobetter_citation_check', true );
+    if ( ! empty( $cached['is_cited'] ) ) {
         $cited_count++;
     }
 }
 $citation_rate = $total_posts > 0 ? round( ( $cited_count / $total_posts ) * 100 ) : 0;
+
+// v1.5.13 — field name reads now match Citation_Tracker::check_post() return shape:
+//   is_cited (bool), cite_reason (str), visibility_score, position, competitors[].is_you,
+//   checked_at. Cache meta key is _seobetter_citation_check (not _data).
 ?>
 <div class="wrap seobetter-dashboard">
 
@@ -92,7 +97,7 @@ $citation_rate = $total_posts > 0 ? round( ( $cited_count / $total_posts ) * 100
     <?php if ( $citation_result && $checked_post_id ) :
         $checked_post = get_post( $checked_post_id );
     ?>
-    <div class="seobetter-card" style="margin-bottom:24px;border-left:4px solid <?php echo ! empty( $citation_result['cited'] ) ? 'var(--sb-success,#059669)' : 'var(--sb-error,#dc2626)'; ?>">
+    <div class="seobetter-card" style="margin-bottom:24px;border-left:4px solid <?php echo ! empty( $citation_result['is_cited'] ) ? 'var(--sb-success,#059669)' : 'var(--sb-error,#dc2626)'; ?>">
         <h2 style="margin-bottom:16px">Citation Check: <?php echo esc_html( $checked_post->post_title ?? '' ); ?></h2>
 
         <div style="display:flex;gap:24px;margin-bottom:20px">
@@ -111,7 +116,7 @@ $citation_rate = $total_posts > 0 ? round( ( $cited_count / $total_posts ) * 100
                     <tr>
                         <td style="width:140px"><strong>Cited by AI:</strong></td>
                         <td>
-                            <?php if ( ! empty( $citation_result['cited'] ) ) : ?>
+                            <?php if ( ! empty( $citation_result['is_cited'] ) ) : ?>
                                 <span style="color:var(--sb-success,#059669);font-weight:600"><span class="dashicons dashicons-yes-alt"></span> YES</span>
                             <?php else : ?>
                                 <span style="color:var(--sb-error,#dc2626);font-weight:600"><span class="dashicons dashicons-dismiss"></span> NO</span>
@@ -120,7 +125,7 @@ $citation_rate = $total_posts > 0 ? round( ( $cited_count / $total_posts ) * 100
                     </tr>
                     <tr>
                         <td><strong>Reason:</strong></td>
-                        <td><?php echo esc_html( $citation_result['reason'] ?? '' ); ?></td>
+                        <td><?php echo esc_html( $citation_result['cite_reason'] ?? '' ); ?></td>
                     </tr>
                 </table>
             </div>
@@ -145,7 +150,7 @@ $citation_rate = $total_posts > 0 ? round( ( $cited_count / $total_posts ) * 100
                         <small style="color:var(--sb-text-muted,#94a3b8)"><?php echo esc_html( $comp['url'] ?? '' ); ?></small>
                     </td>
                     <td>
-                        <?php if ( ! empty( $comp['cited'] ) ) : ?>
+                        <?php if ( ! empty( $comp['is_you'] ) ) : ?>
                             <span class="dashicons dashicons-yes-alt" style="color:var(--sb-success,#059669)"></span>
                         <?php else : ?>
                             <span class="dashicons dashicons-minus" style="color:var(--sb-text-muted,#94a3b8)"></span>
@@ -181,7 +186,7 @@ $citation_rate = $total_posts > 0 ? round( ( $cited_count / $total_posts ) * 100
                     $score_data = get_post_meta( $p->ID, '_seobetter_geo_score', true );
                     $score = $score_data['geo_score'] ?? '—';
                     $score_class = is_numeric( $score ) ? ( $score >= 80 ? 'good' : ( $score >= 60 ? 'ok' : 'poor' ) ) : '';
-                    $cached = get_post_meta( $p->ID, '_seobetter_citation_data', true );
+                    $cached = get_post_meta( $p->ID, '_seobetter_citation_check', true );
                     $last_checked = $cached['checked_at'] ?? null;
                 ?>
                 <tr>
@@ -195,7 +200,7 @@ $citation_rate = $total_posts > 0 ? round( ( $cited_count / $total_posts ) * 100
                     </td>
                     <td>
                         <?php if ( $cached ) : ?>
-                            <?php if ( ! empty( $cached['cited'] ) ) : ?>
+                            <?php if ( ! empty( $cached['is_cited'] ) ) : ?>
                                 <span class="dashicons dashicons-yes-alt" style="color:var(--sb-success,#059669)"></span>
                             <?php else : ?>
                                 <span class="dashicons dashicons-dismiss" style="color:var(--sb-error,#dc2626)"></span>

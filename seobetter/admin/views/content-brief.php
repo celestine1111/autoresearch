@@ -1,6 +1,7 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit;
 
-$is_pro = SEOBetter\License_Manager::is_pro();
+// v1.5.13 — gate uses can_use() instead of is_pro()
+$is_pro = SEOBetter\License_Manager::can_use( 'content_brief' );
 $brief = null;
 
 // Handle brief generation

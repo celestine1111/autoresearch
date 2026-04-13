@@ -1,6 +1,7 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit;
 
-$is_pro = SEOBetter\License_Manager::is_pro();
+// v1.5.13 — gate uses can_use() instead of is_pro()
+$is_pro = SEOBetter\License_Manager::can_use( 'internal_link_suggestions' );
 $suggestions = null;
 $selected_post_id = 0;
 
@@ -24,19 +25,13 @@ $all_posts = get_posts( [
     'order'          => 'ASC',
 ] );
 
-// Site-wide link stats
 $total_posts = count( $all_posts );
-$total_internal_links = 0;
-$orphan_count = 0;
 
-foreach ( $all_posts as $p ) {
-    $link_count = absint( get_post_meta( $p->ID, '_seobetter_internal_links', true ) );
-    $total_internal_links += $link_count;
-    if ( $link_count === 0 ) {
-        $orphan_count++;
-    }
-}
-$avg_links = $total_posts > 0 ? round( $total_internal_links / $total_posts, 1 ) : 0;
+// v1.5.13 — Site-wide overview removed because nothing populates the
+// _seobetter_internal_links post meta. A real implementation needs a crawl
+// job that scans every post, parses internal anchors, and stores the count.
+// Until that job ships, the per-post suggestion form below is the only
+// reliable path. See seo-guidelines/pro-features-ideas.md backlog.
 ?>
 <div class="wrap seobetter-dashboard">
 
@@ -71,21 +66,15 @@ $avg_links = $total_posts > 0 ? round( $total_internal_links / $total_posts, 1 )
     </div>
     <?php endif; ?>
 
-    <!-- Site-Wide Link Stats -->
-    <div class="seobetter-card" style="margin-bottom:24px">
-        <h2 style="margin-bottom:16px">Site Link Overview</h2>
-        <div style="display:flex;justify-content:space-around;padding:20px 0;text-align:center">
-            <div>
-                <div style="font-size:36px;font-weight:700;color:var(--sb-primary,#764ba2)"><?php echo esc_html( $total_posts ); ?></div>
-                <div style="font-size:13px;color:var(--sb-text-secondary,#64748b)">Total Published Posts</div>
+    <!-- Site overview info card (v1.5.13: full crawl deferred) -->
+    <div class="seobetter-card" style="margin-bottom:24px;padding:18px;display:flex;gap:16px;align-items:center">
+        <span class="dashicons dashicons-info-outline" style="font-size:28px;width:28px;height:28px;color:var(--sb-primary,#764ba2)"></span>
+        <div>
+            <div style="font-weight:600;font-size:14px;color:var(--sb-text,#1e293b);margin-bottom:2px">
+                <?php echo esc_html( sprintf( _n( '%d published post', '%d published posts', $total_posts, 'seobetter' ), $total_posts ) ); ?>
             </div>
-            <div>
-                <div style="font-size:36px;font-weight:700;color:<?php echo $avg_links >= 3 ? 'var(--sb-success,#059669)' : 'var(--sb-warning,#f59e0b)'; ?>"><?php echo esc_html( $avg_links ); ?></div>
-                <div style="font-size:13px;color:var(--sb-text-secondary,#64748b)">Avg Internal Links/Post</div>
-            </div>
-            <div>
-                <div style="font-size:36px;font-weight:700;color:<?php echo $orphan_count === 0 ? 'var(--sb-success,#059669)' : 'var(--sb-error,#dc2626)'; ?>"><?php echo esc_html( $orphan_count ); ?></div>
-                <div style="font-size:13px;color:var(--sb-text-secondary,#64748b)">Orphan Pages</div>
+            <div style="font-size:13px;color:var(--sb-text-secondary,#64748b)">
+                Site-wide link overview (avg links/post, orphan pages) is coming in a future release. For now, pick a post below to see suggested internal links.
             </div>
         </div>
     </div>
@@ -121,14 +110,16 @@ $avg_links = $total_posts > 0 ? round( $total_internal_links / $total_posts, 1 )
     <!-- Suggestion Results -->
     <?php if ( $suggestions && $selected_post_id ) :
         $selected_post = get_post( $selected_post_id );
+        // v1.5.13 — backend returns 'suggestions' key, not 'links'
+        $suggestion_rows = $suggestions['suggestions'] ?? [];
     ?>
     <div class="seobetter-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
             <h2 style="margin:0">Link Suggestions for: <?php echo esc_html( $selected_post->post_title ?? '' ); ?></h2>
-            <span style="font-size:13px;color:var(--sb-text-secondary,#64748b)"><?php echo esc_html( count( $suggestions['links'] ?? [] ) ); ?> suggestions found</span>
+            <span style="font-size:13px;color:var(--sb-text-secondary,#64748b)"><?php echo esc_html( count( $suggestion_rows ) ); ?> suggestions found</span>
         </div>
 
-        <?php if ( ! empty( $suggestions['links'] ) ) : ?>
+        <?php if ( ! empty( $suggestion_rows ) ) : ?>
         <table class="widefat striped">
             <thead>
                 <tr>
@@ -139,7 +130,7 @@ $avg_links = $total_posts > 0 ? round( $total_internal_links / $total_posts, 1 )
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ( $suggestions['links'] as $link ) :
+                <?php foreach ( $suggestion_rows as $link ) :
                     $rel_score = $link['relevance_score'] ?? 0;
                     $rel_color = $rel_score >= 80 ? 'var(--sb-success,#059669)' : ( $rel_score >= 60 ? 'var(--sb-warning,#f59e0b)' : 'var(--sb-error,#dc2626)' );
                     $rel_class = $rel_score >= 80 ? 'good' : ( $rel_score >= 60 ? 'ok' : 'poor' );
@@ -160,11 +151,10 @@ $avg_links = $total_posts > 0 ? round( $total_internal_links / $total_posts, 1 )
                         </div>
                     </td>
                     <td>
-                        <button type="button" class="button button-small sb-insert-link"
-                            data-source-id="<?php echo esc_attr( $selected_post_id ); ?>"
+                        <button type="button" class="button button-small sb-copy-link"
                             data-target-url="<?php echo esc_url( get_permalink( $link['target_post_id'] ?? 0 ) ); ?>"
                             data-anchor="<?php echo esc_attr( $link['anchor_text'] ?? '' ); ?>">
-                            Insert Link
+                            Copy
                         </button>
                     </td>
                 </tr>
@@ -177,42 +167,24 @@ $avg_links = $total_posts > 0 ? round( $total_internal_links / $total_posts, 1 )
     </div>
 
     <script>
+    // v1.5.13 — Copy anchor + URL as a markdown link to clipboard.
+    // Insert-into-post REST endpoint is on the backlog; for now the user
+    // pastes manually into the editor.
     (function() {
-        document.querySelectorAll('.sb-insert-link').forEach(function(btn) {
+        document.querySelectorAll('.sb-copy-link').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                var sourceId = this.dataset.sourceId;
-                var targetUrl = this.dataset.targetUrl;
-                var anchor = this.dataset.anchor;
+                var targetUrl = this.dataset.targetUrl || '';
+                var anchor = this.dataset.anchor || '';
+                var markdown = '[' + anchor + '](' + targetUrl + ')';
                 var button = this;
-
-                button.disabled = true;
-                button.textContent = 'Inserting...';
-
-                fetch('<?php echo esc_url( rest_url( 'seobetter/v1/insert-link' ) ); ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>'
-                    },
-                    body: JSON.stringify({
-                        post_id: sourceId,
-                        target_url: targetUrl,
-                        anchor_text: anchor
-                    })
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (data.success) {
-                        button.textContent = 'Inserted';
-                        button.style.color = 'var(--sb-success,#059669)';
-                    } else {
-                        button.textContent = 'Failed';
-                        button.disabled = false;
-                    }
-                })
-                .catch(function() {
-                    button.textContent = 'Error';
-                    button.disabled = false;
+                navigator.clipboard.writeText(markdown).then(function() {
+                    var original = button.textContent;
+                    button.textContent = 'Copied!';
+                    button.style.color = 'var(--sb-success,#059669)';
+                    setTimeout(function() {
+                        button.textContent = original;
+                        button.style.color = '';
+                    }, 1800);
                 });
             });
         });

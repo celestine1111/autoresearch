@@ -1,6 +1,7 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit;
 
-$is_pro = SEOBetter\License_Manager::is_pro();
+// v1.5.13 — gate uses can_use() instead of is_pro()
+$is_pro = SEOBetter\License_Manager::can_use( 'cannibalization_detector' );
 $results = null;
 
 // Handle cannibalization scan
@@ -8,6 +9,11 @@ if ( isset( $_POST['seobetter_scan_cannibalization'] ) && check_admin_referer( '
     if ( $is_pro ) {
         $detector = new SEOBetter\Cannibalization_Detector();
         $results = $detector->detect();
+        // v1.5.13 — cache results so revisiting the page doesn't re-scan
+        if ( ! empty( $results['success'] ) ) {
+            $results['scanned_at'] = current_time( 'mysql' );
+            update_option( 'seobetter_cannibalization_results', $results, false );
+        }
     }
 }
 
@@ -22,7 +28,8 @@ $affected_posts = 0;
 $seen_ids = [];
 foreach ( $conflicts as $group ) {
     foreach ( $group['posts'] ?? [] as $p ) {
-        $pid = $p['id'] ?? 0;
+        // v1.5.13 — backend returns 'post_id', not 'id'
+        $pid = $p['post_id'] ?? 0;
         if ( $pid && ! in_array( $pid, $seen_ids, true ) ) {
             $seen_ids[] = $pid;
             $affected_posts++;
@@ -106,14 +113,18 @@ foreach ( $conflicts as $group ) {
     <?php if ( ! empty( $conflicts ) ) : ?>
         <?php foreach ( $conflicts as $idx => $group ) :
             $keyword = $group['keyword'] ?? 'Unknown';
-            $similarity = $group['similarity_score'] ?? 0;
-            $recommendation = $group['recommendation'] ?? 'differentiate';
+            // v1.5.13 — backend returns 'similarity'; 'recommendation' is an array
+            $similarity = $group['similarity'] ?? 0;
+            $rec = is_array( $group['recommendation'] ?? null ) ? $group['recommendation'] : [];
+            $rec_action  = $rec['action']  ?? 'differentiate';
+            $rec_message = $rec['message'] ?? '';
             $rec_colors = [
                 'merge'         => [ 'bg' => '#fef3cd', 'text' => '#856404', 'icon' => 'dashicons-migrate' ],
                 'redirect'      => [ 'bg' => '#f8d7da', 'text' => '#721c24', 'icon' => 'dashicons-redo' ],
+                'consolidate'   => [ 'bg' => '#f8d7da', 'text' => '#721c24', 'icon' => 'dashicons-redo' ],
                 'differentiate' => [ 'bg' => '#d4edda', 'text' => '#155724', 'icon' => 'dashicons-randomize' ],
             ];
-            $rc = $rec_colors[ $recommendation ] ?? $rec_colors['differentiate'];
+            $rc = $rec_colors[ $rec_action ] ?? $rec_colors['differentiate'];
             $sim_class = $similarity >= 80 ? 'poor' : ( $similarity >= 50 ? 'ok' : 'good' );
         ?>
         <div class="seobetter-card" style="margin-bottom:20px">
@@ -132,13 +143,9 @@ foreach ( $conflicts as $group ) {
             <!-- Recommendation -->
             <div style="padding:10px 16px;background:<?php echo esc_attr( $rc['bg'] ); ?>;border-radius:6px;margin-bottom:16px;font-size:13px;color:<?php echo esc_attr( $rc['text'] ); ?>">
                 <span class="dashicons <?php echo esc_attr( $rc['icon'] ); ?>" style="margin-right:4px;font-size:16px;width:16px;height:16px;vertical-align:text-bottom"></span>
-                <strong>Recommendation:</strong> <?php echo esc_html( ucfirst( $recommendation ) ); ?>
-                <?php if ( $recommendation === 'merge' ) : ?>
-                    — Combine these posts into one comprehensive article to avoid splitting authority.
-                <?php elseif ( $recommendation === 'redirect' ) : ?>
-                    — 301 redirect the weaker post to the stronger one to consolidate rankings.
-                <?php else : ?>
-                    — Adjust the focus keyword of one post to target a distinct, related query.
+                <strong>Recommendation:</strong> <?php echo esc_html( ucfirst( $rec_action ) ); ?>
+                <?php if ( $rec_message ) : ?>
+                    — <?php echo esc_html( $rec_message ); ?>
                 <?php endif; ?>
             </div>
 
@@ -170,7 +177,7 @@ foreach ( $conflicts as $group ) {
                             <?php endif; ?>
                         </td>
                         <td style="font-size:12px;color:var(--sb-text-secondary,#64748b)"><?php echo esc_html( $cp['published'] ?? '' ); ?></td>
-                        <td><a href="<?php echo esc_url( get_edit_post_link( $cp['id'] ?? 0 ) ); ?>" class="button button-small">Edit</a></td>
+                        <td><a href="<?php echo esc_url( get_edit_post_link( $cp['post_id'] ?? 0 ) ); ?>" class="button button-small">Edit</a></td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
