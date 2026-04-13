@@ -19,7 +19,7 @@
 ## v1.5.12 — Restore full result UI + kill legacy sync POST fallback
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `d12e9eb`
 
 ### Fixed
 
