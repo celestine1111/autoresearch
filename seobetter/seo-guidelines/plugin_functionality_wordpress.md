@@ -146,6 +146,39 @@ All sources combined into `for_prompt` string containing:
 - **TRENDING DISCUSSIONS** — Reddit titles, HN stories, Google Trends
 - **SOURCES FOR REFERENCES** — real URLs for article citations (up to 20)
 
+### 1.7 Topic Research Endpoint (`/api/topic-research`, v1.5.22 enhanced)
+
+Separate endpoint from the main `/api/research` used for generation. Pulls real keyword demand data from 5 sources (no LLM hallucination) and powers TWO UI features:
+
+1. **Sidebar Topic Suggester** — "Suggest 10 Topics" button in the Generate page sidebar. Returns scored topics with intent classification.
+2. **Auto-suggest button** — next to the Primary Keyword input. Populates Secondary Keywords + LSI Keywords fields with real Google Suggest variations + Datamuse semantic clusters.
+
+**Request:** `POST /api/topic-research` with `{ niche, site_url }`
+
+**Response:**
+```json
+{
+  "success": true,
+  "niche": "...",
+  "topics": [ ...full topic ideas with intent/score/reason ],
+  "keywords": {
+    "secondary": [ "real google suggest phrase 1", "real phrase 2", ... up to 7 ],
+    "lsi":       [ "datamuse word 1", "datamuse word 2", ... up to 10 ],
+    "secondary_string": "pre-joined comma-separated string for UI",
+    "lsi_string":       "pre-joined comma-separated string for UI"
+  },
+  "sources": { "google_suggest": N, "datamuse": N, "wikipedia": N, "reddit": N }
+}
+```
+
+**Data sources:**
+- `keywords.secondary` — extracted from Google Suggest (real search queries people type). Filtered to phrases that share at least one word with the niche, 6-80 chars long.
+- `keywords.lsi` — extracted from Datamuse semantic word clusters, single words 4-30 chars. Falls back to 1-2 word Wikipedia titles if Datamuse returns fewer than 6 results.
+
+**v1.5.22 context:** Before this release, the Auto-suggest button called `/api/generate` (LLM) with a strict-format prompt + fragile regex parser that frequently failed silently when Llama wrapped its output in markdown (e.g. `**SECONDARY:**`). The LLM path is gone. Auto-suggest now uses this endpoint directly — same data source as the sidebar Topic Suggester for consistency.
+
+**Source:** [cloud-api/api/topic-research.js::buildKeywordSets()](../cloud-api/api/topic-research.js)
+
 ---
 
 ## 2. AI GENERATION PIPELINE (Async_Generator)

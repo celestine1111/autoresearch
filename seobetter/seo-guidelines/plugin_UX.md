@@ -17,7 +17,7 @@
 | Field | Type | Name/ID | Required | Notes |
 |---|---|---|---|---|
 | Primary Keyword | text input | `primary_keyword` | YES | Target keyword for the article |
-| Auto-suggest | button | `seobetter-auto-keywords` | — | Generates secondary + LSI keywords |
+| Auto-suggest | button | `seobetter-auto-keywords` | — | Populates secondary + LSI keywords from real Google Suggest + Datamuse (v1.5.22) |
 | Secondary Keywords | text input | `secondary_keywords` | no | Comma-separated related phrases |
 | LSI / Semantic Keywords | text input | `lsi_keywords` | no | Comma-separated semantic terms |
 
@@ -167,7 +167,7 @@ Appears when Generate is clicked. Contains:
 | Function | Trigger | Purpose |
 |---|---|---|
 | `sbContentTypeChanged()` | Content Type dropdown change | Auto-adjusts tone + word count |
-| Auto-suggest handler | Auto-suggest button click | Generates secondary/LSI keywords |
+| Auto-suggest handler | Auto-suggest button click | Populates secondary/LSI keywords from real Google Suggest + Datamuse data (v1.5.22 — was LLM-based before; see BUILD_LOG) |
 | Social content generator | Social button click | Generates Twitter/LinkedIn/Instagram content |
 | Topic suggester | Suggest Topics button click | Generates 10 topic ideas |
 | `sbRenderCountries()` | Country search input | Filters country dropdown |

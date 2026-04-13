@@ -16,6 +16,72 @@
 
 ---
 
+## v1.5.22 — Auto-suggest uses real keyword data (fixes silent failures)
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Context
+
+User reported: "auto suggest is not suggesting keywords, check api and .md files".
+
+Root cause found: the Auto-suggest button next to the Primary Keyword input called `/api/generate` (Groq LLM) with a strict-format prompt and a **fragile client-side regex parser** that silently failed whenever Llama wrapped its output in markdown.
+
+The failing flow (through v1.5.21):
+1. Button hits `POST /api/generate` with prompt `"Return ONLY:\nSECONDARY: a, b, c\nRELATED: a, b, c"`
+2. Llama 3.3 70B (the free Groq default) frequently returned:
+   - `**SECONDARY:** keyword1, keyword2` (markdown bold) → regex `/^SECONDARY/i` fails because line starts with `*`
+   - `1. SECONDARY: keyword1, keyword2` (numbered) → regex fails
+   - ` ```\nSECONDARY: ...\n``` ` (code block) → regex fails
+3. Client parser `.split('\n').forEach(l => if (/^SECONDARY/i.test(l)) ...)` missed the lines
+4. Input fields stayed empty
+5. Status text still said "Done!" because `d.content` was truthy
+6. User saw nothing happen — silent failure
+
+Meanwhile the plugin already had a **working alternative** at `/api/topic-research` which pulls real keyword demand data from 5 sources (Google Suggest + Datamuse + Wikipedia + Reddit + DuckDuckGo) with zero LLM hallucination. The sidebar "Suggest 10 Topics" widget used it successfully. But the Auto-suggest button never did.
+
+### Fixed
+
+- **Auto-suggest button rewired to use `/api/topic-research`** — `admin/views/content-generator.php` lines **611-652** (click handler)
+  - No more LLM call, no more regex parser
+  - Reads `data.keywords.secondary` and `data.keywords.lsi` directly from a structured JSON response
+  - Populates the `secondary_keywords` and `lsi_keywords` fields with `array.join(', ')`
+  - Status text now shows source counts: `"Added N secondary + M LSI (N from Google Suggest, M from Datamuse)"`
+  - Graceful fallback: shows `"No keyword variations found — try a broader term"` if the arrays are empty (e.g. for very obscure niches)
+  - Verify: `grep -n "topic-research" seobetter/admin/views/content-generator.php`
+
+### Added
+
+- **`keywords` field in /api/topic-research response** — `cloud-api/api/topic-research.js::buildKeywordSets()` new helper at line ~**180**
+  - Extracts short keyword phrases from the raw research arrays for the Auto-suggest button
+  - `keywords.secondary` (up to 7) — real Google Suggest variations filtered to phrases 6-80 chars that share at least one word with the niche
+  - `keywords.lsi` (up to 10) — Datamuse semantic single-word clusters, 4-30 chars, deduped against secondary words. Falls back to 1-2 word Wikipedia titles if Datamuse returns <6 results.
+  - Also exposed as `keywords.secondary_string` and `keywords.lsi_string` — pre-joined comma-separated strings for direct UI display
+  - The existing `topics[]` array is unchanged — the sidebar "Suggest 10 Topics" widget still works identically
+  - Verify: `grep -n "buildKeywordSets\|keywords:" seobetter/cloud-api/api/topic-research.js`
+
+### Documentation
+
+- **plugin_functionality_wordpress.md §1.7** — new section "Topic Research Endpoint (v1.5.22 enhanced)" documenting the `/api/topic-research` endpoint, the request/response shape including the new `keywords` field, the 5 data sources, and the historical context (why Auto-suggest used to be LLM-based and why that was wrong)
+  - Verify: `grep -n '1.7 Topic Research Endpoint' seobetter/seo-guidelines/plugin_functionality_wordpress.md`
+
+- **plugin_UX.md §2 + §5** — updated the Auto-suggest feature rows to note the v1.5.22 data source change (was LLM, now real data from Google Suggest + Datamuse)
+  - Verify: `grep -n 'v1.5.22' seobetter/seo-guidelines/plugin_UX.md`
+
+### Not changed
+
+- `/api/generate` endpoint still exists — used by the Social Content Generator (Twitter/LinkedIn/Instagram post creation) which does genuinely need LLM generation
+- Sidebar "Suggest 10 Topics" widget still hits the same `/api/topic-research` endpoint and still reads `data.topics` — unaffected by the new `keywords` field
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall + retest. After v1.5.22:
+  - Click "Auto-suggest" next to the Primary Keyword input on a fresh article
+  - Secondary Keywords and LSI Keywords fields should populate with real Google Suggest + Datamuse data within 1-2 seconds (faster than the old LLM call which took 3-5s)
+  - Status text should show the source attribution like `"Added 6 secondary + 8 LSI (18 from Google Suggest, 8 from Datamuse)"`
+
+---
+
 ## v1.5.21 — Preview/draft styling parity (format_classic now wraps format_hybrid)
 
 **Date:** 2026-04-13

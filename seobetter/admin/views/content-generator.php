@@ -608,26 +608,48 @@ function sbContentTypeChanged(type) {
     }
 }
 
-// Auto-suggest keywords
+// Auto-suggest keywords (v1.5.22 — real data from /api/topic-research)
+//
+// Before v1.5.22 this button called /api/generate (LLM) with a strict-format
+// prompt and a fragile regex parser that silently failed when Llama wrapped
+// its output in markdown. Now it calls /api/topic-research which pulls REAL
+// keyword variations from Google Suggest + Datamuse + Wikipedia and returns
+// pre-extracted secondary + lsi arrays.
 var sbAutoBtn = document.getElementById('seobetter-auto-keywords');
 if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
     var kw = document.getElementById('primary_keyword').value.trim();
     if (!kw) { alert('Enter a keyword first.'); return; }
     var btn = this, st = document.getElementById('seobetter-auto-status');
-    btn.disabled = true; st.textContent = 'Generating...';
-    fetch(CLOUD + '/api/generate', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ prompt:'For "'+kw+'", generate:\nSECONDARY: 5-7 related phrases\nRELATED: 8-10 semantic terms\n\nReturn ONLY:\nSECONDARY: a, b, c\nRELATED: a, b, c', system_prompt:'SEO keyword expert. Format only.', max_tokens:300, temperature:0.7, site_url:SITE })
-    }).then(r=>r.json()).then(d => {
+    btn.disabled = true; st.textContent = 'Fetching real-data keywords...';
+    fetch(CLOUD + '/api/topic-research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ niche: kw, site_url: SITE })
+    }).then(function(r) { return r.json(); }).then(function(d) {
         btn.disabled = false;
-        if (d.content) {
-            d.content.split('\n').forEach(l => {
-                if (/^SECONDARY/i.test(l)) document.querySelector('[name="secondary_keywords"]').value = l.replace(/^SECONDARY\s*:\s*/i,'');
-                if (/^RELATED/i.test(l)) document.querySelector('[name="lsi_keywords"]').value = l.replace(/^RELATED\s*:\s*/i,'');
-            });
-            st.textContent = 'Done!'; setTimeout(()=>st.textContent='', 2000);
-        } else st.textContent = d.error||'Failed';
-    }).catch(e => { btn.disabled=false; st.textContent='Error'; });
+        if (!d || !d.success) {
+            st.textContent = (d && d.error) || 'Failed to fetch suggestions';
+            return;
+        }
+        var sec = (d.keywords && d.keywords.secondary) || [];
+        var lsi = (d.keywords && d.keywords.lsi) || [];
+        if (sec.length === 0 && lsi.length === 0) {
+            st.textContent = 'No keyword variations found — try a broader term';
+            return;
+        }
+        if (sec.length) {
+            document.querySelector('[name="secondary_keywords"]').value = sec.join(', ');
+        }
+        if (lsi.length) {
+            document.querySelector('[name="lsi_keywords"]').value = lsi.join(', ');
+        }
+        var srcLabel = (d.sources ? d.sources.google_suggest : 0) + ' from Google Suggest, ' + (d.sources ? d.sources.datamuse : 0) + ' from Datamuse';
+        st.textContent = 'Added ' + sec.length + ' secondary + ' + lsi.length + ' LSI (' + srcLabel + ')';
+        setTimeout(function() { st.textContent = ''; }, 6000);
+    }).catch(function(e) {
+        btn.disabled = false;
+        st.textContent = 'Error: ' + (e && e.message ? e.message : 'network');
+    });
 });
 
 <?php if ( $result && $result['success'] ) : ?>
