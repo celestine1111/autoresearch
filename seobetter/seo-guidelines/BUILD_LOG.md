@@ -16,6 +16,46 @@
 
 ---
 
+## v1.5.19 — Delete duplicate renderResult in admin.js (race condition fix)
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Context
+
+User retest of v1.5.18 surfaced a critical regression: the GEO score dashboard, the 14 bar charts, the Analyze & Improve fix buttons, and the headline radio selector ALL appeared briefly and then **disappeared and were replaced by a stripped-down legacy panel**. The Save Draft button on the legacy panel did nothing (no Post/Page dropdown, no click handler).
+
+Root cause: [admin/js/admin.js](../admin/js/admin.js) lines 15-253 contained an entire duplicate copy of the async article generation handler — its own `renderResult()`, its own polling loop, its own click handler on `#seobetter-async-generate`. This was a leftover from before v1.5.12 that never got cleaned up. Both this file and the inline script in [admin/views/content-generator.php](../admin/views/content-generator.php) attached click handlers to the same button, both polled `/seobetter/v1/generate/step`, both called `/seobetter/v1/generate/result`, and both raced to write into `#seobetter-async-result`.
+
+The inline content-generator.php renderer (full v1.5.18 dashboard with bar charts, fix buttons, headline radios) finished first and rendered correctly. The legacy admin.js renderer finished a few hundred milliseconds later and **overwrote** the result panel with its own stripped output: just a "GEO Score: X (Y) Words: Z" textual summary, the suggestions list, a bare "Headlines" panel with no radio buttons, and a Save Draft button that POSTed to the deleted `seobetter_create_draft` legacy handler.
+
+This explains every symptom in the user's bug report:
+- "the graph dissapears" → legacy renderer overwrites the v1.5.18 dashboard
+- "stats and graph then it disappears" → same
+- "pro features to add whats needed but disappears" → Analyze & Improve panel overwritten
+- "you cant select the title" → legacy renderer's headline panel has no radio buttons
+- "the save draft button does nothing" → legacy save button submits to a 2-version-old handler that no longer exists
+
+### Fixed
+
+- **Deleted the entire async generator block from admin.js** — `admin/js/admin.js` lines **15-253** (everything except the API key visibility toggle)
+  - The file now has 35 lines instead of 256
+  - Only the API key field show/hide handler remains
+  - A long header comment documents the deletion + warns future devs not to add result-panel JS here
+  - Verify: `! grep -n 'renderResult\|seobetter-async-generate' seobetter/admin/js/admin.js | grep -v '^[[:space:]]*\*'`
+  - Verify line count: `wc -l seobetter/admin/js/admin.js` (should be ≤ 36)
+
+### Documentation
+
+- **plugin_UX.md §8B** — new section "Single-source-of-truth rule for the result panel renderer" documenting the v1.5.19 fix and prohibiting any future async-generator JS in admin.js
+  - Verify: `grep -n '§8B' seobetter/seo-guidelines/plugin_UX.md`
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall + retest article 1. After v1.5.19, the result panel should render the FULL v1.5.18 dashboard (score circle, 14 bar charts, fix buttons, headline radio selector, Post/Page dropdown, working Save Draft) and STAY rendered without disappearing.
+
+---
+
 ## v1.5.18 — Citation dedup, preview/draft styling parity
 
 **Date:** 2026-04-13

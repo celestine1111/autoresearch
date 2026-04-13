@@ -360,6 +360,21 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 ---
 
+## §8B — Single-source-of-truth rule for the result panel renderer (v1.5.19)
+
+The article generator result panel (`#seobetter-async-result`) is rendered by **exactly one** JavaScript function: the `renderResult()` defined inline at [admin/views/content-generator.php](../admin/views/content-generator.php) ~line 744.
+
+**There must be NO other `renderResult()` anywhere in the plugin.** v1.5.18 and earlier had a duplicate `renderResult()` in [admin/js/admin.js](../admin/js/admin.js) that was a stripped-down v1.5.10-era version. Both files attached click handlers to `#seobetter-async-generate`, both polled `/generate/step`, both called `fetchResult`, and both raced to write into the same result element. Whichever finished last won, and the legacy admin.js renderer (no graph, no bar charts, no fix buttons, no headline radio selector, broken Save Draft button submitting to a deleted handler) usually won. Deleted in v1.5.19.
+
+**Process for any future result-panel changes:**
+
+1. Edit the inline `renderResult()` in `content-generator.php` only
+2. Do NOT add any JS that touches `#seobetter-async-generate`, `#seobetter-async-result`, or `/seobetter/v1/generate/*` to `admin/js/admin.js`
+3. `admin/js/admin.js` is for cross-admin helpers only (API key visibility toggle, future settings-page helpers)
+4. If you need to test that the single source rule still holds: `grep -n "renderResult\|seobetter-async-generate" seobetter/admin/js/admin.js` — the only matches should be in comments
+
+---
+
 ## §9 — Standalone menu pages (added v1.5.13)
 
 ### §9.0 Domain dropdown sync rule (v1.5.15 — MANDATORY)
