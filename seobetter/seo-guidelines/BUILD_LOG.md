@@ -19,7 +19,7 @@
 ## v1.5.15 — Domain category drift fix + Veterinary research APIs
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `155698c`
 
 ### Context
 
