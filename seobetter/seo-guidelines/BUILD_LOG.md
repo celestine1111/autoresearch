@@ -19,7 +19,7 @@
 ## v1.5.18 — Citation dedup, preview/draft styling parity
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `02575d1`
 
 ### Context
 
