@@ -16,6 +16,80 @@
 
 ---
 
+## v1.5.20 — Remove dropcaps + cap stat callouts + custom SEOBetter icon set
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Context
+
+User feedback after v1.5.19 fixes:
+
+1. "Overly extensive amount of percentage stylings" — the v1.5.14 stat callout regex was matching ANY paragraph containing `\d%` or `X out of Y`, regardless of whether the stat was the lead or buried mid-paragraph. Articles with lots of numbers (which is most of them, since the GEO prompt encourages stats) ended up with 8+ pulled-out stat cards crowding out the prose.
+
+2. "Remove drop caps on sentences" — the v1.5.18 dropcap (both the format_hybrid `dropCap` emission and the format_classic `h2+p::first-letter` CSS rule) was visually overbearing. Every section opened with a 3.2em first letter that fought for attention with the colored H2 above it.
+
+3. Icons in styled wp:html blocks — user wants visual icons to appear in callout corners and box headers (not body prose, per article_design.md §6) and explicitly requested **unique icons** that "other websites don't use, so it's unique and up to date for 2026 onwards". Investigated Noun Project API and found it would require OAuth-style auth + per-user paid signup. Recommended hand-drawn custom icons instead — same effort to ship, zero runtime cost, genuinely unique because no library has the exact path data.
+
+### Removed
+
+- **Dropcap CSS in format_classic()** — `includes/Content_Formatter.php::format_classic()` line ~661
+  - Deleted the `.{$uid} h2+p::first-letter` and `.{$uid} h2+div+p::first-letter` rules that floated a 3.2em accent-color first letter on every paragraph following an H2
+  - Verify: `! grep -n 'h2\+p::first-letter' seobetter/includes/Content_Formatter.php`
+
+- **Dropcap emission in format_hybrid()** — `includes/Content_Formatter.php::format_hybrid()` paragraph fallback case lines ~443-454
+  - Deleted the v1.5.18 branch that emitted `<!-- wp:paragraph {"dropCap":true} --><p class="has-drop-cap">...` for the first body paragraph. All paragraphs now use the plain `<!-- wp:paragraph -->` form.
+  - Removed the now-unused `$dropcap_used` flag declaration
+  - Verify: `! grep -n 'dropCap":true\|has-drop-cap\|dropcap_used' seobetter/includes/Content_Formatter.php`
+
+### Changed
+
+- **Stat callout regex tightened + 3-per-article cap** — `includes/Content_Formatter.php::format_hybrid()` paragraph case stat branch lines ~427-446
+  - Old regex matched `\d%` or `X out of Y` anywhere in the paragraph — fired on every numeric-heavy paragraph
+  - New regex requires the stat to appear in the **first 60 characters** of the paragraph (so the stat is the LEAD, not buried mid-prose): `^.{0,60}(\d{1,3}(?:[.,]\d+)?\s*%)` and `^.{0,60}\b\d{1,3}\s+(?:out\s+of|in)\s+\d{1,4}\b`
+  - Added `$stat_count` per-article counter; once it reaches 3, no more stat callouts fire — the rest stay as plain prose paragraphs
+  - X out of Y form now renders the value as a fraction `X/Y` instead of stripping to just X
+  - Verify: `grep -n 'stat_count' seobetter/includes/Content_Formatter.php`
+
+### Added
+
+- **SEOBetter Custom Icon Set v1 — 13 hand-drawn SVG icons** — `includes/Content_Formatter.php::sb_icon()` lines ~842-905
+  - New helper method with hardcoded SVG path data for 13 icons: `tip`, `note`, `warning`, `didyouknow`, `definition`, `highlight`, `stat`, `quote`, `social`, `takeaways`, `pros`, `cons`, `ingredients`
+  - Hand-drawn for SEOBetter — NOT from Lucide, Heroicons, Phosphor, Font Awesome, Tabler, Noun Project, Iconoir, or any other library. The path data is unique to SEOBetter so no other site uses these exact icons.
+  - 18×18 viewBox, default render at 16px, `stroke="currentColor"` so icons inherit the parent box's text color (tip=blue, warning=red, pros=green, cons=red, etc), `stroke-width="1.5"` for hairline modern look
+  - `aria-hidden="true"` since the box label text provides accessible context
+  - Total inline SVG size: ~3KB across all 13 icons. Zero runtime cost, zero external dependency, zero API call.
+  - Verify: `grep -n "private function sb_icon" seobetter/includes/Content_Formatter.php`
+
+- **Icons wired into 13 styled wp:html blocks** — `includes/Content_Formatter.php::format_hybrid()` quote/paragraph/list cases
+  - Tip / Note / Warning callouts (paragraph branches) — icon next to the bold label
+  - Did You Know box (paragraph branch) — icon in the eyebrow header line
+  - Definition box (paragraph branch) — icon at start
+  - Highlight sentence (paragraph branch) — icon at start
+  - Stat callout (paragraph branch) — icon next to the pulled-out number
+  - Expert quote blockquote (quote case fallback) — icon above the quote text
+  - Social Media Citation card (quote case social branch) — icon in the red eyebrow header
+  - Key Takeaways box (list case takeaways branch) — new eyebrow header "KEY TAKEAWAYS" with icon
+  - Pros box (list case pros branch) — new eyebrow header "PROS" with icon
+  - Cons box (list case cons branch) — new eyebrow header "CONS" with icon
+  - Ingredients box (list case ingredients branch) — new eyebrow header "WHAT YOU'LL NEED" with icon
+  - Verify: `grep -c 'sb_icon' seobetter/includes/Content_Formatter.php` (should be ≥ 13)
+
+### Documentation
+
+- **article_design.md §6** — rewrote the "When Icons Are Used" subsection with the SEOBetter Custom Icon Set v1 spec table (13 icons + visual concepts), technical implementation notes, and a "What was removed in v1.5.20" subsection covering the dropcap removal
+  - Verify: `grep -n 'SEOBetter Custom Icon Set' seobetter/seo-guidelines/article_design.md`
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall + retest. Expected:
+  - No dropcap on any paragraph (preview or saved draft)
+  - At most 3 stat callout cards per article
+  - Each styled wp:html block has its own unique SEOBetter icon in the header/corner, sized 16px, colored to match the box accent
+  - Icons are NOT inline with regular body prose
+
+---
+
 ## v1.5.19 — Delete duplicate renderResult in admin.js (race condition fix)
 
 **Date:** 2026-04-13

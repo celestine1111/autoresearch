@@ -323,15 +323,40 @@ This roughly doubles the existing styled-block hit rate without changing the pro
 2. A single icon in the Key Takeaways box header (not per item)
 3. Social share or author byline sections
 
-### When Icons Are Used
-- Embed as inline SVG directly in the HTML
-- Do NOT reference Lucide or Iconify as runtime dependencies
-- Copy raw SVG path data and inline it
-- Size: no larger than 1em
-- Color: `currentColor` (inherits text color)
+### When Icons Are Used (v1.5.20+ — SEOBetter Custom Icon Set)
+
+The plugin uses a **hand-drawn 13-icon set custom-designed for SEOBetter**. NOT from any third-party library (Lucide, Heroicons, Phosphor, Font Awesome, Tabler, Noun Project, etc.) — the SVG path data was hand-written so the icon set is unique to SEOBetter and won't appear on any other site.
+
+Source: [Content_Formatter.php::sb_icon()](../includes/Content_Formatter.php) — single helper method with 13 hardcoded SVG strings.
+
+| Icon name | Used in | Visual concept |
+|---|---|---|
+| `tip` | Tip callout | Diamond with 4 short rays — spark of insight |
+| `note` | Note callout | Tag shape with a hole — labeled note |
+| `warning` | Warning callout | Rotated square (diamond) with exclamation |
+| `didyouknow` | Did You Know box header | 4-point compass star with curved arms |
+| `definition` | Definition box | Stacked text lines with underline on last |
+| `highlight` | Highlight sentence | Highlighter pen stroke (translucent diagonal) |
+| `stat` | Stat callout | 3 ascending bars with a dot above the tallest |
+| `quote` | Expert quote blockquote | Two L-shapes (Western quote marks) |
+| `social` | Social Media Citation card | Shield outline with exclamation |
+| `takeaways` | Key Takeaways box header | 3 bullet circles with lines |
+| `pros` | Pros box header | Curved checkmark |
+| `cons` | Cons box header | X mark |
+| `ingredients` | Ingredients box header | 3 stacked rounded rectangles |
+
+### Technical implementation
+- All 13 icons are inline `<svg>` strings hardcoded in `sb_icon()` — zero external dependencies, zero runtime API calls
+- 18×18 viewBox, default rendered at 16×16 pixels (1em)
+- `stroke="currentColor"` so each icon inherits the parent box's text color (tip=blue, note=amber, warning=red, pros=green, cons=red, etc)
+- `stroke-width="1.5"` for a hairline modern look
+- `aria-hidden="true"` since the box label provides accessible context
 
 ### Default Behavior
-Generate articles with **zero icons** in the body. Only include if template explicitly calls for a callout or byline component.
+Generate articles with **zero icons** in body prose paragraphs. Icons appear ONLY in the styled wp:html block headers/corners listed in the table above. Per article_design.md §6 the strict no-icons-in-body-copy rule is unchanged — `sb_icon()` is invoked only inside `format_hybrid()` styled-block builders, never inside the regular paragraph fallback.
+
+### What was removed in v1.5.20
+- **Dropcaps:** the v1.5.18 `dropCap` emission in `format_hybrid()` and the matching `h2+p::first-letter` CSS rule in `format_classic()` were removed. The user reported dropcaps appearing on too many sentences, and the visual weight competed with the colored H2 above each section. Articles now flow as plain prose paragraphs with no first-letter styling.
 
 ---
 

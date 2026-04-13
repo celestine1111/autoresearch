@@ -337,8 +337,9 @@ class Content_Formatter {
         $accent = $options['accent_color'] ?? '#764ba2';
         $para_count = 0;
         $more_inserted = false;
-        // v1.5.18 — track whether we've emitted a dropcap yet (only on first body paragraph)
-        $dropcap_used = false;
+        // v1.5.20 — cap stat callouts at 3 per article so percent-heavy
+        // articles don't end up with 8+ visual-noise stat cards
+        $stat_count = 0;
 
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
@@ -379,20 +380,24 @@ class Content_Formatter {
                         $output[] = "<p class=\"has-small-font-size\"><em>{$text}</em></p>";
                         $output[] = '<!-- /wp:paragraph -->';
                     } elseif ( preg_match( '/^(pro\s*tip|tip)\s*[:—-]/i', $plain ) ) {
-                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\"><strong>Tip:</strong> {$text}</div>";
+                        $icon = $this->sb_icon( 'tip' );
+                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\">{$icon}<strong>Tip:</strong> {$text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } elseif ( preg_match( '/^(note|important)\s*[:—-]/i', $plain ) ) {
-                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\"><strong>Note:</strong> {$text}</div>";
+                        $icon = $this->sb_icon( 'note' );
+                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\">{$icon}<strong>Note:</strong> {$text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } elseif ( preg_match( '/^(warning|caution)\s*[:—-]/i', $plain ) ) {
-                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\"><strong>Warning:</strong> {$text}</div>";
+                        $icon = $this->sb_icon( 'warning' );
+                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\">{$icon}<strong>Warning:</strong> {$text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     }
                     // v1.5.14 — Did You Know box: paragraph starts with "Did you know" or "Fun fact"
                     elseif ( preg_match( '/^(did\s*you\s*know|fun\s*fact)\??\s*[:—-]?\s*(.*)$/is', $plain, $dyk_match ) ) {
                         $body_text = $this->inline_markdown( trim( $dyk_match[2] ) ) ?: $text;
+                        $icon = $this->sb_icon( 'didyouknow' );
                         $html = '<div style="background:#fefce8 !important;border-left:4px solid #eab308;padding:1em 1.25em;border-radius:0 8px 8px 0;margin:1.25em 0;color:#713f12 !important;line-height:1.7">';
-                        $html .= '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#a16207 !important;margin-bottom:0.35em">Did you know?</div>';
+                        $html .= '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#a16207 !important;margin-bottom:0.35em;display:flex;align-items:center">' . $icon . 'Did you know?</div>';
                         $html .= '<div>' . $body_text . '</div>';
                         $html .= '</div>';
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
@@ -401,7 +406,9 @@ class Content_Formatter {
                     elseif ( preg_match( '/^<strong>([^<]{2,40})<\/strong>\s*[:—-]\s*(.+)$/s', $text, $def_match ) ) {
                         $term = $def_match[1];
                         $body_text = trim( $def_match[2] );
-                        $html = '<div style="background:#f8fafc !important;border:1px solid #e2e8f0;border-radius:8px;padding:1em 1.25em;margin:1.25em 0;line-height:1.7">';
+                        $icon = $this->sb_icon( 'definition' );
+                        $html = '<div style="background:#f8fafc !important;border:1px solid #e2e8f0;border-radius:8px;padding:1em 1.25em;margin:1.25em 0;line-height:1.7;color:' . $accent . '">';
+                        $html .= $icon;
                         $html .= '<span style="color:' . $accent . ' !important;font-weight:700;font-size:1.05em">' . $term . '</span>';
                         $html .= '<span style="color:#374151 !important"> &middot; ' . $body_text . '</span>';
                         $html .= '</div>';
@@ -410,8 +417,10 @@ class Content_Formatter {
                     // v1.5.14 — Highlight sentence: entire paragraph is one bold sentence
                     elseif ( preg_match( '/^<strong>([^<].*?)<\/strong>[\s.!?]*$/s', $text, $hl_match ) && strpos( $hl_match[1], '<' ) === false ) {
                         $inner = $hl_match[1];
-                        $html = '<div style="border-left:6px solid ' . $accent . ';background:#faf5ff !important;padding:1em 1.5em;margin:1.5em 0;border-radius:0 8px 8px 0;font-size:1.15em;line-height:1.6;color:#1e293b !important;font-weight:600">';
-                        $html .= $inner;
+                        $icon = $this->sb_icon( 'highlight' );
+                        $html = '<div style="border-left:6px solid ' . $accent . ';background:#faf5ff !important;padding:1em 1.5em;margin:1.5em 0;border-radius:0 8px 8px 0;font-size:1.15em;line-height:1.6;color:' . $accent . ' !important;font-weight:600">';
+                        $html .= $icon;
+                        $html .= '<span style="color:#1e293b">' . $inner . '</span>';
                         $html .= '</div>';
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     }
@@ -420,7 +429,9 @@ class Content_Formatter {
                         $quote_text = $this->inline_markdown( trim( $q_match[1] ) );
                         $author = trim( $q_match[2] );
                         $title_part = isset( $q_match[3] ) ? trim( $q_match[3] ) : '';
-                        $html = '<blockquote style="border-left:4px solid ' . $accent . ';margin:1.5em 0;padding:1em 1.5em;background:#f9fafb !important;border-radius:0 8px 8px 0;font-style:italic">';
+                        $icon = $this->sb_icon( 'quote' );
+                        $html = '<blockquote style="border-left:4px solid ' . $accent . ';margin:1.5em 0;padding:1em 1.5em;background:#f9fafb !important;border-radius:0 8px 8px 0;font-style:italic;color:' . $accent . '">';
+                        $html .= '<div style="margin-bottom:0.4em">' . $icon . '</div>';
                         $html .= '<p style="margin:0 0 0.5em 0;color:#1e293b !important;font-size:1.1em;line-height:1.6">&ldquo;' . $quote_text . '&rdquo;</p>';
                         $html .= '<footer style="font-style:normal;font-size:0.9em;color:#64748b !important">&mdash; <strong>' . esc_html( $author ) . '</strong>';
                         if ( $title_part ) {
@@ -430,31 +441,38 @@ class Content_Formatter {
                         $html .= '</blockquote>';
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     }
-                    // v1.5.14 — Stat callout: paragraph contains a prominent statistic
-                    elseif ( preg_match( '/(\d{1,3}(?:[.,]\d+)?)\s*%/', $plain, $stat_match )
-                             || preg_match( '/\b(\d{1,3})\s+(?:out\s+of|in)\s+(\d{1,4})\b/i', $plain, $stat_match ) ) {
-                        $stat_value = $stat_match[0];
-                        $html = '<div style="display:flex;gap:1.25em;align-items:center;background:#faf5ff !important;border-left:4px solid ' . $accent . ';padding:1em 1.25em;margin:1.25em 0;border-radius:0 8px 8px 0">';
-                        $html .= '<div style="flex-shrink:0;font-size:2em;font-weight:800;color:' . $accent . ' !important;line-height:1;letter-spacing:-0.02em">' . esc_html( $stat_value ) . '</div>';
+                    // v1.5.14 — Stat callout: paragraph LEADS with a prominent statistic
+                    // v1.5.20 — Tightened: stat must appear in the first 60 chars of the
+                    // paragraph (so it's the lead, not buried mid-prose) AND we cap at
+                    // 3 stat callouts per article so percent-heavy articles don't get
+                    // visually spammed with 8+ pulled-out cards. Articles with lots of
+                    // numbers now get 3 prominent stat cards + the rest stay as prose.
+                    elseif (
+                        $stat_count < 3
+                        && (
+                            preg_match( '/^.{0,60}(\d{1,3}(?:[.,]\d+)?\s*%)/', $plain, $stat_match )
+                            || preg_match( '/^.{0,60}\b(\d{1,3})\s+(?:out\s+of|in)\s+(\d{1,4})\b/i', $plain, $stat_match )
+                        )
+                    ) {
+                        $stat_value = trim( $stat_match[1] );
+                        if ( isset( $stat_match[2] ) && ! str_contains( $stat_value, '%' ) ) {
+                            // X out of Y / X in Y form — show as fraction
+                            $stat_value = $stat_value . '/' . trim( $stat_match[2] );
+                        }
+                        $icon = $this->sb_icon( 'stat', 18 );
+                        $html = '<div style="display:flex;gap:1.25em;align-items:center;background:#faf5ff !important;border-left:4px solid ' . $accent . ';padding:1em 1.25em;margin:1.25em 0;border-radius:0 8px 8px 0;color:' . $accent . '">';
+                        $html .= '<div style="flex-shrink:0;font-size:2em;font-weight:800;color:' . $accent . ' !important;line-height:1;letter-spacing:-0.02em;display:flex;align-items:center;gap:0.3em">' . $icon . esc_html( $stat_value ) . '</div>';
                         $html .= '<div style="flex:1;color:#374151 !important;line-height:1.65;font-size:0.97em">' . $text . '</div>';
                         $html .= '</div>';
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                        $stat_count++;
                     }
                     else {
-                        // v1.5.18 — emit the very first body paragraph with a dropcap
-                        // (Gutenberg native dropCap attribute) so the saved draft visually
-                        // matches the preview's first-letter styling. Subsequent paragraphs
-                        // are normal. The dropCap attribute is a stable WP 5.x+ feature.
-                        if ( ! $dropcap_used && $para_count === 0 ) {
-                            $output[] = '<!-- wp:paragraph {"dropCap":true} -->';
-                            $output[] = '<p class="has-drop-cap">' . $text . '</p>';
-                            $output[] = '<!-- /wp:paragraph -->';
-                            $dropcap_used = true;
-                        } else {
-                            $output[] = '<!-- wp:paragraph -->';
-                            $output[] = "<p>{$text}</p>";
-                            $output[] = '<!-- /wp:paragraph -->';
-                        }
+                        // v1.5.20 — dropcap removed. Was visually overbearing and the
+                        // user reported it appearing on too many sentences/paragraphs.
+                        $output[] = '<!-- wp:paragraph -->';
+                        $output[] = "<p>{$text}</p>";
+                        $output[] = '<!-- /wp:paragraph -->';
                         $para_count++;
                         // Insert wp:more after the 2nd regular paragraph (creates Read More break)
                         if ( $para_count === 2 && ! $more_inserted ) {
@@ -491,7 +509,9 @@ class Content_Formatter {
                     $is_howto_steps = ( $content_type === 'how_to' && $tag === 'ol' && ! $is_takeaways && ! $is_pros && ! $is_cons && ! $is_ingredients );
 
                     if ( $is_takeaways ) {
-                        $html = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0">';
+                        $icon = $this->sb_icon( 'takeaways', 18 );
+                        $html = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0;color:' . $accent . '">';
+                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:' . $accent . ' !important;margin-bottom:0.6em;display:flex;align-items:center">' . $icon . 'Key Takeaways</div>';
                         $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
                         foreach ( $section['items'] as $item ) {
                             $html .= "<li style=\"margin-bottom:0.5em;color:#374151 !important\">{$item}</li>";
@@ -499,7 +519,9 @@ class Content_Formatter {
                         $html .= "</{$tag}></div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } elseif ( $is_pros ) {
-                        $html = '<div style="background:#f0fdf4 !important;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
+                        $icon = $this->sb_icon( 'pros', 18 );
+                        $html = '<div style="background:#f0fdf4 !important;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0;color:#166534">';
+                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#166534 !important;margin-bottom:0.5em;display:flex;align-items:center">' . $icon . 'Pros</div>';
                         $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
                         foreach ( $section['items'] as $item ) {
                             $html .= "<li style=\"margin-bottom:0.5em;color:#166534 !important\">{$item}</li>";
@@ -507,7 +529,9 @@ class Content_Formatter {
                         $html .= "</{$tag}></div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } elseif ( $is_cons ) {
-                        $html = '<div style="background:#fef2f2 !important;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
+                        $icon = $this->sb_icon( 'cons', 18 );
+                        $html = '<div style="background:#fef2f2 !important;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0;color:#991b1b">';
+                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#991b1b !important;margin-bottom:0.5em;display:flex;align-items:center">' . $icon . 'Cons</div>';
                         $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
                         foreach ( $section['items'] as $item ) {
                             $html .= "<li style=\"margin-bottom:0.5em;color:#991b1b !important\">{$item}</li>";
@@ -515,7 +539,9 @@ class Content_Formatter {
                         $html .= "</{$tag}></div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } elseif ( $is_ingredients ) {
-                        $html = '<div style="background:#fffbeb !important;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0">';
+                        $icon = $this->sb_icon( 'ingredients', 18 );
+                        $html = '<div style="background:#fffbeb !important;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0;color:#92400e">';
+                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#92400e !important;margin-bottom:0.5em;display:flex;align-items:center">' . $icon . 'What you\'ll need</div>';
                         $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
                         foreach ( $section['items'] as $item ) {
                             $html .= "<li style=\"margin-bottom:0.5em;color:#92400e !important\">{$item}</li>";
@@ -582,8 +608,9 @@ class Content_Formatter {
                         $quote    = $this->inline_markdown( $quote_md );
                         $src_url  = isset( $sm[4] ) ? trim( $sm[4] ) : '';
 
-                        $html  = '<div style="background:#f1f5f9 !important;border:1px solid #cbd5e1;border-left:4px solid #64748b;border-radius:0 8px 8px 0;padding:1em 1.25em;margin:1.5em 0">';
-                        $html .= '<div style="font-size:0.7em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#dc2626 !important;margin-bottom:0.6em">Social media citation &mdash; review before publishing</div>';
+                        $social_icon = $this->sb_icon( 'social' );
+                        $html  = '<div style="background:#f1f5f9 !important;border:1px solid #cbd5e1;border-left:4px solid #64748b;border-radius:0 8px 8px 0;padding:1em 1.25em;margin:1.5em 0;color:#dc2626">';
+                        $html .= '<div style="font-size:0.7em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#dc2626 !important;margin-bottom:0.6em;display:flex;align-items:center">' . $social_icon . 'Social media citation &mdash; review before publishing</div>';
                         $html .= '<p style="margin:0 0 0.5em 0;color:#1e293b !important;line-height:1.65;font-size:0.97em">&ldquo;' . $quote . '&rdquo;</p>';
                         $html .= '<div style="font-size:0.85em;color:#64748b !important;font-style:normal">&mdash; ';
                         if ( $src_url && preg_match( '/^https?:\/\//', $src_url ) ) {
@@ -678,8 +705,9 @@ class Content_Formatter {
         $css .= ".{$uid} h2{font-size:clamp(1.3em,3vw,1.6em);font-weight:700;line-height:1.3;color:{$accent} !important;margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22}";
         $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;line-height:1.4;margin:1.5em 0 0.5em;color:#374151 !important}";
         $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;font-size:1.05em;color:#374151 !important;text-wrap:pretty;max-width:65ch}";
-        // Drop cap on first paragraph after an H2
-        $css .= ".{$uid} h2+p::first-letter,.{$uid} h2+div+p::first-letter{float:left;font-size:3.2em;line-height:0.8;font-weight:700;color:{$accent} !important;margin:0.05em 0.1em 0 0}";
+        // v1.5.20 — dropcap removed. Was applied to first paragraph after every
+        // H2, which made every section open with a 3.2em first letter — visually
+        // overbearing and fights for attention with the colored H2 above it.
         $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151 !important}";
         $css .= ".{$uid} li{margin-bottom:0.4em;color:#374151 !important}";
         $css .= ".{$uid} ul li::marker{color:{$accent} !important;font-weight:700}";
@@ -831,6 +859,67 @@ class Content_Formatter {
     /**
      * Convert inline markdown (bold, italic, links) to HTML.
      */
+    /**
+     * v1.5.20 — Custom hand-drawn SEOBetter icon set.
+     *
+     * 13 unique inline SVG icons for the styled wp:html block headers and
+     * callout corners. NOT from any third-party library (Lucide, Heroicons,
+     * Phosphor, Font Awesome, Noun Project, etc.) — the path data was hand-
+     * drawn for SEOBetter so no other site uses these exact icons. Each is
+     * an 18x18 viewBox stroke-only outline using `currentColor` so the icon
+     * automatically inherits the parent box's text color, which means a tip
+     * callout's icon is blue, a warning's is red, a pros box's is green, etc.
+     *
+     * Per article_design.md §6 these icons appear ONLY in callout corners and
+     * styled box headers — NEVER inline with body prose. The "no icons in body
+     * copy" rule still stands.
+     *
+     * @param string $name  One of: tip, note, warning, didyouknow, definition,
+     *                      highlight, stat, quote, social, takeaways, pros,
+     *                      cons, ingredients
+     * @param int    $size  Pixel size for width/height (default 16)
+     */
+    private function sb_icon( string $name, int $size = 16 ): string {
+        $icons = [
+            // Diamond with 4 rays — "spark of insight"
+            'tip'         => '<path d="M9 6L11 9L9 12L7 9Z" fill="currentColor"/><path d="M9 3v1.5M9 13.5v1.5M3 9h1.5M13.5 9h1.5"/>',
+            // Tag with hole — "labeled note"
+            'note'        => '<path d="M3 3h7l5 5-7 7L3 10V3z"/><circle cx="6" cy="6" r="0.8" fill="currentColor"/>',
+            // Diamond with exclamation — rotated square warning
+            'warning'     => '<path d="M9 2L16 9L9 16L2 9Z"/><line x1="9" y1="6" x2="9" y2="10"/><circle cx="9" cy="12.5" r="0.7" fill="currentColor"/>',
+            // 4-point compass star — curved-arm starburst
+            'didyouknow'  => '<path d="M9 2C9.5 6 12 8.5 16 9C12 9.5 9.5 12 9 16C8.5 12 6 9.5 2 9C6 8.5 8.5 6 9 2Z"/>',
+            // Stacked text lines with underline on last — "defined term"
+            'definition'  => '<line x1="3" y1="5" x2="15" y2="5"/><line x1="3" y1="9" x2="11" y2="9"/><line x1="3" y1="13" x2="13" y2="13"/><line x1="3" y1="14.8" x2="9" y2="14.8" stroke-width="1.2"/>',
+            // Highlighter pen stroke — diagonal marker with translucent fill
+            'highlight'   => '<path d="M3 14L11 6L13 8L5 16Z" fill="currentColor" fill-opacity="0.18"/><path d="M11 6L14 3L16 5L13 8"/>',
+            // 3 ascending bars + dot above tallest — growth/stat
+            'stat'        => '<line x1="4" y1="14" x2="4" y2="11"/><line x1="9" y1="14" x2="9" y2="8"/><line x1="14" y1="14" x2="14" y2="5"/><circle cx="14" cy="3" r="0.9" fill="currentColor"/>',
+            // Two L-shapes — Western quote marks
+            'quote'       => '<path d="M5 5v4h3M12 5v4h3"/>',
+            // Shield with exclamation — citation alert
+            'social'      => '<path d="M9 2L3 4v5c0 4 6 7 6 7s6-3 6-7V4l-6-2z"/><line x1="9" y1="6.5" x2="9" y2="10"/><circle cx="9" cy="12" r="0.6" fill="currentColor"/>',
+            // 3 bullet circles + lines — "key list"
+            'takeaways'   => '<circle cx="5" cy="5" r="1" fill="currentColor"/><line x1="8" y1="5" x2="15" y2="5"/><circle cx="5" cy="9" r="1" fill="currentColor"/><line x1="8" y1="9" x2="13" y2="9"/><circle cx="5" cy="13" r="1" fill="currentColor"/><line x1="8" y1="13" x2="14" y2="13"/>',
+            // Curved checkmark — pros
+            'pros'        => '<path d="M3 9L7 13L15 5"/>',
+            // X mark — cons
+            'cons'        => '<line x1="4" y1="4" x2="14" y2="14"/><line x1="14" y1="4" x2="4" y2="14"/>',
+            // 3 stacked rounded rectangles — ingredient containers
+            'ingredients' => '<rect x="3" y="3" width="12" height="3" rx="0.5"/><rect x="3" y="7.5" width="12" height="3" rx="0.5"/><rect x="3" y="12" width="12" height="3" rx="0.5"/>',
+        ];
+
+        $inner = $icons[ $name ] ?? '';
+        if ( ! $inner ) {
+            return '';
+        }
+
+        return '<svg viewBox="0 0 18 18" width="' . $size . '" height="' . $size
+            . '" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"'
+            . ' style="display:inline-block;vertical-align:-3px;margin-right:0.4em;flex-shrink:0" aria-hidden="true">'
+            . $inner . '</svg>';
+    }
+
     private function inline_markdown( string $text ): string {
         // Bold + italic
         $text = preg_replace( '/\*\*\*(.+?)\*\*\*/', '<strong><em>$1</em></strong>', $text );
