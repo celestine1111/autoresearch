@@ -16,6 +16,66 @@
 
 ---
 
+## v1.5.21 — Preview/draft styling parity (format_classic now wraps format_hybrid)
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Context
+
+User retest of v1.5.20: "when you save the draft to post all the styling is there, but it does not show in the preview". Investigation confirmed that `format_classic()` (used by the result-panel preview) and `format_hybrid()` (used by the saved draft) had drifted significantly:
+
+- **format_hybrid** had 14 styled block branches with custom SVG icons (v1.5.20), eyebrow headers, and v1.5.14/v1.5.17 features (Did You Know, Definition, Highlight, Expert Quote, Stat callout, Social Citation, HowTo Step Boxes)
+- **format_classic** still had only the v1.5.10-era 4 branches (tip/note/warning paragraph, takeaways/pros/cons/ingredients list) using CSS classes, with **zero `sb_icon()` calls**
+
+Verified via `grep -c sb_icon includes/Content_Formatter.php` → 14 calls all in `format_hybrid()` (lines 383-611), 0 in `format_classic()`.
+
+Result: the preview was a stripped-down version of the article. Saved draft had icons + eyebrow headers + 7 extra styled blocks; preview had none of them.
+
+### Fixed
+
+- **format_classic() reimplemented as a thin wrapper around format_hybrid()** — `includes/Content_Formatter.php::format_classic()` lines **685-755**
+  - Old implementation: ~170 lines duplicating the section-rendering switch with CSS classes
+  - New implementation: ~70 lines that call `format_hybrid()`, strip Gutenberg block comments via `preg_replace('/<!--\s*\/?wp:[^>]*-->/', '', ...)` (browsers ignore HTML comments anyway, but cleaner), and wrap the result in a scoped CSS container that styles the plain prose elements (h1, p, ul, table)
+  - Wrapper CSS only adds typography (font, line-height, accent H2 fallback color, paragraph max-width). Every styled wp:html block is self-contained with inline styles, so they render identically in both modes.
+  - Verify: `grep -A 5 "format_classic.*sections.*options.*string" seobetter/includes/Content_Formatter.php | head -20`
+  - Verify: `! grep -A 200 "private function format_classic" seobetter/includes/Content_Formatter.php | head -200 | grep -c "case 'paragraph'"` (should be 0 — classic no longer has its own switch statement)
+
+### Consequences (intentional)
+
+- **Preview pixel-matches the saved draft** for every styled block (icons, eyebrow headers, callouts, key takeaways, pros/cons, definitions, highlights, stat callouts, social citations, did-you-know boxes, etc)
+- Adding any new styled block in the future means editing `format_hybrid()` ONCE — `format_classic()` automatically picks it up. No more drift risk.
+- The wrapper CSS uses `!important` on key colors to defeat WordPress admin CSS (which loads with high specificity and would otherwise override the article styling)
+- `format_gutenberg()` (legacy "pure native blocks" mode used by the Bulk Generator's per-item save path) is unchanged and remains its own implementation
+
+### Documentation
+
+- **article_design.md §5.16b** — new section "Preview = saved draft parity (v1.5.21+)" documenting the wrapper architecture, why classic was reimplemented, and the consequence that future styled-block additions only need to touch `format_hybrid()`
+  - Verify: `grep -n '5.16b Preview = saved draft parity' seobetter/seo-guidelines/article_design.md`
+
+### Audit performed but no changes needed
+
+The user also asked: "Check it has all the required SEO, AI SEO and GEO, AI citation, LLM citation requirements for the article generation in code." Performed full audit — all requirements verified in the code:
+
+- **Async_Generator::get_system_prompt()** ([Async_Generator.php:601-735](../includes/Async_Generator.php#L601)) — has all 13 sections: keyword density (0.5-1.5%, every 100-200 words, 30% of H2s), GEO visibility boosts (+41% quotes, +40% stats), CITATION RULES (closed-menu pool, no hallucinated URLs, no API anchor text), E-E-A-T (Experience/Expertise/Authority/Trust + YMYL), NLP entity optimization (5%+ density), 30+ banned words list, 11+ banned patterns, sentence rhythm, transitions, structure (40-60 word section openers), island test (no pronoun starts), word count enforcement, RICH FORMATTING block (v1.5.14+ with v1.5.17 social citation marker)
+- **GEO_Analyzer::analyze()** ([GEO_Analyzer.php:54](../includes/GEO_Analyzer.php#L54)) — all 14 checks (readability, bluf_header, section_openings, island_test, factual_density, citations, expert_quotes, tables, lists, freshness, entity_usage, keyword_density, humanizer, core_eeat) with weights summing to 100
+- **CORE_EEAT_Auditor::audit()** ([CORE_EEAT_Auditor.php:36](../includes/CORE_EEAT_Auditor.php#L36)) — full 80-item rubric (40 CORE + 40 EEAT) + veto items C01/R10/T04 with 40-point cap on veto hit
+- **Content_Ranking_Framework** ([Content_Ranking_Framework.php](../includes/Content_Ranking_Framework.php)) — 5 phases (topic_selection, keyword_research, intent_grouping, research_first_writing, quality_gate)
+- **Citation_Pool** ([Citation_Pool.php](../includes/Citation_Pool.php)) — `build()`, `format_for_prompt()`, `contains_url()`, `get_entry()` per-article allow-list
+- **validate_outbound_links** ([seobetter.php:1334](../seobetter.php#L1334)) — 4 passes (sanitize references, strip malformed, filter pool/whitelist, RLFKV verify_citation_atoms) + Pass 4 URL deduplication (v1.5.18)
+- **9 always-on research sources** (Reddit, HN, Wikipedia, Google Trends, DuckDuckGo, Bluesky, Mastodon, DEV.to, Lemmy)
+- **25 category APIs** including `veterinary` (Crossref filtered + EuropePMC + OpenAlex + openFDA + DogFacts)
+
+No drift from the spec. The article generation pipeline has every SEO/AI-SEO/GEO/AI-citation/LLM-citation requirement wired into code.
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall + retest. After v1.5.21:
+  - Preview should show ALL the same styled blocks as the saved draft, including v1.5.20 icons + eyebrow headers
+  - Pixel parity between preview and saved draft (with addition of better typography for plain prose elements in the preview)
+
+---
+
 ## v1.5.20 — Remove dropcaps + cap stat callouts + custom SEOBetter icon set
 
 **Date:** 2026-04-13

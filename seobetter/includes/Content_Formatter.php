@@ -683,177 +683,71 @@ class Content_Formatter {
      * Classic block editor, email, and export contexts.
      */
     private function format_classic( array $sections, array $options ): string {
-        $output = [];
+        // v1.5.21 — format_classic is now a THIN WRAPPER around format_hybrid.
+        //
+        // Why: through v1.5.20 these two formatters had drifted significantly.
+        // format_hybrid had 14 styled block branches with custom SVG icons,
+        // eyebrow headers, and v1.5.14/v1.5.17 features (Did You Know,
+        // Definition, Highlight, Expert Quote, Stat callout, Social Citation,
+        // HowTo Step Boxes). format_classic still had only 4 branches (tip,
+        // note, warning, takeaways/pros/cons/ingredients) using CSS classes
+        // instead of inline styles. Result: the result-panel preview (which
+        // uses classic mode) showed a stripped-down version of the article
+        // that didn't match the saved draft (which uses hybrid mode).
+        //
+        // Rather than port every hybrid branch into classic and maintain two
+        // copies of the same logic, classic now CALLS hybrid, strips the
+        // Gutenberg block comments (browsers ignore them anyway, but cleaner),
+        // and wraps the result in a scoped CSS container that styles the
+        // plain prose elements (h1, h2, h3, p, ul, table, etc). The wp:html
+        // blocks inside hybrid output already have inline styles so they
+        // render the same with or without the wrapper — which means preview
+        // pixel-matches the saved draft for every styled block.
+        //
+        // The wrapper CSS only adds typography (font, line-height, size,
+        // accent H2 color, paragraph max-width, table base styles) for the
+        // plain elements. Every styled wp:html block is self-contained.
+
         $accent = $options['accent_color'] ?? '#764ba2';
         $uid = 'sb-' . substr( md5( uniqid() ), 0, 6 );
 
-        // Self-contained scoped CSS — no external dependencies
-        // Use !important on critical properties to override any theme CSS
-        //
-        // Typography spec (article_design.md §3, SEO-GEO-AI-GUIDELINES.md §12B):
-        // - System font stacks (ui-serif for headings, ui-sans-serif for body)
-        // - clamp() fluid heading sizes
-        // - text-wrap: balance on headings, pretty on paragraphs
-        // - max-width 65ch on body copy
-        $sans = "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+        // Get the full hybrid output — has all 14 styled block branches
+        // with icons, eyebrow headers, and inline styles
+        $hybrid_html = $this->format_hybrid( $sections, $options );
+
+        // Strip Gutenberg block comments. Browsers ignore HTML comments so
+        // they wouldn't be visible anyway, but stripping them gives cleaner
+        // preview HTML and avoids the chance of a future browser quirk.
+        $hybrid_html = preg_replace( '/<!--\s*\/?wp:[^>]*-->/', '', $hybrid_html );
+
+        // Typography fonts (article_design.md §3, SEO-GEO-AI-GUIDELINES §12B)
+        $sans  = "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
         $serif = "ui-serif,Georgia,'Times New Roman',serif";
 
-        $css = "<style>.{$uid}{font-family:{$sans};color:#1f2937 !important;line-height:1.7;background:#fff !important;padding:2em;border-radius:12px;max-width:100%}";
-        $css .= ".{$uid} *{color:inherit}";
-        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3,.{$uid} h4{font-family:{$serif};color:#111827 !important;text-wrap:balance}";
-        $css .= ".{$uid} h1{font-size:clamp(1.8em,4vw,2.4em);font-weight:800;line-height:1.2;margin:0 0 0.5em;text-transform:capitalize}";
-        $css .= ".{$uid} h2{font-size:clamp(1.3em,3vw,1.6em);font-weight:700;line-height:1.3;color:{$accent} !important;margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22}";
+        // Scoped CSS — only styles the plain prose elements. The wp:html
+        // styled blocks have their own inline styles and override these where
+        // they overlap. !important on color/background to defeat WP admin CSS.
+        $css  = "<style>";
+        $css .= ".{$uid}{font-family:{$sans};color:#1f2937 !important;line-height:1.7;background:#fff !important;padding:2em;border-radius:12px;max-width:100%}";
+        $css .= ".{$uid} h1,.{$uid} h2,.{$uid} h3,.{$uid} h4{font-family:{$serif};text-wrap:balance}";
+        $css .= ".{$uid} h1{font-size:clamp(1.8em,4vw,2.4em);font-weight:800;line-height:1.2;margin:0 0 0.5em;color:#111827 !important;text-transform:capitalize}";
+        // h2 colour is set inline by format_hybrid via Gutenberg style attrs;
+        // this is a fallback for any h2 that didn't get inline styles
+        $css .= ".{$uid} h2{font-size:clamp(1.3em,3vw,1.6em);font-weight:700;line-height:1.3;margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22;color:{$accent} !important}";
         $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;line-height:1.4;margin:1.5em 0 0.5em;color:#374151 !important}";
         $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;font-size:1.05em;color:#374151 !important;text-wrap:pretty;max-width:65ch}";
-        // v1.5.20 — dropcap removed. Was applied to first paragraph after every
-        // H2, which made every section open with a 3.2em first letter — visually
-        // overbearing and fights for attention with the colored H2 above it.
         $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151 !important}";
         $css .= ".{$uid} li{margin-bottom:0.4em;color:#374151 !important}";
         $css .= ".{$uid} ul li::marker{color:{$accent} !important;font-weight:700}";
-        $css .= ".{$uid} blockquote{border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb !important;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563 !important;line-height:1.7}";
-        $css .= ".{$uid} blockquote p{margin:0;color:#4b5563 !important}";
-        $css .= ".{$uid} table{width:100%;border-collapse:collapse;font-size:0.95em;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:1.5em 0}";
-        $css .= ".{$uid} thead th{background:{$accent} !important;color:#fff !important;padding:0.75em 1em;text-align:left;font-weight:600;font-size:0.9em;letter-spacing:0.03em}";
-        $css .= ".{$uid} tbody td{padding:0.75em 1em;border-bottom:1px solid #e5e7eb;color:#374151 !important}";
-        $css .= ".{$uid} tbody tr:nth-child(even){background:#f9fafb}";
-        $css .= ".{$uid} img{max-width:100%;height:auto;border-radius:8px;margin:1.5em auto;display:block}";
-        $css .= ".{$uid} hr{border:none;border-top:2px solid #e5e7eb;margin:2.5em 0}";
         $css .= ".{$uid} a{color:{$accent} !important;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}";
         $css .= ".{$uid} a:hover{text-decoration-thickness:2px}";
+        $css .= ".{$uid} hr{border:none;border-top:2px solid #e5e7eb;margin:2.5em 0}";
+        $css .= ".{$uid} img,.{$uid} figure img{max-width:100%;height:auto;border-radius:8px;margin:1.5em auto;display:block}";
         $css .= ".{$uid} code{background:#f3f4f6;padding:0.15em 0.4em;border-radius:4px;font-size:0.9em;color:#374151 !important}";
-        $css .= ".{$uid} pre{background:#1f2937 !important;color:#e5e7eb !important;padding:1.25em;border-radius:8px;overflow-x:auto;font-size:0.9em;line-height:1.6;margin:1.5em 0}";
-        // Callout boxes
-        $css .= ".{$uid} .sb-callout{padding:1em 1.25em;border-radius:0 8px 8px 0;margin:1.5em 0;line-height:1.7;font-size:0.95em}";
-        $css .= ".{$uid} .sb-callout-tip{background:#eff6ff !important;border-left:4px solid #3b82f6;color:#1e3a5f !important}";
-        $css .= ".{$uid} .sb-callout-note{background:#fffbeb !important;border-left:4px solid #f59e0b;color:#78350f !important}";
-        $css .= ".{$uid} .sb-callout-warn{background:#fef2f2 !important;border-left:4px solid #ef4444;color:#991b1b !important}";
-        // Key takeaways box
-        $css .= ".{$uid} .sb-takeaways{border-left:4px solid {$accent};background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%) !important;padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0}";
-        // Pros/cons
-        $css .= ".{$uid} .sb-pros{background:#f0fdf4 !important;border:1px solid #bbf7d0;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
-        $css .= ".{$uid} .sb-cons{background:#fef2f2 !important;border:1px solid #fecaca;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
-        $css .= ".{$uid} .sb-ingredients{background:#fffbeb !important;border:1px solid #fde68a;border-radius:8px;padding:1em 1.5em;margin:1em 0}";
-        // v1.5.18 — dark-mode media query removed. Previously this block
-        // auto-flipped the preview to dark colors when the user's OS was in
-        // dark mode, which was confusing because (a) the published article
-        // on the site never inherits OS dark mode, so the preview was lying
-        // about how the saved post would look, and (b) WordPress admin pages
-        // are always light, so a black article preview inside a white admin
-        // page is visually jarring. Preview now always renders light.
+        // Drop-cap and dark-mode rules removed in v1.5.20.
         $css .= "</style>";
 
-        $output[] = $css;
-        $output[] = "<div class=\"{$uid}\">";
-
-        foreach ( $sections as $i => $section ) {
-            switch ( $section['type'] ) {
-
-                case 'heading':
-                    $level = $section['level'];
-                    $text = $section['content'];
-                    $output[] = "<h{$level}>{$text}</h{$level}>";
-                    break;
-
-                case 'paragraph':
-                    $text = $this->inline_markdown( $section['content'] );
-                    if ( empty( trim( $text ) ) ) continue 2;
-                    $plain = strip_tags( $text );
-
-                    if ( preg_match( '/^last\s*updated/i', $plain ) ) {
-                        $output[] = "<p style=\"color:#6b7280;font-size:0.85em;font-style:italic;margin-bottom:0.5em\">{$text}</p>";
-                    } elseif ( preg_match( '/^(pro\s*tip|tip)\s*[:—-]/i', $plain ) ) {
-                        $output[] = "<div class=\"sb-callout sb-callout-tip\"><strong>Tip:</strong> {$text}</div>";
-                    } elseif ( preg_match( '/^(note|important)\s*[:—-]/i', $plain ) ) {
-                        $output[] = "<div class=\"sb-callout sb-callout-note\"><strong>Note:</strong> {$text}</div>";
-                    } elseif ( preg_match( '/^(warning|caution)\s*[:—-]/i', $plain ) ) {
-                        $output[] = "<div class=\"sb-callout sb-callout-warn\"><strong>Warning:</strong> {$text}</div>";
-                    } else {
-                        $output[] = "<p>{$text}</p>";
-                    }
-                    break;
-
-                case 'list':
-                    $tag = $section['list_type'];
-
-                    // Detect context from preceding heading OR paragraph
-                    $prev_context = '';
-                    for ( $j = $i - 1; $j >= 0; $j-- ) {
-                        if ( $sections[ $j ]['type'] === 'heading' ) {
-                            $prev_context = strtolower( $sections[ $j ]['content'] );
-                            break;
-                        }
-                        if ( $sections[ $j ]['type'] === 'paragraph' && ! empty( trim( $sections[ $j ]['content'] ) ) ) {
-                            $prev_context = strtolower( strip_tags( $sections[ $j ]['content'] ) );
-                            break;
-                        }
-                    }
-                    // Also check first item for "Pro:" / "Con:" patterns
-                    $first_item = strtolower( $section['items'][0] ?? '' );
-
-                    $is_takeaways = preg_match( '/key\s*takeaway/i', $prev_context );
-                    $is_pros = ( preg_match( '/\bpros?\b|advantage|strength|benefit/i', $prev_context ) && ! preg_match( '/cons/i', $prev_context ) ) || preg_match( '/^\s*pros?\s*[:—-]/i', $prev_context );
-                    $is_cons = preg_match( '/\bcons?\b|disadvantage|weakness|drawback/i', $prev_context ) || preg_match( '/^\s*cons?\s*[:—-]/i', $prev_context );
-                    $is_ingredients = preg_match( '/ingredient|you.ll need|what you need|supplies|materials/i', $prev_context );
-
-                    // Wrapper class
-                    $wrapper = '';
-                    if ( $is_takeaways ) $wrapper = 'sb-takeaways';
-                    elseif ( $is_pros ) $wrapper = 'sb-pros';
-                    elseif ( $is_cons ) $wrapper = 'sb-cons';
-                    elseif ( $is_ingredients ) $wrapper = 'sb-ingredients';
-
-                    if ( $wrapper ) $output[] = "<div class=\"{$wrapper}\">";
-
-                    $output[] = "<{$tag}>";
-                    foreach ( $section['items'] as $item ) {
-                        $output[] = "<li>{$item}</li>";
-                    }
-                    $output[] = "</{$tag}>";
-
-                    if ( $wrapper ) $output[] = '</div>';
-                    break;
-
-                case 'quote':
-                    $text = $this->inline_markdown( $section['content'] );
-                    $output[] = "<blockquote><p>{$text}</p></blockquote>";
-                    break;
-
-                case 'table':
-                    $rows = $section['rows'];
-                    if ( empty( $rows ) ) continue 2;
-
-                    $output[] = '<div style="overflow-x:auto;margin:1.5em 0">';
-                    $output[] = '<table><thead><tr>';
-                    foreach ( $rows[0] as $cell ) {
-                        $output[] = '<th>' . $this->inline_markdown( $cell ) . '</th>';
-                    }
-                    $output[] = '</tr></thead><tbody>';
-                    for ( $r = 1; $r < count( $rows ); $r++ ) {
-                        $output[] = '<tr>';
-                        foreach ( $rows[ $r ] as $cell ) {
-                            $output[] = '<td>' . $this->inline_markdown( $cell ) . '</td>';
-                        }
-                        $output[] = '</tr>';
-                    }
-                    $output[] = '</tbody></table></div>';
-                    break;
-
-                case 'separator':
-                    $output[] = '<hr />';
-                    break;
-
-                case 'image':
-                    $alt = esc_attr( $section['alt'] );
-                    $url = esc_url( $section['url'] );
-                    $output[] = "<figure><img src=\"{$url}\" alt=\"{$alt}\" loading=\"lazy\" decoding=\"async\" style=\"aspect-ratio:16/9;object-fit:cover\" /></figure>";
-                    break;
-            }
-        }
-
-        $output[] = '</div>';
-
-        return implode( "\n", $output );
+        return $css . "<div class=\"{$uid}\">" . $hybrid_html . "</div>";
     }
 
     /**

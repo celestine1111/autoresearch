@@ -271,6 +271,19 @@ Auto-detected when `content_type === 'how_to'` AND the list is ordered (`<ol>`) 
 - Threading: `format_hybrid()` reads `$options['content_type']` (passed in by `seobetter.php::rest_save_draft()` and `Async_Generator::assemble_final()`)
 - Source: `Content_Formatter.php::format_hybrid()` list branch — HowTo step boxes
 
+### 5.16b Preview = saved draft parity (`v1.5.21+`)
+
+Through v1.5.20 the two formatters had diverged. `format_hybrid()` had 14 styled block branches with custom SVG icons, eyebrow headers, and v1.5.14/v1.5.17 features (Did You Know, Definition, Highlight, Expert Quote, Stat callout, Social Citation, HowTo Step Boxes). `format_classic()` (used by the result-panel preview) still had only 4 branches (tip/note/warning paragraph, takeaways/pros/cons/ingredients list) using CSS classes instead of inline styles. **Result: the preview was a stripped-down version of the article that didn't match the saved draft.**
+
+In v1.5.21, `format_classic()` is now a **thin wrapper around `format_hybrid()`**. It calls hybrid, strips the Gutenberg block comments (browsers ignore HTML comments anyway), and wraps the result in a scoped CSS container that styles the plain prose elements (h1, p, ul, table). The wp:html blocks inside hybrid output already have inline styles, so they render the same in both modes.
+
+**Consequences of this change:**
+- Preview pixel-matches the saved draft for every styled block (icons, eyebrow headers, callouts, key takeaways, pros/cons, social citations, etc)
+- Adding a new styled block in the future means editing `format_hybrid()` ONCE — `format_classic()` automatically picks it up
+- Zero risk of preview/draft drift going forward
+- The wrapper CSS only adds typography (font, line-height, accent H2 color, paragraph max-width). Every styled wp:html block is self-contained.
+- `format_gutenberg()` (legacy "pure native blocks" mode) is unchanged and still its own implementation — it's only used for the bulk generator's per-item save path
+
 ### 5.16a Hybrid heading + dropcap parity (`v1.5.18+`)
 
 To make saved drafts visually match the preview without giving up Gutenberg editability, `format_hybrid()` now emits two extra style hints:
