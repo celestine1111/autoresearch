@@ -19,7 +19,7 @@
 ## v1.5.13 — Wire up 5 unimplemented menu features (testing-phase ungating)
 
 **Date:** 2026-04-13
-**Commit:** `[pending]`
+**Commit:** `a7f7460`
 
 ### Context
 
