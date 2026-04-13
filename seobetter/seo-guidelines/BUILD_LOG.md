@@ -16,6 +16,46 @@
 
 ---
 
+## v1.5.17 — Social media citation blocks (human-in-the-loop for AI-unreliable sources)
+
+**Date:** 2026-04-13
+**Commit:** `[pending]`
+
+### Context
+
+v1.5.16 added Reddit, HN, Bluesky, Mastodon, DEV.to, and Lemmy as research sources, but the AI would weave quotes from them into regular paragraphs — making social content indistinguishable from vetted prose. Since social posts are easily AI-faked or unreliable, users need to review every social citation before publishing. v1.5.17 makes every social citation render as its own dedicated `wp:html` block with a prominent red review-before-publish warning banner, so the user can spot it in the Gutenberg block list and delete it with one click if it's suspect. The rest of the article's prose is unaffected.
+
+### Added
+
+- **Social Media Citation detection** — `includes/Content_Formatter.php::format_hybrid()` `case 'quote':` line **536**
+  - New branch detects blockquotes that start with `[platform @handle]` marker (supports bluesky, mastodon, reddit, hn/hacker news, dev.to, lemmy, twitter/x — the last two for forward compat with the pro-features-ideas.md X integration)
+  - Renders as a `wp:html` block with: slate background, 4px slate-500 left border, red uppercase "SOCIAL MEDIA CITATION — REVIEW BEFORE PUBLISHING" eyebrow label, quote body in curly quotes, attribution footer with `@handle` link to source URL, dashed-border footnote "Social content is user-generated and may be unreliable or AI-generated. Verify the claim before publishing, or delete this block."
+  - Falls through to the existing generic blockquote renderer if no social marker matches — zero regression risk for existing expert quotes
+  - Verify: `grep -n "v1.5.17 — Social media citation detection" seobetter/includes/Content_Formatter.php`
+
+- **Prompt instruction for social citation format** — `includes/Async_Generator.php::get_system_prompt()` line ~**728**
+  - Added to the RICH FORMATTING block: explicit instruction that any claim or quote from a social media post MUST be written as a markdown blockquote with `[platform @handle]` marker on the first line (optionally followed by a second blockquote line with the source URL), NEVER woven into a regular paragraph
+  - Lists the 6 valid platform markers (bluesky, mastodon, reddit, hn, dev.to, lemmy)
+  - Reasoning baked into the prompt: "social media content can be unreliable or AI-generated, so it MUST be visually separated from your vetted prose"
+  - Verify: `grep -n '\[bluesky @alice' seobetter/includes/Async_Generator.php`
+
+### Documentation
+
+- **article_design.md §5.16** — new subsection documenting the Social Media Citation box with trigger regex, style spec, and AI instruction note. The original "Widened triggers" section was renumbered to §5.17.
+  - Verify: `grep -n '^### 5.16 Social Media Citation' seobetter/seo-guidelines/article_design.md`
+
+- **SEO-GEO-AI-GUIDELINES.md §4.8** — added the social citation row to the auto-styled triggers list with **REQUIRED** emphasis that social content must never be inlined into prose
+  - Verify: `grep -n 'Social media citation.*v1.5.17' seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md`
+
+- **plugin_functionality_wordpress.md §3.2 + §3.3** — added the new Social Media Citation styled block to the list, added a new "Blockquotes are styled based on the first-line marker" detection subsection
+  - Verify: `grep -n 'v1.5.17' seobetter/seo-guidelines/plugin_functionality_wordpress.md`
+
+### Verified by user
+
+- **UNTESTED** — waiting on user reinstall. Expected: when the AI references a social post (e.g. "A Reddit user reports..."), it appears as a distinct gray-bordered card with a red warning banner instead of inline prose. User can select and delete the block from the Gutenberg list view with one click.
+
+---
+
 ## v1.5.16 — Free social discussion sources (Bluesky, Mastodon, DEV.to, Lemmy)
 
 **Date:** 2026-04-13

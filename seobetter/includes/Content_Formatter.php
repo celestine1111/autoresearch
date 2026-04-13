@@ -534,7 +534,52 @@ class Content_Formatter {
                     break;
 
                 case 'quote':
-                    // Styled blockquote — wp:html to preserve styling
+                    // v1.5.17 — Social media citation detection
+                    // Pattern: > [platform @handle] quote text [optional newline + url]
+                    // Rendered as a dedicated wp:html block with a review-before-publish
+                    // warning so the user can visually spot and delete social citations
+                    // before publishing. Social content is easily AI-faked and needs
+                    // human verification.
+                    $raw = $section['content'];
+                    if ( preg_match( '/^\s*\[\s*(bluesky|mastodon|reddit|hacker\s*news|hn|dev\.?to|lemmy|twitter|x)\s+@?([A-Za-z0-9_.@\/\-]+)\s*\]\s*(.+?)(?:\s*\n\s*(https?:\/\/\S+))?\s*$/is', $raw, $sm ) ) {
+                        $platform_raw = strtolower( trim( $sm[1] ) );
+                        $platform_map = [
+                            'bluesky'      => 'Bluesky',
+                            'mastodon'     => 'Mastodon',
+                            'reddit'       => 'Reddit',
+                            'hacker news'  => 'Hacker News',
+                            'hackernews'   => 'Hacker News',
+                            'hn'           => 'Hacker News',
+                            'dev.to'       => 'DEV.to',
+                            'devto'        => 'DEV.to',
+                            'lemmy'        => 'Lemmy',
+                            'twitter'      => 'X (Twitter)',
+                            'x'            => 'X (Twitter)',
+                        ];
+                        $platform = $platform_map[ $platform_raw ] ?? ucfirst( $platform_raw );
+                        $handle   = trim( $sm[2] );
+                        $quote_md = trim( $sm[3] );
+                        $quote    = $this->inline_markdown( $quote_md );
+                        $src_url  = isset( $sm[4] ) ? trim( $sm[4] ) : '';
+
+                        $html  = '<div style="background:#f1f5f9 !important;border:1px solid #cbd5e1;border-left:4px solid #64748b;border-radius:0 8px 8px 0;padding:1em 1.25em;margin:1.5em 0">';
+                        $html .= '<div style="font-size:0.7em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#dc2626 !important;margin-bottom:0.6em">Social media citation &mdash; review before publishing</div>';
+                        $html .= '<p style="margin:0 0 0.5em 0;color:#1e293b !important;line-height:1.65;font-size:0.97em">&ldquo;' . $quote . '&rdquo;</p>';
+                        $html .= '<div style="font-size:0.85em;color:#64748b !important;font-style:normal">&mdash; ';
+                        if ( $src_url && preg_match( '/^https?:\/\//', $src_url ) ) {
+                            $html .= '<a href="' . esc_url( $src_url ) . '" target="_blank" rel="noopener nofollow" style="color:#475569;text-decoration:underline">@' . esc_html( $handle ) . '</a>';
+                        } else {
+                            $html .= '@' . esc_html( $handle );
+                        }
+                        $html .= ' on ' . esc_html( $platform );
+                        $html .= '</div>';
+                        $html .= '<div style="font-size:0.72em;color:#94a3b8 !important;margin-top:0.75em;padding-top:0.5em;border-top:1px dashed #cbd5e1">Social content is user-generated and may be unreliable or AI-generated. Verify the claim before publishing, or delete this block.</div>';
+                        $html .= '</div>';
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                        break;
+                    }
+
+                    // Default: styled blockquote (expert quote / pull quote) — wp:html
                     $text = $this->inline_markdown( $section['content'] );
                     $html = "<blockquote style=\"border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563 !important;line-height:1.7\"><p style=\"margin:0;color:#4b5563 !important\">{$text}</p></blockquote>";
                     $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";

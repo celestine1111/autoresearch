@@ -734,6 +734,11 @@ RICH FORMATTING (use these patterns naturally — the plugin auto-styles them in
 - For expert quotes, write on their own line as: \"Quote text here\" — Dr. Name, Title, Organization
 - Use H2 headings 'Key Takeaways', 'Pros and Cons', 'What You'll Need', or 'Key Insights' verbatim where they fit naturally — these auto-style the following list into colored boxes
 - Statistics with numbers ('78% of dogs prefer X', '3 out of 5 owners report...') are auto pulled-out into stat callouts — write them naturally inside paragraphs
+- For any claim or quote sourced from a social media post (Reddit, Hacker News, Bluesky, Mastodon, DEV.to, Lemmy), DO NOT weave it into a regular paragraph. Instead format it as a markdown blockquote with a platform marker on the first line:
+  > [bluesky @alice.bsky.social] The TypeScript error rate is down 40 percent this year.
+  > https://bsky.app/profile/alice.bsky.social/post/xyz
+  The plugin will render this as a dedicated review-before-publish card so the user can verify or delete it. Social media content can be unreliable or AI-generated, so it MUST be visually separated from your vetted prose.
+- Valid platform markers: bluesky, mastodon, reddit, hn (or 'hacker news'), dev.to, lemmy. Always include the @handle or username. Always include the post URL on its own second blockquote line when you have one.
 - These rich formatting hints REPLACE the BANNED WRITING PATTERNS rule against excessive bold ONLY for the specific cases above (definitions, key insights). Everywhere else, no bold.
 
 FORMAT: Output GitHub Flavored Markdown. Use tables for comparisons. Use bullet/numbered lists for features and steps.";

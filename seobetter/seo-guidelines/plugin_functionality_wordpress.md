@@ -256,6 +256,7 @@ Each content type has: required sections, writing guidance, schema type, shared 
 - **Did-You-Know box** (`v1.5.14`) — soft yellow bg, amber eyebrow label, no icons
 - **Highlight sentence** (`v1.5.14`) — 1.15em accent-color sentence with 6px accent border
 - **HowTo step boxes** (`v1.5.14`) — numbered circle badge per step, only for `content_type === 'how_to'` ordered lists
+- **Social media citation** (`v1.5.17`) — slate bg with 4px slate left border, red uppercase "SOCIAL MEDIA CITATION — REVIEW BEFORE PUBLISHING" eyebrow, quote body, attribution link, dashed-border footnote warning about AI-generated content. Detected from blockquote starting with `[platform @handle]` marker. Required for any Reddit/HN/Bluesky/Mastodon/DEV.to/Lemmy claim so the user can verify each one before publishing.
 
 ### 3.3 Context Detection
 
@@ -270,11 +271,15 @@ Paragraphs are styled based on text content (v1.5.14 added 5 new patterns):
 - Starts with "Tip:" → blue callout
 - Starts with "Note:/Important:" → amber callout
 - Starts with "Warning:/Caution:" → red callout
-- (NEW) Starts with "Did you know?/Fun fact" → yellow Did-You-Know box (capped at 1/article)
-- (NEW) Starts with `**Term**:` → gray Definition box
-- (NEW) Entire paragraph is a single bold sentence `**...**` → accent Highlight box
-- (NEW) Matches `"quote" — Name, Title` pattern → italic Expert Quote with attribution footer
-- (NEW) Contains `\d%` or `\d out of \d` or `\d in \d` → Stat callout with pulled-out number
+- (NEW v1.5.14) Starts with "Did you know?/Fun fact" → yellow Did-You-Know box (capped at 1/article)
+- (NEW v1.5.14) Starts with `**Term**:` → gray Definition box
+- (NEW v1.5.14) Entire paragraph is a single bold sentence `**...**` → accent Highlight box
+- (NEW v1.5.14) Matches `"quote" — Name, Title` pattern → italic Expert Quote with attribution footer
+- (NEW v1.5.14) Contains `\d%` or `\d out of \d` or `\d in \d` → Stat callout with pulled-out number
+
+Blockquotes are styled based on the first-line marker (v1.5.17):
+- (NEW v1.5.17) `> [bluesky @handle] quote text` (or mastodon/reddit/hn/dev.to/lemmy) → Social Media Citation card with review warning banner — **required for all social citations** so the user can verify before publishing
+- Otherwise → generic styled blockquote with accent left border (fallback)
 
 The system prompt at [Async_Generator::get_system_prompt()](../includes/Async_Generator.php#L601) now includes a `RICH FORMATTING` block (added v1.5.14) that instructs the AI to use these trigger words/structures naturally so the boxes fire reliably. See [SEO-GEO-AI-GUIDELINES.md §4.8](SEO-GEO-AI-GUIDELINES.md#L222) for the full trigger → box mapping.
 

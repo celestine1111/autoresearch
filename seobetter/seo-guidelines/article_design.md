@@ -271,7 +271,26 @@ Auto-detected when `content_type === 'how_to'` AND the list is ordered (`<ol>`) 
 - Threading: `format_hybrid()` reads `$options['content_type']` (passed in by `seobetter.php::rest_save_draft()` and `Async_Generator::assemble_final()`)
 - Source: `Content_Formatter.php::format_hybrid()` list branch — HowTo step boxes
 
-### 5.15 Widened triggers for existing boxes (`v1.5.14+`)
+### 5.16 Social Media Citation (`v1.5.17+`)
+
+Auto-detected when a markdown blockquote starts with a `[platform @handle]` marker. Unlike other styled boxes, this one has a **prominent red warning banner** at the top telling the user to review before publishing, and a dashed-border footnote at the bottom explaining why. Social media content is easily AI-generated or fabricated, so every citation from Reddit, Bluesky, Mastodon, DEV.to, Lemmy, or Hacker News MUST be rendered as a dedicated wp:html block the user can review and delete with one click.
+
+- **Trigger:** markdown blockquote starting with `[platform @handle]` on the first line, optionally followed by a second blockquote line containing the source URL:
+  ```
+  > [bluesky @alice.bsky.social] Quote text goes here.
+  > https://bsky.app/profile/alice.bsky.social/post/xyz
+  ```
+- **Valid platform markers:** `bluesky`, `mastodon`, `reddit`, `hn`, `hacker news`, `dev.to`, `lemmy`, `twitter`, `x`
+- **Style:**
+  - Background: slate-100 (`#f1f5f9`), 1px slate border, 4px slate-500 left border
+  - Warning eyebrow: uppercase red (`#dc2626`), "Social media citation — review before publishing"
+  - Quote body: dark slate text, wrapped in curly smart quotes
+  - Attribution: gray, em-dash + `@handle` + "on Platform Name", handle links to source URL if present
+  - Footnote: small gray, dashed top border, "Social content is user-generated and may be unreliable or AI-generated. Verify the claim before publishing, or delete this block."
+- **AI instruction:** The system prompt at `Async_Generator::get_system_prompt()` explicitly tells the model to use this marker format for any claim sourced from social media, instead of weaving the quote into a regular paragraph. This guarantees the user always sees social citations as distinct blocks in the Gutenberg editor.
+- **Source:** [Content_Formatter.php::format_hybrid()](../includes/Content_Formatter.php) `case 'quote':` branch — social media citation
+
+### 5.17 Widened triggers for existing boxes (`v1.5.14+`)
 Existing boxes 5.1–5.5 now match more synonyms in the preceding H2:
 - **Takeaways**: also `key insight`, `main point`, `at a glance`, `tldr`, `tl;dr`, `what to know`, `the bottom line`
 - **Pros**: also `upside`, `highlight`

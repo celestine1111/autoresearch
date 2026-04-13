@@ -237,8 +237,9 @@ Trigger → styled box mapping:
 - H2 `Cons` / `Drawbacks` / `Downsides` / `Limitations` / `Trade-offs` → followed list becomes red Cons box
 - H2 `Ingredients` / `Materials` / `Tools` / `What You'll Need` / `Prerequisites` → followed list becomes amber Ingredients box
 - For `content_type === 'how_to'`: numbered ordered lists become Step Boxes with circular numbered badges
+- **Social media citation** (v1.5.17) — markdown blockquote starting with `[platform @handle]` (e.g. `> [bluesky @alice] Quote text`, optionally followed by `> https://...`) → dedicated review-before-publish card with red warning banner. Valid platforms: bluesky, mastodon, reddit, hn, dev.to, lemmy, twitter/x. **REQUIRED** for any claim sourced from social media — social content must never be woven into regular prose paragraphs so the user can review and delete each citation before publishing.
 
-Reference: [article_design.md §5.9-5.15](article_design.md#L155). Code: [Content_Formatter.php::format_hybrid()](../includes/Content_Formatter.php#L335).
+Reference: [article_design.md §5.9-5.17](article_design.md#L155). Code: [Content_Formatter.php::format_hybrid()](../includes/Content_Formatter.php#L335).
 
 ---
 
