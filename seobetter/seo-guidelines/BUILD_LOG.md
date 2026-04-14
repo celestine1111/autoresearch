@@ -19,7 +19,7 @@
 ## v1.5.31 — Business photos in listicle sections (Sonar-sourced, capped at 5 per article)
 
 **Date:** 2026-04-14
-**Commit:** `[pending]`
+**Commit:** `820973b`
 
 ### Context
 
