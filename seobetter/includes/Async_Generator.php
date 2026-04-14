@@ -173,16 +173,26 @@ class Async_Generator {
                 // business-name sections, no listicle numbering, disclaimer at end)
                 // instead of asking the model to write a listicle that it will
                 // inevitably hallucinate to fill.
-                //
-                // v1.5.24's LOCAL-INTENT WARNING prompt block proved insufficient —
-                // live Lucignano test in v1.5.26 showed the model happily ignored the
-                // warning and invented 6 gelaterie anyway. Prompt instructions are
-                // unreliable under structural listicle pressure. The only durable fix
-                // is to never ask the model to write a listicle in the first place.
                 $places_count = (int) ( $research['places_count'] ?? 0 );
                 $places_insufficient = ! empty( $research['is_local_intent'] ) && $places_count < 2;
                 $job['options']['places_insufficient'] = $places_insufficient;
                 $job['results']['places_insufficient'] = $places_insufficient;
+
+                // v1.5.33 — when we have a non-empty pool but the number of verified
+                // places is SMALLER than what a word-count-based outline would produce,
+                // cap the number of business-name H2s to exactly places_count. This
+                // stops the model from being asked to write a 6-item listicle when
+                // only 2 real businesses exist — it will fill the gap with fakes.
+                // The generate_outline() branch reads this cap and builds the outline
+                // with exactly N business H2s + generic fill sections.
+                if ( ! empty( $research['is_local_intent'] ) && $places_count >= 2 ) {
+                    $job['options']['local_business_cap']  = $places_count;
+                    $job['options']['local_business_mode'] = true;
+                    // Thread the verified pool names to generate_outline() so
+                    // it can substitute the "Business N" placeholders with the
+                    // real names from the pool.
+                    $job['options']['places_pool_for_outline'] = $research['places'] ?? [];
+                }
 
                 // Build the verified citation pool (real keyword-relevant URLs)
                 // This drives both the AI prompt grounding and the post-save validator.
@@ -247,11 +257,19 @@ class Async_Generator {
                 $trends_context = ( $job['results']['trends'] ?? '' )
                     . ( $job['results']['citation_pool_prompt'] ?? '' );
 
+                // v1.5.33 — pass the verified Places Pool so generate_section()
+                // can match this heading against a pool entry and swap to the
+                // strict "local business" prompt that forbids inventing facts.
+                $section_places_pool = $job['results']['places'] ?? [];
+                $section_places_location = $job['results']['places_location'] ?? '';
+
                 $section_content = self::generate_section(
                     $keyword, $heading, $section_idx, $options,
                     $secondary, $lsi, $system,
                     $trends_context,
-                    $job['results']['intent'] ?? 'informational'
+                    $job['results']['intent'] ?? 'informational',
+                    $section_places_pool,
+                    $section_places_location
                 );
                 $job['results'][ 'section_' . $section_idx ] = $section_content;
 
@@ -420,6 +438,69 @@ class Async_Generator {
         $year = wp_date( 'Y' );
         $min_kw_headings = max( 2, round( $content_sections * 0.5 ) );
 
+        // v1.5.33 — Local Business Mode. When the Places waterfall returned
+        // ≥2 verified businesses but fewer than a word-count-based outline
+        // would demand (e.g. 2 real gelaterie but a 2000-word listicle would
+        // produce 5 content sections), cap the listicle size to exactly the
+        // verified count. The remaining word budget goes to generic fill
+        // sections (What to Look For, Regional Tradition, How to Find Quality)
+        // which the model can write without inventing anything about specific
+        // businesses.
+        $local_business_cap = (int) ( $options['local_business_cap'] ?? 0 );
+        $local_business_mode = ! empty( $options['local_business_mode'] );
+
+        if ( $local_business_mode && $local_business_cap > 0 && empty( $options['places_insufficient'] ) ) {
+            $year = wp_date( 'Y' );
+            $cap_text = (int) $local_business_cap;
+            $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n"
+                . "CRITICAL CONTEXT: Our verified-places database has found exactly {$cap_text} real businesses matching this keyword. You must write a listicle with EXACTLY {$cap_text} business-name H2s — not more, not fewer. Do NOT pad the listicle with invented businesses just because the user requested a longer article.\n\n"
+                . "REQUIRED outline structure:\n"
+                . "1. Key Takeaways\n"
+                . "2-" . ( 1 + $cap_text ) . ". [{$cap_text} business-name H2s — our post-generation validator will match these against the verified pool. Use generic placeholder names like 'Business 1', 'Business 2' — the actual verified names will be injected into each section prompt.]\n"
+                . ( 2 + $cap_text ) . ". What Makes [gelato / pizza / etc] in [location] Special (general educational section, no specific business names)\n"
+                . ( 3 + $cap_text ) . ". What to Look For in a Quality [category] (general tips for travelers)\n"
+                . ( 4 + $cap_text ) . ". Regional Context and Traditions (cultural background)\n"
+                . ( 5 + $cap_text ) . ". FAQ\n"
+                . ( 6 + $cap_text ) . ". References\n\n"
+                . "CURRENT YEAR: {$year}.\nTarget audience: {$audience}\nTarget word count: {$total_words} words total.\n\n"
+                . "RULES:\n"
+                . "- Produce EXACTLY {$cap_text} business-name H2 headings (use 'Business 1', 'Business 2' etc as placeholders — the real names will replace these later)\n"
+                . "- Then add the generic fill sections listed above so the article hits the target word count\n"
+                . "- KEYWORD IN HEADINGS: At least 2 of the headings should contain the keyword or a close variant\n\n"
+                . "Return ONLY the numbered list of H2 headings, one per line. No explanations.";
+            $result = self::send_request( $prompt, 'You are an SEO content strategist. Return only the numbered list of headings.', [ 'max_tokens' => 500 ] );
+            if ( ! $result['success'] ) {
+                return $result;
+            }
+            $headings = [];
+            foreach ( explode( "\n", trim( $result['content'] ) ) as $line ) {
+                $line = trim( $line );
+                if ( preg_match( '/^\d+[\.\)]\s*(.+)$/', $line, $m ) ) {
+                    $headings[] = trim( $m[1] );
+                }
+            }
+            if ( count( $headings ) < 3 ) {
+                return [ 'success' => false, 'error' => 'Could not parse outline. Try again.' ];
+            }
+            // Replace the placeholder 'Business N' H2s with the actual verified
+            // place names from the pool so each section generator knows exactly
+            // which pool entry it's writing about.
+            $pool_names = [];
+            foreach ( ( $options['places_pool_for_outline'] ?? [] ) as $p ) {
+                if ( is_array( $p ) && ! empty( $p['name'] ) ) $pool_names[] = $p['name'];
+            }
+            if ( ! empty( $pool_names ) ) {
+                $pool_idx = 0;
+                foreach ( $headings as $i => $h ) {
+                    if ( preg_match( '/business\s*\d+/i', $h ) && isset( $pool_names[ $pool_idx ] ) ) {
+                        $headings[ $i ] = $pool_names[ $pool_idx ];
+                        $pool_idx++;
+                    }
+                }
+            }
+            return [ 'success' => true, 'headings' => $headings ];
+        }
+
         // v1.5.27 — structural override when Places waterfall returned <2 verified
         // businesses for a local-intent keyword. Force an informational article
         // structure instead of a listicle so the model is never even asked to
@@ -470,7 +551,7 @@ class Async_Generator {
     /**
      * Generate a single section (one API call).
      */
-    private static function generate_section( string $keyword, string $heading, int $index, array $options, array $secondary, array $lsi, string $system, string $trends, string $intent = 'informational' ): string {
+    private static function generate_section( string $keyword, string $heading, int $index, array $options, array $secondary, array $lsi, string $system, string $trends, string $intent = 'informational', array $places_pool = [], string $places_location = '' ): string {
         $total_words = $options['word_count'] ?? 2000;
         $num_sections = max( 3, round( $total_words / 400 ) );
         $words_per_section = max( 100, round( ( $total_words * 0.85 ) / $num_sections ) );
@@ -506,6 +587,16 @@ class Async_Generator {
         $is_faq = preg_match( '/faq|frequently\s*asked/i', $heading );
         $is_references = preg_match( '/reference/i', $heading );
 
+        // v1.5.33 — check if this section's heading matches a verified place
+        // in the Places Pool. If yes, we're writing about a specific real
+        // business and MUST NOT invent any facts beyond what the pool contains.
+        $matched_place = null;
+        if ( ! empty( $places_pool ) && ! $is_takeaways && ! $is_faq && ! $is_references ) {
+            // Strip listicle numbering from the heading before matching
+            $candidate = preg_replace( '/^(?:#?\d+[\.\):—\-]|no\.\s*\d+\s*[—\-])\s*/i', '', $heading );
+            $matched_place = Places_Validator::pool_lookup( $candidate, $places_pool );
+        }
+
         $readability_rule = "\n\nREADABILITY: Write at a 6th-8th grade reading level. Mix short sentences (under 10 words) with medium ones (15-20 words). Use everyday words. Write like you would explain something to a friend — natural, not robotic. Vary your rhythm. Do not write every sentence the same length.";
 
         if ( $is_takeaways ) {
@@ -522,6 +613,65 @@ class Async_Generator {
             // generates it. Return an empty string so the section slot is skipped.
             // See seo-guidelines/external-links-policy.md, Layer 3b.
             return '';
+        } elseif ( $matched_place !== null ) {
+            // v1.5.33 — STRICT LOCAL BUSINESS SECTION. This H2 matches a
+            // verified place in the Places Pool. Use ONLY the verified data
+            // (name, address, website, phone, rating) — forbid inventing any
+            // other facts about the business (hours, prices, menu, history,
+            // reviews, chef names, signature dishes, etc). Pad the word count
+            // with GENERAL context (regional gelato culture, what to look for
+            // in good gelato, how tourists can enjoy it) instead of fabricated
+            // business specifics.
+            $place_name    = $matched_place['name'] ?? '';
+            $place_address = $matched_place['address'] ?? '';
+            $place_website = $matched_place['website'] ?? '';
+            $place_phone   = $matched_place['phone'] ?? '';
+            $place_rating  = isset( $matched_place['rating'] ) ? number_format( (float) $matched_place['rating'], 1 ) : '';
+            $place_source  = $matched_place['source'] ?? '';
+            $place_type    = $matched_place['type'] ?? '';
+
+            $verified_block = "VERIFIED POOL ENTRY FOR THIS SECTION (use ONLY this data — invent NOTHING):\n";
+            $verified_block .= "- Name: {$place_name}\n";
+            if ( $place_address ) $verified_block .= "- Address: {$place_address}\n";
+            if ( $place_website )  $verified_block .= "- Website: {$place_website}\n";
+            if ( $place_phone )    $verified_block .= "- Phone: {$place_phone}\n";
+            if ( $place_rating )   $verified_block .= "- Rating: {$place_rating}/5\n";
+            if ( $place_type )     $verified_block .= "- Type: {$place_type}\n";
+            if ( $place_source )   $verified_block .= "- Verified via: {$place_source}\n";
+
+            $location_phrase = $places_location ? " in {$places_location}" : '';
+
+            $prompt = "Write a short H2 section about the verified local business \"{$place_name}\"{$location_phrase}.\n\n"
+                . "{$verified_block}\n"
+                . "*** CRITICAL ANTI-HALLUCINATION RULES ***\n\n"
+                . "1. State the business name, its address (if provided), and cite the verified source. That is the ONLY specific-business information you may include.\n\n"
+                . "2. DO NOT invent or describe any of the following — NONE of these facts are in the verified pool and you do NOT know them:\n"
+                . "   - Opening hours, days of the week, closing times, seasonal closures\n"
+                . "   - Menu items, flavors, prices, specialty dishes, signature products\n"
+                . "   - The owner's name, founder's name, chef's name, staff names\n"
+                . "   - History, founding year, family background, generational ownership\n"
+                . "   - Interior design, decor, atmosphere, seating capacity\n"
+                . "   - Customer reviews, quotes from customers, what people say\n"
+                . "   - Awards, accolades, rankings, recognitions (unless explicitly in the pool)\n"
+                . "   - Ingredients, recipes, preparation methods, techniques used\n"
+                . "   - Distance from landmarks, walking directions, parking availability\n\n"
+                . "3. If you feel tempted to write any of the above, STOP and replace it with general content about the CATEGORY or REGION instead. For example, instead of 'Gelateria X is famous for pistachio made with Sicilian nuts', write 'Traditional Tuscan gelaterias often showcase seasonal flavors from local ingredients — look for shops that list their ingredient sources'.\n\n"
+                . "4. Fill the {$words_per_section}-word budget with GENERAL educational content about the category: what to look for in good {$prose['guidance']}, how the regional tradition works, what tourists should know when visiting the region, general signs of quality, how to pick a good establishment. The verified business serves as one example in this broader context, NOT the subject of fabricated specifics.\n\n"
+                . "5. If you cannot reach {$words_per_section} words without inventing facts, stop earlier. Short real content beats long fabricated content. A 150-word real section is fine.\n\n"
+                . "WRITING STRUCTURE:\n"
+                . "- Start with: ## {$heading}\n"
+                . "- First paragraph (2-3 sentences): name the business, state its address, mention its verified rating or category. That's it — no inventions.\n"
+                . "- Second paragraph onwards: general context about the category/region. Educate the reader about the CATEGORY, not this specific business.\n"
+                . "- Close with a practical tip for how a tourist would approach this kind of business in this kind of town.\n\n"
+                . "OTHER RULES:\n"
+                . "- Do NOT use bullet lists for fabricated flavor lists / menu items / hours.\n"
+                . "- Do NOT invent tables with fake opening hours.\n"
+                . "- Do NOT cite a source inline unless the source URL appears in the RESEARCH DATA below.\n"
+                . "- Keyword \"{$keyword}\" should appear naturally 1-2 times.\n"
+                . "- Never start a paragraph with: It, This, They, These.\n\n"
+                . ( $trends ? "REFERENCE RESEARCH DATA (for general context only — do NOT use to invent business specifics):\n{$trends}\n\n" : '' )
+                . "Output Markdown only.";
+            $max = 2500;
         } else {
             $trends_inject = $trends ? "\n\nREAL-TIME RESEARCH DATA (use these real statistics and sources — do NOT hallucinate numbers):\n{$trends}" : '';
 

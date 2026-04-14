@@ -16,6 +16,86 @@
 
 ---
 
+## v1.5.33 — Local Business Mode: cap listicle H2s to verified pool size + strict per-section business prompt
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User retested Lucignano after v1.5.32 and reported: **"it is still providing the wrong data in the blog, there are only 2 shops according to perplexity, it names and makes up descriptions not true"**.
+
+This is a DIFFERENT failure mode than v1.5.26/27. The business NAMES are correct (they match the 2 real gelaterie Perplexity UI found), BUT the DESCRIPTIONS in each listicle section are fabricated. The model is being asked to write a 300-word section about "Gelateria C'era una Volta" and invents opening hours, prices, menu items, family history, and customer reviews to fill the word budget.
+
+Root cause analysis:
+1. Sonar Tier 0 (or Foursquare) finds exactly 2 real places for Lucignano
+2. `places_count = 2`, pre-gen switch does NOT fire (threshold is <2)
+3. Outline generation produces a 5-section listicle (word count 2000 / 400 = 5)
+4. The model invents 3 extra business names to pad the listicle
+5. AND for each of the 2 REAL businesses, the section generator has no pool context — it just sees "write a section about Gelateria X" and fills with fabricated details
+
+Two structural fixes needed:
+1. **Cap outline length to pool size.** If we have 2 real places, the listicle has exactly 2 business-name H2s. Extra word budget fills generic educational sections (What to Look For, Regional Tradition, How to Find Quality).
+2. **Pass verified pool entry to each business section.** When a section's heading matches a pool entry, generate_section() swaps to a strict "local business" prompt that uses ONLY the verified fields (name, address, website, rating) and forbids inventing everything else (hours, prices, menu, history, reviews, chef names).
+
+### Added
+
+- **Local Business Mode in `process_step()` trends branch** — [includes/Async_Generator.php](../includes/Async_Generator.php) lines **~180-190**
+  - When `is_local_intent && places_count >= 2`, sets `$job['options']['local_business_cap'] = places_count`, `local_business_mode = true`, and threads the pool names via `places_pool_for_outline`
+  - Verify: `grep -n "local_business_cap\|local_business_mode" seobetter/includes/Async_Generator.php`
+
+- **Local Business outline branch in `generate_outline()`** — [includes/Async_Generator.php::generate_outline()](../includes/Async_Generator.php) ~lines **410-455**
+  - New prompt branch that fires when `local_business_mode` is true AND `places_insufficient` is false
+  - Produces an outline with EXACTLY `local_business_cap` business-name H2s (using "Business 1", "Business 2" as placeholders) plus generic fill sections (What Makes X Special, What to Look For, Regional Context, FAQ, References) to hit the target word count
+  - After the model returns headings, the code walks them and replaces "Business N" placeholders with actual pool names via `places_pool_for_outline`
+  - The model is NEVER asked to write more business-name sections than the verified pool has — structurally impossible to hallucinate extras
+  - Verify: `grep -n "Local Business Mode\|Business N'\|places_pool_for_outline" seobetter/includes/Async_Generator.php`
+
+- **Strict "local business" section prompt in `generate_section()`** — [includes/Async_Generator.php::generate_section()](../includes/Async_Generator.php) new `elseif ( $matched_place !== null )` branch
+  - Before the existing generic section prompt, now checks if the heading matches a Places Pool entry via `Places_Validator::pool_lookup()`
+  - If yes, swaps to a completely different prompt that:
+    1. Injects the verified pool entry as a block (name, address, website, phone, rating, type, source)
+    2. States CRITICAL ANTI-HALLUCINATION RULES forbidding invention of opening hours, days, closing times, seasonal closures, menu items, flavors, prices, specialty dishes, owner/founder/chef names, history, founding year, family background, interior design, decor, atmosphere, seating, customer reviews, quotes, awards, accolades, rankings, ingredients, recipes, preparation methods, techniques, distance from landmarks, walking directions, parking
+    3. Directs the word budget to GENERAL educational content about the category + regional tradition + traveler tips — NOT specifics about the business
+    4. Allows the model to write short (150 words) rather than padded-with-fakes (300 words)
+    5. Structure: first paragraph = name/address/rating from pool only, rest = general regional context, close = practical tip
+  - New `$matched_place` variable is populated via `Places_Validator::pool_lookup()` when places_pool is non-empty AND the section is NOT takeaways/FAQ/references
+  - Verify: `grep -n "STRICT LOCAL BUSINESS SECTION\|VERIFIED POOL ENTRY FOR THIS SECTION\|matched_place" seobetter/includes/Async_Generator.php`
+
+- **New `$places_pool` + `$places_location` parameters on `generate_section()`** — function signature extended, default empty so existing callers don't break
+  - Called from `process_step()` section branch with `$job['results']['places']` and `$job['results']['places_location']`
+  - Verify: `grep -n "generate_section.*places_pool\|\\\$section_places_pool" seobetter/includes/Async_Generator.php`
+
+### Why this is the structural fix (not just another prompt tweak)
+
+Previous releases (v1.5.24 PLACES RULES, v1.5.27 pre-gen switch, v1.5.30 Sonar Tier 0) all attempted to prevent hallucination at the DATA level — either by finding real data or by refusing to write a listicle when data is missing. They didn't address the case where data EXISTS but is THIN (2 real places for a 5-section listicle request).
+
+v1.5.33 adds two hard structural guarantees:
+1. **Cap N** — the model is NEVER asked to write more business sections than the pool has. The outline prompt literally says "produce EXACTLY N headings" and the placeholder substitution injects real names.
+2. **Per-section verified injection** — when writing a business section, the model sees the verified pool entry block at the top of its prompt and a list of 20+ FORBIDDEN invention categories. The word budget is redirected to general content that doesn't require inventing business specifics.
+
+A model that ignores both of these would have to simultaneously (a) invent extra headings not in the outline it was given, and (b) ignore a hard-rules block plus reroute the word budget to fabrication. LLMs follow outline structures and hard rules when they're the dominant signal — by removing the "listicle length pressure" and adding strict inject rules, the fabrication pressure disappears.
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.32` → `1.5.33`
+
+### Verification
+
+1. Retest Lucignano with Sonar or Foursquare configured (any provider that returns ≥2 real gelaterie) — expected outcome:
+   - Exactly 2 business-name H2s in the listicle (matching the verified pool)
+   - Each business section names the business + cites the verified address only, no fabricated hours/menu/history
+   - 3 additional generic fill sections ("What Makes Gelato in Lucignano Special", "What to Look For in Quality Gelato", "Regional Tradition") to hit the 2000-word target
+2. Retest with 0 places configured — pre-gen switch fires, informational article ships (existing v1.5.27 path, unchanged)
+3. Rome regression — ≥10 pool entries, listicle produces up to 8 business sections (standard outline cap), each with strict per-section business prompt
+4. Non-local regression — detectLocalIntent false, neither Local Business Mode nor the new section prompt fires, article unchanged
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.32 — Branding + AI Featured Image generator + Article Writer Model Recommender with tier badges
 
 **Date:** 2026-04-15
