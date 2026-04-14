@@ -379,17 +379,28 @@ class Content_Formatter {
                         $output[] = '<!-- wp:paragraph {"fontSize":"small"} -->';
                         $output[] = "<p class=\"has-small-font-size\"><em>{$text}</em></p>";
                         $output[] = '<!-- /wp:paragraph -->';
-                    } elseif ( preg_match( '/^(pro\s*tip|tip)\s*[:—-]/i', $plain ) ) {
+                    // v1.5.25 — strip the "Tip:" / "Note:" / "Warning:" prefix from the body
+                    // before injecting it next to the bold label, otherwise the rendered output
+                    // shows "Note: Note: ..." (the formatter's label PLUS the AI's literal prefix).
+                    // We match against $section['content'] (raw markdown) so inline links survive
+                    // the re-render via inline_markdown().
+                    } elseif ( preg_match( '/^(?:\*\*)?(pro\s*tip|tip)(?:\*\*)?\s*[:—-]\s*(.*)$/is', $section['content'], $tip_match ) ) {
+                        $body_text = $this->inline_markdown( trim( $tip_match[2] ) );
+                        if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'tip' );
-                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\">{$icon}<strong>Tip:</strong> {$text}</div>";
+                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\">{$icon}<strong>Tip:</strong> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
-                    } elseif ( preg_match( '/^(note|important)\s*[:—-]/i', $plain ) ) {
+                    } elseif ( preg_match( '/^(?:\*\*)?(note|important)(?:\*\*)?\s*[:—-]\s*(.*)$/is', $section['content'], $note_match ) ) {
+                        $body_text = $this->inline_markdown( trim( $note_match[2] ) );
+                        if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'note' );
-                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\">{$icon}<strong>Note:</strong> {$text}</div>";
+                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\">{$icon}<strong>Note:</strong> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
-                    } elseif ( preg_match( '/^(warning|caution)\s*[:—-]/i', $plain ) ) {
+                    } elseif ( preg_match( '/^(?:\*\*)?(warning|caution)(?:\*\*)?\s*[:—-]\s*(.*)$/is', $section['content'], $warn_match ) ) {
+                        $body_text = $this->inline_markdown( trim( $warn_match[2] ) );
+                        if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'warning' );
-                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\">{$icon}<strong>Warning:</strong> {$text}</div>";
+                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\">{$icon}<strong>Warning:</strong> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     }
                     // v1.5.14 — Did You Know box: paragraph starts with "Did you know" or "Fun fact"

@@ -634,7 +634,12 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
         var sec = (d.keywords && d.keywords.secondary) || [];
         var lsi = (d.keywords && d.keywords.lsi) || [];
         if (sec.length === 0 && lsi.length === 0) {
-            st.textContent = 'No keyword variations found — try a broader term';
+            // v1.5.25 — friendlier message for ultra-long-tail keywords. Google Suggest +
+            // Datamuse return zero variations for highly specific 8+ word phrases (e.g. small
+            // city + business type + year). That's normal; the user can safely leave the
+            // Secondary/LSI fields empty and the AI will pull keyword variations from the
+            // research pool during generation.
+            st.innerHTML = '<span style="color:#1e40af;font-style:normal">&#8505;&#65039; No auto-suggestions for this long-tail keyword (that\'s normal for very specific phrases). You can safely leave Secondary Keywords empty — the AI will generate variations from the research pool.</span>';
             return;
         }
         if (sec.length) {

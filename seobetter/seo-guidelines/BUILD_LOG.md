@@ -16,6 +16,60 @@
 
 ---
 
+## v1.5.25 — Fix "Note: Note:" duplication in callout boxes + friendlier auto-suggest message for ultra-long-tail keywords
+
+**Date:** 2026-04-14
+**Commit:** `[pending]`
+
+### Context
+
+Two user-reported bugs from the v1.5.24 Lucignano test session:
+
+1. **Callout duplication** — published article showed `Note: Note: Seasonal closures may occur...`. Root cause: `Content_Formatter.php::format_hybrid()` paragraph branch matched paragraphs starting with `Note:` / `Tip:` / `Warning:`, wrapped them in a callout box with a hard-coded `<strong>Note:</strong>` label, but did NOT strip the AI's literal "Note:" prefix from `$text` before injecting it next to the label. The Did You Know box at the same site already used the correct pattern (capture body separately, re-render with `inline_markdown`) since v1.5.14 — Tip/Note/Warning never got the same treatment.
+2. **Auto-suggest "no variations" message too negative** — when the user clicked Auto-suggest on the ultra-long-tail keyword "Whats The Best Gelato Shops In Lucignano Italy 2026", the status text said `No keyword variations found — try a broader term`. That's correct behavior (Google Suggest + Datamuse genuinely return zero variations for 8+ word phrases) but the message implied user error and didn't tell them the field is optional anyway.
+
+Also documents the still-open v1.5.24 deployment issue: the Vercel cloud-api may not have been redeployed when v1.5.24 was pushed to GitHub. Plugin code is correct end-to-end; the published Lucignano article showed neither a REAL LOCAL PLACES block nor a LOCAL-INTENT WARNING, which is only possible if the deployed `cloud-api/api/research.js` is older than v1.5.23. User must run `cd seobetter/cloud-api && npx vercel --prod` (or trigger a redeploy in the Vercel dashboard) to fix.
+
+### Fixed
+
+- **Callout-box prefix duplication** — `includes/Content_Formatter.php::format_hybrid()` paragraph branch lines **382-403**
+  - Tip block (line 387): regex changed from `'/^(pro\s*tip|tip)\s*[:—-]/i'` against `$plain` to `'/^(?:\*\*)?(pro\s*tip|tip)(?:\*\*)?\s*[:—-]\s*(.*)$/is'` against `$section['content']` (the raw markdown source) with capture group 2 holding the body
+  - Note block (line 393): same pattern with `(note|important)`
+  - Warning block (line 399): same pattern with `(warning|caution)`
+  - Body is re-rendered through `$this->inline_markdown( trim( $match[2] ) )` which preserves inline links, bold, italic that the AI may have used inside the callout body
+  - `(?:\*\*)?` prefix in the regex handles both `Note: foo` and `**Note:** foo` AI output styles
+  - Empty-body guard (`if ( empty( trim( $body_text ) ) ) continue 2;`) skips paragraphs that are JUST the prefix with nothing after
+  - Verify: `grep -n "tip_match\|note_match\|warn_match" seobetter/includes/Content_Formatter.php`
+
+### Changed
+
+- **Auto-suggest "no variations" status message** — `admin/views/content-generator.php` line **637**
+  - Replaced terse "No keyword variations found — try a broader term" with a friendly blue ℹ️ info banner
+  - New text: "ℹ️ No auto-suggestions for this long-tail keyword (that's normal for very specific phrases). You can safely leave Secondary Keywords empty — the AI will generate variations from the research pool."
+  - Uses `st.innerHTML` to render the ℹ️ emoji + a `<span style="color:#1e40af;font-style:normal">` so it stands out from the italic default of the status `<span>`
+  - Verify: `grep -n "No auto-suggestions for this long-tail keyword" seobetter/admin/views/content-generator.php`
+
+### Documented
+
+- **`article_design.md` §5.5** — added prefix-stripping rule explaining the bug + fix pattern + the markdown-source-vs-HTML reasoning, and noted that the Did You Know block already used this approach since v1.5.14
+- **`plugin_UX.md` §1.1** — Auto-suggest row now documents the v1.5.25 friendly-empty-state behavior and gives the canonical Lucignano example
+- **`pro-features-ideas.md`** — NOT touched per skill rules (user manages this file manually)
+
+### Version bump
+
+- `seobetter/seobetter.php` header: `1.5.24` → `1.5.25`
+- `SEOBETTER_VERSION` constant: `1.5.24` → `1.5.25`
+
+### Known limitation (NOT shipping in v1.5.25)
+
+- Vercel cloud-api may still be on a stale deployment of `cloud-api/api/research.js`. User action required: redeploy the cloud-api project. v1.5.25 does not change any cloud-api code, so this remains the same blocker as in v1.5.24 testing.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.24 — 5-tier Places waterfall (Wikidata + Foursquare + HERE + Google) for any small city worldwide
 
 **Date:** 2026-04-13

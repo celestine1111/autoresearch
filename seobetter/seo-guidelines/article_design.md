@@ -198,13 +198,15 @@ The accent color comes from the user's color picker. All other colors are fixed 
 - Used when preceding heading contains "ingredients", "supplies", "what you need"
 
 ### 5.5 Callout Boxes (`.sb-callout`)
-Detected from paragraph text starting with "Tip:", "Note:", or "Warning:"
+Detected from paragraph text starting with "Tip:", "Pro Tip:", "Note:", "Important:", "Warning:", or "Caution:" (also matches the `**Bold:**` markdown variant). Source: `Content_Formatter.php::format_hybrid()` paragraph branch.
 
 | Type | Class | Background | Left Border |
 |---|---|---|---|
 | Tip | `.sb-callout-tip` | `#eff6ff` (light blue) | `#3b82f6` (blue) |
 | Note | `.sb-callout-note` | `#fffbeb` (light amber) | `#f59e0b` (amber) |
 | Warning | `.sb-callout-warn` | `#fef2f2` (light red) | `#ef4444` (red) |
+
+**v1.5.25 — prefix-stripping rule (CRITICAL):** the formatter renders the bold label (`<strong>Note:</strong>`) itself, so the AI's literal "Note:" / "Tip:" / "Warning:" prefix MUST be stripped from the body before injection — otherwise the published paragraph reads "Note: Note: ...". The fix matches against `$section['content']` (the raw markdown source, not the post-`inline_markdown` HTML) using `'/^(?:\*\*)?(note|important)(?:\*\*)?\s*[:—-]\s*(.*)$/is'` and re-renders capture group 2 via `inline_markdown()` to preserve inline links inside the body. Same pattern for Tip and Warning blocks. Did You Know box at the same site already used this approach since v1.5.14 — v1.5.25 brings Tip/Note/Warning into parity.
 
 ### 5.6 Blockquotes
 - Left border: 4px solid accent
