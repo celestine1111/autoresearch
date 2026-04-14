@@ -16,6 +16,64 @@
 
 ---
 
+## v1.5.31 — Business photos in listicle sections (Sonar-sourced, capped at 5 per article)
+
+**Date:** 2026-04-14
+**Commit:** `[pending]`
+
+### Context
+
+v1.5.29 (link injector) + v1.5.30 (Sonar Tier 0) fixed the data-coverage and address-visibility problems. This release adds visual polish: when Sonar returns a photo URL for a business (scraped from the source TripAdvisor/Yelp/Wikivoyage page's og:image or listing thumbnail), the Places_Link_Injector renders a responsive `<figure>` below the meta line. Capped at 5 photos per article to keep page weight reasonable.
+
+Foursquare/Google Places photo extraction is deferred to a future release because both require a second paid API call per photo. OSM wikimedia_commons extraction is also deferred (only ~5% of places have this tag). Sonar photos are the free cheapest-coverage option since Sonar is already reading the source page anyway.
+
+### Added
+
+- **`photo_url` field in Sonar fetcher system prompt** — [cloud-api/api/research.js::fetchSonarPlaces()](../cloud-api/api/research.js) system prompt block
+  - Added an optional `photo_url` field to the JSON schema description the Sonar model is told to return
+  - Instruction: "direct https URL to a photo of the business if the source page has one (og:image, first image of the listing, etc). Prefer stable CDN URLs. Skip if unsure."
+  - Verify: `grep -n "photo_url.*optional" seobetter/cloud-api/api/research.js`
+
+- **`photo_url` capture in Sonar fetcher return shape** — [cloud-api/api/research.js::fetchSonarPlaces()](../cloud-api/api/research.js) map block
+  - Added `photo_url: (p.photo_url && /^https:\/\//.test(p.photo_url)) ? p.photo_url : null` to the place normalization
+  - HTTPS-only to avoid mixed-content warnings on SSL WordPress sites
+  - Verify: `grep -n "photo_url:.*https" seobetter/cloud-api/api/research.js`
+
+- **`Places_Link_Injector::build_photo_figure()`** — [includes/Places_Link_Injector.php](../includes/Places_Link_Injector.php) new private method
+  - Takes a pool entry with `photo_url` and returns a responsive `<figure>` block
+  - Figure structure: `<img>` with `loading="lazy"`, `max-width:100%`, `border-radius:8px`, `border:1px solid #e5e7eb`, plus a `<figcaption>` with "Photo via {source}" attribution in italic
+  - `alt` text built from `{name} in {address}` for SEO + accessibility
+  - Returns empty string if photo_url missing, non-https, or fails `FILTER_VALIDATE_URL`
+  - Verify: `grep -n "build_photo_figure\|sb-place-photo" seobetter/includes/Places_Link_Injector.php`
+
+- **5-photo cap in `Places_Link_Injector::inject()`** — [includes/Places_Link_Injector.php](../includes/Places_Link_Injector.php)
+  - New `PHOTO_CAP = 5` class constant
+  - Shared `$photo_count` counter closed-over in the `preg_replace_callback` so it increments across all H2 matches and stops injecting figures once cap is reached
+  - Meta line (address + maps + website + phone) still injected for ALL matched H2s regardless of cap — only photos are limited
+  - Verify: `grep -n "PHOTO_CAP\|photo_count" seobetter/includes/Places_Link_Injector.php`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION` constant: `1.5.30` → `1.5.31`
+
+### Deferred (not shipping this release)
+
+- **Foursquare photo extraction** — requires second API call to `/places/{fsq_id}/photos` per place, doubles API usage. Ship as opt-in settings checkbox in a future release if users demand it.
+- **Google Places photo extraction** — requires paid photo redemption call (~$0.007/photo). Ship as opt-in in a future release.
+- **HERE photo extraction** — HERE's `media.images` field is inconsistent across regions. Needs a more thorough audit before shipping.
+- **OSM wikimedia_commons extraction** — only ~5% of OSM places have this tag. Low-coverage, deferred.
+
+### Known risks
+
+- Sonar-scraped image URLs may be hot-linked from TripAdvisor/Yelp CDN URLs that rotate. If a URL breaks, the browser just shows the alt text — acceptable since the article can be regenerated.
+- No ToS check on image display. Sonar returns public page og:images which are generally fair use for editorial preview, but users should be aware they're embedding hotlinked content.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.30 — Perplexity Sonar Tier 0 via OpenRouter (web-search business discovery for any city worldwide)
 
 **Date:** 2026-04-14

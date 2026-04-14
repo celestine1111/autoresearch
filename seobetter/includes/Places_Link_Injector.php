@@ -29,24 +29,35 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Places_Link_Injector {
 
     /**
+     * v1.5.31 — maximum number of H2 sections that get a photo injected.
+     * Limits page weight (each photo is ~50–200 KB) and avoids turning a
+     * 10-item listicle into a 2 MB article.
+     */
+    const PHOTO_CAP = 5;
+
+    /**
      * Main entry. Walk the article HTML and inject an address/links meta line
-     * under every H2 that matches a pool entry.
+     * and (v1.5.31) a photo figure under every H2 that matches a pool entry.
      *
      * @param string $html         Assembled article HTML (post-Places_Validator).
      * @param array  $places_pool  Array of place entries from research.js fetchPlacesWaterfall.
-     * @return string Cleaned HTML with meta lines injected under matching H2s.
+     * @return string Cleaned HTML with meta lines + photos injected under matching H2s.
      */
     public static function inject( string $html, array $places_pool ): string {
         if ( empty( $places_pool ) ) {
             return $html;
         }
 
+        // v1.5.31 — shared counter across all regex callbacks so we can cap
+        // photo injection at PHOTO_CAP total per article. Pass by reference.
+        $photo_count = 0;
+
         // Use a regex to find every H2 opening/content/closing sequence and
         // decorate it. We don't split and rejoin because that would risk
         // double-encoding entities already in the HTML.
         return preg_replace_callback(
             '/(<h2(?:\s[^>]*)?>)(.*?)(<\/h2>)/is',
-            function ( $m ) use ( $places_pool ) {
+            function ( $m ) use ( $places_pool, &$photo_count ) {
                 $heading_html = $m[0];
                 $heading_text = wp_strip_all_tags( $m[2] );
                 $heading_text = trim( html_entity_decode( $heading_text, ENT_QUOTES, 'UTF-8' ) );
@@ -70,10 +81,48 @@ class Places_Link_Injector {
                     return $heading_html;
                 }
 
-                return $heading_html . "\n" . $meta_line;
+                // v1.5.31 — append a <figure> below the meta line if the pool
+                // entry has a photo_url AND we haven't hit the cap yet. Only
+                // the first 5 matched places get a photo to keep page weight
+                // reasonable.
+                $photo_figure = '';
+                if ( $photo_count < self::PHOTO_CAP ) {
+                    $photo_figure = self::build_photo_figure( $entry );
+                    if ( $photo_figure !== '' ) {
+                        $photo_count++;
+                    }
+                }
+
+                return $heading_html . "\n" . $meta_line . ( $photo_figure !== '' ? "\n" . $photo_figure : '' );
             },
             $html
         );
+    }
+
+    /**
+     * v1.5.31 — build the <figure> HTML block for a place with a photo_url.
+     * Returns empty string if the entry has no photo or the photo URL fails
+     * basic validation.
+     */
+    private static function build_photo_figure( array $entry ): string {
+        $photo = isset( $entry['photo_url'] ) ? trim( (string) $entry['photo_url'] ) : '';
+        if ( $photo === '' ) return '';
+        // Require https for security + privacy + broken-mixed-content avoidance
+        if ( ! preg_match( '~^https://~', $photo ) ) return '';
+        if ( ! filter_var( $photo, FILTER_VALIDATE_URL ) ) return '';
+
+        $name     = trim( (string) ( $entry['name'] ?? '' ) );
+        $location = trim( (string) ( $entry['address'] ?? '' ) );
+        $source   = trim( (string) ( $entry['source'] ?? '' ) );
+        $alt      = $name !== '' ? ( $name . ( $location ? ' in ' . $location : '' ) ) : 'Business photo';
+
+        $figure  = '<figure class="sb-place-photo" style="margin:8px 0 20px 0;padding:0">';
+        $figure .= '<img src="' . esc_url( $photo ) . '" alt="' . esc_attr( $alt ) . '" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #e5e7eb;display:block" />';
+        if ( $source !== '' ) {
+            $figure .= '<figcaption style="font-size:11px;color:#94a3b8;margin-top:4px;font-style:italic">Photo via ' . esc_html( $source ) . '</figcaption>';
+        }
+        $figure .= '</figure>';
+        return $figure;
     }
 
     /**
