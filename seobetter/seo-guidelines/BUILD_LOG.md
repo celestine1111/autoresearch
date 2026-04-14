@@ -16,10 +16,87 @@
 
 ---
 
-## v1.5.29 — Places_Link_Injector: inject address + Google Maps + website below every matched H2 + fix non-OSM place URLs flowing to References
+## v1.5.30 — Perplexity Sonar Tier 0 via OpenRouter (web-search business discovery for any city worldwide)
 
 **Date:** 2026-04-14
 **Commit:** `[pending]`
+
+### Context
+
+v1.5.29 added the Places_Link_Injector so any matched pool entry gets its real address + Google Maps link + website injected below the H2. But that only helps when the pool is non-empty. The actual root problem is coverage: OSM/Foursquare/HERE have genuine gaps for small cities (Lucignano: 0 gelaterie in all three). User proved Perplexity's web interface finds the real gelaterie (Gelateria C'era una Volta at Via Rosini 20, Snoopy's nearby) by scraping TripAdvisor + Yelp + local Italian blogs. Perplexity's Sonar models are available via OpenRouter at ~$0.008/article on base `sonar` — adding them as Tier 0 of the waterfall solves the coverage gap for any city worldwide with a single user-provided OpenRouter API key.
+
+### Added
+
+- **`fetchSonarPlaces(keyword, geo, sonarConfig)`** — new fetcher at [cloud-api/api/research.js](../cloud-api/api/research.js) ~line **883**
+  - Calls `POST https://openrouter.ai/api/v1/chat/completions` with a structured system prompt demanding JSON output
+  - Model selectable via `sonarConfig.model`: `perplexity/sonar` (default, fast, ~$0.80/100 articles) or `perplexity/sonar-pro` (deeper search, ~$6/100 articles)
+  - System prompt forbids inventing data: "If you cannot find at least 3 real verified businesses, return an empty places array"
+  - Response parsed with `response_format: json_object` + fallback regex extraction for non-compliant models
+  - 30-second timeout (Sonar deep search takes 5–15s)
+  - Returns same normalized place shape as Foursquare/HERE/Google: `{name, type, address, website, phone, lat, lon, source_url, source: 'Perplexity Sonar', rating}`
+  - Returns `[]` on any error, 401, parse failure — falls through to OSM
+  - Verify: `grep -n "^async function fetchSonarPlaces" seobetter/cloud-api/api/research.js`
+
+- **Tier 0 insertion in `fetchPlacesWaterfall()`** — [cloud-api/api/research.js](../cloud-api/api/research.js) ~line **925**
+  - Runs BEFORE OSM Tier 1 if `placesKeys.openrouter_sonar.key` is set
+  - Waterfall is now: Sonar → OSM → Foursquare → HERE → Google Places → pre-gen switch
+  - OSM Tier 1 now has a `!provider_used` guard so it skips when Sonar already found ≥3 places
+  - Users who don't configure OpenRouter silently skip Tier 0 — zero regression
+  - Verify: `grep -n "Tier 0: Perplexity Sonar" seobetter/cloud-api/api/research.js`
+
+- **OpenRouter key + model plumbing** — [includes/Trend_Researcher.php::cloud_research()](../includes/Trend_Researcher.php) lines **~107-120**
+  - Reads `openrouter_api_key` + `sonar_model` from `seobetter_settings`
+  - Builds `places_keys.openrouter_sonar = { key, model }` and adds it to the cloud-api request body
+  - Verify: `grep -n "openrouter_sonar" seobetter/includes/Trend_Researcher.php`
+
+- **Sonar settings row in Places Integrations card** — [admin/views/settings.php](../admin/views/settings.php) top of Places Integrations form
+  - Marked `RECOMMENDED` with blue badge
+  - Password field for `openrouter_api_key`
+  - Model dropdown: `perplexity/sonar` (default) / `perplexity/sonar-pro`
+  - Setup link to `openrouter.ai/keys` with "1-minute signup, add $5 credit" instructions
+  - Blue info box explaining this is the best fix for small-city coverage
+  - Server-side sanitization whitelists only the two allowed model IDs
+  - Verify: `grep -n "openrouter_api_key\|sonar_model" seobetter/admin/views/settings.php`
+
+- **Tourism source whitelist** — [seobetter.php::get_trusted_domain_whitelist()](../seobetter.php) lines **~1925-1938**
+  - Added: `openrouter.ai`, `perplexity.ai`, `tripadvisor.com` (+ .co.uk, .it, .es, .fr, .de, .jp), `yelp.com` (+ .co.uk, .it, .fr), `wikivoyage.org` (+ locale subdomains), `timeout.com`, `atlasobscura.com`, `lonelyplanet.com`, `fodors.com`, `theculturetrip.com`
+  - These are the sites Sonar typically scrapes for business listings in Italy/Europe. Their URLs need to be on the whitelist so `validate_outbound_links()` doesn't strip Sonar-sourced citations from the References section.
+  - Verify: `grep -n "tripadvisor.com\|yelp.com\|wikivoyage" seobetter/seobetter.php`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION` constant: `1.5.29` → `1.5.30`
+
+### Cost
+
+- **base `perplexity/sonar`**: ~$0.008/article → ~$0.80 per 100 articles/month
+- **`perplexity/sonar-pro`**: ~$0.06/article → ~$6 per 100 articles/month
+- User covers cost directly via their own OpenRouter account — no billing integration needed
+- Plus a small `search_tokens` surcharge from Perplexity (~$0.005 per call)
+
+### Verification
+
+1. Retest Lucignano with OpenRouter key configured and no other place keys — expect `places_provider_used: "Perplexity Sonar"`, `places_count: 5-10`, real names (Gelateria C'era una Volta, Snoopy's) with Via Rosini addresses. v1.5.29 Places_Link_Injector then injects the address + Google Maps + website meta line below each H2.
+2. Direct curl test: `curl -X POST seobetter.vercel.app/api/research -d '{"keyword":"best gelato in lucignano italy","places_keys":{"openrouter_sonar":{"key":"KEY","model":"perplexity/sonar"}}}'` — response `places` array populated, `providers_tried[0].name === 'Perplexity Sonar'`
+3. Rome regression with both OSM + Sonar configured — expect Sonar runs first, returns ≥3 results, waterfall stops at Tier 0, OSM never runs
+4. Non-local regression: `how to introduce raw food to a dog` — `detectLocalIntent` false, Sonar never called, zero cost
+
+### Required user action
+
+- **Vercel redeploy** — this release modifies `cloud-api/api/research.js`, needs a Vercel redeploy. Git push auto-triggers the build since the v1.5.27 Vercel reconnect is already pointed at `celestine1111/autoresearch` with root `seobetter/cloud-api`. Check vercel.com → project → Deployments for a new green deployment after `git push`.
+- **Install zip** — WP Admin → Plugins → Upload → Replace Current
+- **Configure OpenRouter key** — SEOBetter → Settings → Places Integrations → paste OpenRouter API key in the new top row → Save
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
+## v1.5.29 — Places_Link_Injector: inject address + Google Maps + website below every matched H2 + fix non-OSM place URLs flowing to References
+
+**Date:** 2026-04-14
+**Commit:** `6df059b`
 
 ### Context
 

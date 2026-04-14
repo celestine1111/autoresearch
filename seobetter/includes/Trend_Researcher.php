@@ -108,9 +108,18 @@ class Trend_Researcher {
         $fsq_key    = $settings['foursquare_api_key'] ?? '';
         $here_key   = $settings['here_api_key'] ?? '';
         $google_key = $settings['google_places_api_key'] ?? '';
+        // v1.5.30 — Perplexity Sonar via OpenRouter as Tier 0 of the waterfall
+        $openrouter_key   = $settings['openrouter_api_key'] ?? '';
+        $sonar_model      = $settings['sonar_model'] ?? 'perplexity/sonar';
         if ( ! empty( $fsq_key ) )    $places_keys['foursquare'] = $fsq_key;
         if ( ! empty( $here_key ) )   $places_keys['here']       = $here_key;
         if ( ! empty( $google_key ) ) $places_keys['google']     = $google_key;
+        if ( ! empty( $openrouter_key ) ) {
+            $places_keys['openrouter_sonar'] = [
+                'key'   => $openrouter_key,
+                'model' => $sonar_model,
+            ];
+        }
         if ( ! empty( $places_keys ) ) {
             $body['places_keys'] = $places_keys;
         }

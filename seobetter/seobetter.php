@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.29
+ * Version: 1.5.30
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.29' );
+define( 'SEOBETTER_VERSION', '1.5.30' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1919,6 +1919,20 @@ final class SEOBetter {
             'here.com', 'www.here.com', 'discover.search.hereapi.com',
             'maps.google.com', 'maps.googleapis.com',
             'places.googleapis.com', 'google.com/maps',
+            // v1.5.30 — Perplexity Sonar (Tier 0) scrapes these tourism and
+            // review sites for citations. They need to be whitelisted so
+            // source_urls returned by Sonar pass validate_outbound_links().
+            'openrouter.ai', 'perplexity.ai', 'www.perplexity.ai',
+            'tripadvisor.com', 'www.tripadvisor.com', 'tripadvisor.co.uk', 'tripadvisor.it',
+            'tripadvisor.es', 'tripadvisor.fr', 'tripadvisor.de', 'tripadvisor.jp',
+            'yelp.com', 'www.yelp.com', 'yelp.co.uk', 'yelp.it', 'yelp.fr',
+            'wikivoyage.org', 'en.wikivoyage.org', 'it.wikivoyage.org',
+            'it.wikivoyage.org', 'fr.wikivoyage.org', 'de.wikivoyage.org',
+            'timeout.com', 'www.timeout.com',
+            'atlasobscura.com', 'www.atlasobscura.com',
+            'lonelyplanet.com', 'www.lonelyplanet.com',
+            'fodors.com', 'www.fodors.com',
+            'theculturetrip.com', 'www.theculturetrip.com',
         ];
 
         $custom = apply_filters( 'seobetter_trusted_domains', $default );

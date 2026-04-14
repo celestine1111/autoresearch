@@ -70,10 +70,18 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
 // flow through Trend_Researcher → cloud-api for the 5-tier Places waterfall.
 if ( isset( $_POST['seobetter_save_places'] ) && check_admin_referer( 'seobetter_places_nonce' ) ) {
     $existing = get_option( 'seobetter_settings', [] );
+    $allowed_sonar_models = [ 'perplexity/sonar', 'perplexity/sonar-pro' ];
+    $submitted_model = sanitize_text_field( $_POST['sonar_model'] ?? 'perplexity/sonar' );
+    if ( ! in_array( $submitted_model, $allowed_sonar_models, true ) ) {
+        $submitted_model = 'perplexity/sonar';
+    }
     $settings = array_merge( $existing, [
         'foursquare_api_key'    => sanitize_text_field( $_POST['foursquare_api_key'] ?? '' ),
         'here_api_key'          => sanitize_text_field( $_POST['here_api_key'] ?? '' ),
         'google_places_api_key' => sanitize_text_field( $_POST['google_places_api_key'] ?? '' ),
+        // v1.5.30 — Perplexity Sonar via OpenRouter (Tier 0)
+        'openrouter_api_key'    => sanitize_text_field( $_POST['openrouter_api_key'] ?? '' ),
+        'sonar_model'           => $submitted_model,
     ] );
     update_option( 'seobetter_settings', $settings );
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Places integrations saved.', 'seobetter' ) . '</p></div>';
@@ -279,6 +287,28 @@ $settings = get_option( 'seobetter_settings', [] );
         <form method="post">
             <?php wp_nonce_field( 'seobetter_places_nonce' ); ?>
             <table class="form-table">
+
+                <!-- Perplexity Sonar (v1.5.30, RECOMMENDED for small cities) -->
+                <tr>
+                    <th><?php esc_html_e( 'Perplexity Sonar (via OpenRouter)', 'seobetter' ); ?>
+                        <span class="seobetter-score seobetter-score-good" style="font-size:10px;margin-left:6px;background:#dbeafe;color:#1e40af"><?php esc_html_e( 'RECOMMENDED', 'seobetter' ); ?></span>
+                    </th>
+                    <td>
+                        <input type="password" name="openrouter_api_key" value="<?php echo esc_attr( $settings['openrouter_api_key'] ?? '' ); ?>" class="regular-text" placeholder="sk-or-v1-..." autocomplete="off" />
+                        <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get OpenRouter Key', 'seobetter' ); ?></a>
+                        <br><br>
+                        <label for="sonar_model" style="display:inline-block;min-width:60px"><strong><?php esc_html_e( 'Model:', 'seobetter' ); ?></strong></label>
+                        <select name="sonar_model" id="sonar_model">
+                            <?php $sm = $settings['sonar_model'] ?? 'perplexity/sonar'; ?>
+                            <option value="perplexity/sonar" <?php selected( $sm, 'perplexity/sonar' ); ?>>perplexity/sonar — ~$0.80 / 100 articles (fast, recommended)</option>
+                            <option value="perplexity/sonar-pro" <?php selected( $sm, 'perplexity/sonar-pro' ); ?>>perplexity/sonar-pro — ~$6 / 100 articles (deeper search, better for small cities)</option>
+                        </select>
+                        <p class="description" style="background:#eff6ff;padding:10px 12px;border-left:3px solid #3b82f6;margin-top:8px">
+                            <strong><?php esc_html_e( '✨ Best fix for small-city coverage.', 'seobetter' ); ?></strong>
+                            <?php esc_html_e( 'Web-search LLM that pulls real businesses from TripAdvisor, Yelp, Wikivoyage, and local blogs with citations. Works for ANY city worldwide — zero per-user tier setup. 1-minute signup at openrouter.ai/keys, add $5 credit, paste the key here. Costs ~$0.008 per article on base sonar (~$0.80 per 100 articles). Runs as Tier 0 of the Places waterfall — OSM/Foursquare/HERE/Google below become fallbacks for when Sonar is rate-limited.', 'seobetter' ); ?>
+                        </p>
+                    </td>
+                </tr>
 
                 <!-- OSM row (always active, no key) -->
                 <tr>
