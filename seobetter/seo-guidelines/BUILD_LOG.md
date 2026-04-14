@@ -19,7 +19,7 @@
 ## v1.5.27 — Layer 0 pre-generation switch when Places waterfall is empty (structural fix for small-city hallucination)
 
 **Date:** 2026-04-14
-**Commit:** `[pending]`
+**Commit:** `e14f374`
 
 ### Context
 
