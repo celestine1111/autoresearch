@@ -19,7 +19,7 @@
 ## v1.5.26 — Layer 3 Places_Validator (structural anti-hallucination guarantee) + remove Wikidata from the active waterfall
 
 **Date:** 2026-04-14
-**Commit:** `[pending]`
+**Commit:** `132c09e`
 
 ### Context
 
