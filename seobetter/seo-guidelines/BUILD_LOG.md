@@ -19,7 +19,7 @@
 ## v1.5.28 — New `travel` domain category + REST Countries fetcher for tourism articles
 
 **Date:** 2026-04-14
-**Commit:** `[pending]`
+**Commit:** `2c80433`
 
 ### Context
 
