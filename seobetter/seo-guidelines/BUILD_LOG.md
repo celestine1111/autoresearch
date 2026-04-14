@@ -19,7 +19,7 @@
 ## v1.5.25 — Fix "Note: Note:" duplication in callout boxes + friendlier auto-suggest message for ultra-long-tail keywords
 
 **Date:** 2026-04-14
-**Commit:** `[pending]`
+**Commit:** `8ffc8ab`
 
 ### Context
 
