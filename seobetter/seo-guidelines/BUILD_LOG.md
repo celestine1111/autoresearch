@@ -58,6 +58,13 @@ The fix: move the anti-hallucination guarantee from post-generation (Layer 3) to
   - When pool is empty AND local intent is true, falls through into the main validation loop. Every section whose heading looks like a specific business name gets deleted because `pool_contains()` returns false for every candidate against the empty pool. Generic section names ("FAQ", "History", "Key Takeaways") are filtered out upstream by `extract_business_name_candidate()`'s generic-name list and survive.
   - Verify: `grep -n "is_local_intent" seobetter/includes/Places_Validator.php`
 
+- **Places Validator debug panel in result view** — [admin/views/content-generator.php](../admin/views/content-generator.php) lines **~945-985** (inside the result renderer, just before the content preview)
+  - Only shown when `res.places_validator.is_local_intent` is true (local-intent articles only)
+  - Color-coded banner: green (places found, listicle allowed), amber (places insufficient, informational), red (force_informational, article structurally hallucinated)
+  - Surfaces: location, business type, pool size, validator warnings, and — when places_insufficient fires — an explanation + link to Settings → Places Integrations
+  - Primary diagnostic surface when a user reports "my listicle still shows fake businesses" or "my Foursquare key isn't working" — they can now see at a glance which tier returned what
+  - Verify: `grep -n "Places Validator debug panel\|res.places_validator" seobetter/admin/views/content-generator.php`
+
 - **places_insufficient UI suggestion** — [includes/Async_Generator.php::assemble_final()](../includes/Async_Generator.php) lines **~583-597**
   - When `$job['results']['places_insufficient']` is true, prepends a high-priority suggestion to the Analyze & Improve panel with the ⚠️ emoji, the location name, an explanation of why the listicle became informational, and a link to `developer.foursquare.com` with the "2 min signup" hint
   - Also exposes `places_insufficient`, `is_local_intent`, `places_location`, `places_business_type` in the `places_validator` subkey of the assemble result for future UI surfaces

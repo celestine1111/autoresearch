@@ -942,6 +942,47 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             h += '</div>';
         }
 
+        // v1.5.27 — Places Validator debug panel. Only shown for local-intent
+        // keywords so non-local articles don't see it. Surfaces which providers
+        // were tried + how many places each returned, whether Places_Validator
+        // stripped any sections, and whether the pre-gen switch fired. This is
+        // the primary diagnostic surface when a user reports "my listicle still
+        // shows fake businesses" or "my Foursquare key isn't being used".
+        if (res.places_validator && res.places_validator.is_local_intent) {
+            var pv = res.places_validator;
+            var bgColor = pv.force_informational ? '#fef2f2' : (pv.places_insufficient ? '#fffbeb' : '#f0fdf4');
+            var borderColor = pv.force_informational ? '#ef4444' : (pv.places_insufficient ? '#f59e0b' : '#22c55e');
+            var headerIcon = pv.force_informational ? '🚨' : (pv.places_insufficient ? '⚠️' : '✅');
+            var headerText = pv.force_informational
+                ? 'Places Validator: article was structurally hallucinated'
+                : (pv.places_insufficient
+                    ? 'Places Validator: places insufficient — article written as informational'
+                    : 'Places Validator: real places found, listicle allowed');
+            h += '<div style="padding:16px 20px;background:'+bgColor+';border-left:4px solid '+borderColor+';border-radius:0 8px 8px 0;margin-bottom:16px">';
+            h += '<div style="font-weight:700;font-size:14px;margin-bottom:8px">'+headerIcon+' '+headerText+'</div>';
+            h += '<div style="font-size:12px;color:#374151;line-height:1.6">';
+            if (pv.places_location) {
+                h += '<strong>Location:</strong> '+pv.places_location+'<br>';
+            }
+            if (pv.places_business_type) {
+                h += '<strong>Business type:</strong> '+pv.places_business_type+'<br>';
+            }
+            h += '<strong>Pool size:</strong> '+(pv.pool_size || 0)+' verified places<br>';
+            if (pv.warnings && pv.warnings.length) {
+                h += '<strong>Validator warnings:</strong><ul style="margin:4px 0 0 16px;padding:0">';
+                pv.warnings.forEach(function(w) { h += '<li>'+w+'</li>'; });
+                h += '</ul>';
+            }
+            h += '</div>';
+            if (pv.places_insufficient) {
+                h += '<div style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.6);border-radius:6px;font-size:12px;color:#78350f">';
+                h += '<strong>Why:</strong> The Places waterfall (OpenStreetMap → Foursquare → HERE → Google Places) returned fewer than 2 verified businesses for this location. To prevent hallucinated business names, the article was written as a general informational guide instead of a listicle. ';
+                h += 'If you already configured Foursquare/HERE keys and expected them to return results, (1) verify the keys are saved in <a href="'+(window.ajaxurl||'').replace('admin-ajax.php','admin.php?page=seobetter-settings')+'">Settings → Places Integrations</a>, (2) check whether the location is too small for those providers to have coverage, or (3) try a larger nearby city to confirm the keys work.';
+                h += '</div>';
+            }
+            h += '</div>';
+        }
+
         // Content preview with style block
         var content = res.content || '';
         var styleMatch = content.match(/<style>[\s\S]*?<\/style>/);

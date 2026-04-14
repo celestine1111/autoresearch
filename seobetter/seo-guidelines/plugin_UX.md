@@ -94,6 +94,14 @@ Appears when Generate is clicked. Contains:
 ### 3.4 Analyze & Improve Panel (REQUIRED) — INJECT-ONLY SYSTEM
 - Header: "Analyze & Improve" with improvement count
 - All buttons currently free (will be gated to Pro after testing)
+
+### 3.4B Places Validator Debug Panel (v1.5.27, REQUIRED for local-intent keywords)
+Color-coded banner rendered above the content preview in the result view when `res.places_validator.is_local_intent === true`. Three states:
+- **Green** (real places found, listicle allowed) — verified Places Pool has ≥2 entries and the article was generated as a normal listicle
+- **Amber** (places insufficient, article written as informational) — `places_insufficient` fired, the pre-generation switch forced an informational article, and the user sees a link to Settings → Places Integrations
+- **Red** (force_informational, article structurally hallucinated) — Places_Validator's post-gen pass stripped >50% of sections and the article is gutted; critical suggestion is also prepended to the fixes list
+
+Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validator warnings, and (when amber) an explanation of why the listicle became informational. Primary diagnostic surface for users reporting "my Foursquare key isn't working" or "why are there still fake businesses". Source: [admin/views/content-generator.php](../admin/views/content-generator.php) inline `renderResult()` function around the content-preview block.
 - **Two button modes:**
   - **"Add now" (purple)** — INJECT mode: adds new content WITHOUT editing existing text
   - **"Check" (gray)** — FLAG mode: shows what to fix manually, doesn't touch content
