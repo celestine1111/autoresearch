@@ -925,19 +925,21 @@ class Async_Generator {
 
 CURRENT DATE: {$month_year}. The current year is {$year}. ALWAYS use {$year} when writing 'in [year]', 'best X in [year]', or any year reference. NEVER use 2024 or 2025 — those are outdated.
 
-KEYWORD DENSITY (CRITICAL FOR SEO PLUGINS):
-- Primary keyword MUST appear every 100-200 words (0.5%-1.5% density)
-- Primary keyword MUST appear in the first 1-2 sentences of the article
-- At least 30% of H2 headings must contain the primary keyword or close variant
-- Use EXACT keyword phrase naturally — do not split or rearrange it
+KEYWORD PLACEMENT (CRITICAL FOR SEO PLUGINS):
+- The primary keyword should appear naturally every 100-200 words of body text
+- Primary keyword must appear in the first 1-2 sentences of the article
+- At least one third of H2 headings should contain the primary keyword or a close variant
+- Use the exact keyword phrase naturally — do not split or rearrange it
 - Also use natural variations (rearranged words, synonyms, related phrases)
+- IMPORTANT: Do NOT copy any density instruction numbers or ratios into the article body itself. The above is guidance for HOW YOU WRITE, not content to include in the text.
 
 GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
-- Expert quotes with full attribution: name, title, organization (+41% visibility)
-- Statistics with specific numbers and source: '85% of users prefer X (Source, Year)' (+40% visibility)
+- Expert quotes with full attribution: name, title, organization
+- Statistics with specific numbers and a source citation: 'eighty-five percent of users prefer X (Source, Year)' — when you include a real statistic from the research data, write the number normally
 - Source attributions in plain text format: '(RSPCA, 2026)' or 'According to the AVMA' — NO hyperlinks required
-- Fluent, polished writing with smooth transitions (+25-30% visibility)
-- NEVER stuff keywords — this REDUCES AI visibility by 9%
+- Fluent, polished writing with smooth transitions
+- NEVER stuff keywords — doing so reduces AI visibility
+- IMPORTANT: Do NOT output any of the bracketed "boost percentages" shown here (like "+41", "+40", etc.). Those are internal notes about why the guidance exists. NEVER write phrases like "5% entity density" or "0.5-1.5% density" in the article body — those are instructions to you, not content for readers.
 
 CITATION RULES (closed-menu grounding — the plugin injects an AVAILABLE CITATIONS list below):
 
@@ -975,9 +977,10 @@ E-E-A-T (Google Helpful Content Requirements):
 
 NLP ENTITY OPTIMIZATION (Google Natural Language):
 - Use specific named entities: 'Dr. Sarah Chen at MIT' NOT 'an expert says'
-- Use proper nouns for people, organizations, places, products — target 5%+ entity density
+- Use lots of proper nouns for people, organizations, places, products — aim for high entity saturation throughout
 - Mention primary entities early in the text (salience scoring)
 - Stay focused on one topic per section (triggers specific content classification)
+- IMPORTANT: the above are instructions for YOUR writing style, not content for readers. Do NOT write the phrase "entity density" or similar technical terms in the article body.
 
 WRITE LIKE A HUMAN (CRITICAL — this is the #1 quality signal):
 AI writing has a recognizable smell. It is not about any single word. It is the combination: predictable structure, relentless parallelism, significance inflation, and a tendency to wrap everything in a tidy bow. Your job is to write like a knowledgeable person who has opinions, not like a language model.

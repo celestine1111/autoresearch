@@ -135,9 +135,15 @@ class AI_Image_Generator {
     }
 
     /**
-     * Pollinations.ai — FREE, no API key. Returns a URL that can be directly
-     * embedded or downloaded. The URL is the generation request itself;
-     * Pollinations generates the image on first fetch and caches it.
+     * Pollinations.ai — FREE, no API key. Fetches the generated image and
+     * saves it to a local temp file with a .jpg extension so
+     * media_sideload_image() can consume it (that function requires a file
+     * extension in the URL path to detect mime type).
+     *
+     * v1.5.34: previously returned the Pollinations URL directly, but that
+     * URL has no extension so media_sideload_image silently failed and
+     * the featured image fell through to Picsum. Now downloads + saves
+     * locally first.
      */
     private static function generate_pollinations( string $prompt ): string {
         $base = 'https://image.pollinations.ai/prompt/';
@@ -150,7 +156,21 @@ class AI_Image_Generator {
             'enhance'  => 'true',
             'seed'     => abs( crc32( $prompt ) ) % 100000,
         ] );
-        return $base . $encoded . '?' . $query;
+        $pollinations_url = $base . $encoded . '?' . $query;
+
+        // Fetch the actual image. Pollinations generates on first fetch
+        // (can take 5-20s) and returns a JPEG.
+        $response = wp_remote_get( $pollinations_url, [
+            'timeout'     => 60,
+            'redirection' => 3,
+        ] );
+        if ( is_wp_error( $response ) ) return '';
+        if ( wp_remote_retrieve_response_code( $response ) !== 200 ) return '';
+
+        $body = wp_remote_retrieve_body( $response );
+        if ( empty( $body ) ) return '';
+
+        return self::save_binary_to_temp( $body, 'jpg' );
     }
 
     /**
@@ -263,14 +283,22 @@ class AI_Image_Generator {
     private static function save_base64_to_temp( string $b64, string $mime ): string {
         $decoded = base64_decode( $b64, true );
         if ( $decoded === false ) return '';
-
-        $upload_dir = wp_upload_dir();
         $ext = ( strpos( $mime, 'jpeg' ) !== false ) ? 'jpg' : 'png';
+        return self::save_binary_to_temp( $decoded, $ext );
+    }
+
+    /**
+     * v1.5.34 — shared helper that writes binary image data to a temp file
+     * in the uploads dir with a proper extension, then returns the public
+     * URL. Used by both Pollinations (raw JPEG fetch) and Gemini (base64 inline).
+     */
+    private static function save_binary_to_temp( string $binary, string $ext ): string {
+        if ( empty( $binary ) ) return '';
+        $upload_dir = wp_upload_dir();
         $filename = 'sb-ai-image-' . wp_generate_password( 8, false ) . '.' . $ext;
         $filepath = $upload_dir['path'] . '/' . $filename;
         $fileurl  = $upload_dir['url']  . '/' . $filename;
-
-        if ( file_put_contents( $filepath, $decoded ) === false ) return '';
+        if ( file_put_contents( $filepath, $binary ) === false ) return '';
         return $fileurl;
     }
 

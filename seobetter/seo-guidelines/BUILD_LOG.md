@@ -16,6 +16,68 @@
 
 ---
 
+## v1.5.34 — Critical bugfix trio: stale research cache + broken Pollinations download + "5%" leaking into article body
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User retested Lucignano against v1.5.33 and reported the article STILL had 6 fabricated business names (Gelateria del Borgo, La Dolce Vita Gelato, Cremeria San Francesco, Gelato Artigianale Toscano, Antica Gelateria Lucignano, Il Cono Perfetto), no AI-generated featured image, and a literal "5%" showing up in the article body as disconnected filler. None of those 6 names match what Sonar/Perplexity UI returns for Lucignano.
+
+Triple root cause discovered by verifying each link in the chain:
+
+**Bug 1 — Stale Trend_Researcher cache hiding v1.5.26+ schema fields.** The cache key `seobetter_trends_{md5}` with 6-hour TTL was still holding research responses from before `is_local_intent` and `places` were added to the cloud-api output. When `Async_Generator::process_step()` pulled `$research` from this cache, the new fields were missing, the v1.5.27 pre-gen switch silently didn't fire (`$research['is_local_intent']` was empty), the v1.5.33 Local Business Mode silently didn't fire (`$research['places_count']` was 0 from the stale shape), and the outline generator went down the default branch and produced a generic 6-item listicle. The model then fabricated 6 Italian-sounding gelato shop names to fill it.
+
+**Bug 2 — Pollinations URL has no file extension, `media_sideload_image()` silently drops it.** The v1.5.32 AI_Image_Generator returned `https://image.pollinations.ai/prompt/{text}?width=1200...` with no `.jpg` in the path. WordPress's `media_sideload_image()` validates the URL extension against `/\.(jpe?g|gif|png|webp)\b/i` before downloading and returns a WP_Error when no extension is present. The featured image fell through to Pexels → Picsum without any error surfacing.
+
+**Bug 3 — System prompt percentages leaking as literal body text.** Two lines in `Async_Generator::get_system_prompt()` contained `0.5%-1.5% density` and `target 5%+ entity density` — meant as instructions to the model, but the model was copying the "5%" literal into the article body as a disconnected filler element.
+
+### Fixed
+
+- **Cache version busting in Trend_Researcher** — [includes/Trend_Researcher.php::research()](../includes/Trend_Researcher.php) lines **~30-73**
+  - Added `CACHE_VERSION = 'v7'` class constant. Cache key is now `seobetter_trends_v7_{md5}` so all pre-v7 cached entries (including the v1.5.24/v1.5.26/v1.5.30 schema transitions) are invalidated automatically on upgrade.
+  - Cached response is also schema-validated before being returned: if it lacks `is_local_intent` or doesn't have a `places` key, it's treated as a cache miss and re-fetched. This is the belt-and-suspenders — even if the cache key collision ever occurs, stale shapes can't slip through.
+  - If a pre-v7 entry is detected at the old cache key, it's deleted immediately so subsequent requests re-populate with fresh data.
+  - Verify: `grep -n "CACHE_VERSION\|seobetter_trends_.*CACHE_VERSION" seobetter/includes/Trend_Researcher.php`
+
+- **Pollinations download-to-temp** — [includes/AI_Image_Generator.php::generate_pollinations()](../includes/AI_Image_Generator.php)
+  - Instead of returning the raw Pollinations URL (no extension), now fetches the actual JPEG bytes via `wp_remote_get` with 60-second timeout, saves to `wp_upload_dir()['path']` with a `.jpg` extension, and returns the local file URL
+  - `media_sideload_image()` then happily consumes the local URL (has proper extension) and copies it into the media library as a regular WP attachment
+  - New private helper `save_binary_to_temp( $binary, $ext )` shared by Pollinations (raw JPEG) and Gemini (base64 inline)
+  - Verify: `grep -n "save_binary_to_temp\|wp_remote_get.*pollinations_url" seobetter/includes/AI_Image_Generator.php`
+
+- **Removed literal percentages from system prompt** — [includes/Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php) lines **~928-945** and **~978-982**
+  - Rewrote `Primary keyword MUST appear every 100-200 words (0.5%-1.5% density)` → `Primary keyword should appear naturally every 100-200 words`
+  - Rewrote `Use proper nouns for people, organizations, places, products — target 5%+ entity density` → `Use lots of proper nouns for people, organizations, places, products — aim for high entity saturation throughout`
+  - Added explicit "IMPORTANT: Do NOT copy any of these numbers into the article body" disclaimers next to both blocks so the model knows the instructions are for its own process, not content for readers
+  - Removed "+41% visibility", "+40% visibility", "+25-30% visibility" bracketed numbers from the GEO VISIBILITY block since those were also at risk of leaking
+  - Removed "reduces AI visibility by 9%" and rewrote as "reduces AI visibility" (no number)
+  - Rewrote the example statistic `'85% of users prefer X'` to `'eighty-five percent of users prefer X'` so the model doesn't use that as a template for fabricating "X%" statistics
+  - Verify: `grep -n "Do NOT copy any density\|aim for high entity saturation" seobetter/includes/Async_Generator.php`
+
+### Why this trio fixes all three symptoms
+
+1. **The fake 6-item listicle** — with cache busted, v1.5.27 pre-gen switch now actually fires for Lucignano (OSM:0 → places_insufficient=true → informational article) OR v1.5.33 Local Business Mode fires (Sonar returns 2 real places → 2 business H2s + generic fill sections). Either way the 6-fake-shops failure becomes structurally impossible.
+2. **Missing AI featured image** — with Pollinations download path fixed, the free zero-setup default now actually produces an image that lands in the media library. Users who've configured `branding_provider='pollinations'` will see an image on their next generation.
+3. **"5%" filler in article body** — with the literal percentages removed from the system prompt, the model has nothing to parrot from the instruction block.
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.33` → `1.5.34`
+
+### Critical — user must clear the WordPress cache before retesting
+
+- WP Admin → SEOBetter → Tools → Clear transient cache (or `wp transient delete --all` via WP-CLI)
+- OR just wait 6 hours for the old `seobetter_trends_*` entries to expire
+- The v7 cache version automatically avoids hitting old entries on new writes, BUT the very first test after upgrading may still pull a stale entry if the WP object cache (not transient) is holding it
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.33 — Local Business Mode: cap listicle H2s to verified pool size + strict per-section business prompt
 
 **Date:** 2026-04-15

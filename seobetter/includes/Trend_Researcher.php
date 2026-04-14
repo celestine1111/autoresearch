@@ -23,6 +23,13 @@ class Trend_Researcher {
      * Cache duration for research results (6 hours).
      */
     private const CACHE_TTL = 21600;
+    // v1.5.34 — bump this when the research response shape changes so stale
+    // cached entries from older plugin versions are never hit after an upgrade.
+    // Bumping this version invalidates ALL existing seobetter_trends_* transients
+    // without requiring a manual DB cleanup.
+    // v7 — v1.5.26 added the `places` array, v1.5.30 added Sonar tier, v1.5.34
+    // fixes stale caches from pre-v1.5.26 deployments still hitting old shape.
+    private const CACHE_VERSION = 'v7';
 
     /**
      * Check if Last30Days is available.
@@ -48,11 +55,20 @@ class Trend_Researcher {
      * @return array Research results with stats, quotes, trends, and sources.
      */
     public static function research( string $keyword, string $type = 'general', string $country = '' ): array {
-        // Check cache first
-        $cache_key = 'seobetter_trends_' . md5( $keyword . $type . $country );
+        // v1.5.34 — cache key includes a schema version so upgrading the
+        // plugin automatically invalidates all stale cached research results.
+        // Also validate the cached shape: if it lacks the v1.5.26+ fields
+        // (is_local_intent, places, places_count), treat it as a cache miss
+        // and re-fetch. This protects against WP object caches that might
+        // ignore transient expiry.
+        $cache_key = 'seobetter_trends_' . self::CACHE_VERSION . '_' . md5( $keyword . $type . $country );
         $cached = get_transient( $cache_key );
-        if ( $cached ) {
+        if ( is_array( $cached ) && isset( $cached['is_local_intent'] ) && array_key_exists( 'places', $cached ) ) {
             return $cached;
+        }
+        // If an old-format cache entry is still here, delete it so we re-fetch
+        if ( $cached ) {
+            delete_transient( $cache_key );
         }
 
         // 1. Try Vercel cloud endpoint (works everywhere, no Python needed)
