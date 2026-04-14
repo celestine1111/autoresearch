@@ -166,6 +166,24 @@ class Async_Generator {
                 $job['results']['places_location']     = $research['places_location'] ?? '';
                 $job['results']['is_local_intent']     = ! empty( $research['is_local_intent'] );
 
+                // v1.5.27 — STRUCTURAL pre-generation switch. When the keyword has local
+                // intent but the Places waterfall returned <2 verified businesses, set
+                // a flag that propagates through to generate_outline() and
+                // generate_section() so they produce an informational article (no
+                // business-name sections, no listicle numbering, disclaimer at end)
+                // instead of asking the model to write a listicle that it will
+                // inevitably hallucinate to fill.
+                //
+                // v1.5.24's LOCAL-INTENT WARNING prompt block proved insufficient —
+                // live Lucignano test in v1.5.26 showed the model happily ignored the
+                // warning and invented 6 gelaterie anyway. Prompt instructions are
+                // unreliable under structural listicle pressure. The only durable fix
+                // is to never ask the model to write a listicle in the first place.
+                $places_count = (int) ( $research['places_count'] ?? 0 );
+                $places_insufficient = ! empty( $research['is_local_intent'] ) && $places_count < 2;
+                $job['options']['places_insufficient'] = $places_insufficient;
+                $job['results']['places_insufficient'] = $places_insufficient;
+
                 // Build the verified citation pool (real keyword-relevant URLs)
                 // This drives both the AI prompt grounding and the post-save validator.
                 $pool = Citation_Pool::build(
@@ -401,7 +419,32 @@ class Async_Generator {
 
         $year = wp_date( 'Y' );
         $min_kw_headings = max( 2, round( $content_sections * 0.5 ) );
-        $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "\n\nRequirements:\n- Follow the REQUIRED SECTIONS structure above — use those as your H2 headings\n- Adapt the section names to fit the specific keyword naturally\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. SEO plugins check this — headings without the keyword get flagged.\n- Make headings sound natural, not like SEO templates\n- Target word count: {$total_words} words\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
+
+        // v1.5.27 — structural override when Places waterfall returned <2 verified
+        // businesses for a local-intent keyword. Force an informational article
+        // structure instead of a listicle so the model is never even asked to
+        // produce business-name-shaped sections.
+        if ( ! empty( $options['places_insufficient'] ) ) {
+            $prompt = "Create an INFORMATIONAL ARTICLE outline for: \"{$keyword}\"\n{$kw_context}\n\n"
+                . "CRITICAL CONTEXT: This keyword asks about local businesses in a small city, but our verified-places database has no real businesses for this location. Therefore this article must be written as a GENERAL INFORMATIONAL GUIDE, not a listicle. Do NOT produce section headings that name specific businesses, restaurants, shops, hotels, cafés, or establishments.\n\n"
+                . "FORBIDDEN heading patterns:\n"
+                . "- \"1. [Business Name]\", \"#1: [Name]\", \"Top Pick: [Name]\"\n"
+                . "- Any proper noun that looks like a business name (e.g. \"Gelateria X\", \"Trattoria Y\", \"Hotel Z\")\n"
+                . "- \"Best [type] in [city]\" as an H2 (fine as H1 title, not as section)\n\n"
+                . "REQUIRED heading patterns (use these as templates, adapt to the keyword):\n"
+                . "- Key Takeaways\n"
+                . "- What to Look for in [type of business/experience]\n"
+                . "- History and Cultural Context of [topic] in [region]\n"
+                . "- Regional Variations and Traditions\n"
+                . "- How to Find Quality [type] When Traveling in [region]\n"
+                . "- Questions to Ask Before Visiting\n"
+                . "- FAQ\n"
+                . "- References\n\n"
+                . "CURRENT YEAR: {$year}.\nTarget audience: {$audience}\nTarget word count: {$total_words} words\nKEYWORD IN HEADINGS: At least {$min_kw_headings} headings should contain the keyword or a close variant (natural phrasing, not stuffing).\n\n"
+                . "Return ONLY the numbered list of H2 headings, one per line. No explanations.";
+        } else {
+            $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "\n\nRequirements:\n- Follow the REQUIRED SECTIONS structure above — use those as your H2 headings\n- Adapt the section names to fit the specific keyword naturally\n- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. SEO plugins check this — headings without the keyword get flagged.\n- Make headings sound natural, not like SEO templates\n- Target word count: {$total_words} words\n\nReturn ONLY the numbered list of H2 headings, one per line. No explanations.";
+        }
 
         $result = self::send_request( $prompt, 'You are an SEO content strategist. Return only the numbered list of headings.', [ 'max_tokens' => 500 ] );
 
@@ -445,6 +488,19 @@ class Async_Generator {
         if ( $domain && $domain !== 'general' ) $kw_context .= "\nContent domain: {$domain}";
         if ( ! empty( $secondary ) ) $kw_context .= "\nSecondary keywords to include: " . implode( ', ', $secondary );
         if ( ! empty( $lsi ) ) $kw_context .= "\nLSI keywords to include: " . implode( ', ', $lsi );
+
+        // v1.5.27 — structural anti-hallucination rule injected into every
+        // non-takeaways/non-faq/non-references section when the Places waterfall
+        // returned <2 verified businesses for a local-intent keyword. This is
+        // a HARD rule — the section MUST NOT name specific businesses. Paired
+        // with the informational outline from generate_outline() and the
+        // Places_Validator empty-pool trap as the Layer 3 backstop.
+        if ( ! empty( $options['places_insufficient'] ) ) {
+            $kw_context .= "\n\n*** PLACES INSUFFICIENT — HARD RULE ***\n"
+                . "Our verified-places database has ZERO verified businesses for this location. This section MUST NOT name any specific business, restaurant, shop, hotel, café, gelateria, trattoria, osteria, pizzeria, bar, bakery, or establishment. Writing 'Gelateria X is famous for...' or 'At Hotel Y you can...' is FORBIDDEN even if it sounds plausible.\n"
+                . "Instead: write about the topic in general terms — history, traditions, what to look for, regional variations, cultural context, practical tips for travelers. If the reader wants specific business recommendations, the article's disclaimer paragraph tells them to check TripAdvisor, Google Maps, OpenStreetMap, or Yelp directly.\n"
+                . "If you feel tempted to name a business, replace it with a generic noun like 'a traditional gelateria', 'a family-run trattoria', 'a local osteria'. Never invent a business name.";
+        }
 
         $is_takeaways = preg_match( '/key\s*takeaway/i', $heading );
         $is_faq = preg_match( '/faq|frequently\s*asked/i', $heading );
@@ -536,13 +592,18 @@ class Async_Generator {
         // gutted) article but surface a loud warning in the result panel so the user
         // knows to regenerate manually with a broader keyword.
         $places_pool = $job['results']['places'] ?? [];
+        $is_local_intent = ! empty( $job['results']['is_local_intent'] );
         $places_warnings = [];
         $places_force_informational = false;
-        if ( ! empty( $places_pool ) ) {
+        // v1.5.27 — also run the validator when pool is empty but the keyword
+        // has local intent, so the backstop can strip any hallucinated business
+        // sections that slipped through the pre-generation prompt override.
+        if ( ! empty( $places_pool ) || $is_local_intent ) {
             $pv_result = Places_Validator::validate(
                 $html,
                 $places_pool,
-                $job['results']['places_business_type'] ?? ''
+                $job['results']['places_business_type'] ?? '',
+                $is_local_intent
             );
             if ( ! $pv_result['force_informational'] ) {
                 $html = $pv_result['html'];
@@ -572,6 +633,22 @@ class Async_Generator {
             ] );
         }
 
+        // v1.5.27 — if the pre-generation switch fired (places_insufficient), add
+        // a dedicated high-priority suggestion explaining to the user WHY they got
+        // a general informational article instead of the listicle they asked for,
+        // and how to enable real listicles by configuring a free API key.
+        if ( ! empty( $job['results']['places_insufficient'] ) ) {
+            $loc = $job['results']['places_location'] ?? 'this location';
+            array_unshift( $suggestions, [
+                'type'     => 'places_insufficient',
+                'priority' => 'high',
+                'message'  => sprintf(
+                    '⚠️ No verified businesses were found in %s — your article was written as a general informational guide instead of a listicle to prevent hallucinated business names. To enable real listicles for small cities worldwide, configure a free Foursquare API key (2 min signup at developer.foursquare.com) in Settings → Integrations. OpenStreetMap (the free default) has thin coverage for small towns.',
+                    $loc
+                ),
+            ] );
+        }
+
         return [
             'success'       => true,
             'content'       => $html,
@@ -587,10 +664,17 @@ class Async_Generator {
             'meta'          => $job['results']['meta'] ?? [],
             // v1.5.26 — surface Places_Validator outcome so the UI can show a
             // red banner when an article was gutted by the validator.
+            // v1.5.27 — also surface places_insufficient + is_local_intent so
+            // the UI can show an orange "written as informational instead of
+            // listicle" banner with a link to Settings → Integrations.
             'places_validator' => [
-                'pool_size'            => count( $places_pool ),
-                'warnings'             => $places_warnings,
-                'force_informational'  => $places_force_informational,
+                'pool_size'             => count( $places_pool ),
+                'warnings'              => $places_warnings,
+                'force_informational'   => $places_force_informational,
+                'is_local_intent'       => $is_local_intent,
+                'places_insufficient'   => ! empty( $job['results']['places_insufficient'] ),
+                'places_location'       => $job['results']['places_location'] ?? '',
+                'places_business_type'  => $job['results']['places_business_type'] ?? '',
             ],
             // Thread the citation pool through to the save path so
             // validate_outbound_links() can use it as the primary allow-list

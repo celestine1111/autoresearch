@@ -64,7 +64,7 @@ class Places_Validator {
      *     @type int    $pool_size
      * }
      */
-    public static function validate( string $html, array $places_pool, string $business_type = '' ): array {
+    public static function validate( string $html, array $places_pool, string $business_type = '', bool $is_local_intent = false ): array {
         $result = [
             'html'                => $html,
             'removed_sections'    => [],
@@ -74,8 +74,13 @@ class Places_Validator {
             'pool_size'           => count( $places_pool ),
         ];
 
-        // Skip entirely for non-local articles (empty pool = no waterfall ran).
-        if ( empty( $places_pool ) ) {
+        // v1.5.26: skip entirely for non-local articles (no local intent AND empty pool).
+        // v1.5.27: when is_local_intent=true AND pool is empty, we FALL THROUGH into
+        // the main validation loop so we can delete any business-name-shaped section
+        // the model may have produced despite the prompt-level forbidding. This is
+        // the backstop when the pre-generation prompt override (in Async_Generator::
+        // generate_outline) isn't sufficient.
+        if ( empty( $places_pool ) && ! $is_local_intent ) {
             return $result;
         }
 
@@ -88,7 +93,15 @@ class Places_Validator {
             }
             $normalized_pool[] = self::normalize_business_name( $name );
         }
-        if ( empty( $normalized_pool ) ) {
+
+        // v1.5.27 — empty-pool backstop: when is_local_intent=true and the pool is
+        // empty, we still walk the article and delete any section whose heading
+        // looks like a specific business name. pool_contains() will return false
+        // for every candidate, so every business-shaped section gets stripped.
+        // Non-business headings (FAQ, History, What to Look For, Key Takeaways,
+        // Conclusion) are filtered out by the generic-name check inside
+        // extract_business_name_candidate() and are kept intact.
+        if ( empty( $normalized_pool ) && ! $is_local_intent ) {
             return $result;
         }
 

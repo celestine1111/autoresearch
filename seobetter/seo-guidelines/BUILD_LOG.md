@@ -16,6 +16,81 @@
 
 ---
 
+## v1.5.27 — Layer 0 pre-generation switch when Places waterfall is empty (structural fix for small-city hallucination)
+
+**Date:** 2026-04-14
+**Commit:** `[pending]`
+
+### Context
+
+Live v1.5.26 testing against Lucignano (OSM:0, no Foursquare key configured) proved that Places_Validator's post-generation deletion is insufficient as a standalone fix. Three failure modes combined:
+
+1. **Empty pool → validator early-exited.** The original v1.5.26 `Places_Validator::validate()` had `if ( empty( $places_pool ) ) { return $result; }` as the first guard. When OSM returned 0 and no keys were configured, the pool was empty and the validator did absolutely nothing. Article shipped with all hallucinations intact and no warnings visible in the UI.
+2. **Prompt-level LOCAL-INTENT WARNING was ignored.** The `for_prompt` research payload DID include the warning block telling the model "DO NOT invent business names", but the model ignored it under the structural pressure to produce a 2,000-word listicle with 6 H2 sections. Verified by curl'ing `https://seobetter.vercel.app/api/research` — the warning is present in the prompt, but the model wrote "Gelateria Artigianale Il Cono d'Oro" and "Dolce Vita Gelato & Sorbet" in Lucignano anyway.
+3. **No UI feedback.** The Analyze & Improve panel showed standard suggestions (readability, citations) but ZERO indication that the article was structurally hallucinated.
+
+The fix: move the anti-hallucination guarantee from post-generation (Layer 3) to pre-generation (new Layer 0). When research returns `is_local_intent && places_count < 2`, flip a flag that forces `generate_outline()` to produce an informational article structure and `generate_section()` to forbid business names. The model is NEVER asked to write a listicle — there is no structural pressure to hallucinate, so it doesn't. Places_Validator is updated to ALSO run with an empty pool when `is_local_intent=true`, as the structural backstop for any sections that slip through.
+
+### Added
+
+- **Layer 0 pre-generation switch** — [includes/Async_Generator.php::process_step()](../includes/Async_Generator.php) trends-step branch, lines **~167-178**
+  - After `Trend_Researcher::research()` returns, check `is_local_intent && places_count < 2`
+  - Set `$job['options']['places_insufficient'] = true` — flag persists in the job transient through outline and section steps
+  - Also set `$job['results']['places_insufficient']` for the assemble_final result payload
+  - Verify: `grep -n "places_insufficient" seobetter/includes/Async_Generator.php`
+
+- **Outline prompt structural override** — [includes/Async_Generator.php::generate_outline()](../includes/Async_Generator.php) lines **~412-436**
+  - When `$options['places_insufficient']` is true, branch to a completely different prompt that:
+    - Explicitly FORBIDS business-name-shaped H2s ("1. Gelateria X", "Top Pick: Y")
+    - REQUIRES informational-article section templates (Key Takeaways, History and Cultural Context, What to Look For, Regional Variations, How to Find Quality X When Traveling, FAQ, References)
+    - Instructs the model that the user's verified-places database has zero results for this location and the article must be informational, not a listicle
+  - Verify: `grep -n "FORBIDDEN heading patterns" seobetter/includes/Async_Generator.php`
+
+- **Section prompt hard rule** — [includes/Async_Generator.php::generate_section()](../includes/Async_Generator.php) lines **~497-511**
+  - When `$options['places_insufficient']` is true, appends `*** PLACES INSUFFICIENT — HARD RULE ***` block to `$kw_context` for every non-takeaways/non-faq/non-references section
+  - Hard rule forbids naming any specific business, restaurant, shop, hotel, café, gelateria, trattoria, osteria, pizzeria, bar, bakery, or establishment
+  - Instructs the model to use generic nouns ("a traditional gelateria", "a family-run trattoria") instead of invented names
+  - Verify: `grep -n "PLACES INSUFFICIENT — HARD RULE" seobetter/includes/Async_Generator.php`
+
+- **Places_Validator empty-pool backstop** — [includes/Places_Validator.php::validate()](../includes/Places_Validator.php) lines **~66-92**
+  - New 4th parameter `bool $is_local_intent = false`
+  - Early-exit guard changed from `if ( empty( $places_pool ) )` to `if ( empty( $places_pool ) && ! $is_local_intent )`
+  - When pool is empty AND local intent is true, falls through into the main validation loop. Every section whose heading looks like a specific business name gets deleted because `pool_contains()` returns false for every candidate against the empty pool. Generic section names ("FAQ", "History", "Key Takeaways") are filtered out upstream by `extract_business_name_candidate()`'s generic-name list and survive.
+  - Verify: `grep -n "is_local_intent" seobetter/includes/Places_Validator.php`
+
+- **places_insufficient UI suggestion** — [includes/Async_Generator.php::assemble_final()](../includes/Async_Generator.php) lines **~583-597**
+  - When `$job['results']['places_insufficient']` is true, prepends a high-priority suggestion to the Analyze & Improve panel with the ⚠️ emoji, the location name, an explanation of why the listicle became informational, and a link to `developer.foursquare.com` with the "2 min signup" hint
+  - Also exposes `places_insufficient`, `is_local_intent`, `places_location`, `places_business_type` in the `places_validator` subkey of the assemble result for future UI surfaces
+  - Verify: `grep -n "places_insufficient UI" seobetter/includes/Async_Generator.php`
+
+### Changed
+
+- **Places_Validator call site in assemble_final** — now always runs the validator when EITHER `$places_pool` is non-empty OR `$is_local_intent` is true, instead of only when the pool is non-empty. Enables the empty-pool backstop path to execute.
+- **Version bump** — `seobetter/seobetter.php` header + `SEOBETTER_VERSION` constant: `1.5.26` → `1.5.27`
+
+### Documented
+
+- **`plugin_functionality_wordpress.md §1.6B`** — new paragraph documenting the Layer 0 pre-generation switch, the empty-pool backstop, the UI `places_insufficient` suggestion, and the reasoning from the failed Lucignano test
+- **`SEO-GEO-AI-GUIDELINES.md §4.7B`** — new paragraph explaining the 4-layer architecture (Layer 0 pre-gen switch, Layer 1 prompt rule, Layer 2 data grounding, Layer 3 post-gen validator) and why the pre-generation layer is required given that prompt-level instructions are unreliable under listicle pressure
+- **`pro-features-ideas.md`** — **NOT touched** per skill rule
+
+### Known limitations (still not shipping in v1.5.27)
+
+- **Automatic regeneration on `force_informational`** — Places_Validator still just flags the problem; it doesn't re-run generation with a different content type. This is less critical now because Layer 0 catches the case before tokens are spent.
+- **Yelp Fusion as Tier 5** — Anglophone-only, deferred to v1.5.28 or later
+- **Type-match validator per tier** — deferred; removing Wikidata fixed the worst offender
+
+### Required user action before testing
+
+- **Vercel redeploy** — v1.5.27 only touches plugin PHP files, NOT `cloud-api/api/research.js`. The v1.5.26 cloud-api deployment at `https://seobetter.vercel.app` is still the correct endpoint. No Vercel redeploy needed.
+- **Install zip** — WP Admin → Plugins → Upload → `/Users/ben/Desktop/seobetter.zip` → Replace Current
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.26 — Layer 3 Places_Validator (structural anti-hallucination guarantee) + remove Wikidata from the active waterfall
 
 **Date:** 2026-04-14
