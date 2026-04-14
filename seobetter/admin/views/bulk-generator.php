@@ -155,7 +155,8 @@ if ( $batch_id && ! $batch ) {
                             <option value="science">Science &amp; Space</option>
                             <option value="sports">Sports &amp; Fitness</option>
                             <option value="technology">Technology</option>
-                            <option value="transportation">Transportation &amp; Travel</option>
+                            <option value="transportation">Transportation &amp; Logistics</option>
+                            <option value="travel">Travel &amp; Tourism</option>
                             <option value="veterinary">Veterinary &amp; Pet Health</option>
                             <option value="weather">Weather &amp; Climate</option>
                         </select>

@@ -16,6 +16,56 @@
 
 ---
 
+## v1.5.28 — New `travel` domain category + REST Countries fetcher for tourism articles
+
+**Date:** 2026-04-14
+**Commit:** `[pending]`
+
+### Context
+
+User requested a dedicated `travel` category. The existing "Transportation & Travel" label was misleading — it routed to OpenSky / OpenChargeMap / ADSBExchange / CityBikes / NHTSA, which are logistics/vehicle APIs, not tourism APIs. Travel-intent articles had no dedicated category route and fell through to `general` (Quotable / NagerDate / NumberFacts) which is useless for destination guides.
+
+**Important note:** the travel category controls which fact/stat APIs run alongside the always-on sources — it does NOT affect the Places waterfall. Business listings for travel articles (restaurants, hotels, gelaterie, motels) come from the OSM → Foursquare → HERE → Google Places waterfall which runs independently of the category selector. The category selector provides supporting stats (destination facts, climate, holidays) that get woven into the article prose.
+
+### Added
+
+- **`fetchRestCountries(keyword, country)`** — [cloud-api/api/research.js](../cloud-api/api/research.js) ~line **2265**
+  - Free REST Countries v3.1 API, no auth required
+  - Queries `restcountries.com/v3.1/name/{country}` using the explicit country param or a last-capitalized-word heuristic from the keyword as fallback
+  - Returns two stats: (1) name + capital + population + region, (2) official languages + currency + timezone
+  - Verify: `grep -n "^function fetchRestCountries" seobetter/cloud-api/api/research.js`
+
+- **`travel` category in `getCategorySearches()`** — [cloud-api/api/research.js](../cloud-api/api/research.js) ~line **1014**
+  - Routes to: `fetchRestCountries` + `fetchOpenMeteo` + `fetchSunriseSunset` + `fetchNagerDate`
+  - All four are existing zero-config free APIs (no new keys required)
+  - Wikipedia is already always-on so destination summaries come through automatically
+  - Verify: `grep -n "travel:.*fetchRestCountries" seobetter/cloud-api/api/research.js`
+
+- **`travel` option added to 3 category dropdowns** (forms must stay in sync per research.js:987 comment):
+  - [admin/views/content-generator.php](../admin/views/content-generator.php) — after transportation
+  - [admin/views/bulk-generator.php](../admin/views/bulk-generator.php) — after transportation
+  - [admin/views/content-brief.php](../admin/views/content-brief.php) — after transportation
+  - Label: "Travel & Tourism" (distinct from "Transportation & Logistics")
+
+### Changed
+
+- **"Transportation & Travel" label clarified** — renamed to "Transportation & Logistics" in all 3 form dropdowns so it's clear that category is for vehicle/flight/EV-charging data, not tourism
+- **Version bump** — `seobetter/seobetter.php` header + `SEOBETTER_VERSION` constant: `1.5.27` → `1.5.28`
+
+### Documented
+
+- **`plugin_functionality_wordpress.md §1`** — new row in the category API table listing `travel → REST Countries + OpenMeteo + SunriseSunset + NagerDate`
+
+### Does NOT affect
+
+- **Place listings.** The Places waterfall (OSM → Foursquare → HERE → Google Places) runs regardless of category. Picking `travel` instead of `food` for your Lucignano test does NOT change which gelato shops are found — that depends entirely on whether your Foursquare/HERE keys return real data for the location. For business-listing accuracy, the only levers are the API keys in Settings → Places Integrations.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.27 — Layer 0 pre-generation switch when Places waterfall is empty (structural fix for small-city hallucination)
 
 **Date:** 2026-04-14
