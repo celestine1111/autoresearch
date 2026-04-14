@@ -149,6 +149,133 @@ class AI_Provider_Manager {
     }
 
     /**
+     * v1.5.32 — Model tier compatibility map for SEOBetter's strict grounding
+     * workflow. Each model is classified as:
+     *   'green'  — Recommended. Follows PLACES RULES + Citation Pool reliably.
+     *   'amber'  — Works but may ignore URL rules under complex prompts.
+     *   'red'    — NOT recommended. Known to produce hallucinated content
+     *              despite the plugin's strict closed-menu grounding.
+     *
+     * These classifications are based on instruction-following benchmarks +
+     * empirical testing against SEOBetter's multi-rule system prompt. The
+     * "red" tier is models that CANNOT reliably follow the PLACES RULES
+     * block even when a verified pool is injected into the prompt.
+     */
+    const MODEL_TIERS = [
+        // 🟢 Green — Recommended
+        'claude-sonnet-4-6'           => 'green',
+        'claude-opus-4-6'             => 'green',
+        'claude-haiku-4-5-20251001'   => 'green',
+        'claude-sonnet-4-5-20250414'  => 'green',
+        'gpt-4.1'                     => 'green',
+        'gpt-4o'                      => 'green',
+        'gemini-2.5-pro'              => 'green',
+        'anthropic/claude-sonnet-4'   => 'green',
+        'anthropic/claude-opus-4'     => 'green',
+        'openai/gpt-4.1'              => 'green',
+        'openai/gpt-4o'               => 'green',
+        'google/gemini-2.5-pro'       => 'green',
+        // 🟡 Amber — Works but weaker instruction following
+        'gpt-4o-mini'                 => 'amber',
+        'gpt-4.1-mini'                => 'amber',
+        'gpt-4.1-nano'                => 'amber',
+        'gemini-2.5-flash'            => 'amber',
+        'gemini-2.0-flash'            => 'amber',
+        'google/gemini-2.5-flash'     => 'amber',
+        'claude-3-5-haiku-20241022'   => 'amber',
+        // 🔴 Red — NOT recommended for SEOBetter's flow
+        'o3'                          => 'red',
+        'o3-mini'                     => 'red',
+        'o4-mini'                     => 'red',
+        'openai/o3'                   => 'red',
+        'llama-3.3-70b-versatile'     => 'red',
+        'llama-3.1-70b-versatile'     => 'red',
+        'llama-3.1-8b-instant'        => 'red',
+        'meta-llama/llama-3.3-70b'    => 'red',
+        'mixtral-8x7b-32768'          => 'red',
+        'deepseek-r1-distill-llama-70b' => 'red',
+        'deepseek/deepseek-r1'        => 'red',
+        'deepseek/deepseek-chat-v3'   => 'red',
+        'gemma2-9b-it'                => 'red',
+        'llama3.3'                    => 'red',
+        'llama3.1'                    => 'red',
+        'mistral'                     => 'red',
+        'mixtral'                     => 'red',
+        'qwen2.5'                     => 'red',
+        'deepseek-r1'                 => 'red',
+        'deepseek-v3'                 => 'red',
+    ];
+
+    /**
+     * Get the SEOBetter compatibility tier for a model ID.
+     * Returns 'green' | 'amber' | 'red' | 'unknown'.
+     */
+    public static function get_model_tier( string $model_id ): string {
+        return self::MODEL_TIERS[ $model_id ] ?? 'unknown';
+    }
+
+    /**
+     * Get the list of models for a provider, each decorated with its tier
+     * label for display in the UI dropdown.
+     *
+     * Returns an array of ['id' => 'model-id', 'label' => 'model-id 🟢 Recommended', 'tier' => 'green'].
+     */
+    public static function get_models_with_tiers( string $provider_id ): array {
+        $provider = self::PROVIDERS[ $provider_id ] ?? null;
+        if ( ! $provider ) return [];
+        $out = [];
+        foreach ( $provider['models'] as $model ) {
+            $tier = self::get_model_tier( $model );
+            $badge = [
+                'green'   => '🟢 Recommended',
+                'amber'   => '🟡 Works but weaker',
+                'red'     => '🔴 NOT recommended — may hallucinate',
+                'unknown' => '',
+            ][ $tier ] ?? '';
+            $label = $badge ? ( $model . ' — ' . $badge ) : $model;
+            $out[] = [
+                'id'    => $model,
+                'label' => $label,
+                'tier'  => $tier,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * v1.5.32 — Quick-pick tier presets shown above the "Add AI Provider"
+     * form. Each preset is a one-click selection of provider + model that
+     * sets the form fields via JS.
+     */
+    const QUICK_PICKS = [
+        'best' => [
+            'label'       => '🥇 Best Quality (Recommended)',
+            'description' => 'Claude Sonnet 4.6 — highest accuracy, best multilingual, follows PLACES RULES reliably. ~$0.04 per article.',
+            'provider'    => 'anthropic',
+            'model'       => 'claude-sonnet-4-6',
+            'badge_color' => '#f59e0b',
+        ],
+        'value' => [
+            'label'       => '💰 Best Value',
+            'description' => 'Claude Haiku 4.5 — 80% of Sonnet quality at 20% of the cost. ~$0.008 per article.',
+            'provider'    => 'anthropic',
+            'model'       => 'claude-haiku-4-5-20251001',
+            'badge_color' => '#3b82f6',
+        ],
+        'free' => [
+            'label'       => '🆓 Free Tier',
+            'description' => 'Google Gemini 2.5 Flash — FREE 1,500 requests/day on AI Studio. Weaker on strict rules — pair with Places waterfall for best results.',
+            'provider'    => 'gemini',
+            'model'       => 'gemini-2.5-flash',
+            'badge_color' => '#22c55e',
+        ],
+    ];
+
+    public static function get_quick_picks(): array {
+        return self::QUICK_PICKS;
+    }
+
+    /**
      * Get saved provider configurations.
      */
     public static function get_saved_providers(): array {

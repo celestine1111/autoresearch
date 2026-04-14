@@ -16,6 +16,107 @@
 
 ---
 
+## v1.5.32 — Branding + AI Featured Image generator + Article Writer Model Recommender with tier badges
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+Two user-requested UX improvements shipping together because they both target the "WordPress newbie gets lost in settings" problem:
+
+1. **Branding + AI Featured Image** — users wanted a settings page (screenshot-inspired: Business Details, Logo, Brand Colors, AI Provider, Style Preset) that generates a brand-aware featured image for every article from the title/keywords instead of showing random Picsum stock. Supports free + paid providers so newbies can start with zero setup.
+2. **Article Writer Model Recommender** — the Settings → AI Providers section listed 7 providers × 40+ models with zero guidance. Users picked DeepSeek R1 / Llama 3.3 / Mixtral (cheap but hallucination-prone), saw the plugin produce fake business names, and blamed the plugin. The fix is 3 quick-pick preset buttons above the advanced dropdown + red/yellow/green compatibility badges on every model + a confirmation dialog when saving a red-tier model.
+
+### Added
+
+**Part A — Branding + AI Featured Image (featured-only, not inline)**
+
+- **`AI_Image_Generator` class** — new file [includes/AI_Image_Generator.php](../includes/AI_Image_Generator.php), ~270 lines, SEOBetter namespace
+  - `static generate( $title, $keyword, $brand )` — main entry, routes to the configured provider and returns an image URL
+  - `static get_brand_settings()` — loads + normalizes the branding config from `seobetter_settings`
+  - 4 providers wired: **Pollinations.ai** (FREE, no key, FLUX Schnell backend), **Google Gemini 2.5 Flash Image** ("Nano Banana", $0.04/image, 10/day free on AI Studio), **OpenAI DALL-E 3** ($0.04 std / $0.08 HD), **FLUX.1 Pro 1.1** via fal.ai ($0.055/image)
+  - 7 style presets (`realistic`, `illustration`, `flat`, `hero`, `minimalist`, `editorial`, `3d`) each with its own prompt template weaving in brand colors + business context
+  - `build_prompt()` composes the final prompt from article title + keyword + brand name + description + colors + negative prompt
+  - `save_base64_to_temp()` writes Gemini's inline base64 image data to a temp file in uploads dir so `media_sideload_image()` can consume it
+  - Returns empty string on any error, 401, parse failure — caller falls back to the existing Pexels → Picsum flow
+  - Verify: `grep -n "class AI_Image_Generator\|generate_pollinations\|generate_gemini\|generate_dalle3\|generate_flux_pro" seobetter/includes/AI_Image_Generator.php`
+
+- **Branding card in settings.php** — [admin/views/settings.php](../admin/views/settings.php) new card after Places Integrations
+  - Own form with `seobetter_branding_nonce` so save doesn't clobber other sections
+  - Fields: business name, business description, logo upload (WP media library picker), 3 color pickers (primary/secondary/accent), provider select, API key, style preset dropdown, negative prompt
+  - Client JS: logo media picker via `wp.media`, dynamic API-key-row show/hide based on provider (Pollinations hides the key row since it's free), per-provider help text revealed on selection
+  - Server sanitization: provider/style whitelist enforcement, hex color sanitization, logo ID as absint, all text fields sanitized
+  - Info banner at bottom explaining "featured image only, inline stays Pexels" so users understand why
+  - Verify: `grep -n "seobetter_save_branding\|branding_provider\|Branding & AI Featured Image" seobetter/admin/views/settings.php`
+
+- **`set_featured_image()` hook** — [seobetter.php::set_featured_image()](../seobetter.php) lines **~1952-1962**
+  - Before the existing Pexels → Picsum fallback chain, now calls `\SEOBetter\AI_Image_Generator::generate()` with the post title + keyword + brand settings
+  - If the AI provider returns a URL, that's used for `media_sideload_image()` — it downloads into the WordPress media library exactly like the existing Pexels/Picsum URLs
+  - If branding is not configured OR the AI call fails, falls through to Pexels → Picsum unchanged (zero regression)
+  - Verify: `grep -n "AI_Image_Generator::generate" seobetter/seobetter.php`
+
+**Part B — Article Writer Model Recommender + tier badges**
+
+- **`AI_Provider_Manager::MODEL_TIERS` constant + `get_model_tier()`** — [includes/AI_Provider_Manager.php](../includes/AI_Provider_Manager.php) lines **~145-210**
+  - Maps ~50 model IDs to `green` / `amber` / `red` / `unknown` tiers based on their empirical ability to follow SEOBetter's PLACES RULES + Citation Pool + URL rules under complex prompts
+  - **Green (Recommended):** Claude Sonnet 4.6, Opus 4.6, Haiku 4.5, Sonnet 4.5, GPT-4.1, GPT-4o, Gemini 2.5 Pro + the OpenRouter variants of each
+  - **Amber (Works but weaker):** GPT-4o-mini, GPT-4.1-mini/nano, Gemini 2.5 Flash, Gemini 2.0 Flash, Claude 3.5 Haiku
+  - **Red (NOT recommended):** OpenAI o3 / o3-mini / o4-mini, Llama 3.3 70B, Llama 3.1 (all sizes), Mixtral, DeepSeek R1 (all variants), DeepSeek v3, Gemma 2 9B, all Ollama local models that aren't Claude-tier
+  - Verify: `grep -n "const MODEL_TIERS\|get_model_tier" seobetter/includes/AI_Provider_Manager.php`
+
+- **`AI_Provider_Manager::QUICK_PICKS` + `get_quick_picks()`** — [includes/AI_Provider_Manager.php](../includes/AI_Provider_Manager.php) lines **~250-275**
+  - 3 one-click presets: 🥇 **Best Quality** (Claude Sonnet 4.6), 💰 **Best Value** (Claude Haiku 4.5), 🆓 **Free Tier** (Gemini 2.5 Flash)
+  - Each has label, description, provider ID, model ID, badge color
+  - Verify: `grep -n "QUICK_PICKS\|get_quick_picks" seobetter/includes/AI_Provider_Manager.php`
+
+- **Quick-Pick preset banner in settings.php** — [admin/views/settings.php](../admin/views/settings.php) above the "Add AI Provider" form
+  - 3 big clickable buttons rendered from `get_quick_picks()`, each colored with its badge color on the left border
+  - Click → JS auto-fills the provider dropdown + model dropdown below with the preset values, then focuses the API key input so user can paste and save
+  - Below the buttons: a loud ⚠️ warning line listing the models NOT to pick (Llama, DeepSeek, Mixtral, o3, Perplexity Sonar) and why
+  - Verify: `grep -n "sb-quick-pick\|Quick Pick — Recommended Models" seobetter/admin/views/settings.php`
+
+- **Tier badges in the Advanced model dropdown** — [admin/views/settings.php](../admin/views/settings.php) provider select JSON
+  - Each model in the `data-models` JSON attribute is now an object `{ id, label, tier }` where label has the tier emoji appended (🟢 / 🟡 / 🔴)
+  - JS updated to handle both old-format (string) and new-format (object) for backwards compat
+  - Dataset attribute `data-tier` is attached to each `<option>` so the confirmation handler can detect red-tier selections
+  - Verify: `grep -n "decorated_models\|data-tier" seobetter/admin/views/settings.php`
+
+- **Red-tier confirmation dialog** — [admin/views/settings.php](../admin/views/settings.php) JS
+  - When user clicks "Connect Provider" with a red-tier model selected, a `confirm()` modal shows warning: *"This model is known to ignore PLACES RULES and may produce hallucinated content... Continue anyway?"*
+  - User can still override if they know what they're doing (e.g. they're testing Llama for non-local keywords)
+  - Verify: `grep -n "NOT recommended for SEOBetter" seobetter/admin/views/settings.php`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION` constant: `1.5.31` → `1.5.32`
+
+### Does NOT affect
+
+- **Inline article images** — those still come from Pexels (if configured) or Picsum (free fallback). AI image generation is ONLY used for the featured image. Rationale documented in settings UI info banner: inline images are contextual decoration where Pexels's millions of real photos work great for free, and AI inline generation would add ~$0.12 per article for marginal visual gain. Featured images are where brand-aware AI matters most.
+- **Non-local articles** — Branding affects ALL articles, not just local-intent. Any article with branding configured gets an AI featured image. Branding is OFF by default (provider = empty string) so existing installs see no change.
+
+### Free options audit (2026-04)
+
+Only 2 truly free, zero-setup image gen paths evaluated and included:
+- **Pollinations.ai** — shipped as the default option. No key, no signup, rate-limited but functional.
+- **Gemini 2.5 Flash Image** — free tier on Google AI Studio with 10 images/day. Requires a Google account but no billing card.
+
+Other free paths considered but rejected: HuggingFace Inference API (rate-limited to unusability), Craiyon (no API), Midjourney (no API at all), Leonardo.ai (complex OAuth flow).
+
+### Known limitations
+
+- Pollinations is a third-party service with no SLA — if their servers are down, the plugin falls through to Pexels/Picsum.
+- Gemini Nano Banana image responses are base64-inlined so we save them to a temp file and then `media_sideload_image()` re-copies them. Two disk writes per image — acceptable for a 1-per-article workflow.
+- The tier classification is snapshot in time (April 2026). Model behavior changes between releases — revisit the `MODEL_TIERS` constant every 6 months.
+- Logo image is NOT embedded in the AI-generated image (AI models cannot render logos accurately). It's stored as brand identity reference only.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.31 — Business photos in listicle sections (Sonar-sourced, capped at 5 per article)
 
 **Date:** 2026-04-14

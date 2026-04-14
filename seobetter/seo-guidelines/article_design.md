@@ -379,12 +379,18 @@ Generate articles with **zero icons** in body prose paragraphs. Icons appear ONL
 
 ### 7.1 Image sources
 
-Images come from a three-tier fallback in `Stock_Image_Inserter::get_image_url()`:
+**Inline images** come from a three-tier fallback in `Stock_Image_Inserter::get_image_url()`:
 
 1. **Pexels API** (preferred) — if the user has set `pexels_api_key` in settings, real keyword-relevant photos are fetched via the Pexels search API. Cached per query for 6 hours. Results are deduplicated per article via `$used_urls`.
 2. **Picsum fallback** — if no Pexels key, generates seeded URLs like `https://picsum.photos/seed/{crc32}/800/450.jpg`. These are random but consistent per keyword/heading combo.
 
-Featured images for posts use `search_pexels_image()` in `seobetter.php` (separate from the inline inserter), falling back to Picsum with `.jpg` extension to avoid the old 302-without-extension bug.
+**Featured images** (v1.5.32+) have a different, brand-aware tier chain in `seobetter.php::set_featured_image()`:
+
+1. **AI Image Generator** ([includes/AI_Image_Generator.php](../includes/AI_Image_Generator.php)) — if the user has configured a Branding provider in Settings → Branding & AI Featured Image. Routes to one of 4 providers: Pollinations.ai (free, no key), Google Gemini 2.5 Flash Image a.k.a. "Nano Banana" ($0.04/image, 10/day free on AI Studio), OpenAI DALL-E 3 ($0.04 standard / $0.08 HD), Black Forest Labs FLUX.1 Pro 1.1 via fal.ai ($0.055/image). Composes a prompt from article title + keyword + brand colors + business description + chosen style preset (7 presets: realistic, illustration, flat, hero, minimalist, editorial, 3d). Returns empty on error.
+2. **`search_pexels_image()`** — fallback when AI is not configured or fails, same Pexels API the inline inserter uses.
+3. **Picsum** — final fallback with `.jpg` extension.
+
+**Why AI for featured but not inline:** featured images are the hero — they drive CTR from search results and social shares, and brand consistency matters. Inline images are contextual decoration where Pexels's millions of relevant real photos work great for free. AI inline generation would add $0.12+ per article for marginal visual gain and doesn't justify the cost for most users.
 
 ### 7.2 Placement rules (v1.5.10+)
 

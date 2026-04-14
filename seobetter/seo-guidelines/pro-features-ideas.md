@@ -68,6 +68,117 @@
 ### Advanced Pro
 - [ ] Unlimited AI provider connections
 - [ ] Social content generator (Twitter, LinkedIn, Instagram)
+- [x] **Branding page + AI-generated featured image — ✅ SHIPPED in v1.5.32 (2026-04-15)**
+
+  See [BUILD_LOG.md v1.5.32](BUILD_LOG.md) for anchors. Settings → Branding & AI Featured Image card with business name/description, logo upload, 3 brand color pickers, 4 providers (Pollinations free / Gemini Nano Banana / DALL-E 3 / FLUX Pro), 7 style presets, negative prompt, and a `Stock_Image_Inserter::set_featured_image()` hook that tries the AI generator first and falls back to Pexels → Picsum. Original backlog entry kept below for reference:
+
+  **What it does:** a new Settings → Branding page that lets the user upload their brand assets once, then auto-generates a high-quality featured image for every article based on the brand, article title, and keywords. Replaces the current Picsum / stock-image fallback for featured images.
+
+  **User uploads / configures (once):**
+  - Logo (PNG/SVG) — stored in media library
+  - 3 brand hex colors (primary / secondary / accent) with color pickers
+  - Brand style preset: `Realistic photo` / `Professional illustration` / `Flat graphic` / `Hero banner` / `Product shot` / `Minimalist` / `Editorial` / `Retro` / `3D render` (9 presets)
+  - Image aspect ratio: `16:9 hero` (default) / `1:1 social` / `4:3 featured` / `9:16 Pinterest`
+  - Optional: reference brand URL for style-matching AI to pull site colors/fonts
+  - Optional: negative prompt (things to never include — e.g. "no text overlay, no watermark, no people's faces")
+
+  **Per-article prompt composition (hidden from user by default):**
+  The plugin prepends a style-preset prompt to the AI image generator based on the user's picks. Example for `Realistic photo` preset:
+
+  > `"Professional high-quality photograph, {user_brand_primary_color} color accent, clean composition, natural lighting, shallow depth of field, editorial style, 16:9 aspect ratio, no text overlay, no logos, no watermarks. Subject: {article_title}. Context: {first_3_keywords}. Style reference: {user_brand_style}."`
+
+  For `Flat graphic`:
+  > `"Flat vector illustration, bold geometric shapes, {user_brand_colors} color palette, minimal composition, no photorealism, no text, clean background, 16:9 aspect ratio. Subject: {article_title}."`
+
+  Each preset has its own prepended template. User sees a "Preview prompt" toggle that reveals the full composed prompt so they can override it if they don't like what the AI produces.
+
+  **Override flow:**
+  - After generation, user sees the image in the result panel
+  - If they don't like it, they click "Regenerate with custom prompt" — modal opens with the full composed prompt pre-filled and editable
+  - User edits the prompt, clicks Regenerate, sees the new image
+  - No limit on regenerations (or 3 per article on free, unlimited on Pro)
+
+  **Image generation backends (evaluated 2026-04-14):**
+
+  | Model | Cost/image | Quality | Speed | Best for | Access |
+  |---|---|---|---|---|---|
+  | **Google Gemini 2.5 Flash Image** | ~$0.02 | Good | 3–5s | Cheapest, multi-language captions | Gemini API direct, or via OpenRouter |
+  | **OpenAI DALL-E 3** | $0.04 (standard) / $0.08 (HD) | Very good | 5–10s | Reliable brand-aware generation, 1024×1024 or 1792×1024 | OpenAI API direct |
+  | **FLUX.1 Pro 1.1** (Black Forest Labs) | ~$0.055 | Excellent | 5–8s | Best realism + composition, top choice for hero banners | via FAL.ai or Replicate |
+  | **FLUX.1 Pro 1.1 Ultra** | ~$0.06 | Excellent + 4MP res | 8–15s | Print-quality featured images | via FAL.ai or Replicate |
+  | **FLUX.1 Dev** | ~$0.003 | Good | 3–5s | Budget tier, good for bulk | via Replicate or fal.ai |
+  | **Ideogram v2** | ~$0.08 | Very good | 6–10s | BEST for images where text needs to appear correctly (e.g. a hero showing the article title as a graphic element) | via Replicate |
+  | **Stable Diffusion XL** | ~$0.003 | Fair | 3–5s | Free/cheap backup, lower quality | via Replicate, self-host via Ollama/AUTOMATIC1111 |
+  | **Midjourney** | subscription only | Best-in-class | 30s+ | NOT usable — no public API as of 2026 | — |
+
+  **Recommended default:** `FLUX.1 Pro 1.1` via FAL.ai or Replicate for quality, with `Gemini 2.5 Flash Image` as the budget tier. Both available via direct API with free/trial credit.
+
+  **Settings page layout:**
+  ```
+  Settings → Branding (NEW PAGE)
+  ├── Brand Assets
+  │    ├── Logo upload (PNG/SVG, max 2MB)
+  │    ├── Primary color (color picker)
+  │    ├── Secondary color (color picker)
+  │    └── Accent color (color picker)
+  ├── Featured Image Generator
+  │    ├── AI Model [dropdown: FLUX Pro / DALL-E 3 / Gemini Flash Image]
+  │    ├── API Key for selected model [password field]
+  │    ├── Style preset [9 options]
+  │    ├── Aspect ratio [4 options]
+  │    ├── Negative prompt [textarea, optional]
+  │    └── Preview composed prompt [toggle]
+  └── Free tier limits
+       └── 3 images per month on free / unlimited on Pro
+  ```
+
+  **Free-to-Pro gating:**
+  - Free tier: 3 images/month, Stable Diffusion XL only (cheapest), no custom prompt editing
+  - Pro: unlimited images, any model (FLUX / DALL-E / Ideogram), full prompt editing, brand URL auto-extraction, aspect ratio choice, negative prompt
+
+  **Integration point:** `Stock_Image_Inserter::get_featured_image()` currently falls back to Picsum — replace that with a call to the new `AI_Image_Generator::generate($keyword, $title, $brand_settings)` when a brand is configured. Keep Picsum as the ultimate fallback for users without a brand configured or when the AI call fails.
+
+  **Why this matters:** Picsum images are random — they have zero relevance to the article content. AI featured images dramatically improve click-through from social shares and search results, and brand-aware images make the article look like a professional publisher's output (which is the whole differentiation vs. basic AI content tools).
+
+  **Estimated effort:** ~10 hours (new Settings page + brand-asset storage + model fetcher + prompt composer + modal UI + 3 API integrations)
+
+- [x] **Article Writer Model Recommender + Tier Badges — ✅ SHIPPED in v1.5.32 (2026-04-15)**
+
+  See [BUILD_LOG.md v1.5.32](BUILD_LOG.md) for anchors. 3 quick-pick preset buttons (🥇 Best Quality / 💰 Best Value / 🆓 Free Tier) above the Advanced dropdown, compatibility badges (🟢 / 🟡 / 🔴) on every model in the advanced dropdown via `AI_Provider_Manager::MODEL_TIERS`, and a red-tier confirmation dialog when saving. Avoid list: Llama 3.1/3.3, DeepSeek R1/v3, Mixtral, o3/o4, Perplexity Sonar (research model, not a writer). Original backlog entry kept below for reference:
+
+  **Problem:** the current Settings page lists 7 providers × 40+ models with zero guidance. A WordPress newbie picks a cheap Llama or DeepSeek R1 model, sees the plugin "hallucinate" business names, and blames the plugin — even though the hallucination is the model ignoring PLACES RULES, not the plugin failing. Some models genuinely CANNOT follow SEOBetter's strict grounding rules.
+
+  **What to ship:**
+
+  1. **3-tier preset selector** replacing the current dropdown-of-40:
+     - 🥇 **Best Quality (Recommended)** → `claude-sonnet-4.6` direct or via OpenRouter. $0.04/article. Best instruction-following, best multilingual, best at following PLACES RULES + Citation Pool.
+     - 💰 **Best Value** → `claude-haiku-4.5` direct. $0.008/article. 80% of Sonnet quality for 20% of the cost.
+     - 🆓 **Free Tier** → `gemini-2.5-flash` via Gemini API (1,500 free requests/day). $0 for most users. Weaker on strict rules — only safe when Places waterfall is fully populated.
+     - **Advanced** → opens the full 40-model dropdown for power users who know what they're doing.
+
+  2. **Compatibility badges per model** in the Advanced dropdown:
+     - 🟢 `Recommended — hallucination-tested with SEOBetter flow`
+     - 🟡 `Works but may ignore URL rules under complex prompts`
+     - 🔴 `Not recommended — known to produce fake business names despite PLACES RULES`
+     - Explicit ❌ list: `deepseek/deepseek-r1`, `deepseek/deepseek-v3`, `meta-llama/llama-3.3-70b`, `meta-llama/llama-3.1-*`, `openai/o3`, `openai/o3-mini`, `openai/o4-mini`, `mistralai/mixtral-*`, `groq/llama-*`, `perplexity/sonar*` (research model, not writer)
+
+  3. **Hallucination warning modal** when user saves a 🔴 model as their article writer AND has no Places waterfall keys configured:
+     *"⚠️ You're using Llama 3.3 70B with no Places data sources configured. For local-business keywords like 'best gelato in [city]', this combination will produce hallucinated business names. Either configure Perplexity Sonar in Settings → Places Integrations OR switch to a 🟢 Recommended model."*
+     Don't block the save, but make the warning loud.
+
+  4. **Country → model auto-suggest tooltip** on the article generator form. When user picks a country, show a small tooltip under the model selector:
+     - Japan / Korea → "Recommended: Gemini 2.5 Pro"
+     - Italy / Spain / France → "Recommended: Claude Sonnet 4.6"
+     - India / Thailand / Vietnam → "Recommended: Gemini 2.5 Pro"
+     - USA / UK / AU → "Recommended: Claude Sonnet 4.6 or GPT-4o"
+
+  5. **Plain-English model descriptions** — replace "claude-sonnet-4-6" (meaningless to newbies) with "Claude Sonnet 4.6 — Best accuracy, $0.04/article, great for any language". Each model gets a one-sentence description focused on what the user cares about, not the model's name.
+
+  6. **"Test this model" button** — runs a 50-token generation with a dummy keyword against the selected model and returns "✅ Model responds in X seconds" or "❌ Model failed: X". Helps users verify their key works before trying a full article.
+
+  **Estimated effort:** ~4 hours (preset-selector UI + badge system + warning modal + tooltip + test button)
+
+  **Why this matters:** the plugin currently appears to "produce hallucinated content" when the real cause is users picking incompatible models. Simplifying the model picker eliminates ~80% of that confusion for WordPress newbies.
 - [ ] Content Exporter (HTML, Markdown, Plain Text)
 - [ ] Affiliate link auto-linking + CTA buttons
 - [ ] White-label mode

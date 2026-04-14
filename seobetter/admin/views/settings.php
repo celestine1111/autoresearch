@@ -87,6 +87,38 @@ if ( isset( $_POST['seobetter_save_places'] ) && check_admin_referer( 'seobetter
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Places integrations saved.', 'seobetter' ) . '</p></div>';
 }
 
+// v1.5.32 — Branding + AI featured image save handler. Lives in its own form
+// with its own nonce. Stores brand identity (logo ID, colors, business
+// description) and the AI image provider config used by
+// AI_Image_Generator::generate() to produce article featured images.
+if ( isset( $_POST['seobetter_save_branding'] ) && check_admin_referer( 'seobetter_branding_nonce' ) ) {
+    $existing = get_option( 'seobetter_settings', [] );
+    $allowed_providers = [ '', 'pollinations', 'gemini', 'dalle3', 'flux_pro' ];
+    $provider = sanitize_text_field( $_POST['branding_provider'] ?? '' );
+    if ( ! in_array( $provider, $allowed_providers, true ) ) {
+        $provider = '';
+    }
+    $allowed_styles = [ 'realistic', 'illustration', 'flat', 'hero', 'minimalist', 'editorial', '3d' ];
+    $style = sanitize_text_field( $_POST['branding_style'] ?? 'realistic' );
+    if ( ! in_array( $style, $allowed_styles, true ) ) {
+        $style = 'realistic';
+    }
+    $settings = array_merge( $existing, [
+        'branding_provider'        => $provider,
+        'branding_api_key'         => sanitize_text_field( $_POST['branding_api_key'] ?? '' ),
+        'branding_style'           => $style,
+        'branding_business_name'   => sanitize_text_field( $_POST['branding_business_name'] ?? '' ),
+        'branding_description'     => sanitize_textarea_field( $_POST['branding_description'] ?? '' ),
+        'branding_color_primary'   => sanitize_hex_color( $_POST['branding_color_primary'] ?? '' ),
+        'branding_color_secondary' => sanitize_hex_color( $_POST['branding_color_secondary'] ?? '' ),
+        'branding_color_accent'    => sanitize_hex_color( $_POST['branding_color_accent'] ?? '' ),
+        'branding_logo_id'         => absint( $_POST['branding_logo_id'] ?? 0 ),
+        'branding_negative_prompt' => sanitize_textarea_field( $_POST['branding_negative_prompt'] ?? '' ),
+    ] );
+    update_option( 'seobetter_settings', $settings );
+    echo '<div class="notice notice-success"><p>' . esc_html__( 'Branding & AI image settings saved.', 'seobetter' ) . '</p></div>';
+}
+
 $settings = get_option( 'seobetter_settings', [] );
 ?>
 <div class="wrap seobetter-dashboard">
@@ -166,8 +198,28 @@ $settings = get_option( 'seobetter_settings', [] );
         </table>
         <?php endif; ?>
 
+        <!-- v1.5.32 — Quick-Pick Model Presets -->
+        <div style="margin-top:20px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
+            <h3 style="margin:0 0 8px 0"><?php esc_html_e( '⚡ Quick Pick — Recommended Models', 'seobetter' ); ?></h3>
+            <p class="description" style="margin:0 0 12px 0">
+                <?php esc_html_e( 'Not sure which model to pick? Click a preset below and the form will auto-fill with a known-compatible model. You can edit from there. These presets are tested to follow SEOBetter\'s hallucination-prevention rules.', 'seobetter' ); ?>
+            </p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+                <?php foreach ( \SEOBetter\AI_Provider_Manager::get_quick_picks() as $qkey => $q ) : ?>
+                    <button type="button" class="button sb-quick-pick" data-provider="<?php echo esc_attr( $q['provider'] ); ?>" data-model="<?php echo esc_attr( $q['model'] ); ?>" style="flex:1;min-width:220px;height:auto;padding:12px;text-align:left;border-left:4px solid <?php echo esc_attr( $q['badge_color'] ); ?>">
+                        <strong style="display:block;font-size:13px;margin-bottom:4px"><?php echo esc_html( $q['label'] ); ?></strong>
+                        <span style="font-size:11px;color:#64748b;white-space:normal;line-height:1.4"><?php echo esc_html( $q['description'] ); ?></span>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+            <p class="description" style="margin:12px 0 0 0;font-size:11px">
+                <strong>⚠️ <?php esc_html_e( 'Avoid these models:', 'seobetter' ); ?></strong>
+                <?php esc_html_e( 'Llama 3.1/3.3, DeepSeek R1, DeepSeek v3, Mixtral, OpenAI o3/o4, Perplexity Sonar (research model, not a writer). These either ignore PLACES RULES under complex prompts or are not designed for structured article writing. They will produce hallucinated business names even when real data is available.', 'seobetter' ); ?>
+            </p>
+        </div>
+
         <!-- Add New Provider -->
-        <h3><?php esc_html_e( 'Add AI Provider', 'seobetter' ); ?></h3>
+        <h3><?php esc_html_e( 'Add AI Provider (Advanced)', 'seobetter' ); ?></h3>
         <form method="post">
             <?php wp_nonce_field( 'seobetter_settings_nonce' ); ?>
             <table class="form-table">
@@ -176,8 +228,18 @@ $settings = get_option( 'seobetter_settings', [] );
                     <td>
                         <select name="provider_id" id="seobetter-provider-select">
                             <?php foreach ( $providers as $pid => $pdef ) : ?>
+                                <?php
+                                // v1.5.32 — decorate each model with its tier badge
+                                // so users see compatibility at a glance.
+                                $decorated_models = [];
+                                foreach ( $pdef['models'] as $m ) {
+                                    $t = \SEOBetter\AI_Provider_Manager::get_model_tier( $m );
+                                    $badge = [ 'green' => ' 🟢', 'amber' => ' 🟡', 'red' => ' 🔴', 'unknown' => '' ][ $t ] ?? '';
+                                    $decorated_models[] = [ 'id' => $m, 'label' => $m . $badge, 'tier' => $t ];
+                                }
+                                ?>
                                 <option value="<?php echo esc_attr( $pid ); ?>"
-                                    data-models="<?php echo esc_attr( wp_json_encode( $pdef['models'] ) ); ?>"
+                                    data-models="<?php echo esc_attr( wp_json_encode( $decorated_models ) ); ?>"
                                     data-default="<?php echo esc_attr( $pdef['default_model'] ); ?>"
                                     data-help="<?php echo esc_attr( $pdef['help'] ); ?>"
                                     data-docs="<?php echo esc_attr( $pdef['docs_url'] ); ?>"
@@ -373,6 +435,181 @@ $settings = get_option( 'seobetter_settings', [] );
     </div>
 </div>
 
+<?php // v1.5.32 — Branding + AI Featured Image card ?>
+<div class="seobetter-dashboard-card" style="margin-top:24px">
+    <div class="seobetter-card-body">
+        <h2><?php esc_html_e( 'Branding & AI Featured Image', 'seobetter' ); ?></h2>
+        <p class="description" style="margin-bottom:16px">
+            <?php esc_html_e( 'Upload your brand assets and choose an AI image provider to auto-generate a brand-aware featured image for every article. Uses the article title + keywords + your brand colors to compose the prompt. If no provider is configured, the plugin falls back to Pexels/Picsum stock images.', 'seobetter' ); ?>
+        </p>
+
+        <form method="post" enctype="multipart/form-data">
+            <?php wp_nonce_field( 'seobetter_branding_nonce' ); ?>
+            <table class="form-table">
+
+                <!-- Business Name & Description -->
+                <tr>
+                    <th><?php esc_html_e( 'Brand / Business Name', 'seobetter' ); ?></th>
+                    <td>
+                        <input type="text" name="branding_business_name" value="<?php echo esc_attr( $settings['branding_business_name'] ?? '' ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'e.g. Mindiam Pets', 'seobetter' ); ?>" />
+                        <p class="description"><?php esc_html_e( 'Your brand name. Used in the image generation prompt as aesthetic context.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Business Description', 'seobetter' ); ?></th>
+                    <td>
+                        <textarea name="branding_description" rows="4" class="large-text" placeholder="<?php esc_attr_e( 'e.g. Australian pet shop online. Products: Pet products. Audience: pet owners. Benefits: cheap prices, high quality.', 'seobetter' ); ?>"><?php echo esc_textarea( $settings['branding_description'] ?? '' ); ?></textarea>
+                        <p class="description"><?php esc_html_e( 'Short description of what your brand does. Helps the AI pick visuals that fit your industry.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+
+                <!-- Logo upload -->
+                <tr>
+                    <th><?php esc_html_e( 'Brand Logo', 'seobetter' ); ?></th>
+                    <td>
+                        <?php $logo_id = absint( $settings['branding_logo_id'] ?? 0 ); ?>
+                        <input type="hidden" name="branding_logo_id" id="branding_logo_id" value="<?php echo esc_attr( $logo_id ); ?>" />
+                        <div id="branding-logo-preview" style="margin-bottom:8px">
+                            <?php if ( $logo_id && ( $logo_src = wp_get_attachment_image_url( $logo_id, 'medium' ) ) ) : ?>
+                                <img src="<?php echo esc_url( $logo_src ); ?>" alt="Brand logo" style="max-width:200px;max-height:100px;border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff" />
+                            <?php endif; ?>
+                        </div>
+                        <button type="button" class="button" id="branding-logo-upload-btn"><?php esc_html_e( 'Upload / Choose Logo', 'seobetter' ); ?></button>
+                        <button type="button" class="button" id="branding-logo-remove-btn" <?php echo $logo_id ? '' : 'style="display:none"'; ?>><?php esc_html_e( 'Remove', 'seobetter' ); ?></button>
+                        <p class="description"><?php esc_html_e( 'PNG or SVG preferred. Stored in your WordPress media library. Not embedded in AI-generated images directly (AI cannot render logos accurately) — used as a brand identity reference.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+
+                <!-- Brand colors -->
+                <tr>
+                    <th><?php esc_html_e( 'Brand Colors', 'seobetter' ); ?></th>
+                    <td>
+                        <label style="display:inline-block;margin-right:16px">
+                            <?php esc_html_e( 'Primary:', 'seobetter' ); ?>
+                            <input type="color" name="branding_color_primary" value="<?php echo esc_attr( $settings['branding_color_primary'] ?? '#764ba2' ); ?>" />
+                        </label>
+                        <label style="display:inline-block;margin-right:16px">
+                            <?php esc_html_e( 'Secondary:', 'seobetter' ); ?>
+                            <input type="color" name="branding_color_secondary" value="<?php echo esc_attr( $settings['branding_color_secondary'] ?? '#667eea' ); ?>" />
+                        </label>
+                        <label style="display:inline-block">
+                            <?php esc_html_e( 'Accent:', 'seobetter' ); ?>
+                            <input type="color" name="branding_color_accent" value="<?php echo esc_attr( $settings['branding_color_accent'] ?? '#f59e0b' ); ?>" />
+                        </label>
+                        <p class="description"><?php esc_html_e( 'Hex colors woven into the AI prompt so generated images use your brand palette. Leave defaults if unsure.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+
+                <!-- AI Provider -->
+                <tr>
+                    <th><?php esc_html_e( 'AI Image Provider', 'seobetter' ); ?></th>
+                    <td>
+                        <?php $bp = $settings['branding_provider'] ?? ''; ?>
+                        <select name="branding_provider" id="branding_provider">
+                            <option value="" <?php selected( $bp, '' ); ?>>— <?php esc_html_e( 'Disabled (use Pexels/Picsum fallback)', 'seobetter' ); ?> —</option>
+                            <option value="pollinations" <?php selected( $bp, 'pollinations' ); ?>><?php esc_html_e( 'Pollinations.ai — FREE, no API key, no signup (Recommended to start)', 'seobetter' ); ?></option>
+                            <option value="gemini" <?php selected( $bp, 'gemini' ); ?>><?php esc_html_e( 'Google Gemini 2.5 Flash Image (Nano Banana) — ~$0.04/image, 10/day FREE on AI Studio', 'seobetter' ); ?></option>
+                            <option value="dalle3" <?php selected( $bp, 'dalle3' ); ?>><?php esc_html_e( 'OpenAI DALL-E 3 — $0.04/image standard, strong prompt adherence', 'seobetter' ); ?></option>
+                            <option value="flux_pro" <?php selected( $bp, 'flux_pro' ); ?>><?php esc_html_e( 'Black Forest Labs FLUX.1 Pro 1.1 (via fal.ai) — $0.055/image, best editorial quality', 'seobetter' ); ?></option>
+                        </select>
+                        <p class="description" style="margin-top:8px">
+                            <strong><?php esc_html_e( 'Recommended for most users:', 'seobetter' ); ?></strong> <?php esc_html_e( 'Start with Pollinations (free, zero setup). Upgrade to Gemini Nano Banana or FLUX Pro once you want consistent brand-aware quality.', 'seobetter' ); ?>
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- API Key (hidden when Pollinations or disabled) -->
+                <tr id="branding-api-key-row">
+                    <th><?php esc_html_e( 'API Key', 'seobetter' ); ?></th>
+                    <td>
+                        <input type="password" name="branding_api_key" value="<?php echo esc_attr( $settings['branding_api_key'] ?? '' ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'Paste provider API key', 'seobetter' ); ?>" autocomplete="off" />
+                        <p class="description" id="branding-api-key-help">
+                            <span data-provider="pollinations"><?php esc_html_e( 'No API key required — Pollinations is free and anonymous.', 'seobetter' ); ?></span>
+                            <span data-provider="gemini"><?php esc_html_e( 'Get a free key at aistudio.google.com/apikey. Free tier: 10 images/day on gemini-2.5-flash-image. Paid: ~$0.04/image.', 'seobetter' ); ?> <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"><?php esc_html_e( 'Get Gemini Key', 'seobetter' ); ?></a></span>
+                            <span data-provider="dalle3"><?php esc_html_e( 'Get a key at platform.openai.com. Billing required. $0.04 standard / $0.08 HD per image.', 'seobetter' ); ?> <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener"><?php esc_html_e( 'Get OpenAI Key', 'seobetter' ); ?></a></span>
+                            <span data-provider="flux_pro"><?php esc_html_e( 'Get a fal.ai API key. $5 free credit on signup. $0.055 per image. Best editorial-quality realistic images.', 'seobetter' ); ?> <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener"><?php esc_html_e( 'Get fal.ai Key', 'seobetter' ); ?></a></span>
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- Style preset -->
+                <tr>
+                    <th><?php esc_html_e( 'Image Style Preset', 'seobetter' ); ?></th>
+                    <td>
+                        <?php $bs = $settings['branding_style'] ?? 'realistic'; ?>
+                        <select name="branding_style">
+                            <option value="realistic" <?php selected( $bs, 'realistic' ); ?>><?php esc_html_e( 'Realistic Photo — editorial photojournalism', 'seobetter' ); ?></option>
+                            <option value="illustration" <?php selected( $bs, 'illustration' ); ?>><?php esc_html_e( 'Vector Illustration — clean lines, minimal shading', 'seobetter' ); ?></option>
+                            <option value="flat" <?php selected( $bs, 'flat' ); ?>><?php esc_html_e( 'Flat Graphic — bold shapes, solid backgrounds', 'seobetter' ); ?></option>
+                            <option value="hero" <?php selected( $bs, 'hero' ); ?>><?php esc_html_e( 'Hero Banner — cinematic, dramatic lighting', 'seobetter' ); ?></option>
+                            <option value="minimalist" <?php selected( $bs, 'minimalist' ); ?>><?php esc_html_e( 'Minimalist — lots of negative space', 'seobetter' ); ?></option>
+                            <option value="editorial" <?php selected( $bs, 'editorial' ); ?>><?php esc_html_e( 'Editorial — magazine journalism', 'seobetter' ); ?></option>
+                            <option value="3d" <?php selected( $bs, '3d' ); ?>><?php esc_html_e( '3D Render — studio lighting, product-shot style', 'seobetter' ); ?></option>
+                        </select>
+                        <p class="description"><?php esc_html_e( 'The style preset determines the image generation prompt template. All presets automatically weave in your brand colors and business context.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+
+                <!-- Negative prompt -->
+                <tr>
+                    <th><?php esc_html_e( 'Things to Avoid (optional)', 'seobetter' ); ?></th>
+                    <td>
+                        <textarea name="branding_negative_prompt" rows="2" class="large-text" placeholder="<?php esc_attr_e( 'e.g. no text overlay, no watermarks, no people\'s faces, no competitor logos', 'seobetter' ); ?>"><?php echo esc_textarea( $settings['branding_negative_prompt'] ?? '' ); ?></textarea>
+                        <p class="description"><?php esc_html_e( 'Comma-separated list of things the AI should NOT include. Appended to the prompt as an "Avoid:" clause.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button( __( 'Save Branding & AI Image Settings', 'seobetter' ), 'primary', 'seobetter_save_branding' ); ?>
+        </form>
+
+        <p class="description" style="padding:10px 14px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:4px;color:#1e3a5f;margin-top:8px">
+            <strong><?php esc_html_e( 'ℹ️ Featured image vs inline images:', 'seobetter' ); ?></strong>
+            <?php esc_html_e( 'This setting controls the article FEATURED image only (the big hero at the top / social share preview). Inline images inside the article body still come from Pexels (if configured) or Picsum (free fallback) — AI-generated inline images would add $0.12+ per article for marginal visual gain, and Pexels already has millions of relevant real photos for free. Reserve AI generation for the one image that matters most: the hero.', 'seobetter' ); ?>
+        </p>
+    </div>
+</div>
+
+<script>
+jQuery(function($) {
+    // v1.5.32 — Branding logo upload + API key row toggle
+    var mediaFrame;
+    $('#branding-logo-upload-btn').on('click', function(e) {
+        e.preventDefault();
+        if (mediaFrame) { mediaFrame.open(); return; }
+        mediaFrame = wp.media({ title: 'Select Brand Logo', button: { text: 'Use this logo' }, multiple: false, library: { type: 'image' } });
+        mediaFrame.on('select', function() {
+            var a = mediaFrame.state().get('selection').first().toJSON();
+            $('#branding_logo_id').val(a.id);
+            var src = (a.sizes && a.sizes.medium && a.sizes.medium.url) || a.url;
+            $('#branding-logo-preview').html('<img src="' + src + '" alt="Brand logo" style="max-width:200px;max-height:100px;border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff" />');
+            $('#branding-logo-remove-btn').show();
+        });
+        mediaFrame.open();
+    });
+    $('#branding-logo-remove-btn').on('click', function(e) {
+        e.preventDefault();
+        $('#branding_logo_id').val(0);
+        $('#branding-logo-preview').empty();
+        $(this).hide();
+    });
+
+    // Show/hide API key row based on provider (Pollinations needs no key)
+    function updateBrandingKeyRow() {
+        var p = $('#branding_provider').val();
+        if (p === '' || p === 'pollinations') {
+            $('#branding-api-key-row').hide();
+        } else {
+            $('#branding-api-key-row').show();
+        }
+        $('#branding-api-key-help span').hide();
+        if (p) $('#branding-api-key-help span[data-provider="' + p + '"]').show();
+    }
+    $('#branding_provider').on('change', updateBrandingKeyRow);
+    updateBrandingKeyRow();
+});
+</script>
+<?php wp_enqueue_media(); ?>
+
 <script>
 (function() {
     var sel = document.getElementById('seobetter-provider-select');
@@ -393,10 +630,20 @@ $settings = get_option( 'seobetter_settings', [] );
         urlRow.style.display = opt.dataset.needsUrl === '1' ? '' : 'none';
 
         modelSel.innerHTML = '';
+        // v1.5.32 — models are now objects { id, label, tier } with tier badges
+        // in the label for compatibility visibility.
         models.forEach(function(m) {
             var o = document.createElement('option');
-            o.value = m; o.textContent = m;
-            if (m === def) o.selected = true;
+            // Backwards compat: if m is a string (old format), treat as id+label
+            if (typeof m === 'string') {
+                o.value = m; o.textContent = m;
+                if (m === def) o.selected = true;
+            } else {
+                o.value = m.id;
+                o.textContent = m.label;
+                o.dataset.tier = m.tier || 'unknown';
+                if (m.id === def) o.selected = true;
+            }
             modelSel.appendChild(o);
         });
         if (models.length === 0) {
@@ -408,5 +655,43 @@ $settings = get_option( 'seobetter_settings', [] );
 
     sel.addEventListener('change', updateProvider);
     updateProvider();
+
+    // v1.5.32 — Quick-pick preset handlers. Click a preset card to auto-fill
+    // the provider + model fields below with a known-compatible combination.
+    document.querySelectorAll('.sb-quick-pick').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var p = this.dataset.provider;
+            var m = this.dataset.model;
+            for (var i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === p) {
+                    sel.selectedIndex = i;
+                    break;
+                }
+            }
+            updateProvider();
+            for (var j = 0; j < modelSel.options.length; j++) {
+                if (modelSel.options[j].value === m) {
+                    modelSel.selectedIndex = j;
+                    break;
+                }
+            }
+            // Scroll to the provider form so user sees the selection
+            document.querySelector('[name="provider_api_key"]').focus();
+        });
+    });
+
+    // v1.5.32 — Warn user if they save a red-tier model
+    var providerForm = document.querySelector('button[name="seobetter_save_provider"]');
+    if (providerForm) {
+        providerForm.addEventListener('click', function(e) {
+            var chosen = modelSel.options[modelSel.selectedIndex];
+            if (chosen && chosen.dataset.tier === 'red') {
+                if (!confirm('⚠️ Warning: ' + chosen.value + ' is marked as NOT recommended for SEOBetter.\n\nThis model is known to ignore the PLACES RULES and Citation Pool instructions, which means it may produce articles with hallucinated business names, fake URLs, or invented quotes — even when real data is available.\n\nWe strongly recommend using one of the green-tier models instead (Claude Sonnet 4.6, Claude Haiku 4.5, or GPT-4.1).\n\nContinue anyway?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
+    }
 })();
 </script>
