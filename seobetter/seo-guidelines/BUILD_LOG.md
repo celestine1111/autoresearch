@@ -19,7 +19,7 @@
 ## v1.5.30 — Perplexity Sonar Tier 0 via OpenRouter (web-search business discovery for any city worldwide)
 
 **Date:** 2026-04-14
-**Commit:** `[pending]`
+**Commit:** `61c0ba3`
 
 ### Context
 
