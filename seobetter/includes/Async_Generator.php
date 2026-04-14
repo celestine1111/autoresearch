@@ -612,6 +612,16 @@ class Async_Generator {
             $places_force_informational = $pv_result['force_informational'];
         }
 
+        // v1.5.29 — Places_Link_Injector runs AFTER Places_Validator so we
+        // only decorate sections that survived the validator's strip. For each
+        // kept H2 that matches a pool entry, injects a meta line with address,
+        // Google Maps link, website, phone, rating. Zero cost, zero risk of
+        // hallucination (all data comes from the verified pool). Skipped
+        // silently when pool is empty.
+        if ( ! empty( $places_pool ) ) {
+            $html = Places_Link_Injector::inject( $html, $places_pool );
+        }
+
         // GEO score — pass content type so scorer adjusts checks
         $analyzer = new GEO_Analyzer();
         $score = $analyzer->analyze( $html, $keyword, $options['content_type'] ?? '' );

@@ -245,6 +245,63 @@ class Places_Validator {
     }
 
     /**
+     * v1.5.29 — variant of pool_contains() that returns the matched pool
+     * ENTRY (the full { name, address, website, phone, lat, lon, source_url }
+     * hash) instead of just a bool. Used by Places_Link_Injector to look up
+     * the metadata for each kept H2 so it can inject an address/maps/website
+     * line below the heading.
+     *
+     * Accepts the RAW pool (array of place entries) — normalization happens
+     * inside the loop so the caller doesn't have to pre-normalize.
+     *
+     * @return array|null The matched pool entry or null if no match.
+     */
+    public static function pool_lookup( string $candidate, array $places_pool ): ?array {
+        $candidate_norm = self::normalize_business_name( $candidate );
+        if ( $candidate_norm === '' ) {
+            return null;
+        }
+
+        foreach ( $places_pool as $entry ) {
+            if ( ! is_array( $entry ) ) continue;
+            $pool_name = self::normalize_business_name( $entry['name'] ?? '' );
+            if ( $pool_name === '' ) continue;
+
+            // Strategy 1: exact match
+            if ( $candidate_norm === $pool_name ) {
+                return $entry;
+            }
+
+            // Strategy 2: substring containment
+            if ( strlen( $candidate_norm ) >= 5 && strlen( $pool_name ) >= 5 ) {
+                if ( str_contains( $candidate_norm, $pool_name ) || str_contains( $pool_name, $candidate_norm ) ) {
+                    return $entry;
+                }
+            }
+
+            // Strategy 3: Levenshtein
+            if ( abs( strlen( $candidate_norm ) - strlen( $pool_name ) ) <= self::FUZZY_DISTANCE + 2 ) {
+                $a = substr( $candidate_norm, 0, 255 );
+                $b = substr( $pool_name, 0, 255 );
+                $dist = levenshtein( $a, $b );
+                if ( $dist >= 0 && $dist <= self::FUZZY_DISTANCE ) {
+                    return $entry;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * v1.5.29 — public wrapper around extract_business_name_candidate() so
+     * the Places_Link_Injector can reuse the same generic-names filter.
+     */
+    public static function extract_candidate_public( string $section ): string {
+        return self::extract_business_name_candidate( $section );
+    }
+
+    /**
      * Split HTML at H2 and H3 boundaries. Returns an array where [0] is the
      * pre-heading preamble and [1..N] are sections starting with a heading.
      */

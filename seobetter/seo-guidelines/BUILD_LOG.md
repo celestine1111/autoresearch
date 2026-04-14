@@ -16,6 +16,62 @@
 
 ---
 
+## v1.5.29 — Places_Link_Injector: inject address + Google Maps + website below every matched H2 + fix non-OSM place URLs flowing to References
+
+**Date:** 2026-04-14
+**Commit:** `[pending]`
+
+### Context
+
+Even when the Places waterfall returns real businesses (Foursquare/HERE/Google Places), the generated article showed bare H2 headings with no way for readers to find the actual business. Address, website, phone, and lat/lon were being fetched but dropped on the floor — only the REAL LOCAL PLACES prompt block used them, and the AI was free to omit them from the body prose. The References section was also broken for non-OSM providers due to a field-name bug (`osm_url` vs `source_url`).
+
+### Added
+
+- **`Places_Link_Injector` class** — new file [includes/Places_Link_Injector.php](../includes/Places_Link_Injector.php), ~160 lines, SEOBetter namespace
+  - `static inject( $html, $places_pool )` — walks every H2 via `preg_replace_callback`, normalizes the heading, looks up the matching pool entry via `Places_Validator::pool_lookup()`, and injects a `<p class="sb-place-meta">` meta line immediately after the H2
+  - Meta line format: `📍 Address · View on Google Maps · Website · tel:phone · ⭐ 4.7 (Foursquare)`
+  - Google Maps URL built from `https://www.google.com/maps/search/?api=1&query={rawurlencode(name + ' ' + address)}` — public URL scheme, no API key, always works
+  - Phone becomes a clickable `tel:` link with digits-only href
+  - Generic headings filtered out (FAQ, Conclusion, References, History, What to Look For, etc) so the injector never fires on non-business sections
+  - Runs AFTER `Places_Validator::validate()` so we only decorate kept H2s (validator strips hallucinated ones first, injector decorates surviving real ones)
+  - Verify: `grep -n "class Places_Link_Injector\|build_meta_line" seobetter/includes/Places_Link_Injector.php`
+
+- **`Places_Validator::pool_lookup()`** — new public method at [includes/Places_Validator.php::pool_lookup()](../includes/Places_Validator.php) ~line **247**
+  - Variant of `pool_contains()` that returns the full pool entry (name, address, website, phone, lat, lon, source_url, rating, source) instead of just a bool
+  - Same 3-strategy matching (exact / substring / Levenshtein ≤ 3)
+  - Used by Places_Link_Injector to fetch the metadata it needs for each kept H2
+  - Also added `extract_candidate_public()` as a public wrapper around the private candidate extractor so the injector can reuse the exact same generic-names filter
+  - Verify: `grep -n "public static function pool_lookup\|extract_candidate_public" seobetter/includes/Places_Validator.php`
+
+- **Places_Link_Injector call site in `Async_Generator::assemble_final()`** — [includes/Async_Generator.php](../includes/Async_Generator.php) lines **~556-565**
+  - Called AFTER `Places_Validator::validate()` so it only decorates sections that survived the validator's hallucination strip
+  - Skipped silently when `$places_pool` is empty
+  - Verify: `grep -n "Places_Link_Injector::inject" seobetter/includes/Async_Generator.php`
+
+### Fixed
+
+- **Non-OSM place URLs never reached the References section** — [cloud-api/api/research.js](../cloud-api/api/research.js) buildResearchResult lines **~2710-2730**
+  - Bug: the places-to-sources loop hardcoded `pl.osm_url` and `source_name: 'OpenStreetMap'` for every place regardless of which tier produced it. Foursquare/HERE/Google/Sonar places use the generic `source_url` field instead, so their URLs silently dropped out of the Citation Pool and never appeared in References.
+  - Fix: use `pl.source_url || pl.osm_url` as the URL and `pl.source || 'OpenStreetMap'` as the attribution label. OSM entries still work because `pl.osm_url` is the fallback. Non-OSM entries now correctly surface their provider URL (Foursquare profile, HERE page, Google Maps URL) in References.
+  - This bug had been present since v1.5.24 when the waterfall first shipped but was masked until v1.5.26 because Wikidata was incorrectly masking the waterfall outcome.
+  - Verify: `grep -n "pl.source_url || pl.osm_url" seobetter/cloud-api/api/research.js`
+
+### Changed
+
+- **Version bump** — `seobetter/seobetter.php` header + `SEOBETTER_VERSION` constant: `1.5.28` → `1.5.29`
+
+### Known limitations
+
+- Meta line is injected raw as HTML inside the `wp:html` classic-mode output. If the user edits the article in Gutenberg and adds a new H2 for a business not in the pool, no meta line is injected (expected — the pool only has what the waterfall found).
+- The Google Maps search URL uses name + address as the query, not lat/lon. Works for well-named businesses but may return the wrong place if two businesses share a name across towns. Acceptable trade-off vs embedding `maps.google.com/?ll=` which shows raw coordinates but loses the business name label.
+- Website field is only used if `filter_var(..., FILTER_VALIDATE_URL)` passes — non-http(s) URLs are silently dropped.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.28 — New `travel` domain category + REST Countries fetcher for tourism articles
 
 **Date:** 2026-04-14
