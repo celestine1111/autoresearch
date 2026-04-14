@@ -19,7 +19,7 @@
 ## v1.5.32 — Branding + AI Featured Image generator + Article Writer Model Recommender with tier badges
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `6655cc4`
 
 ### Context
 
