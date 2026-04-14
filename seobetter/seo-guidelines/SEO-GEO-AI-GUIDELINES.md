@@ -247,9 +247,11 @@ The Places grounding pipeline now fetches from 5 providers in sequence, stopping
 4. **HERE Places** (free 1K/day, optional user API key) — Tier 4 strong for EU/Asian tier-2 cities
 5. **Google Places API (New)** (paid with $200/mo free credit, optional user API key) — Tier 5 covers remote villages
 
-Users configure API keys in [Settings → Places Integrations](../admin/views/settings.php). Tiers with no configured key are skipped. Free baseline (OSM + Wikidata) works out of the box with no setup.
+Users configure API keys in [Settings → Places Integrations](../admin/views/settings.php). Tiers with no configured key are skipped. Free baseline (OSM only, v1.5.26+) works out of the box with no setup.
 
 The PLACES RULES system prompt block is provider-agnostic — it doesn't care which tier produced the places, just that the AI uses only names from the injected list. Hard refuse fallback (write a general informational article with disclaimer) is triggered when all configured tiers return <3 places combined.
+
+**v1.5.26 — Layer 3 structural guarantee (`Places_Validator`):** the prompt rule + closed-menu injection is Layer 1 + 2 of the anti-hallucination architecture. LLMs sometimes ignore closed-menu instructions when the structural pressure to produce an N-item listicle is stronger than the rule. Layer 3 is a post-generation validator ([includes/Places_Validator.php](../includes/Places_Validator.php)) that walks the finished HTML, extracts business-name candidates from every H2/H3 section, compares them against the verified Places Pool using normalization + Levenshtein fuzzy match, and **deletes any section whose business name is not in the pool**. Mirrors `validate_outbound_links()` for URLs. This is the structural floor — even if the model ignores PLACES RULES entirely, the fabricated sections are removed before the article ships. If more than 50% of sections are stripped, the result is flagged `force_informational` and the user sees a critical warning in the suggestions panel. Wikidata was also removed from the active waterfall in v1.5.26 because it returned wrong-type entities (churches/hamlets) for the Lucignano test and short-circuited the tier progression.
 
 ### 4.8 Auto-styled Rich Formatting Triggers (`v1.5.14+`)
 

@@ -16,6 +16,80 @@
 
 ---
 
+## v1.5.26 — Layer 3 Places_Validator (structural anti-hallucination guarantee) + remove Wikidata from the active waterfall
+
+**Date:** 2026-04-14
+**Commit:** `[pending]`
+
+### Context
+
+Live testing of v1.5.24 against `https://seobetter.vercel.app/api/research` with the Lucignano gelato keyword exposed a real-world failure mode: the Wikidata tier returned 20 wrong-type entities (churches, hamlets, town halls in neighbouring Sinalunga and Torrita di Siena) and short-circuited the waterfall at Tier 2, so Foursquare never ran. The published article still shipped 6 fabricated gelaterie. This release ships the structural anti-hallucination guarantee that makes Lucignano-class failures impossible regardless of whether the model obeys the PLACES RULES prompt block or whether the research tier returns wrong-type data.
+
+### Added
+
+- **`Places_Validator` class** — new file [includes/Places_Validator.php](../includes/Places_Validator.php), 280 lines, SEOBetter namespace
+  - `validate( $html, $places_pool, $business_type )` — main entry. Splits HTML at H2/H3 boundaries via `split_by_headings()`, extracts a business-name candidate per section via `extract_business_name_candidate()` (heading first, falls back to first `<strong>`), normalizes both candidate and pool entries via `normalize_business_name()` (strip accents via `iconv ASCII//TRANSLIT//IGNORE`, remove leading articles "il/la/gli/les/the/el/etc", collapse whitespace, lowercase), compares using `pool_contains()` with three strategies (exact normalized match, substring containment in either direction, Levenshtein distance ≤ 3), and deletes any section whose candidate doesn't match any pool entry.
+  - `FAILURE_RATIO = 0.5` — if more than 50% of listicle sections get stripped, the result is flagged `force_informational` and the caller surfaces a critical warning instead of shipping a gutted article.
+  - `FUZZY_DISTANCE = 3` — Levenshtein threshold. Tolerates minor typos, transliteration differences ("Gelateria Nonna Rosa" vs "Gelateria di Nonna Rosa").
+  - `renumber_listicle_headings()` — after sections are removed, walks remaining H2s and fixes gaps in listicle numbering (1. / 2. / 3. instead of 1. / 3. / 5.).
+  - `split_by_headings()` uses `preg_split('/(?=<h[23](?:\s[^>]*)?>)/i', ...)` to split at section boundaries non-destructively.
+  - `extract_business_name_candidate()` filters out generic section names ("Conclusion", "FAQ", "References", "Key Takeaways", etc) so only actual business-name sections get validated.
+  - Verify: `grep -n "class Places_Validator\|public static function validate\|pool_contains\|normalize_business_name" seobetter/includes/Places_Validator.php`
+
+- **Places_Validator integration in `Async_Generator::assemble_final()`** — [includes/Async_Generator.php](../includes/Async_Generator.php) lines **~517-545**
+  - After `Content_Formatter::format()` produces the final HTML and before `GEO_Analyzer::analyze()` scores it, calls `Places_Validator::validate( $html, $places_pool, $places_business_type )`.
+  - `$places_pool` comes from `$job['results']['places']` which is now populated at the research step from `$research['places']`.
+  - If `force_informational` is false, the cleaned HTML replaces the original. If true, the original HTML is kept and a critical-priority suggestion is prepended to the suggestions array so the user sees the warning in the Analyze & Improve panel.
+  - New top-level `places_validator` key in the assemble result exposes `pool_size`, `warnings`, `force_informational` to the UI.
+  - Verify: `grep -n "Places_Validator::validate\|places_validator" seobetter/includes/Async_Generator.php`
+
+- **`places` array exposed in cloud-api research response** — [cloud-api/api/research.js](../cloud-api/api/research.js) line **~2798**
+  - `buildResearchResult()` now returns the full normalized `places` array (capped at 20 entries) alongside the existing `places_count`/`places_location`/`places_provider_used` telemetry fields, so the PHP Places_Validator can use it as the closed-menu allow-list.
+  - Each entry: `{ name, type, address, website, phone, lat, lon, source_url, source }`.
+  - Verify: `grep -n "places: placesData?.places" seobetter/cloud-api/api/research.js`
+
+- **Places Pool stashed in `$job['results']`** — [includes/Async_Generator.php](../includes/Async_Generator.php) line **~160**
+  - `process_step()` 'trends' branch now populates `$job['results']['places']`, `$job['results']['places_business_type']`, `$job['results']['places_location']`, `$job['results']['is_local_intent']` from the research response so they survive until `assemble_final()` runs.
+  - Verify: `grep -n "job\['results'\]\['places'\]" seobetter/includes/Async_Generator.php`
+
+### Removed
+
+- **Wikidata tier removed from the active waterfall** — [cloud-api/api/research.js::fetchPlacesWaterfall()](../cloud-api/api/research.js) lines **~912-923**
+  - The entire Tier 2 Wikidata block inside `fetchPlacesWaterfall()` is deleted.
+  - `fetchWikidataPlaces()` function itself is kept as dead code for possible future use on cultural-heritage keywords ("oldest churches in X") but is no longer called by the business waterfall. TypeScript linter warning `'fetchWikidataPlaces' is declared but its value is never read` is expected and intentional.
+  - Waterfall is now 4 tiers: OSM → Foursquare → HERE → Google Places.
+  - Wikidata no longer appears in `places_providers_tried` telemetry.
+  - Verify: `grep -n "Tier 2: Wikidata — REMOVED" seobetter/cloud-api/api/research.js`
+
+### Changed
+
+- **Version bump** — `seobetter/seobetter.php` header + `SEOBETTER_VERSION` constant: `1.5.25` → `1.5.26`
+
+### Documented
+
+- **`plugin_functionality_wordpress.md §1.6B`** — rewritten to reflect the 4-tier waterfall, explain why Wikidata was removed (live Lucignano reproduction captured in the plan file), and add a new paragraph documenting the Places_Validator Layer 3 integration point.
+- **`SEO-GEO-AI-GUIDELINES.md §4.7B`** — added a new paragraph at the end explaining that Layer 1 (prompt rule) + Layer 2 (closed-menu injection) are structurally incomplete because LLMs sometimes ignore the rule under listicle length pressure, and that Places_Validator is the Layer 3 structural floor that mirrors `validate_outbound_links()` for business-name atoms.
+- **`pro-features-ideas.md`** — **NOT touched** per skill rule.
+
+### Known limitations (NOT shipping in v1.5.26)
+
+- **Type-match validator per tier** — even with Wikidata removed, Foursquare/HERE/Google may return wrong-category results under ambiguous keywords. Next release should add a per-tier category filter inside `fetchPlacesWaterfall()` using a synonym array from `matchBusinessType()`.
+- **Automatic regeneration on `force_informational`** — currently the user sees a critical warning but has to manually regenerate with a broader keyword. A future release could chain a second `process_step()` pass with a "general info, no listicle, no business names" system-prompt variant.
+- **Adaptive listicle length** — when pool has 2 places but user asked for 6 items, we don't yet silently downgrade the listicle size at prompt-generation time. Places_Validator catches this at the back end by deleting the 4 invented sections, but the user would get a nicer result if we told the model "write 2 sections" upfront.
+
+### Verified by user
+
+- **UNTESTED**
+
+### Required user action before testing
+
+Update WordPress so the plugin actually calls the fixed cloud-api URL:
+- WP Admin → SEOBetter → Settings → **Cloud API URL** field → set to: `https://seobetter.vercel.app` (no trailing slash) → Save.
+
+Without this, v1.5.26 code is installed but the plugin will keep hitting whatever (stale) URL is currently configured.
+
+---
+
 ## v1.5.25 — Fix "Note: Note:" duplication in callout boxes + friendlier auto-suggest message for ultra-long-tail keywords
 
 **Date:** 2026-04-14

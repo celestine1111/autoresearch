@@ -146,20 +146,22 @@ All sources combined into `for_prompt` string containing:
 - **TRENDING DISCUSSIONS** — Reddit titles, HN stories, Google Trends
 - **SOURCES FOR REFERENCES** — real URLs for article citations (up to 20)
 
-### 1.6B Places Waterfall (Anti-Hallucination Local Businesses — v1.5.24)
+### 1.6B Places Waterfall (Anti-Hallucination Local Businesses — v1.5.24, refined v1.5.26)
 
-Full 5-tier waterfall that fetches real local businesses from multiple providers and stops at the first tier returning ≥3 verified places. Replaces the v1.5.23 OSM-only fetcher. User-provided API keys flow from `seobetter_settings` → `Trend_Researcher::cloud_research()` → `research.js::fetchPlacesWaterfall()` via the `places_keys` field in the request body. Tiers with no key are skipped.
+4-tier waterfall that fetches real local businesses from multiple providers and stops at the first tier returning ≥3 verified places. Replaces the v1.5.23 OSM-only fetcher. User-provided API keys flow from `seobetter_settings` → `Trend_Researcher::cloud_research()` → `research.js::fetchPlacesWaterfall()` via the `places_keys` field in the request body. Tiers with no key are skipped.
 
-**Tier order and coverage:**
+**v1.5.26 change — Wikidata removed from the active waterfall.** Live testing against Lucignano exposed that Wikidata SPARQL `geo:around` returns any entity with coordinates (churches, hamlets, town halls) regardless of business type, because small commercial businesses are non-notable to Wikidata by design. 20 wrong-type hits short-circuited the waterfall and prevented Foursquare from ever running. `fetchWikidataPlaces()` is kept as dead code in research.js for possible future use on cultural-heritage keywords (e.g. "oldest churches in X") but no longer counts toward the business waterfall.
+
+**Tier order and coverage (v1.5.26):**
 
 | # | Tier | Cost | User setup | Global small-city coverage |
 |---|---|---|---|---|
 | 1 | **OpenStreetMap** (Nominatim + Overpass) | Free | None | ~40% (70% EU, 20% rural) |
-| 2 | **Wikidata SPARQL** | Free | None | Adds ~15% (landmarks, historical businesses) |
-| 3 | **Foursquare Places** | Free 1K calls/day | API key via Settings → Integrations | Adds ~35% via user check-ins |
-| 4 | **HERE Places** | Free 1K/day | API key via Settings | Adds ~20% for EU/Asian tier-2 cities |
-| 5 | **Google Places API (New)** | Paid ($200/mo free credit ≈ 5K articles) | API key + Google Cloud billing | Adds the final ~15% for remote villages |
+| 2 | **Foursquare Places** | Free 1K calls/day | API key via Settings → Integrations | Adds ~35% via user check-ins |
+| 3 | **HERE Places** | Free 1K/day | API key via Settings | Adds ~20% for EU/Asian tier-2 cities |
+| 4 | **Google Places API (New)** | Paid ($200/mo free credit ≈ 5K articles) | API key + Google Cloud billing | Adds the final ~15% for remote villages |
 | — | **Hard refuse fallback** | — | — | 100% — writes a general informational article with disclaimer when all tiers return <3 places |
+| — | **Places_Validator** (Layer 3, v1.5.26) | — | — | Structural guarantee: deletes any post-gen section naming a business not in the verified pool |
 
 **Architecture:**
 
@@ -186,6 +188,8 @@ Full 5-tier waterfall that fetches real local businesses from multiple providers
 - Return object gains `places_provider_used`, `places_providers_tried` for telemetry
 
 **System prompt enforcement** ([Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php#L601)): PLACES RULES block added in v1.5.23 is unchanged — closed-menu grounding works identically regardless of which provider produced the places.
+
+**v1.5.26 — Layer 3 Places_Validator** ([includes/Places_Validator.php](../includes/Places_Validator.php)): after `Content_Formatter::format()` produces the final HTML and before `GEO_Analyzer::analyze()` scores it, [Async_Generator.php::assemble_final()](../includes/Async_Generator.php) calls `Places_Validator::validate($html, $places_pool, $business_type)`. The validator splits the HTML at H2/H3 boundaries, extracts a business-name candidate from each section's heading (tolerating listicle-numbering prefixes like "1. " and "#1: "), normalizes both the candidate and the pool entries (accent transliteration, article removal, whitespace collapse), and compares using three strategies: exact match, substring containment (either direction), and Levenshtein distance ≤ 3. Any section whose candidate doesn't match ANY pool entry is deleted. If more than 50% of sections get stripped, `force_informational` is set on the result and a critical warning is surfaced in the GEO suggestions panel so the user knows the article is structurally hallucinated. Mirrors the defensive post-generation pattern used by `validate_outbound_links()` for URL atoms — same pattern, different atom.
 
 **GEO_Analyzer sentinel** ([GEO_Analyzer.php::check_local_places_grounding()](../includes/GEO_Analyzer.php) + `generate_suggestions()`): for listicle/buying_guide/review/comparison articles with local-intent keywords, checks for map URLs or specific addresses. If neither, scores 0, floors `geo_score` at 40, AND emits a high-priority `local_places` suggestion pointing the user to Settings → Integrations to configure additional providers.
 

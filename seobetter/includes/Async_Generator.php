@@ -157,6 +157,15 @@ class Async_Generator {
                 $job['results']['trends'] = $research['for_prompt'] ?? '';
                 $job['results']['trend_source'] = $research['source'] ?? 'unknown';
 
+                // v1.5.26 — stash the Places waterfall output so the post-generation
+                // Places_Validator can use it as the closed-menu allow-list in
+                // assemble_final(). Only populated for local-intent keywords; empty
+                // array otherwise.
+                $job['results']['places']              = $research['places'] ?? [];
+                $job['results']['places_business_type'] = $research['places_business_type'] ?? '';
+                $job['results']['places_location']     = $research['places_location'] ?? '';
+                $job['results']['is_local_intent']     = ! empty( $research['is_local_intent'] );
+
                 // Build the verified citation pool (real keyword-relevant URLs)
                 // This drives both the AI prompt grounding and the post-save validator.
                 $pool = Citation_Pool::build(
@@ -515,6 +524,33 @@ class Async_Generator {
             'content_type' => $options['content_type'] ?? '',
         ] );
 
+        // v1.5.26 — Layer 3 structural anti-hallucination guarantee for local-intent
+        // listicles. Walks every H2/H3 section, extracts the business-name candidate,
+        // checks it against the verified Places Pool from fetchPlacesWaterfall(), and
+        // deletes any section whose business name is not in the pool. Mirrors the
+        // 4-pass defensive pattern used by validate_outbound_links() for URLs.
+        //
+        // Skipped for non-local articles (empty pool). For local articles where more
+        // than 50% of sections get stripped, sets force_informational=true and the
+        // caller could re-run generation — for now we keep the cleaned (partially-
+        // gutted) article but surface a loud warning in the result panel so the user
+        // knows to regenerate manually with a broader keyword.
+        $places_pool = $job['results']['places'] ?? [];
+        $places_warnings = [];
+        $places_force_informational = false;
+        if ( ! empty( $places_pool ) ) {
+            $pv_result = Places_Validator::validate(
+                $html,
+                $places_pool,
+                $job['results']['places_business_type'] ?? ''
+            );
+            if ( ! $pv_result['force_informational'] ) {
+                $html = $pv_result['html'];
+            }
+            $places_warnings = $pv_result['warnings'];
+            $places_force_informational = $pv_result['force_informational'];
+        }
+
         // GEO score — pass content type so scorer adjusts checks
         $analyzer = new GEO_Analyzer();
         $score = $analyzer->analyze( $html, $keyword, $options['content_type'] ?? '' );
@@ -522,6 +558,19 @@ class Async_Generator {
         // 5-Part Framework (§28) Phase 5 — Quality Gate on the assembled article
         $framework = new Content_Ranking_Framework();
         $quality_gate = $framework->quality_gate( $html, $keyword, $options['content_type'] ?? '' );
+
+        // v1.5.26 — merge any Places_Validator warnings into the score suggestions
+        // so the Analyze & Improve panel surfaces hallucination strips as high-
+        // priority items the user can act on (the sentinel also still fires in
+        // GEO_Analyzer::check_local_places_grounding for scoring purposes).
+        $suggestions = $score['suggestions'] ?? [];
+        foreach ( $places_warnings as $pw ) {
+            array_unshift( $suggestions, [
+                'type'     => 'places_validator',
+                'priority' => $places_force_informational ? 'critical' : 'high',
+                'message'  => $pw,
+            ] );
+        }
 
         return [
             'success'       => true,
@@ -532,10 +581,17 @@ class Async_Generator {
             'grade'         => $score['grade'],
             'word_count'    => str_word_count( wp_strip_all_tags( $html ) ),
             'model_used'    => 'async-chained',
-            'suggestions'   => $score['suggestions'],
+            'suggestions'   => $suggestions,
             'checks'        => $score['checks'],
             'headlines'     => $job['results']['headlines'] ?? [],
             'meta'          => $job['results']['meta'] ?? [],
+            // v1.5.26 — surface Places_Validator outcome so the UI can show a
+            // red banner when an article was gutted by the validator.
+            'places_validator' => [
+                'pool_size'            => count( $places_pool ),
+                'warnings'             => $places_warnings,
+                'force_informational'  => $places_force_informational,
+            ],
             // Thread the citation pool through to the save path so
             // validate_outbound_links() can use it as the primary allow-list
             // and build_references_section() can auto-generate References.
