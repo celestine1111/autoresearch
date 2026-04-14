@@ -19,7 +19,7 @@
 ## v1.5.33 — Local Business Mode: cap listicle H2s to verified pool size + strict per-section business prompt
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `d9b543f`
 
 ### Context
 
