@@ -16,6 +16,64 @@
 
 ---
 
+## v1.5.48 — Five production fixes from Mudgee test: Lucignano/Cortona mentions, article-body disclaimer, stat badge regex, grade-13 readability, 3.53% density
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User ran the v1.5.47 Local Business Mode fix against `best pet shops in mudgee nsw 2026` with Sonar configured. Sonar returned 0 verified places, the pre-gen switch fired correctly (informational mode), but the live output exposed five unrelated production bugs:
+
+1. **Lucignano/Cortona mentioned in Mudgee article's GEO suggestion** — hardcoded Italian example text in [Async_Generator.php](../includes/Async_Generator.php) line ~867 and [content-generator.php](../admin/views/content-generator.php) line ~1033. Every failed-places article showed "For a 2026-04-15 test: Perplexity Web UI finds 2 real gelaterie in Lucignano" and "try a larger nearby city (e.g. Cortona, Siena)" regardless of the actual keyword location. Noise, confusing, and broke the "each article only references its own topic" contract.
+2. **Article body contained a meta-disclaimer** — `Note: This article doesn't name specific local businesses because verified open-map data wasn't available for this location. We recommend checking Google Maps or OpenStreetMap directly for current listings.` was rendered in the published WP post body. User explicit rule: errors / admin notices belong in the plugin panel only, never in the reader-facing article. Two sources: the PLACES RULES rule #6 in [Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php) line ~1042 AND the LOCAL-INTENT WARNING block in [cloud-api/api/research.js](../cloud-api/api/research.js) line ~3010.
+3. **Stat callout badge showed `5%` instead of `65%`** and `0%` instead of `20%` — greedy regex bug in [Content_Formatter.php::format_hybrid()](../includes/Content_Formatter.php) line ~464. The pattern `^.{0,60}(\d{1,3}(?:[.,]\d+)?\s*%)` used greedy `.{0,60}` which consumed the first digit of the number before the `%` sign. For "approximately 65% of households" the dot swallowed "approximately 6" (56 chars) and the capture group matched "5%". For "a 15-20% increase" it captured "0%". Classic greedy-regex-eats-the-digit bug.
+4. **Readability grade 13.0** on a 1500-word article (target: 6–8) — the existing `$readability_rule` string was a single sentence of guidance that the model treated as a suggestion, not a hard rule. No example words, no banned phrases, no measurable sentence-length cap.
+5. **Keyword density 3.53%** (target: 0.5–1.5%) — no hard cap on keyword mentions per section, no instruction to use pronouns/variations/synonyms.
+
+### Fixed
+
+#### 1. Removed hardcoded Lucignano/Cortona/Siena from user-facing messages — [includes/Async_Generator.php::post_score_suggestions()](../includes/Async_Generator.php) line ~867 + [admin/views/content-generator.php](../admin/views/content-generator.php) line ~1033
+- **Before**: GEO suggestion said `"For a 2026-04-15 test: Perplexity Web UI finds 2 real gelaterie in Lucignano (Gelateria C'era una Volta, Snoopy's)"` and panel diagnostic said `"try a larger nearby city (e.g. Cortona, Siena)"`. Both mentioned Italian towns regardless of the actual keyword location.
+- **After**: generic wording — "any small town worldwide" in the suggestion, and "try running the same keyword against a larger nearby town" in the diagnostic (no specific town names).
+- Verify: `grep -n "Lucignano\|Cortona\|Siena\|gelateri" seobetter/includes/Async_Generator.php seobetter/admin/views/content-generator.php` → should return only the historical comment references, never in user-facing strings.
+
+#### 2. Removed article-body meta-disclaimer — [includes/Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php) PLACES RULES #6 line ~1042 + [cloud-api/api/research.js::buildResearchResult()](../cloud-api/api/research.js) LOCAL-INTENT WARNING line ~3010
+- **Before** (system prompt rule #6): `"Add a disclaimer paragraph at the end: 'Note: This article doesn't name specific local businesses because verified open-map data wasn't available for this location. We recommend checking Google Maps or OpenStreetMap directly for current listings.'"` — told the AI to write the disclaimer INTO the article body.
+- **After**: rule #6 now explicitly FORBIDS the AI from adding any disclaimer, note, warning, or meta-explanation in the article body. The research-prompt warning block also updated to match: "DO NOT add any disclaimer, note, or meta-explanation in the article body about missing data, unavailable sources, Google Maps, OpenStreetMap, or the plugin's grounding process. The reader must never see those words. The plugin surfaces the missing-data notice in a separate admin panel."
+- The places_insufficient banner in the plugin's results panel ([content-generator.php](../admin/views/content-generator.php) line ~1005) is unchanged — admin still sees the warning, article reader never does.
+- Verify: `grep -n "article doesn't name specific\|disclaimer paragraph" seobetter/includes/Async_Generator.php seobetter/cloud-api/api/research.js` → should return zero matches telling the AI to write a disclaimer.
+
+#### 3. Fixed stat callout greedy regex — [includes/Content_Formatter.php::format_hybrid()](../includes/Content_Formatter.php) line ~464
+- **Before**: `preg_match( '/^.{0,60}(\d{1,3}(?:[.,]\d+)?\s*%)/', ... )` — greedy `.{0,60}` consumed the first digit of the number.
+- **After**: `preg_match( '/^[^0-9]{0,60}(\d{1,3}(?:[.,]\d+)?\s*%)/', ... )` — `[^0-9]` cannot eat digits, forces the capture group to start at the first full number. Same fix applied to the "X out of Y" / "X in Y" pattern on the next line. Side effect: ranges like "15-20%" no longer fire the callout at all (correct — ranges shouldn't be lead-stat-shaped badges).
+- Verify: `grep -n "0-9]{0,60}" seobetter/includes/Content_Formatter.php`
+
+#### 4. Strengthened readability rule to grade-6 cap with explicit examples — [includes/Async_Generator.php::generate_section()](../includes/Async_Generator.php) line ~646
+- **Before**: single sentence — `"READABILITY: Write at a 6th-8th grade reading level. Mix short sentences..."` — treated as guidance, produced grade 13.
+- **After**: seven-bullet HARD RULES block with explicit Flesch-Kincaid target, average sentence length (12–16 words), max sentence length (22 words), word-length preference, active-voice requirement, and a concrete banned-phrases list ("in order to", "due to the fact that", "it is important to note", etc). Also names specific simple-word substitutions: "use not utilize", "help not facilitate", "show not demonstrate".
+- Verify: `grep -n "GRADE LEVEL: 6th" seobetter/includes/Async_Generator.php`
+
+#### 5. Added hard keyword-density cap to the section prompt — [includes/Async_Generator.php::generate_section()](../includes/Async_Generator.php) line ~646 (same rule block)
+- **Before**: no per-section cap on keyword mentions. Density came out at 3.53% (2.3× the 1.5% target).
+- **After**: new KEYWORD DENSITY block appended to the readability rule: "Mention the primary keyword \"{$keyword}\" AT MOST 2 times in this section. Use pronouns, variations, and synonyms for every other reference. Density must stay between 0.5% and 1.5% of the article. Above 2% is penalized as keyword stuffing and reduces AI visibility by 9%. Do NOT repeat the keyword in three consecutive sentences."
+- Verify: `grep -n "AT MOST 2 times in this section" seobetter/includes/Async_Generator.php`
+
+### Verification
+
+1. Retest Mudgee — Sonar returns 0, pre-gen switch fires, article is informational BUT:
+   - No "Lucignano" / "Cortona" / "Siena" / "gelateria" mentions anywhere in the suggestions or banner
+   - Article body contains NO disclaimer paragraph (the "Note: This article doesn't name specific..." text is gone)
+   - GEO_Analyzer readability score reports grade 7–9 (was 13.0)
+   - Keyword density reports 0.8–1.3% (was 3.53%)
+2. Retest any keyword that produces a stat paragraph like "approximately 65% of households" — the big stat badge reads `65%` not `5%`.
+3. Verify the places_insufficient banner still appears in the admin results panel (v1.5.27/33 functionality kept)
+4. Rome regression (large-pool Local Business Mode) — unchanged, still produces capped listicle
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.47 — Local Business Mode now fires at places_count ≥ 1 so a single verified place still gets a dedicated H2 + meta line
 
 **Date:** 2026-04-15

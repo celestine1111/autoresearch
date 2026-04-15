@@ -458,11 +458,20 @@ class Content_Formatter {
                     // 3 stat callouts per article so percent-heavy articles don't get
                     // visually spammed with 8+ pulled-out cards. Articles with lots of
                     // numbers now get 3 prominent stat cards + the rest stay as prose.
+                    // v1.5.48 — regex bugfix. The old greedy `.{0,60}` consumed
+                    // the first digit of the number before the `%` sign, so
+                    // "approximately 65% of households" produced a badge reading
+                    // "5%" instead of "65%". Switched to `[^0-9]{0,60}` which
+                    // cannot eat digits, forcing the capture group to start at
+                    // the first full number. Same fix applied to the "X in Y"
+                    // pattern where ranges like "15-20%" previously captured
+                    // "0%". Ranges no longer trigger a callout at all, which
+                    // is correct behavior.
                     elseif (
                         $stat_count < 3
                         && (
-                            preg_match( '/^.{0,60}(\d{1,3}(?:[.,]\d+)?\s*%)/', $plain, $stat_match )
-                            || preg_match( '/^.{0,60}\b(\d{1,3})\s+(?:out\s+of|in)\s+(\d{1,4})\b/i', $plain, $stat_match )
+                            preg_match( '/^[^0-9]{0,60}(\d{1,3}(?:[.,]\d+)?\s*%)/', $plain, $stat_match )
+                            || preg_match( '/^[^0-9]{0,60}(\d{1,3})\s+(?:out\s+of|in)\s+(\d{1,4})\b/i', $plain, $stat_match )
                         )
                     ) {
                         $stat_value = trim( $stat_match[1] );

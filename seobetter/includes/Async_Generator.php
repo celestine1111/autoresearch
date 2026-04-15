@@ -643,7 +643,21 @@ class Async_Generator {
             $matched_place = Places_Validator::pool_lookup( $candidate, $places_pool );
         }
 
-        $readability_rule = "\n\nREADABILITY: Write at a 6th-8th grade reading level. Mix short sentences (under 10 words) with medium ones (15-20 words). Use everyday words. Write like you would explain something to a friend — natural, not robotic. Vary your rhythm. Do not write every sentence the same length.";
+        // v1.5.48 — previous rule produced grade 13+ output in live tests.
+        // Tightened with explicit sentence-length cap, word-length cap, banned
+        // complex word list, and a hard keyword-mention cap (the old rule
+        // produced 3.53% density = stuffing that reduces AI visibility -9%).
+        $readability_rule = "\n\nREADABILITY (HARD RULES — measured post-generation, scored for GEO):\n"
+            . "- GRADE LEVEL: 6th–8th grade. Measured via Flesch-Kincaid. The previous version produced grade 13+ and failed. Aim for grade 7.\n"
+            . "- AVERAGE SENTENCE LENGTH: 12–16 words. Never write a sentence longer than 22 words. Break long sentences into two.\n"
+            . "- WORD LENGTH: Prefer 1–2 syllable words. If a simpler word exists, use it. 'Use' not 'utilize'. 'Help' not 'facilitate'. 'Show' not 'demonstrate'. 'About' not 'regarding'. 'Buy' not 'purchase'. 'Near' not 'proximate'. 'Start' not 'commence'. 'End' not 'conclude'. 'Most' not 'the majority of'.\n"
+            . "- SENTENCE RHYTHM: Mix short (5–10 words) with medium (12–18 words). No two sentences in a row should be the same length. Do not write every sentence the same shape.\n"
+            . "- VOICE: Active voice. Direct. Confident. Write to one reader, not a crowd.\n"
+            . "- FORBIDDEN PHRASES: 'in order to', 'due to the fact that', 'with regard to', 'in light of', 'it is important to note', 'it should be noted', 'one should consider', 'when it comes to'.\n\n"
+            . "KEYWORD DENSITY (HARD RULE — measured post-generation):\n"
+            . "- Mention the primary keyword \"{$keyword}\" AT MOST 2 times in this section. Not more.\n"
+            . "- Use pronouns, variations, and synonyms for every other reference. Density must stay between 0.5% and 1.5% of the article. Above 2% is penalized as keyword stuffing and reduces AI visibility by 9%.\n"
+            . "- Do NOT repeat the keyword in three consecutive sentences.";
 
         if ( $is_takeaways ) {
             $trends_context = ( $trends ) ? "\n\nUse these real data points if relevant:\n{$trends}" : '';
@@ -864,7 +878,7 @@ class Async_Generator {
                 'type'     => 'places_insufficient',
                 'priority' => 'high',
                 'message'  => sprintf(
-                    '⚠️ No verified businesses were found in %s — your article was written as a general informational guide instead of a listicle to prevent hallucinated business names. BEST FIX: configure Perplexity Sonar via OpenRouter in Settings → Places Integrations (1 min signup at openrouter.ai/keys, ~$0.008 per article). Sonar searches TripAdvisor / Yelp / Wikivoyage and typically finds real businesses for any small city worldwide. For a 2026-04-15 test: Perplexity Web UI finds 2 real gelaterie in Lucignano (Gelateria C\'era una Volta, Snoopy\'s). If Sonar returned empty here, either your OpenRouter key is not saved OR Sonar genuinely could not verify enough sources for this location. Secondary fallbacks (Foursquare free, HERE free) are in the same Settings card.',
+                    '⚠️ No verified businesses were found in %s — your article was written as a general informational guide instead of a listicle to prevent hallucinated business names. BEST FIX: configure Perplexity Sonar via OpenRouter in Settings → Places Integrations (1 min signup at openrouter.ai/keys, ~$0.008 per article). Sonar searches TripAdvisor / Yelp / Wikivoyage / Google Maps and typically finds real businesses for any small town worldwide. If Sonar returned empty here, either your OpenRouter key is not saved OR Sonar genuinely could not verify enough sources for this exact location. Secondary fallbacks (Foursquare free, HERE free) are in the same Settings card.',
                     $loc
                 ),
             ] );
@@ -1039,7 +1053,7 @@ When the research data below includes a \"REAL LOCAL PLACES\" section, those are
 3. If a place has a website URL, link to it. If it only has an OpenStreetMap URL, link to that.
 4. Use each place at most once.
 5. DO NOT invent shop names, restaurant names, or business names under ANY circumstances. No \"Trattoria Bella Vista\" unless it's in the list. No \"Gelato di Piazza\" unless it's in the list. This is the most common hallucination failure and the v1.5.23 release exists specifically to prevent it.
-6. If the REAL LOCAL PLACES section contains a LOCAL-INTENT WARNING (research returned zero verified businesses), DO NOT write a listicle of businesses. Write a general informational article about the topic instead. Never make up businesses to fill a listicle. Add a disclaimer paragraph at the end: \"Note: This article doesn't name specific local businesses because verified open-map data wasn't available for this location. We recommend checking Google Maps or OpenStreetMap directly for current listings.\"
+6. If the REAL LOCAL PLACES section contains a LOCAL-INTENT WARNING (research returned zero verified businesses), DO NOT write a listicle of businesses. Write a general informational article about the topic instead. Never make up businesses to fill a listicle. DO NOT add any disclaimer, note, warning, or meta-explanation in the article body about missing data, unavailable sources, Google Maps, OpenStreetMap, or the plugin's grounding process. The article reader must never see those words. The plugin surfaces the missing-data notice in a separate admin panel — the article body stays clean, informational, and never breaks the fourth wall.
 7. TARGET: a listicle naming 5-10 real places from the list with real addresses and working URLs is a PASS. A listicle with plausible-sounding but invented business names is a CRITICAL FAIL — the article will be blocked by the GEO_Analyzer local-places sentinel check and the user will be asked to regenerate.
 
 E-E-A-T (Google Helpful Content Requirements):
