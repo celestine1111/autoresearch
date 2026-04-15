@@ -48,10 +48,49 @@ class Content_Injector {
         //   - v1.5.63 CACHE_VERSION bump to invalidate stale pools
         //   - hygiene check + dedupe + length cap
         $pool = Citation_Pool::build( $keyword );
+
+        // v1.5.66 — fallback. If the topical filter returns empty, fall back
+        // to direct research sources + a lenient keyword-in-title check so
+        // the button still does something useful instead of hard-failing.
+        // This prevents the "Retry" red state when the cached pool is thin.
+        if ( empty( $pool ) ) {
+            $research = Trend_Researcher::research( $keyword );
+            $raw_sources = is_array( $research['sources'] ?? null ) ? $research['sources'] : [];
+            $stopwords = [ 'the','and','for','how','what','why','when','where','your','with','from','best','top','safely','guide','2024','2025','2026','2027' ];
+            $tokens = array_filter(
+                array_map(
+                    fn( $t ) => preg_replace( '/[^\w]/', '', strtolower( $t ) ),
+                    explode( ' ', $keyword )
+                ),
+                fn( $t ) => strlen( $t ) >= 4 && ! in_array( $t, $stopwords, true )
+            );
+            $pool = [];
+            foreach ( $raw_sources as $s ) {
+                if ( ! is_array( $s ) || empty( $s['url'] ) ) continue;
+                $title = strtolower( $s['title'] ?? '' );
+                $slug = strtolower( (string) wp_parse_url( $s['url'], PHP_URL_PATH ) );
+                $haystack = $title . ' ' . $slug;
+                $matches = false;
+                foreach ( $tokens as $t ) {
+                    if ( str_contains( $haystack, $t ) ) { $matches = true; break; }
+                }
+                if ( ! $matches ) continue;
+                // Skip known noise domains
+                $host = strtolower( (string) wp_parse_url( $s['url'], PHP_URL_HOST ) );
+                if ( preg_match( '/^(dev\.to|lemmy\.|en\.wikipedia\.org\/wiki\/Veganism)/', $host ) ) continue;
+                $pool[] = [
+                    'url'         => $s['url'],
+                    'title'       => $s['title'] ?? wp_parse_url( $s['url'], PHP_URL_HOST ),
+                    'source_name' => $s['source_name'] ?? wp_parse_url( $s['url'], PHP_URL_HOST ),
+                ];
+                if ( count( $pool ) >= 8 ) break;
+            }
+        }
+
         if ( empty( $pool ) ) {
             return [
                 'success' => false,
-                'error'   => 'No topically-relevant citations available for this keyword. The Citation Pool build returned zero entries after filtering — try a more specific keyword.',
+                'error'   => 'No topically-relevant citations available for this keyword. Both the Citation Pool and the fallback research sources returned zero entries after filtering.',
             ];
         }
 
@@ -174,7 +213,6 @@ class Content_Injector {
         );
 
         return $body . $refs_separator . $refs_content;
-    }
     }
 
     /**

@@ -16,6 +16,38 @@
 
 ---
 
+## v1.5.66 — CRITICAL hotfix: stray `}` in Content_Injector broke all inject-fix buttons + Citation_Pool fallback
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User reported ALL 3 Analyze & Improve buttons (Add Citations, Simplify Readability, Check Keyword Placement) returning the red "Retry" state after v1.5.65 shipped. Plus the article preview lost all its styled formatting.
+
+### Fixed
+
+#### 1. Stray `}` on line 178 of Content_Injector.php — CRITICAL PARSE ERROR
+- v1.5.65's rewrite of `inject_citations()` and the addition of `inject_inline_citation_anchors()` accidentally left an extra closing brace between the two methods. Line 178 had `    }` right after the method closing `}`, which closed the ENTIRE class prematurely. Every method defined after that point (inject_quotes, inject_table, inject_statistics, inject_freshness, flag_readability, flag_pronouns, flag_openers, flag_keyword_placement, flag_humanizer, flag_core_eeat, simplify_readability, calc_flesch_kincaid_grade) was outside the class and became a **PHP fatal parse error** as soon as WordPress tried to load the file.
+- Result: every `rest_inject_fix` call returned HTTP 500 before even reaching the handler logic. Every button went to Retry.
+- **Fix**: removed the extra `}` on line 178. Verified only ONE top-level class-closing brace remains at end of file.
+- Verify: `tail -5 seobetter/includes/Content_Injector.php` — should show exactly one `}` at the end
+- Probable article preview regression: if WordPress can't load Content_Injector, the autoloader or any class referencing it fails on page load too, which likely broke admin CSS loading or the Content_Formatter render path. Should self-heal once the parse error is fixed.
+
+#### 2. Citation_Pool fallback for empty pools — [includes/Content_Injector.php::inject_citations()](../includes/Content_Injector.php) line ~45
+- When `Citation_Pool::build()` returns empty (thin research sources or strict topical filter), fall back to `Trend_Researcher::research()` directly with a lenient keyword-in-title check. Rejects known noise domains (dev.to, lemmy.*, Wikipedia Veganism page). Takes up to 8 filtered entries.
+- If BOTH Citation_Pool AND the fallback return empty, then return success=false with a clear error message. Previously a thin pool would hard-fail every Add Citations click.
+
+### Expected result after v1.5.66
+
+1. All 3 Analyze & Improve buttons work normally (Add Citations → success, Simplify Readability → success, Check Keyword Placement → amber "See below" with flag details)
+2. Article preview re-renders with full styled formatting (Key Takeaways box, Pros/Cons blocks, stat callouts, References pill, etc)
+3. No HTTP 500 errors in the browser devtools Network tab
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.65 — inject_citations uses Citation_Pool, inline [N] anchors, simplify_readability grade delta, redesigned score ring with cool transitions
 
 **Date:** 2026-04-15
