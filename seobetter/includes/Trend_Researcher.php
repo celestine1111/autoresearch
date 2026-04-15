@@ -95,9 +95,14 @@ class Trend_Researcher {
             // for future calls to reuse.
             $places_only_key = 'seobetter_places_only_' . md5( strtolower( trim( $keyword ) ) . '|' . strtoupper( $country ) );
 
-            if ( empty( $result['places'] ) || count( $result['places'] ) < 2 ) {
+            // v1.5.47 — threshold lowered from < 2 to < 1 to match
+            // Async_Generator's Local Business Mode threshold. With 1 verified
+            // place we still prefer reusing the shared cache over a fresh
+            // empty result, and we still save single-place results into the
+            // shared cache so the next generation can reuse them.
+            if ( empty( $result['places'] ) || count( $result['places'] ) < 1 ) {
                 $places_cached = get_transient( $places_only_key );
-                if ( is_array( $places_cached ) && ! empty( $places_cached['places'] ) && count( $places_cached['places'] ) >= 2 ) {
+                if ( is_array( $places_cached ) && ! empty( $places_cached['places'] ) && count( $places_cached['places'] ) >= 1 ) {
                     $result['places']                 = $places_cached['places'];
                     $result['places_count']           = count( $places_cached['places'] );
                     $result['places_provider_used']   = $places_cached['provider_used'] ?? 'Perplexity Sonar (cached)';
@@ -107,7 +112,7 @@ class Trend_Researcher {
                 }
             }
 
-            if ( ! empty( $result['places'] ) && count( $result['places'] ) >= 2 ) {
+            if ( ! empty( $result['places'] ) && count( $result['places'] ) >= 1 ) {
                 set_transient( $places_only_key, [
                     'places'          => $result['places'],
                     'provider_used'   => $result['places_provider_used'] ?? null,

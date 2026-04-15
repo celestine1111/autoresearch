@@ -174,7 +174,13 @@ class Async_Generator {
                 // instead of asking the model to write a listicle that it will
                 // inevitably hallucinate to fill.
                 $places_count = (int) ( $research['places_count'] ?? 0 );
-                $places_insufficient = ! empty( $research['is_local_intent'] ) && $places_count < 2;
+                // v1.5.47 — threshold lowered from < 2 to < 1. A single verified
+                // place is still better than an informational article with the
+                // real business buried in body text and no meta line. With 1
+                // pool entry, Local Business Mode below produces 1 business H2 +
+                // generic fills, and Places_Link_Injector attaches the address /
+                // Google Maps / website meta line below that H2.
+                $places_insufficient = ! empty( $research['is_local_intent'] ) && $places_count < 1;
                 $job['options']['places_insufficient'] = $places_insufficient;
                 $job['results']['places_insufficient'] = $places_insufficient;
 
@@ -185,7 +191,7 @@ class Async_Generator {
                 // only 2 real businesses exist — it will fill the gap with fakes.
                 // The generate_outline() branch reads this cap and builds the outline
                 // with exactly N business H2s + generic fill sections.
-                if ( ! empty( $research['is_local_intent'] ) && $places_count >= 2 ) {
+                if ( ! empty( $research['is_local_intent'] ) && $places_count >= 1 ) {
                     $job['options']['local_business_cap']  = $places_count;
                     $job['options']['local_business_mode'] = true;
                     // Thread the verified pool names to generate_outline() so

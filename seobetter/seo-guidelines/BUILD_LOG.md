@@ -7,12 +7,50 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-13
+> **Last updated:** 2026-04-15
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.47 — Local Business Mode now fires at places_count ≥ 1 so a single verified place still gets a dedicated H2 + meta line
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+After v1.5.46 shipped, the user re-ran the Lucignano test and reported:
+
+> "Pool size: 1 verified places. It mentions Gelaterie C'era Una Volta in Lucignano represents this traditional approach... but not prominent. I guess it works. No link or anything to the map or, website or address."
+
+Sonar returned exactly 1 verified gelateria. The v1.5.27 pre-gen switch threshold was `places_count < 2`, so a single-place result fell through to informational mode. The 1 real gelateria got mentioned in body-text prose but had NO dedicated H2, so Places_Link_Injector (which matches H2 headings to the pool) had nothing to attach its 📍 address / Google Maps / website meta line to. The user saw the real business name buried in a paragraph with no clickable links — exactly the opposite of the intended UX.
+
+Root cause: the v1.5.27 threshold was chosen when the only two outcomes were "≥2 places → listicle" and "0 places → informational". The v1.5.33 Local Business Mode introduced a middle path — a capped listicle with exactly N business H2s + generic fill sections — but the threshold was kept at `>= 2` without re-examining whether cap=1 made sense. It does: 1 real H2 + 5 generic fills is a perfectly valid article structure, and the single place gets its meta line.
+
+### Fixed
+
+#### Lowered Local Business Mode threshold from ≥ 2 to ≥ 1 — [includes/Async_Generator.php::process_step()](../includes/Async_Generator.php) lines **~176-195**
+- **Before**: `$places_insufficient = places_count < 2` and `if ( places_count >= 2 ) { local_business_mode = true; }` — a single-place result fell into `places_insufficient`, triggered the pre-gen switch, and produced an informational article where the real place was buried in body text.
+- **After**: `$places_insufficient = places_count < 1` and `if ( places_count >= 1 ) { local_business_mode = true; }` — a single-place result now enables Local Business Mode with `local_business_cap = 1`. `generate_outline()` at line ~469 already handles any cap ≥ 1 correctly: it produces exactly 1 business-name H2 placeholder, substitutes the real place name from the pool, then appends the generic fill sections (What Makes X Special, What to Look For, Regional Context, FAQ, References). Places_Link_Injector then attaches the 📍 meta line below the 1 business H2.
+- Verify: `grep -n "places_count < 1\|places_count >= 1" seobetter/includes/Async_Generator.php`
+
+#### Shared places-only cache now saves and restores single-place results — [includes/Trend_Researcher.php::cloud_research()](../includes/Trend_Researcher.php) lines **~96-122**
+- **Before**: the shared `seobetter_places_only_*` transient required `count(places) >= 2` to both restore and save. If Sonar returned 1 place on call A and 0 on call B, call B would get no benefit from call A's cached 1-place result.
+- **After**: threshold lowered to `>= 1` in both the restore check and the save block. Single-place results now persist across generations, stabilizing the Sonar non-determinism lower bound.
+- Verify: `grep -n "places_only_key" seobetter/includes/Trend_Researcher.php`
+
+### Verification
+
+1. Retest Lucignano via Sonar: if Sonar returns exactly 1 gelateria (e.g. "Gelateria C'era una Volta"), expect a listicle with 1 real business H2 named after that place + 5 generic fill sections (What Makes Gelato in Lucignano Special, etc), address + Google Maps + website meta line visible below the single business H2, no "places_insufficient" banner, no informational disclaimer.
+2. Rome regression (places_count ≥ 10): unchanged — still enters Local Business Mode with cap=10, still produces capped listicle.
+3. Empty-pool regression (Sonar returns 0): unchanged — `places_count < 1` still fires places_insufficient, still produces informational article with disclaimer.
+4. Places_Validator: with pool_size=1, the validator keeps the 1 real H2 (pool_contains match) and the 5 generic fills (extract_business_name_candidate filters them out as non-business headings), so no sections are stripped and force_informational never fires.
+
+**Verified by user:** UNTESTED
 
 ---
 
