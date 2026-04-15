@@ -19,7 +19,7 @@
 ## v1.5.45 — Split Country/Language picker into two independent fields + rewrite all tooltips in beginner plain-English
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `dbc6d74`
 
 ### Context
 
