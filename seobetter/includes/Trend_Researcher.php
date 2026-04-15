@@ -74,6 +74,7 @@ class Trend_Researcher {
         // 1. Try Vercel cloud endpoint (works everywhere, no Python needed)
         $result = self::cloud_research( $keyword, $type, $country );
         if ( $result['success'] && ! empty( $result['for_prompt'] ) ) {
+            $result = self::ensure_local_intent_fields( $result, $keyword );
             set_transient( $cache_key, $result, self::CACHE_TTL );
             return $result;
         }
@@ -82,6 +83,7 @@ class Trend_Researcher {
         if ( self::is_available() ) {
             $result = self::run_last30days( $keyword, $type );
             if ( $result['success'] ) {
+                $result = self::ensure_local_intent_fields( $result, $keyword );
                 set_transient( $cache_key, $result, self::CACHE_TTL );
                 return $result;
             }
@@ -90,8 +92,74 @@ class Trend_Researcher {
         // 3. Fall back to AI-based trend generation
         $result = self::ai_fallback( $keyword );
         if ( $result['success'] ) {
+            $result = self::ensure_local_intent_fields( $result, $keyword );
             set_transient( $cache_key, $result, self::CACHE_TTL );
         }
+        return $result;
+    }
+
+    /**
+     * v1.5.38 — CRITICAL safety net. Cloud_research timeouts (20-30s budget
+     * vs Sonar's 5-15s + parallel research fanout) cause fallback to
+     * run_last30days or ai_fallback, both of which return responses WITHOUT
+     * the v1.5.24+ Places waterfall fields (is_local_intent, places,
+     * places_count). Missing those fields means the v1.5.27 pre-gen switch
+     * and v1.5.33 Local Business Mode both silently DON'T FIRE, and the
+     * default listicle branch runs → model hallucinates 6 fake businesses.
+     *
+     * Fix: always run PHP-side local-intent detection on the keyword and
+     * force-populate the missing fields. Mirrors the JS detectLocalIntent
+     * in cloud-api/api/research.js. When fields are missing AND the keyword
+     * looks local-intent, inject is_local_intent=true + empty places array
+     * so the pre-gen switch fires and produces an informational article
+     * instead of a fabricated listicle.
+     */
+    private static function ensure_local_intent_fields( array $result, string $keyword ): array {
+        // If cloud-api provided the fields, trust them
+        if ( isset( $result['is_local_intent'] ) && array_key_exists( 'places', $result ) ) {
+            return $result;
+        }
+
+        // Detect local intent from the keyword via 4 regex patterns (match
+        // the JS detectLocalIntent patterns in cloud-api/api/research.js).
+        $kw = trim( $keyword );
+        $is_local = false;
+        $location = '';
+        $business_hint = '';
+
+        // Pattern 1: "X in Y"
+        if ( preg_match( '/^(.+?)\s+in\s+([\w\s,\'-]+?)(?:\s+(\d{4}))?$/i', $kw, $m ) ) {
+            $is_local = true;
+            $business_hint = trim( $m[1] );
+            $location = trim( $m[2] );
+        }
+        // Pattern 2: "best X in Y"
+        elseif ( preg_match( '/^(?:best|top|greatest|finest)\s+(.+?)\s+(?:in|near|around)\s+([\w\s,\'-]+?)(?:\s+(\d{4}))?$/i', $kw, $m ) ) {
+            $is_local = true;
+            $business_hint = trim( $m[1] );
+            $location = trim( $m[2] );
+        }
+        // Pattern 3: "near me" / "nearby" / "local"
+        elseif ( preg_match( '/\b(?:near\s*me|nearby|local)\b/i', $kw ) ) {
+            $is_local = true;
+            $business_hint = trim( preg_replace( '/\b(?:near\s*me|nearby|local|best|top)\b/i', '', $kw ) );
+        }
+        // Pattern 4: "what's the best X in Y"
+        elseif ( preg_match( '/^(?:what\'?s?|which|where)\s+(?:is|are)?\s*(?:the\s+)?(?:best|top)\s+(.+?)\s+(?:in|near|around|at)\s+([\w\s,\'-]+?)(?:\s+(\d{4}))?$/i', $kw, $m ) ) {
+            $is_local = true;
+            $business_hint = trim( $m[1] );
+            $location = trim( $m[2] );
+        }
+
+        // Always populate the fields so downstream code can rely on them
+        $result['is_local_intent']       = $is_local;
+        $result['places']                = $result['places'] ?? [];
+        $result['places_count']          = $result['places_count'] ?? 0;
+        $result['places_location']       = $result['places_location'] ?? $location;
+        $result['places_business_type']  = $result['places_business_type'] ?? $business_hint;
+        $result['places_provider_used']  = $result['places_provider_used'] ?? null;
+        $result['places_providers_tried']= $result['places_providers_tried'] ?? [];
+
         return $result;
     }
 
@@ -140,8 +208,18 @@ class Trend_Researcher {
             $body['places_keys'] = $places_keys;
         }
 
+        // v1.5.38 — timeout increased from 20s to 60s. The cloud-api fans out
+        // to ~10 parallel sources including Sonar (Tier 0, 5-15s web search),
+        // OSM Nominatim + Overpass (1-3s), Wikipedia, Reddit, HN, Brave,
+        // DuckDuckGo, and country-specific category APIs. Total can exceed
+        // 20s under normal conditions, especially when Sonar is configured.
+        // Silent 20s timeouts were causing fallback to run_last30days /
+        // ai_fallback which return responses WITHOUT is_local_intent or
+        // places fields — which silently disabled the pre-gen switch and
+        // Local Business Mode, letting the default listicle branch run and
+        // hallucinate 6 fake businesses per article.
         $response = wp_remote_post( $cloud_url . '/api/research', [
-            'timeout' => 20,
+            'timeout' => 60,
             'headers' => [ 'Content-Type' => 'application/json' ],
             'body'    => wp_json_encode( $body ),
         ] );

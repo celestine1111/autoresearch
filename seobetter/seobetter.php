@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.37
+ * Version: 1.5.38
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.37' );
+define( 'SEOBETTER_VERSION', '1.5.38' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -633,7 +633,7 @@ final class SEOBetter {
         $rate_check = $this->check_rate_limit( 'generate' );
         if ( $rate_check ) return $rate_check;
 
-        // v1.5.37 — wrap start_job in a try/catch so any thrown exception
+        // v1.5.38 — wrap start_job in a try/catch so any thrown exception
         // becomes a visible JSON error with the actual message + file + line,
         // instead of the mystery "Failed to start." fallback in the JS. If
         // something in the generation pipeline is silently fataling, this
@@ -1941,7 +1941,7 @@ final class SEOBetter {
             'here.com', 'www.here.com', 'discover.search.hereapi.com',
             'maps.google.com', 'maps.googleapis.com',
             'places.googleapis.com', 'google.com/maps',
-            // v1.5.37 — Perplexity Sonar (Tier 0) scrapes these tourism and
+            // v1.5.38 — Perplexity Sonar (Tier 0) scrapes these tourism and
             // review sites for citations. They need to be whitelisted so
             // source_urls returned by Sonar pass validate_outbound_links().
             'openrouter.ai', 'perplexity.ai', 'www.perplexity.ai',
@@ -1974,7 +1974,7 @@ final class SEOBetter {
 
         $image_url = '';
 
-        // v1.5.37 — Branding AI image generation first. Try the user's
+        // v1.5.38 — Branding AI image generation first. Try the user's
         // configured AI image provider (Pollinations / Gemini Nano Banana /
         // DALL-E 3 / FLUX Pro). Returns empty string on any error, at which
         // point we fall through to the existing Pexels → Picsum flow.

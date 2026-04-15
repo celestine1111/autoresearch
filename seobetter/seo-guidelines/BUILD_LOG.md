@@ -16,6 +16,79 @@
 
 ---
 
+## v1.5.38 — The REAL hallucination fix: 20s cloud timeout + missing is_local_intent in fallback paths
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+After v1.5.37 fixed the PHP fatal from v1.5.34, the user retested Lucignano and got 6 fully-hallucinated gelato shops with fake owner names (Marco Benedetti appearing in 3 different shops), fake addresses (Via Roma 15 reused across sections), fake prices (€3.50 / €4.50 / €6.00), fake history (founded 1982, 2019, three generations), fake quotes from fake experts ("Dr. Giuseppe Torriani, food historian at the University of Bologna"), and fake statistics from fake sources ("Gelato & Culture Magazine, 2023", "Italian Gelato Association").
+
+This is EXACTLY the failure mode the v1.5.27 pre-gen switch and v1.5.33 Local Business Mode were supposed to prevent. Yet they didn't fire. The 6-item default listicle branch ran. Why?
+
+### Diagnosis
+
+Traced the research flow end-to-end and found two compounding bugs:
+
+**Bug 1 — Cloud_research timeout was 20 seconds, pipeline takes longer.** The cloud-api fans out to ~10 parallel sources: Sonar Tier 0 (5-15 seconds for web search), OSM Nominatim + Overpass (1-3 seconds), Wikipedia, Reddit, HN, Brave, DuckDuckGo, plus country-specific category APIs. When Sonar is configured, total response time is typically 15-25 seconds. When it exceeds 20s, `wp_remote_post` returns `WP_Error: connection_timeout`, `cloud_research()` returns `success: false`, and Trend_Researcher falls through to `run_last30days` (Python bridge that may not even be installed on WP Engine) and finally `ai_fallback` (pure LLM generation).
+
+**Bug 2 — `run_last30days` and `ai_fallback` return responses WITHOUT the v1.5.24+ Places waterfall fields.** These legacy fallbacks predate the Places waterfall. They return trend data in the old shape with no `is_local_intent`, no `places`, no `places_count`, no `places_location`. When Async_Generator::process_step() reads these fields from the fallback response:
+- `is_local_intent` is empty → pre-gen switch doesn't fire (needs truthy `is_local_intent`)
+- `places_count` is empty → `local_business_mode` doesn't fire (needs `>= 2`)
+- `places_insufficient` is set to `false` because the condition `is_local_intent && places_count < 2` requires `is_local_intent` to be truthy
+- The default listicle branch in `generate_outline()` runs
+- The model is asked to produce a full 6-section listicle about "best gelato in lucignano italy 2026"
+- It hallucinates 6 Italian-sounding business names with fabricated details to fill the word count
+
+**Every test since v1.5.27 has hit this silent-failure path.** The structural fixes (pre-gen switch, Local Business Mode, strict per-section prompt, Places_Link_Injector, Places_Validator) were all correct — they just never got a chance to run because cloud_research was silently timing out on the user's WP Engine install.
+
+### Fixed
+
+- **Cloud research timeout 20s → 60s** — [includes/Trend_Researcher.php::cloud_research()](../includes/Trend_Researcher.php) lines **~143-152**
+  - `wp_remote_post` timeout parameter changed from `20` to `60`
+  - Matches the actual budget of the parallel research pipeline when Sonar Tier 0 is configured
+  - Verify: `grep -n "'timeout' => 60" seobetter/includes/Trend_Researcher.php`
+
+- **`ensure_local_intent_fields()` safety net** — [includes/Trend_Researcher.php::ensure_local_intent_fields()](../includes/Trend_Researcher.php) lines **~97-165**
+  - Called on EVERY research result regardless of source (cloud / last30days / ai_fallback)
+  - If the result already has `is_local_intent` and `places`, returns as-is
+  - Otherwise runs PHP-side `detect_local_intent` via 4 regex patterns matching the JS `detectLocalIntent` in `cloud-api/api/research.js`:
+    - `^X in Y [year]$` — catches "best gelato in lucignano italy 2026"
+    - `^best/top X in/near Y [year]$` — catches "best gelato shops in lucignano italy"
+    - `\bnear me\b|\bnearby\b|\blocal\b` — catches "gelato near me"
+    - `^what'?s?/which/where (is|are) (the )?best/top X in/near Y$` — catches "what's the best gelato in lucignano"
+  - Populates missing fields: `is_local_intent` (bool), `places` (empty array), `places_count` (0), `places_location`, `places_business_type`, `places_provider_used` (null), `places_providers_tried` (empty array)
+  - Result: even when cloud_research times out and falls through to `ai_fallback`, the pre-gen switch fires correctly because `is_local_intent=true` and `places_count=0` → `places_insufficient=true` → informational article with disclaimer
+  - Verify: `grep -n "ensure_local_intent_fields\|function ensure_local_intent_fields" seobetter/includes/Trend_Researcher.php`
+
+- **Called from all 3 research paths** — [includes/Trend_Researcher.php::research()](../includes/Trend_Researcher.php) lines **~74-95**
+  - cloud_research success path: `$result = ensure_local_intent_fields($result, $keyword)` before cache set
+  - last30days success path: same
+  - ai_fallback success path: same
+
+### Why THIS is the actual fix for Lucignano
+
+Previous releases (v1.5.24 Places waterfall, v1.5.26 Places_Validator, v1.5.27 pre-gen switch, v1.5.29 Places_Link_Injector, v1.5.30 Sonar Tier 0, v1.5.33 Local Business Mode, v1.5.34 cache bust, v1.5.37 PHP fatal fix) were all correct pieces of the structural anti-hallucination architecture. But the CHAIN was broken at the very first link: when cloud_research silently timed out, none of the downstream safeguards could see local intent, so they all silently did nothing.
+
+With v1.5.38, the safety net guarantees that ANY keyword matching a local-intent pattern gets `is_local_intent=true` in its research result, which makes the pre-gen switch fire reliably even in the worst case (cloud-api down, Sonar unconfigured, all fallbacks triggered). The user's Lucignano article will now ship as an informational piece with a disclaimer, not a fabricated listicle.
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.37` → `1.5.38`
+
+### Critical — user must clear the WP Engine cache
+
+Because v1.5.34's cache bust relied on the v7 cache key, any cached v7 entries from recent failed tests (where `is_local_intent` was empty due to the timeout fallback) still exist in the transient store. They'll be served for 6 hours unless purged.
+
+**User action:** WP Engine User Portal → Caching → Purge all caches (same as before).
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.37 — FIX PHP fatal: unescaped double quotes in get_system_prompt() introduced in v1.5.34
 
 **Date:** 2026-04-15
