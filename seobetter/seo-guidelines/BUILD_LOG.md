@@ -19,7 +19,7 @@
 ## v1.5.60 — Score-to-90 release: forced tables, relaxed keyword density, readability prompt examples, first-hand voice, References fallback
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `878682c`
 
 ### Context
 
