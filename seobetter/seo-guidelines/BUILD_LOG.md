@@ -19,7 +19,7 @@
 ## v1.5.51 — Test Research Sources diagnostic: per-source ok/error/latency for Reddit / HN / DDG / Bluesky / Mastodon / Dev.to / Lemmy / Wikipedia / Google Trends / Brave / Category APIs / Last30Days
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `58c15ee`
 
 ### Context
 
