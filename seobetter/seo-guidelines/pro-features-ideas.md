@@ -62,42 +62,9 @@
 - [ ] AI Citation Tracker (check if AI engines cite your content)
 - [ ] Content Decay Alerts (email when posts go stale or scores drop)
 - [ ] Keyword Cannibalization Detector
-- [ ] **Auto Internal Linking (NEW — requested 2026-04-15)**
-
-  **What it does:** at save time, scans the user's last 50 published posts on the same site and automatically injects 3-6 contextually-relevant internal links into the new article body, satisfying AIOSEO's "no internal links" check and boosting site topical authority.
-
-  **Why it matters:** AIOSEO flagged the live Mindiam Pets article with "We couldn't find any internal links in your content" even though the theme has navigation links. Internal links are a ranking factor and help AI crawlers understand site architecture. SEOBetter currently doesn't inject any internal links at generation time — this is the single biggest AIOSEO gap.
-
-  **How it works:**
-  - New `Internal_Linker` class in `includes/Internal_Linker.php`
-  - At save time in `rest_save_draft()`, AFTER `Places_Link_Injector` runs:
-    - Query `wp_posts` for the last 50 published posts on the same site (`post_type=post`, `post_status=publish`, ordered by `post_date DESC`)
-    - For each candidate post, extract: title, permalink, focus keyword (from `_aioseo_focus_keyword` meta), excerpt, and category
-    - Build a vocabulary map: `{ keyword → post URL }` for every candidate
-    - Walk the new article's body H2 sections. For each H2:
-      - Find the 2-3 most common nouns in the section body
-      - Match them against the vocabulary map (stemmed match + synonym map: "food" matches "feeding" / "diet", "transition" matches "switch" / "change", etc)
-      - If a match exists, wrap the first occurrence of that word in the section body with a markdown link `[word](post_url)`
-      - Cap at 1 internal link per H2 section to avoid over-linking
-    - Target: 3-6 internal links per article
-  - Uses the new Content_Injector pattern — never edits existing sentences, only wraps the first match of each matched keyword in a link
-  - Skip if the candidate post list is empty (new site)
-  - Skip if the candidate post's focus keyword is the same as the current article (avoid self-linking siblings)
-
-  **Free tier fallback:** for non-Pro users, run the same logic but only use the last 10 published posts (vs 50). Still injects 2-4 internal links.
-
-  **Settings UI additions:**
-  - `Settings → Internal Links` card
-  - Checkbox: "Auto-inject internal links when saving drafts"
-  - Number input: "Maximum internal links per article" (default 5, range 1-15)
-  - Checkbox: "Skip self-link on matching focus keywords" (default on)
-  - Text input: "Exclude categories (comma-separated slugs)" for landing pages / legal pages
-
-  **Reuses existing code:**
-  - `Content_Injector` inject-only pattern (never rewrites existing text)
-  - `validate_outbound_links` whitelists the user's own domain automatically via `home_url()`
-  - `GEO_Analyzer::check_internal_links()` — NEW scoring method to track the lift
 - [ ] GEO Score column in Posts list (sortable)
+
+> **Internal linking — OUT OF SCOPE** (decision 2026-04-15). User will rely on an existing third-party WordPress internal linking plugin (e.g. Link Whisper, Internal Link Juicer, Rank Math internal linker) at save time. SEOBetter will not duplicate that functionality. AIOSEO's "no internal links" check is accepted as a cross-plugin concern, not a SEOBetter responsibility.
 
 ### Advanced Pro
 - [ ] Unlimited AI provider connections

@@ -51,7 +51,6 @@
 - ❌ AI Featured Image with branding (4 providers)
 - ❌ Brave Search (Pro research source)
 - ❌ Country localization (80+ country APIs)
-- ❌ Internal linking auto-injector
 - ❌ AIOSEO / Yoast / RankMath auto-population
 - ❌ LocalBusiness + HowTo + ItemList schema
 - ❌ Bulk CSV import
@@ -70,7 +69,6 @@
 - AI Featured Image with branding (Pollinations free / Gemini 2.5 Flash Image / DALL-E 3 / FLUX Pro)
 - Brave Search API integration (real web citations in References section)
 - Country localization (80+ countries with local category/gov APIs)
-- Internal linking auto-injector (3-6 internal links per article, pulled from last 50 published posts)
 - AIOSEO + Yoast + RankMath auto-population (focus keyword, meta title, description, OG tags, schema)
 - LocalBusiness schema with verified addresses from Places pool
 - HowTo schema for tutorial content
@@ -132,7 +130,7 @@
 
 | # | Keyword | Content Type | Expected |
 |---|---|---|---|
-| 1 | `how to transition your dog to raw food safely 2026` | How-To Guide | GEO 90+, AIOSEO passes (except internal links), References with clickable links, first-hand voice, 1 comparison table |
+| 1 | `how to transition your dog to raw food safely 2026` | How-To Guide | GEO 90+, AIOSEO passes (users install a separate internal-linking plugin), References with clickable links, first-hand voice, 1 comparison table |
 | 2 | `best washable dog beds australia 2026` | Listicle | GEO 85+, Pros/Cons blocks, stat callouts, Brave citations, ItemList schema |
 | 3 | `best dog food delivery services in melbourne australia 2026` | Listicle | GEO 85+, real Melbourne businesses as H2s, 📍 meta lines, LocalBusiness schema, no places_insufficient |
 
@@ -263,6 +261,7 @@ The pricing page on [seobetter.com](https://seobetter.com) should mirror this do
 | 2026-04-15 | Cloud Credits as hybrid add-on, not mandatory | Matches Cursor/GitHub Copilot model. Users who don't want to manage keys can pay for credits. Users who DO want BYOK still have the free escape hatch. |
 | 2026-04-15 | AppSumo LTD launch in Phase 3 | Proven WP-plugin launch tactic. $45-120k upfront funds operations. Trade: 3-month exclusivity, but worth it for cash + reviews. |
 | 2026-04-15 | No release until test articles pass 90+ | Shipping broken paid features kills reviews. Test first. |
+| 2026-04-15 | Internal linking REMOVED from roadmap | User will rely on an existing third-party WordPress internal linking plugin (Link Whisper, Internal Link Juicer, Rank Math internal linker, etc). SEOBetter will not duplicate that functionality. Frees engineering to focus on the unique anti-hallucination Places waterfall and GEO scoring that no other plugin has. AIOSEO's "no internal links" check is accepted as a cross-plugin concern. |
 
 ---
 
