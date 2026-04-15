@@ -19,7 +19,7 @@
 ## v1.5.50 — Test Places Providers diagnostic short-circuits all non-places sources
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `5ca0811`
 
 ### Context
 
