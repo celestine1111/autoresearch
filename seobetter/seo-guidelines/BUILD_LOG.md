@@ -19,7 +19,7 @@
 ## v1.5.40 — Auto-discover OpenRouter key from AI Providers for Places Sonar Tier 0 (THE reason Sonar was never called)
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `d5e0b21`
 
 ### Context
 
