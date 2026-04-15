@@ -19,7 +19,7 @@
 ## v1.5.37 — FIX PHP fatal: unescaped double quotes in get_system_prompt() introduced in v1.5.34
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `6252a3d`
 
 ### Context
 
