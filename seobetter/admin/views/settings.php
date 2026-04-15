@@ -484,10 +484,20 @@ $settings = get_option( 'seobetter_settings', [] );
             <?php submit_button( __( 'Save Places Integrations', 'seobetter' ), 'primary', 'seobetter_save_places' ); ?>
         </form>
 
+        <div style="margin:16px 0 8px;padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
+            <strong style="font-size:14px;color:#0f172a"><?php esc_html_e( '🧪 Test Foursquare / HERE / Google Places keys', 'seobetter' ); ?></strong>
+            <p class="description" style="margin:6px 0 10px">
+                <?php esc_html_e( 'Runs a diagnostic against the cloud-api using the keyword "best pet shops in sydney australia 2026". Bypasses Sonar and forces every configured tier to run so you can see per-tier counts. Use this to verify your keys are actually being called during normal article generation (where Sonar or OSM usually short-circuits the waterfall before these tiers run).', 'seobetter' ); ?>
+            </p>
+            <button type="button" id="seobetter-test-places-providers" class="button button-primary" style="margin-right:8px"><?php esc_html_e( '🧪 Test Places Providers', 'seobetter' ); ?></button>
+            <span id="seobetter-test-places-providers-status" style="font-size:12px;color:#6b7280"></span>
+            <div id="seobetter-test-places-providers-result" style="margin-top:12px;display:none;padding:14px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:400px;overflow-y:auto"></div>
+        </div>
+
         <p class="description" style="padding:8px 12px;background:#f0fdf4;border-radius:4px;color:#166534;margin-top:8px">
             <span class="dashicons dashicons-info-outline"></span>
             <strong><?php esc_html_e( 'How the waterfall works:', 'seobetter' ); ?></strong>
-            <?php esc_html_e( 'For any article with a local-intent keyword (e.g. "best gelato shops in Lucignano"), the plugin tries OSM → Wikidata → Foursquare → HERE → Google Places in order, stopping at the first tier returning 3+ verified places. Unconfigured tiers are skipped. If no tier returns enough data, the plugin writes a general informational article with a disclaimer — it NEVER invents business names.', 'seobetter' ); ?>
+            <?php esc_html_e( 'For any article with a local-intent keyword, the plugin tries Perplexity Sonar → OpenStreetMap → Foursquare → HERE → Google Places in order, stopping at the first tier returning 2+ verified places. Unconfigured tiers are skipped. If no tier returns enough data, the plugin writes a general informational article — it NEVER invents business names.', 'seobetter' ); ?>
         </p>
     </div>
 </div>
@@ -702,6 +712,75 @@ jQuery(function($) {
             $result.text('Request failed: ' + status + ' ' + err + '\n\nResponse: ' + (xhr.responseText || 'empty')).show();
             $status.text('Failed.');
             $btn.prop('disabled', false).text('🧪 Test Sonar Connection');
+        });
+    });
+
+    // v1.5.49 — Test Places Providers (Foursquare / HERE / Google) button handler
+    $('#seobetter-test-places-providers').on('click', function(e) {
+        e.preventDefault();
+        var $btn = $(this);
+        var $status = $('#seobetter-test-places-providers-status');
+        var $result = $('#seobetter-test-places-providers-result');
+        $btn.prop('disabled', true).text('Testing... (up to 60s)');
+        $status.text('Calling cloud-api with Sydney test keyword (all tiers forced)...');
+        $result.hide().empty();
+        $.ajax({
+            url: '<?php echo esc_js( rest_url( 'seobetter/v1/test-places-providers' ) ); ?>',
+            method: 'POST',
+            headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
+            data: {},
+            timeout: 70000
+        }).done(function(res) {
+            var lines = [];
+            lines.push('═══ PLACES PROVIDERS DIAGNOSTIC ═══');
+            lines.push('');
+            lines.push('Plugin version: ' + (res.plugin_version || '?'));
+            lines.push('Test keyword:   ' + (res.test_keyword || '(n/a)'));
+            lines.push('Total places:   ' + (res.places_count || 0));
+            lines.push('Provider used:  ' + (res.places_provider_used || 'null'));
+            lines.push('');
+            lines.push('─── KEYS CONFIGURED ───');
+            if (res.configured) {
+                lines.push('Foursquare: ' + (res.configured.foursquare ? 'YES' : 'NO'));
+                lines.push('HERE:       ' + (res.configured.here ? 'YES' : 'NO'));
+                lines.push('Google:     ' + (res.configured.google ? 'YES' : 'NO'));
+            }
+            lines.push('');
+            lines.push('─── VERDICT ───');
+            if (res.verdict) {
+                lines.push(res.verdict);
+            }
+            if (res.error) {
+                lines.push('');
+                lines.push('─── ERROR ───');
+                lines.push(res.error);
+            }
+            if (res.per_tier) {
+                lines.push('');
+                lines.push('─── RAW PER-TIER ───');
+                Object.keys(res.per_tier).forEach(function(name) {
+                    var t = res.per_tier[name];
+                    var line = '  • ' + name + ': ' + (t.count || 0) + ' places';
+                    if (t.error) line += '  [ERROR: ' + t.error + ']';
+                    lines.push(line);
+                });
+            }
+            if (res.places_sample && res.places_sample.length) {
+                lines.push('');
+                lines.push('─── SAMPLE PLACES (first 5) ───');
+                res.places_sample.forEach(function(p, i) {
+                    lines.push('  ' + (i+1) + '. ' + (p.name || '?'));
+                    if (p.address) lines.push('     ' + p.address);
+                    if (p.source)  lines.push('     via ' + p.source);
+                });
+            }
+            $result.text(lines.join('\n')).show();
+            $status.text('Test complete.');
+            $btn.prop('disabled', false).text('🧪 Test Places Providers');
+        }).fail(function(xhr, status, err) {
+            $result.text('Request failed: ' + status + ' ' + err + '\n\nResponse: ' + (xhr.responseText || 'empty')).show();
+            $status.text('Failed.');
+            $btn.prop('disabled', false).text('🧪 Test Places Providers');
         });
     });
 

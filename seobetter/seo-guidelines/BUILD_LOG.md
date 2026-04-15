@@ -16,6 +16,55 @@
 
 ---
 
+## v1.5.49 — Test Places Providers diagnostic: verify Foursquare / HERE / Google keys are actually being called
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User reported "I've already added Foursquare and HERE keys... test they are being called before I try another article." The problem: in normal article generation the waterfall short-circuits at the first tier returning ≥2 results, so if Sonar or OSM succeeds for a given keyword, Foursquare and HERE NEVER run — and the user has no way to know whether their keys are valid until they hit a failing small-town keyword (where all tiers return 0 and the user still can't tell which tier was the problem). We needed a targeted diagnostic that forces every configured tier to run independently.
+
+### Added
+
+#### 1. `test_all_places_tiers` flag on cloud-api /api/research — [cloud-api/api/research.js](../cloud-api/api/research.js) line ~27 + `fetchPlacesWaterfall` line ~1057
+- New boolean field in the request body. When true, every tier's short-circuit gate changes from `if (!provider_used && ...)` to `if (runAllTiers || !provider_used && ...)` so Sonar, OSM, Foursquare, HERE, Google all run regardless of whether earlier tiers succeeded. `providers_tried` reports every tier's count independently.
+- Also added try/catch error capture to Foursquare, HERE, and Google Places fetchers — matches the existing Sonar error capture from v1.5.42. Any HTTP/parse error becomes `providers_tried[i].error` instead of silently returning 0.
+- Normal article generation NEVER passes this flag, so production behavior is unchanged.
+- Verify: `grep -n "runAllTiers\|test_all_places_tiers" seobetter/cloud-api/api/research.js`
+
+#### 2. New REST endpoint `POST /seobetter/v1/test-places-providers` — [seobetter.php::rest_test_places_providers()](../seobetter.php) line ~765
+- Reads `foursquare_api_key`, `here_api_key`, `google_places_api_key` from `seobetter_settings`
+- Builds a cloud-api request with ONLY those keys (no `openrouter_sonar`) + `test_all_places_tiers: true`
+- Test keyword: `"best pet shops in sydney australia 2026"` — Sydney is large enough that FSQ and HERE should both return multiple real results for any valid key
+- Per-tier breakdown returned with a verdict string for each configured tier: ✅ working, ⚠️ called but returned 0, ❌ error message, or ❌ never called (indicates stale Vercel deployment)
+- Verify: `grep -n "rest_test_places_providers" seobetter/seobetter.php`
+
+#### 3. "🧪 Test Places Providers" button in Settings → Places Integrations — [admin/views/settings.php](../admin/views/settings.php) line ~484 + JS handler line ~716
+- Appears directly below the Save button and the Foursquare / HERE / Google input rows
+- Mirrors the existing Test Sonar button pattern from v1.5.41 (same status span, same `<pre>` result block)
+- Verify: grep for `seobetter-test-places-providers` in settings.php
+
+#### 4. Removed remaining "Lucignano" reference from Places waterfall description — [admin/views/settings.php](../admin/views/settings.php) line ~497
+- Old: "For any article with a local-intent keyword (e.g. "best gelato shops in Lucignano"), the plugin tries OSM → Wikidata → Foursquare → HERE → Google Places in order, stopping at the first tier returning 3+ verified places."
+- New: generic wording + corrected waterfall order (Sonar → OSM → Foursquare → HERE → Google) + corrected threshold (2+ not 3+, matching current code). Wikidata removed from the text (dead code since v1.5.26).
+
+### Verification
+
+1. Open Settings → Places Integrations. Click "🧪 Test Places Providers".
+2. Expected output for valid FSQ + HERE keys:
+   ```
+   ✅ Foursquare: WORKING — returned 10 places for Sydney.
+   ✅ HERE: WORKING — returned 10 places for Sydney.
+   ```
+3. If FSQ key is invalid: `❌ Foursquare: key IS being called but returned an ERROR → fsq_http_401: Unauthorized`
+4. If a key is saved but the cloud-api never calls that tier: `❌ Foursquare: key configured but the cloud-api NEVER called the Foursquare tier. Check Vercel deployment is >= v1.5.49.` — this means the user needs to redeploy the cloud-api.
+5. Article generation regression: the normal flow (no test_all_places_tiers flag) still short-circuits at the first successful tier — no performance hit, no extra API calls on normal generations.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.48 — Five production fixes from Mudgee test: Lucignano/Cortona mentions, article-body disclaimer, stat badge regex, grade-13 readability, 3.53% density
 
 **Date:** 2026-04-15

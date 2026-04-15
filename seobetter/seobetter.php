@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.48
+ * Version: 1.5.49
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.48' );
+define( 'SEOBETTER_VERSION', '1.5.49' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -421,7 +421,7 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
-        // v1.5.48 — diagnostic endpoint that tests the full Places Sonar
+        // v1.5.49 — diagnostic endpoint that tests the full Places Sonar
         // Tier 0 chain end-to-end. Calls Trend_Researcher::cloud_research()
         // with a sample local-intent keyword and reports (a) which OpenRouter
         // key source was used (Places field / AI Providers auto-discover /
@@ -431,6 +431,19 @@ final class SEOBetter {
         register_rest_route( 'seobetter/v1', '/test-sonar', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_test_sonar' ],
+            'permission_callback' => function () {
+                return current_user_can( 'manage_options' );
+            },
+        ]);
+        // v1.5.49 — diagnostic endpoint for Foursquare + HERE + Google Places.
+        // Calls the cloud-api research endpoint directly with only the paid
+        // place provider keys (no Sonar, no category APIs) and runAllTiers=true
+        // so the waterfall doesn't short-circuit. Lets users verify their
+        // Foursquare / HERE / Google keys are being called without running
+        // a full article generation and without being masked by Sonar.
+        register_rest_route( 'seobetter/v1', '/test-places-providers', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_test_places_providers' ],
             'permission_callback' => function () {
                 return current_user_can( 'manage_options' );
             },
@@ -644,7 +657,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.48 — Test Sonar connection diagnostic endpoint.
+     * v1.5.49 — Test Sonar connection diagnostic endpoint.
      *
      * Runs a real cloud-api research call against a known-good keyword
      * (Lucignano, which we know should produce 2 real gelaterie when Sonar
@@ -756,11 +769,176 @@ final class SEOBetter {
         return '✅ SONAR IS WORKING. Found ' . $sonar_count . ' verified places for Lucignano via the ' . $key_source . ' key source. The article generation pipeline is correctly configured.';
     }
 
+    /**
+     * v1.5.49 — Test Foursquare / HERE / Google Places directly, bypassing
+     * Sonar and the waterfall short-circuit. Users report "I added my
+     * Foursquare key but no businesses show up" — they need to know whether
+     * the key is actually being called (and returning data) or whether Sonar
+     * / OSM is short-circuiting the waterfall before FSQ/HERE ever run.
+     *
+     * This endpoint reads the configured keys from seobetter_settings, builds
+     * a test request with ONLY those keys (no openrouter_sonar), and calls
+     * the cloud-api /api/research endpoint directly with test_all_places_tiers
+     * = true so every configured tier runs and reports its own count
+     * regardless of whether earlier tiers succeeded.
+     *
+     * Test keyword: "best pet shops in sydney australia 2026" — Sydney is
+     * large enough that both Foursquare and HERE should return multiple real
+     * results if the keys are valid.
+     */
+    public function rest_test_places_providers( \WP_REST_Request $request ): \WP_REST_Response {
+        $settings   = get_option( 'seobetter_settings', [] );
+        $fsq_key    = $settings['foursquare_api_key'] ?? '';
+        $here_key   = $settings['here_api_key'] ?? '';
+        $google_key = $settings['google_places_api_key'] ?? '';
+
+        $configured = [
+            'foursquare' => ! empty( $fsq_key ),
+            'here'       => ! empty( $here_key ),
+            'google'     => ! empty( $google_key ),
+        ];
+
+        if ( empty( $fsq_key ) && empty( $here_key ) && empty( $google_key ) ) {
+            return new \WP_REST_Response( [
+                'success'    => false,
+                'configured' => $configured,
+                'error'      => 'No Foursquare, HERE, or Google Places key is configured in Settings → Places Integrations. Paste at least one key and save, then run this test again.',
+            ] );
+        }
+
+        $places_keys = [];
+        if ( ! empty( $fsq_key ) )    $places_keys['foursquare'] = $fsq_key;
+        if ( ! empty( $here_key ) )   $places_keys['here']       = $here_key;
+        if ( ! empty( $google_key ) ) $places_keys['google']     = $google_key;
+
+        $test_keyword = 'best pet shops in sydney australia 2026';
+        $cloud_url    = SEOBetter\Cloud_API::get_cloud_url();
+
+        $body = [
+            'keyword'                => $test_keyword,
+            'site_url'               => home_url(),
+            'domain'                 => 'general',
+            'country'                => 'AU',
+            'places_keys'            => $places_keys,
+            'test_all_places_tiers'  => true,
+        ];
+
+        try {
+            $response = wp_remote_post( $cloud_url . '/api/research', [
+                'timeout' => 60,
+                'headers' => [ 'Content-Type' => 'application/json' ],
+                'body'    => wp_json_encode( $body ),
+            ] );
+
+            if ( is_wp_error( $response ) ) {
+                return new \WP_REST_Response( [
+                    'success'    => false,
+                    'configured' => $configured,
+                    'error'      => 'Cloud API request failed: ' . $response->get_error_message(),
+                ] );
+            }
+
+            $code    = wp_remote_retrieve_response_code( $response );
+            $raw     = wp_remote_retrieve_body( $response );
+            $decoded = json_decode( $raw, true );
+
+            if ( $code !== 200 ) {
+                return new \WP_REST_Response( [
+                    'success'    => false,
+                    'configured' => $configured,
+                    'http_code'  => $code,
+                    'error'      => ( is_array( $decoded ) && isset( $decoded['error'] ) ) ? $decoded['error'] : "HTTP {$code}",
+                ] );
+            }
+
+            $providers_tried = is_array( $decoded['places_providers_tried'] ?? null ) ? $decoded['places_providers_tried'] : [];
+            $per_tier        = [];
+            foreach ( $providers_tried as $p ) {
+                $name = $p['name'] ?? 'unknown';
+                $per_tier[ $name ] = [
+                    'count' => (int) ( $p['count'] ?? 0 ),
+                    'error' => $p['error'] ?? null,
+                ];
+            }
+
+            $verdict_lines = [];
+            if ( ! empty( $fsq_key ) ) {
+                if ( isset( $per_tier['Foursquare'] ) ) {
+                    $c = $per_tier['Foursquare']['count'];
+                    $e = $per_tier['Foursquare']['error'];
+                    if ( $e ) {
+                        $verdict_lines[] = "❌ Foursquare: key IS being called but returned an ERROR → {$e}";
+                    } elseif ( $c > 0 ) {
+                        $verdict_lines[] = "✅ Foursquare: WORKING — returned {$c} places for Sydney.";
+                    } else {
+                        $verdict_lines[] = "⚠️ Foursquare: key was called but returned 0 places. Key may be invalid or Sydney pet-shop search scope is wrong.";
+                    }
+                } else {
+                    $verdict_lines[] = "❌ Foursquare: key configured but the cloud-api NEVER called the Foursquare tier. This usually means the cloud-api Vercel deployment is outdated. Check Vercel → seobetter-cloud → latest deployment is >= v1.5.49.";
+                }
+            } else {
+                $verdict_lines[] = "⚪ Foursquare: no key configured (skipped).";
+            }
+
+            if ( ! empty( $here_key ) ) {
+                if ( isset( $per_tier['HERE'] ) ) {
+                    $c = $per_tier['HERE']['count'];
+                    $e = $per_tier['HERE']['error'];
+                    if ( $e ) {
+                        $verdict_lines[] = "❌ HERE: key IS being called but returned an ERROR → {$e}";
+                    } elseif ( $c > 0 ) {
+                        $verdict_lines[] = "✅ HERE: WORKING — returned {$c} places for Sydney.";
+                    } else {
+                        $verdict_lines[] = "⚠️ HERE: key was called but returned 0 places. Key may be invalid, or the HERE discover endpoint is filtering pet-shop results.";
+                    }
+                } else {
+                    $verdict_lines[] = "❌ HERE: key configured but the cloud-api NEVER called the HERE tier. Check Vercel deployment is >= v1.5.49.";
+                }
+            } else {
+                $verdict_lines[] = "⚪ HERE: no key configured (skipped).";
+            }
+
+            if ( ! empty( $google_key ) ) {
+                if ( isset( $per_tier['Google Places'] ) ) {
+                    $c = $per_tier['Google Places']['count'];
+                    $e = $per_tier['Google Places']['error'];
+                    if ( $e ) {
+                        $verdict_lines[] = "❌ Google Places: key IS being called but returned an ERROR → {$e}";
+                    } elseif ( $c > 0 ) {
+                        $verdict_lines[] = "✅ Google Places: WORKING — returned {$c} places for Sydney.";
+                    } else {
+                        $verdict_lines[] = "⚠️ Google Places: key was called but returned 0 places.";
+                    }
+                } else {
+                    $verdict_lines[] = "❌ Google Places: key configured but the cloud-api NEVER called the Google tier.";
+                }
+            }
+
+            return new \WP_REST_Response( [
+                'success'              => true,
+                'configured'           => $configured,
+                'test_keyword'         => $test_keyword,
+                'places_count'         => (int) ( $decoded['places_count'] ?? 0 ),
+                'places_provider_used' => $decoded['places_provider_used'] ?? null,
+                'per_tier'             => $per_tier,
+                'verdict'              => implode( "\n", $verdict_lines ),
+                'places_sample'        => array_slice( is_array( $decoded['places'] ?? null ) ? $decoded['places'] : [], 0, 5 ),
+                'plugin_version'       => SEOBETTER_VERSION,
+            ] );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [
+                'success'    => false,
+                'configured' => $configured,
+                'error'      => 'PHP ' . get_class( $e ) . ': ' . $e->getMessage() . ' at ' . basename( $e->getFile() ) . ':' . $e->getLine(),
+            ] );
+        }
+    }
+
     public function rest_generate_start( \WP_REST_Request $request ): \WP_REST_Response {
         $rate_check = $this->check_rate_limit( 'generate' );
         if ( $rate_check ) return $rate_check;
 
-        // v1.5.48 — wrap start_job in a try/catch so any thrown exception
+        // v1.5.49 — wrap start_job in a try/catch so any thrown exception
         // becomes a visible JSON error with the actual message + file + line,
         // instead of the mystery "Failed to start." fallback in the JS. If
         // something in the generation pipeline is silently fataling, this
@@ -845,7 +1023,7 @@ final class SEOBetter {
                 'content_type' => sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' ),
             ] );
 
-            // v1.5.48 — run Places_Link_Injector on the saved hybrid HTML so
+            // v1.5.49 — run Places_Link_Injector on the saved hybrid HTML so
             // the 📍 address + Google Maps + website meta line below each
             // business H2 survives into the WP draft. Previously this was
             // only run in assemble_final's preview path, so the result panel
@@ -1981,7 +2159,7 @@ final class SEOBetter {
             if ( $title === '' ) {
                 $title = $src ?: 'Source';
             }
-            // v1.5.48 — removed the " — {$src}" suffix. User feedback:
+            // v1.5.49 — removed the " — {$src}" suffix. User feedback:
             // "at the end of the link it will reference (perplexity) it
             // doesnt need to do this... just as long as it is accurate and
             // works". The title field already contains business name +
@@ -2085,7 +2263,7 @@ final class SEOBetter {
             'here.com', 'www.here.com', 'discover.search.hereapi.com',
             'maps.google.com', 'maps.googleapis.com',
             'places.googleapis.com', 'google.com/maps',
-            // v1.5.48 — Perplexity Sonar (Tier 0) scrapes these tourism and
+            // v1.5.49 — Perplexity Sonar (Tier 0) scrapes these tourism and
             // review sites for citations. They need to be whitelisted so
             // source_urls returned by Sonar pass validate_outbound_links().
             'openrouter.ai', 'perplexity.ai', 'www.perplexity.ai',
@@ -2118,7 +2296,7 @@ final class SEOBetter {
 
         $image_url = '';
 
-        // v1.5.48 — Branding AI image generation first. Try the user's
+        // v1.5.49 — Branding AI image generation first. Try the user's
         // configured AI image provider (Pollinations / Gemini Nano Banana /
         // DALL-E 3 / FLUX Pro). Returns empty string on any error, at which
         // point we fall through to the existing Pexels → Picsum flow.
