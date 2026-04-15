@@ -363,12 +363,44 @@ $settings = get_option( 'seobetter_settings', [] );
                 }
                 $places_openrouter_empty = empty( $settings['openrouter_api_key'] );
                 ?>
+                <!-- v1.5.41 — Sonar Diagnostic Card. Always shown, always actionable. -->
+                <tr>
+                    <td colspan="2" style="padding:0;background:transparent">
+                        <div style="padding:16px 18px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+                            <strong style="font-size:14px;color:#0f172a"><?php esc_html_e( '🔬 Sonar Tier 0 Diagnostic', 'seobetter' ); ?></strong>
+                            <p class="description" style="margin:6px 0 10px 0;color:#475569"><?php esc_html_e( 'Current state of the Places Sonar Tier 0 setup. Click Test Connection below to run a live call against Lucignano (a known-good test case) and verify Sonar is reachable.', 'seobetter' ); ?></p>
+                            <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px;margin-bottom:12px">
+                                <strong><?php esc_html_e( 'Plugin version:', 'seobetter' ); ?></strong>
+                                <span><code><?php echo esc_html( defined( 'SEOBETTER_VERSION' ) ? SEOBETTER_VERSION : '?' ); ?></code></span>
+                                <strong><?php esc_html_e( 'AI Providers → OpenRouter:', 'seobetter' ); ?></strong>
+                                <span><?php echo $has_ai_openrouter ? '<span style="color:#16a34a">✅ ' . esc_html__( 'Configured', 'seobetter' ) . '</span>' : '<span style="color:#dc2626">❌ ' . esc_html__( 'Not configured', 'seobetter' ) . '</span>'; ?></span>
+                                <strong><?php esc_html_e( 'Places Integrations → Sonar field:', 'seobetter' ); ?></strong>
+                                <span><?php echo $places_openrouter_empty ? '<span style="color:#6b7280">⚪ ' . esc_html__( 'Empty (will auto-reuse AI Providers key if v1.5.40+)', 'seobetter' ) . '</span>' : '<span style="color:#16a34a">✅ ' . esc_html__( 'Key saved', 'seobetter' ) . '</span>'; ?></span>
+                                <strong><?php esc_html_e( 'Sonar model selected:', 'seobetter' ); ?></strong>
+                                <span><code><?php echo esc_html( $settings['sonar_model'] ?? 'perplexity/sonar' ); ?></code></span>
+                                <strong><?php esc_html_e( 'Auto-reuse from AI Providers:', 'seobetter' ); ?></strong>
+                                <span><?php
+                                if ( $has_ai_openrouter && $places_openrouter_empty ) {
+                                    echo '<span style="color:#16a34a">✅ ' . esc_html__( 'Will auto-reuse (requires v1.5.40+)', 'seobetter' ) . '</span>';
+                                } elseif ( $has_ai_openrouter && ! $places_openrouter_empty ) {
+                                    echo '<span style="color:#6b7280">⚪ ' . esc_html__( 'Not needed — Places field has its own key', 'seobetter' ) . '</span>';
+                                } else {
+                                    echo '<span style="color:#dc2626">❌ ' . esc_html__( 'No AI Providers key to reuse', 'seobetter' ) . '</span>';
+                                }
+                                ?></span>
+                            </div>
+                            <button type="button" id="seobetter-test-sonar" class="button button-primary" style="margin-right:8px"><?php esc_html_e( '🧪 Test Sonar Connection', 'seobetter' ); ?></button>
+                            <span id="seobetter-test-sonar-status" style="font-size:12px;color:#6b7280"></span>
+                            <div id="seobetter-test-sonar-result" style="margin-top:12px;display:none;padding:14px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:400px;overflow-y:auto"></div>
+                        </div>
+                    </td>
+                </tr>
                 <?php if ( $has_ai_openrouter && $places_openrouter_empty ) : ?>
                 <tr>
                     <td colspan="2" style="padding:0;background:transparent">
                         <div style="padding:14px 18px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;margin-bottom:8px">
                             <strong style="color:#92400e;font-size:14px">⚠️ <?php esc_html_e( 'Good news:', 'seobetter' ); ?></strong>
-                            <?php esc_html_e( 'You already have an OpenRouter API key configured in the AI Providers section above. v1.5.40 will AUTO-REUSE that same key for Perplexity Sonar Tier 0 below — you do NOT need to paste it twice. Just pick a Sonar model below and save. The Places waterfall will now use Sonar to find real businesses for any small city worldwide.', 'seobetter' ); ?>
+                            <?php esc_html_e( 'You already have an OpenRouter API key configured in the AI Providers section above. v1.5.40+ will AUTO-REUSE that same key for Perplexity Sonar Tier 0 below — you do NOT need to paste it twice. Just pick a Sonar model below and save. The Places waterfall will now use Sonar to find real businesses for any small city worldwide.', 'seobetter' ); ?>
                         </div>
                     </td>
                 </tr>
@@ -596,6 +628,79 @@ $settings = get_option( 'seobetter_settings', [] );
 
 <script>
 jQuery(function($) {
+    // v1.5.41 — Test Sonar Connection button handler
+    $('#seobetter-test-sonar').on('click', function(e) {
+        e.preventDefault();
+        var $btn = $(this);
+        var $status = $('#seobetter-test-sonar-status');
+        var $result = $('#seobetter-test-sonar-result');
+        $btn.prop('disabled', true).text('Testing... (up to 60s)');
+        $status.text('Calling cloud-api with Lucignano test keyword...');
+        $result.hide().empty();
+        $.ajax({
+            url: '<?php echo esc_js( rest_url( 'seobetter/v1/test-sonar' ) ); ?>',
+            method: 'POST',
+            headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
+            data: {},
+            timeout: 70000
+        }).done(function(res) {
+            var verdict = res.verdict || 'No verdict returned';
+            var lines = [];
+            lines.push('═══ SONAR DIAGNOSTIC REPORT ═══');
+            lines.push('');
+            lines.push('VERDICT: ' + verdict);
+            lines.push('');
+            lines.push('─── KEY SOURCE ───');
+            lines.push('Plugin version:           ' + (res.plugin_version || '?'));
+            lines.push('Key source:               ' + (res.key_source || 'unknown'));
+            lines.push('Key preview:              ' + (res.key_preview || '(none)'));
+            lines.push('Has Places field key:     ' + (res.has_places_field_key ? 'YES' : 'NO'));
+            lines.push('Has AI Providers key:     ' + (res.has_ai_providers_key ? 'YES' : 'NO'));
+            lines.push('Auto-discover would fire: ' + (res.auto_discover_would_fire ? 'YES' : 'NO'));
+            lines.push('Sonar model configured:   ' + (res.sonar_model_configured || '?'));
+            lines.push('');
+            lines.push('─── CLOUD-API RESPONSE ───');
+            lines.push('Test keyword:             ' + (res.test_keyword || '?'));
+            lines.push('Research source:          ' + (res.research_source || '?'));
+            lines.push('is_local_intent:          ' + JSON.stringify(res.is_local_intent));
+            lines.push('places_count:             ' + (res.places_count || 0));
+            lines.push('places_provider_used:     ' + (res.places_provider_used || 'null'));
+            lines.push('Sonar was tried:          ' + (res.sonar_was_tried ? 'YES' : 'NO ← PROBLEM'));
+            lines.push('Sonar result count:       ' + (res.sonar_result_count || 0));
+            lines.push('');
+            lines.push('─── PROVIDERS TRIED ───');
+            (res.places_providers_tried || []).forEach(function(p) {
+                lines.push('  • ' + (p.name || '?') + ': ' + (p.count || 0) + ' places');
+            });
+            if (res.places_sample && res.places_sample.length) {
+                lines.push('');
+                lines.push('─── PLACES SAMPLE (first 3) ───');
+                res.places_sample.forEach(function(p, i) {
+                    lines.push('  ' + (i+1) + '. ' + (p.name || '?'));
+                    if (p.address) lines.push('     ' + p.address);
+                    if (p.source) lines.push('     via ' + p.source);
+                });
+            }
+            if (res.research_error) {
+                lines.push('');
+                lines.push('─── ERROR ───');
+                lines.push(res.research_error);
+            }
+            if (res.error) {
+                lines.push('');
+                lines.push('─── PHP EXCEPTION ───');
+                lines.push(res.error);
+            }
+            $result.text(lines.join('\n')).show();
+            $status.text('Test complete.');
+            $btn.prop('disabled', false).text('🧪 Test Sonar Connection');
+        }).fail(function(xhr, status, err) {
+            $result.text('Request failed: ' + status + ' ' + err + '\n\nResponse: ' + (xhr.responseText || 'empty')).show();
+            $status.text('Failed.');
+            $btn.prop('disabled', false).text('🧪 Test Sonar Connection');
+        });
+    });
+
     // v1.5.32 — Branding logo upload + API key row toggle
     var mediaFrame;
     $('#branding-logo-upload-btn').on('click', function(e) {

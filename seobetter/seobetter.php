@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.40
+ * Version: 1.5.41
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.40' );
+define( 'SEOBETTER_VERSION', '1.5.41' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -421,6 +421,20 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
+        // v1.5.41 — diagnostic endpoint that tests the full Places Sonar
+        // Tier 0 chain end-to-end. Calls Trend_Researcher::cloud_research()
+        // with a sample local-intent keyword and reports (a) which OpenRouter
+        // key source was used (Places field / AI Providers auto-discover /
+        // none), (b) the cloud-api response, (c) whether Sonar was actually
+        // called. Lets users diagnose why the pool is empty without running
+        // a full article generation.
+        register_rest_route( 'seobetter/v1', '/test-sonar', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_test_sonar' ],
+            'permission_callback' => function () {
+                return current_user_can( 'manage_options' );
+            },
+        ]);
         register_rest_route( 'seobetter/v1', '/generate/step', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_generate_step' ],
@@ -629,11 +643,124 @@ final class SEOBetter {
         return new \WP_REST_Response( $refresher->refresh( (int) $request->get_param( 'post_id' ) ) );
     }
 
+    /**
+     * v1.5.41 — Test Sonar connection diagnostic endpoint.
+     *
+     * Runs a real cloud-api research call against a known-good keyword
+     * (Lucignano, which we know should produce 2 real gelaterie when Sonar
+     * is working) and returns a structured report telling the user exactly
+     * what's happening:
+     *   - Which OpenRouter key source was used
+     *   - Whether Sonar appeared in providers_tried
+     *   - How many places Sonar found
+     *   - The raw places array if populated
+     *   - Any error from the cloud-api
+     *
+     * Lets users diagnose why Sonar isn't finding places without burning
+     * article-generation credits on a full test run.
+     */
+    public function rest_test_sonar( \WP_REST_Request $request ): \WP_REST_Response {
+        $settings = get_option( 'seobetter_settings', [] );
+        $places_key = $settings['openrouter_api_key'] ?? '';
+        $ai_providers = get_option( 'seobetter_ai_providers', [] );
+        $has_ai_openrouter = is_array( $ai_providers ) && ! empty( $ai_providers['openrouter']['api_key'] );
+        $sonar_model = $settings['sonar_model'] ?? 'perplexity/sonar';
+
+        // Determine which key will be used
+        $key_source = 'none';
+        $key_preview = '';
+        if ( ! empty( $places_key ) ) {
+            $key_source = 'places_integrations';
+            $key_preview = substr( $places_key, 0, 8 ) . '...' . substr( $places_key, -4 );
+        } elseif ( $has_ai_openrouter ) {
+            try {
+                $auto_key = SEOBetter\AI_Provider_Manager::get_provider_key( 'openrouter' );
+                if ( ! empty( $auto_key ) ) {
+                    $key_source = 'ai_providers_auto_discovered';
+                    $key_preview = substr( $auto_key, 0, 8 ) . '...' . substr( $auto_key, -4 );
+                }
+            } catch ( \Throwable $e ) {
+                $key_source = 'ai_providers_decrypt_failed';
+                $key_preview = $e->getMessage();
+            }
+        }
+
+        // Call Trend_Researcher::research() directly with the known Lucignano
+        // keyword. This exercises the full plumbing chain.
+        $test_keyword = 'best gelato in lucignano italy 2026';
+        try {
+            // Delete any stale cached entry so we get a fresh call
+            $cache_key = 'seobetter_trends_v7_' . md5( $test_keyword . 'travel' . 'IT' );
+            delete_transient( $cache_key );
+
+            $result = SEOBetter\Trend_Researcher::research( $test_keyword, 'travel', 'IT' );
+
+            $providers_tried = $result['places_providers_tried'] ?? [];
+            $sonar_tried = false;
+            $sonar_count = 0;
+            foreach ( $providers_tried as $p ) {
+                if ( isset( $p['name'] ) && stripos( $p['name'], 'sonar' ) !== false ) {
+                    $sonar_tried = true;
+                    $sonar_count = (int) ( $p['count'] ?? 0 );
+                }
+            }
+
+            return new \WP_REST_Response( [
+                'success'               => true,
+                'test_keyword'          => $test_keyword,
+                'plugin_version'        => SEOBETTER_VERSION,
+                'key_source'            => $key_source,
+                'key_preview'           => $key_preview,
+                'sonar_model_configured' => $sonar_model,
+                'has_places_field_key'  => ! empty( $places_key ),
+                'has_ai_providers_key'  => $has_ai_openrouter,
+                'auto_discover_would_fire' => empty( $places_key ) && $has_ai_openrouter,
+                // Cloud-api response details
+                'is_local_intent'       => $result['is_local_intent'] ?? null,
+                'places_count'          => $result['places_count'] ?? 0,
+                'places_provider_used'  => $result['places_provider_used'] ?? null,
+                'places_providers_tried' => $providers_tried,
+                'sonar_was_tried'       => $sonar_tried,
+                'sonar_result_count'    => $sonar_count,
+                'places_sample'         => array_slice( $result['places'] ?? [], 0, 3 ),
+                'research_source'       => $result['source'] ?? 'unknown',
+                'research_error'        => $result['error'] ?? null,
+                // Diagnostic verdict
+                'verdict'               => self::build_sonar_verdict( $key_source, $sonar_tried, $sonar_count ),
+            ] );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [
+                'success'      => false,
+                'key_source'   => $key_source,
+                'error'        => 'PHP ' . get_class( $e ) . ': ' . $e->getMessage() . ' at ' . basename( $e->getFile() ) . ':' . $e->getLine(),
+            ] );
+        }
+    }
+
+    /**
+     * Build a human-readable verdict for the Sonar test result.
+     */
+    private static function build_sonar_verdict( string $key_source, bool $sonar_tried, int $sonar_count ): string {
+        if ( $key_source === 'none' ) {
+            return '❌ NO KEY CONFIGURED. Neither the Places Integrations field nor the AI Providers OpenRouter provider has a key. Paste your OpenRouter key into Settings → AI Providers → OpenRouter (it will auto-reuse for Places) OR into Settings → Places Integrations → Perplexity Sonar field.';
+        }
+        if ( $key_source === 'ai_providers_decrypt_failed' ) {
+            return '❌ KEY DECRYPT FAILED. The AI Providers OpenRouter key could not be decrypted. Try removing and re-adding the provider in Settings → AI Providers.';
+        }
+        if ( ! $sonar_tried ) {
+            return '❌ SONAR WAS NOT CALLED. The cloud-api received the request but did not attempt Sonar Tier 0. This usually means the cloud-api is not deployed with the v1.5.30+ fetchSonarPlaces function. Verify Vercel deployment is up to date.';
+        }
+        if ( $sonar_tried && $sonar_count === 0 ) {
+            return '⚠️ SONAR WAS CALLED BUT RETURNED 0. Possible causes: (1) OpenRouter key invalid or out of credit, (2) Perplexity Sonar genuinely found no verified businesses for Lucignano (unlikely — Perplexity Web UI finds 2 real gelaterie), (3) Sonar API timeout. Check OpenRouter dashboard for recent perplexity/sonar calls — if none appear, the key is not reaching OpenRouter.';
+        }
+        return '✅ SONAR IS WORKING. Found ' . $sonar_count . ' verified places for Lucignano via the ' . $key_source . ' key source. The article generation pipeline is correctly configured.';
+    }
+
     public function rest_generate_start( \WP_REST_Request $request ): \WP_REST_Response {
         $rate_check = $this->check_rate_limit( 'generate' );
         if ( $rate_check ) return $rate_check;
 
-        // v1.5.40 — wrap start_job in a try/catch so any thrown exception
+        // v1.5.41 — wrap start_job in a try/catch so any thrown exception
         // becomes a visible JSON error with the actual message + file + line,
         // instead of the mystery "Failed to start." fallback in the JS. If
         // something in the generation pipeline is silently fataling, this
@@ -1941,7 +2068,7 @@ final class SEOBetter {
             'here.com', 'www.here.com', 'discover.search.hereapi.com',
             'maps.google.com', 'maps.googleapis.com',
             'places.googleapis.com', 'google.com/maps',
-            // v1.5.40 — Perplexity Sonar (Tier 0) scrapes these tourism and
+            // v1.5.41 — Perplexity Sonar (Tier 0) scrapes these tourism and
             // review sites for citations. They need to be whitelisted so
             // source_urls returned by Sonar pass validate_outbound_links().
             'openrouter.ai', 'perplexity.ai', 'www.perplexity.ai',
@@ -1974,7 +2101,7 @@ final class SEOBetter {
 
         $image_url = '';
 
-        // v1.5.40 — Branding AI image generation first. Try the user's
+        // v1.5.41 — Branding AI image generation first. Try the user's
         // configured AI image provider (Pollinations / Gemini Nano Banana /
         // DALL-E 3 / FLUX Pro). Returns empty string on any error, at which
         // point we fall through to the existing Pexels → Picsum flow.

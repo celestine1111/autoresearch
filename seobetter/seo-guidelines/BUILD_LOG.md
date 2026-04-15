@@ -16,6 +16,87 @@
 
 ---
 
+## v1.5.41 — Sonar Diagnostic Card + Test Connection button + always-visible state report
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User reported that the v1.5.40 passive banner ("You already have an OpenRouter API key in AI Providers...") doesn't show on their settings page. The banner was conditional on BOTH `has_ai_openrouter && $places_openrouter_empty` — if either was false, no banner. That meant users in the most-likely failure states couldn't see any diagnostic:
+
+- User has Places field populated with an invalid key → `places_openrouter_empty = false` → banner hidden → user thinks everything is fine but Sonar is still failing
+- User hasn't installed v1.5.40 yet → banner code doesn't exist at all
+- WP Engine cache serving a stale settings.php → v1.5.40 code present but not visible
+
+v1.5.40's passive banner was the wrong diagnostic shape. What the user needs is an **always-visible, actionable diagnostic card** with a live test button.
+
+### Added
+
+- **Sonar Tier 0 Diagnostic Card** — [admin/views/settings.php](../admin/views/settings.php) Places Integrations card, replaces/augments the v1.5.40 passive banner
+  - Always visible (not conditional on state)
+  - Shows current plugin version, AI Providers OpenRouter status, Places Integrations Sonar field status, selected Sonar model, auto-reuse status in a compact grid
+  - Color-coded: green ✅ for configured, red ❌ for missing, gray ⚪ for optional
+  - 🧪 "Test Sonar Connection" button calls the new REST endpoint and renders a full diagnostic report inline
+  - Passive v1.5.40 banner kept below as secondary reinforcement for the specific auto-reuse state
+  - Verify: `grep -n "seobetter-test-sonar\|Sonar Tier 0 Diagnostic" seobetter/admin/views/settings.php`
+
+- **`/seobetter/v1/test-sonar` REST endpoint** — [seobetter.php::rest_test_sonar()](../seobetter.php) new method + route registration
+  - Admin-only (`current_user_can('manage_options')`)
+  - Deletes any stale cached research entry for the test keyword
+  - Calls `Trend_Researcher::research('best gelato in lucignano italy 2026', 'travel', 'IT')` — Lucignano is a known-good test case (Perplexity Web UI finds 2 real gelaterie)
+  - Returns a structured JSON report with:
+    - `key_source` — one of: `none`, `places_integrations`, `ai_providers_auto_discovered`, `ai_providers_decrypt_failed`
+    - `key_preview` — first 8 + last 4 chars of the key for user verification (not the full key)
+    - `sonar_model_configured`
+    - `has_places_field_key`, `has_ai_providers_key`, `auto_discover_would_fire` — boolean flags
+    - `is_local_intent`, `places_count`, `places_provider_used`, `places_providers_tried`
+    - `sonar_was_tried` — critical: tells user whether Sonar was even attempted
+    - `sonar_result_count` — how many places Sonar returned
+    - `places_sample` — first 3 places (name/address/source) if populated
+    - `research_source` — tells user if cloud_research succeeded or fell back
+    - `verdict` — plain-English interpretation of the result (see `build_sonar_verdict()`)
+  - Try/catch wrapper converts any exception to a JSON error with class/message/file:line
+  - Verify: `grep -n "rest_test_sonar\|test-sonar" seobetter/seobetter.php`
+
+- **`build_sonar_verdict()` helper** — [seobetter.php](../seobetter.php) private static method
+  - Translates the diagnostic result into one of 5 verdicts:
+    - ❌ NO KEY CONFIGURED
+    - ❌ KEY DECRYPT FAILED
+    - ❌ SONAR WAS NOT CALLED (cloud-api not deployed)
+    - ⚠️ SONAR WAS CALLED BUT RETURNED 0 (key invalid / no credit / genuine empty)
+    - ✅ SONAR IS WORKING
+  - Each verdict includes the next action the user should take
+  - Verify: `grep -n "build_sonar_verdict\|VERDICT" seobetter/seobetter.php`
+
+- **Client-side JS handler** — [admin/views/settings.php](../admin/views/settings.php) script block at top
+  - jQuery `.ajax()` call to `/wp-json/seobetter/v1/test-sonar` with WP REST nonce
+  - 70-second timeout (Sonar can take 30+s on first call)
+  - Renders the full diagnostic report as monospace pre-formatted text
+  - Button shows loading state during test
+  - Failure mode renders XHR error details for debugging
+  - Verify: `grep -n "seobetter-test-sonar.*click\|test-sonar" seobetter/admin/views/settings.php`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.40` → `1.5.41`
+
+### What this unblocks for the user
+
+Instead of guessing whether the v1.5.40 fix is working, the user can now:
+1. Install v1.5.41, go to Settings → Places Integrations
+2. Read the diagnostic card (visible regardless of state)
+3. Click "Test Sonar Connection"
+4. Read the verdict — if it says "SONAR IS WORKING", run a real article generation; if it says anything else, the report tells them exactly what's broken
+
+This is also useful for support going forward — users can paste the diagnostic report when reporting hallucination issues.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.40 — Auto-discover OpenRouter key from AI Providers for Places Sonar Tier 0 (THE reason Sonar was never called)
 
 **Date:** 2026-04-15
