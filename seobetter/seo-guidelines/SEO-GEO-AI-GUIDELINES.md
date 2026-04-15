@@ -416,11 +416,12 @@ The **exact primary keyword** (e.g., "reptile shop melbourne") MUST appear in AL
 
 ### 5A.2 Keyword Density
 - **Target:** 0.5%-1.5% density (keyword appears every 100-200 words)
-- **Minimum:** 0.5% (AIOSEO flags below this)
+- **Minimum:** 0.5% (AIOSEO flags below this — confirmed in live testing 2026-04-15)
 - **Maximum:** 2.0% (above this = keyword stuffing, -10% AI visibility)
 - **For a 1000-word article:** keyword should appear 5-15 times
 - **For a 2000-word article:** keyword should appear 10-30 times
 - **Use exact match AND natural variations** (e.g., "reptile shop melbourne" + "melbourne reptile shop" + "reptile store in melbourne")
+- **Per-section cap formula (v1.5.60):** each section should contain `max(2, round(section_words / 250))` minimum and `max(3, round(section_words / 150))` maximum exact-match mentions. For a 400-word section: 2-3 mentions. For 600-word: 2-4 mentions. Prevents both stuffing (>2.5%) and starvation (<0.5%) failure modes.
 
 ### 5A.3 Heading Keyword Rules
 - At least **30% of H2 headings** must contain the primary keyword or a close variant

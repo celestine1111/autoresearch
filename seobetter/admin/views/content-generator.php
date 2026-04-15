@@ -979,10 +979,12 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             h += '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">';
             h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
             h += '<div><h3 style="margin:0;font-size:16px;font-weight:700">Analyze &amp; Improve</h3>';
-            h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'+fixes.length+' improvements found — fix these to reach score 80+</p></div>';
-            if (!isPro) {
-                h += '<span style="padding:4px 10px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border-radius:20px;font-size:11px;font-weight:600">PRO</span>';
-            }
+            h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'+fixes.length+' improvements found — click each to apply or check</p></div>';
+            // v1.5.60 — removed PRO badge. The inject-fix endpoint is
+            // already free (permission_callback is edit_posts not
+            // License_Manager::can_use), so the PRO badge was misleading
+            // and made users think they had to pay. The buttons work for
+            // everyone — rename the CTA to match.
             h += '</div>';
 
             fixes.forEach(function(fix, idx) {
