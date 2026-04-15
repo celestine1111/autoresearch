@@ -19,7 +19,7 @@
 ## v1.5.62 — Bug sweep: topical Citation_Pool filter, dev.to dropped for non-tech, hybrid format after inject, readability line-skipping, panel re-render, H2 count reconciliation
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `979bb9b`
 
 ### Context
 
