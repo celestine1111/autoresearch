@@ -19,7 +19,7 @@
 ## v1.5.64 — Inject-fix revert to classic mode, full results panel re-render, References in preview, styled numbered References block
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `fd88d8d`
 
 ### Context
 
