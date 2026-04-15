@@ -19,7 +19,7 @@
 ## v1.5.43 — THE ACTUAL FIX: Remove response_format: json_object from Sonar (Perplexity rejects it with 400)
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `0e6dd2e`
 
 ### Context — 14 releases chasing a 1-line bug
 
