@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.54
+ * Version: 1.5.55
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.54' );
+define( 'SEOBETTER_VERSION', '1.5.55' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -421,7 +421,7 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
-        // v1.5.54 — diagnostic endpoint that tests the full Places Sonar
+        // v1.5.55 — diagnostic endpoint that tests the full Places Sonar
         // Tier 0 chain end-to-end. Calls Trend_Researcher::cloud_research()
         // with a sample local-intent keyword and reports (a) which OpenRouter
         // key source was used (Places field / AI Providers auto-discover /
@@ -435,7 +435,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.54 — diagnostic endpoint for Foursquare + HERE + Google Places.
+        // v1.5.55 — diagnostic endpoint for Foursquare + HERE + Google Places.
         // Calls the cloud-api research endpoint directly with only the paid
         // place provider keys (no Sonar, no category APIs) and runAllTiers=true
         // so the waterfall doesn't short-circuit. Lets users verify their
@@ -448,7 +448,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.54 — diagnostic endpoint for every always-on research source
+        // v1.5.55 — diagnostic endpoint for every always-on research source
         // (Reddit, HN, Wikipedia, Google Trends, DuckDuckGo, Bluesky,
         // Mastodon, Dev.to, Lemmy, Brave Search, category APIs, country APIs)
         // PLUS the local Last30Days Python skill. Reports per-source ok/empty
@@ -670,7 +670,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.54 — Test Sonar connection diagnostic endpoint.
+     * v1.5.55 — Test Sonar connection diagnostic endpoint.
      *
      * Runs a real cloud-api research call against a known-good keyword
      * (Lucignano, which we know should produce 2 real gelaterie when Sonar
@@ -711,15 +711,22 @@ final class SEOBetter {
             }
         }
 
-        // Call Trend_Researcher::research() directly with the known Lucignano
-        // keyword. This exercises the full plumbing chain.
-        $test_keyword = 'best gelato in lucignano italy 2026';
+        // v1.5.55 — accept keyword / country / domain from the request so the
+        // user can test any location. Defaults remain the Lucignano-in-Italy
+        // sanity check for backwards compatibility.
+        $test_keyword = sanitize_text_field( $request->get_param( 'keyword' ) ?: 'best gelato in lucignano italy 2026' );
+        $test_country = sanitize_text_field( $request->get_param( 'country' ) ?: 'IT' );
+        $test_domain  = sanitize_text_field( $request->get_param( 'domain' ) ?: 'travel' );
         try {
             // Delete any stale cached entry so we get a fresh call
-            $cache_key = 'seobetter_trends_v7_' . md5( $test_keyword . 'travel' . 'IT' );
+            $cache_key = 'seobetter_trends_v7_' . md5( $test_keyword . $test_domain . $test_country );
             delete_transient( $cache_key );
+            // Also nuke the shared places-only cache for this keyword so a
+            // stale previous-run result doesn't mask the fresh test
+            $places_only_key = 'seobetter_places_only_' . md5( strtolower( trim( $test_keyword ) ) . '|' . strtoupper( $test_country ) );
+            delete_transient( $places_only_key );
 
-            $result = SEOBetter\Trend_Researcher::research( $test_keyword, 'travel', 'IT' );
+            $result = SEOBetter\Trend_Researcher::research( $test_keyword, $test_domain, $test_country );
 
             $providers_tried = $result['places_providers_tried'] ?? [];
             $sonar_tried = false;
@@ -783,7 +790,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.54 — Test Foursquare / HERE / Google Places directly, bypassing
+     * v1.5.55 — Test Foursquare / HERE / Google Places directly, bypassing
      * Sonar and the waterfall short-circuit. Users report "I added my
      * Foursquare key but no businesses show up" — they need to know whether
      * the key is actually being called (and returning data) or whether Sonar
@@ -887,7 +894,7 @@ final class SEOBetter {
                         $verdict_lines[] = "⚠️ Foursquare: key was called but returned 0 places. Key may be invalid or Sydney pet-shop search scope is wrong.";
                     }
                 } else {
-                    $verdict_lines[] = "❌ Foursquare: key configured but the cloud-api NEVER called the Foursquare tier. This usually means the cloud-api Vercel deployment is outdated. Check Vercel → seobetter-cloud → latest deployment is >= v1.5.54.";
+                    $verdict_lines[] = "❌ Foursquare: key configured but the cloud-api NEVER called the Foursquare tier. This usually means the cloud-api Vercel deployment is outdated. Check Vercel → seobetter-cloud → latest deployment is >= v1.5.55.";
                 }
             } else {
                 $verdict_lines[] = "⚪ Foursquare: no key configured (skipped).";
@@ -905,7 +912,7 @@ final class SEOBetter {
                         $verdict_lines[] = "⚠️ HERE: key was called but returned 0 places. Key may be invalid, or the HERE discover endpoint is filtering pet-shop results.";
                     }
                 } else {
-                    $verdict_lines[] = "❌ HERE: key configured but the cloud-api NEVER called the HERE tier. Check Vercel deployment is >= v1.5.54.";
+                    $verdict_lines[] = "❌ HERE: key configured but the cloud-api NEVER called the HERE tier. Check Vercel deployment is >= v1.5.55.";
                 }
             } else {
                 $verdict_lines[] = "⚪ HERE: no key configured (skipped).";
@@ -948,7 +955,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.54 — Test every research source (cloud-api + local Last30Days)
+     * v1.5.55 — Test every research source (cloud-api + local Last30Days)
      * with per-source ok/error/latency breakdown. Complements the Sonar and
      * Places Providers tests by covering the rest of the research pipeline:
      * Reddit, Hacker News, Wikipedia, Google Trends, DuckDuckGo, Bluesky,
@@ -1055,7 +1062,7 @@ final class SEOBetter {
         $rate_check = $this->check_rate_limit( 'generate' );
         if ( $rate_check ) return $rate_check;
 
-        // v1.5.54 — wrap start_job in a try/catch so any thrown exception
+        // v1.5.55 — wrap start_job in a try/catch so any thrown exception
         // becomes a visible JSON error with the actual message + file + line,
         // instead of the mystery "Failed to start." fallback in the JS. If
         // something in the generation pipeline is silently fataling, this
@@ -1140,7 +1147,7 @@ final class SEOBetter {
                 'content_type' => sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' ),
             ] );
 
-            // v1.5.54 — run Places_Link_Injector on the saved hybrid HTML so
+            // v1.5.55 — run Places_Link_Injector on the saved hybrid HTML so
             // the 📍 address + Google Maps + website meta line below each
             // business H2 survives into the WP draft. Previously this was
             // only run in assemble_final's preview path, so the result panel
@@ -2276,7 +2283,7 @@ final class SEOBetter {
             if ( $title === '' ) {
                 $title = $src ?: 'Source';
             }
-            // v1.5.54 — removed the " — {$src}" suffix. User feedback:
+            // v1.5.55 — removed the " — {$src}" suffix. User feedback:
             // "at the end of the link it will reference (perplexity) it
             // doesnt need to do this... just as long as it is accurate and
             // works". The title field already contains business name +
@@ -2380,7 +2387,7 @@ final class SEOBetter {
             'here.com', 'www.here.com', 'discover.search.hereapi.com',
             'maps.google.com', 'maps.googleapis.com',
             'places.googleapis.com', 'google.com/maps',
-            // v1.5.54 — Perplexity Sonar (Tier 0) scrapes these tourism and
+            // v1.5.55 — Perplexity Sonar (Tier 0) scrapes these tourism and
             // review sites for citations. They need to be whitelisted so
             // source_urls returned by Sonar pass validate_outbound_links().
             'openrouter.ai', 'perplexity.ai', 'www.perplexity.ai',
@@ -2413,7 +2420,7 @@ final class SEOBetter {
 
         $image_url = '';
 
-        // v1.5.54 — Branding AI image generation first. Try the user's
+        // v1.5.55 — Branding AI image generation first. Try the user's
         // configured AI image provider (Pollinations / Gemini Nano Banana /
         // DALL-E 3 / FLUX Pro). Returns empty string on any error, at which
         // point we fall through to the existing Pexels → Picsum flow.

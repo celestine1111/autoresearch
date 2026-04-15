@@ -16,6 +16,88 @@
 
 ---
 
+## v1.5.55 — Any-city-any-topic fix: Sonar Pro default, retry-on-error, 25km rural radius, name+type filter, custom keyword test
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User ran `best pet shops in mudgee nsw 2026` after v1.5.54 and got Pool size = 0 across all 5 tiers (Sonar, OSM, FSQ, HERE, Google). Perplexity web UI finds 10 real pet shops for the same keyword. User feedback: "fix this so it works for any city any topic, we have only got it to work for one small town in italy".
+
+Seven problems compounded to produce the zero result on Mudgee:
+
+1. **Sonar default model was `perplexity/sonar`** (base, shallow web search). The web UI uses `sonar-pro` by default — vastly better small-town coverage.
+2. **Retry only fired on thin results**: `if (places.length < 2) retry with pro`. If the base model THREW an error (timeout, rate limit, 402, 500), the catch block re-threw and pro never ran.
+3. **Filter required name + at least one of (address, website, source_url)**. Sonar Pro often returns businesses with just name + type (e.g. "Mudgee Produce Plus", type: "Pet Store") when the source page lacks a stable URL. These real businesses were silently dropped.
+4. **Foursquare radius was 10km**. Rural towns like Mudgee (11k pop) have zero FSQ-indexed businesses within 10km but neighbor towns (Gulgong, Rylstone, 25km away) have real pet stores a local would drive to.
+5. **Foursquare category synonyms didn't cover rural supply stores**. Mudgee Produce Plus is categorized as "Rural Supply" not "Pet Store", so the v1.5.53 category filter dropped it even though it's the town's primary pet store.
+6. **OSM bbox was the raw Nominatim town boundary** (~2-5km across for small towns). Overpass queries never reached neighboring villages.
+7. **HERE bbox was 10km** — same problem as FSQ.
+
+Plus the user had no way to test any keyword other than Lucignano because the Test Sonar button was hardcoded.
+
+### Fixed
+
+#### 1. Sonar Pro is now the default model + retry chain tries both models even on error — [cloud-api/api/research.js::fetchSonarPlaces()](../cloud-api/api/research.js) line ~1241
+- Default model: `perplexity/sonar-pro` (was `perplexity/sonar`). Cost rises from ~$0.008 to ~$0.06 per call but small-town coverage improves dramatically. User can still override via Settings → Places Integrations → Sonar model dropdown.
+- Full rewrite of the retry logic. New approach: build a `modelChain` starting with the user's selected model, then add the OTHER model as a fallback. Loop through the chain calling `callSonar(model)` — each call is wrapped in its own try/catch. On success, merge places into the union. On error, log to `attempts[]` and continue to the next model. Stop when we have ≥2 places. If every model fails or returns 0, throw `sonar_empty_all_models: {diagnostic}` with the full per-model attempts string so the test endpoint can surface exactly what happened.
+- Verify: `grep -n "modelChain\|sonar_empty_all_models" seobetter/cloud-api/api/research.js`
+
+#### 2. Filter accepts name + type (no URL required) — [callSonar()](../cloud-api/api/research.js) line ~1196
+- **Before** (v1.5.52): `name + (address OR website OR source_url)` — dropped name+type-only results.
+- **After**: `name + (type OR address OR website OR source_url)`. Type alone is sufficient verification because Sonar Pro only assigns category types to real indexed businesses. Worst case: the business has no address → no 📍 meta line in the article → still a valid listicle H2 which is better than being dropped.
+- Verify: `grep -n "Type alone is enough verification" seobetter/cloud-api/api/research.js`
+
+#### 3. Foursquare radius 10km → 25km + limit 30 → 40 — [fetchFoursquarePlaces()](../cloud-api/api/research.js) line ~977
+- 25km covers the whole local catchment area for small-town queries (Gulgong, Rylstone, Kandos, Ilford for Mudgee) while still being "local" for large cities (Sydney 25km still covers Greater Sydney metro).
+- Limit raised 30 → 40 to give the category post-filter more raw results to work with.
+- Verify: `grep -n "radius=25000" seobetter/cloud-api/api/research.js`
+
+#### 4. Foursquare synonyms expanded to cover rural supply stores — [FSQ_CATEGORY_SYNONYMS](../cloud-api/api/research.js) line ~873
+- `pet shop`, `pet store`, `pet` synonyms now include: `rural supply`, `farm supply`, `produce store`, `feed store`, `general store`, `hardware store`. These are the Foursquare categories that real rural-town pet stores are tagged under (e.g. Mudgee Produce Plus → "Rural Supply").
+- Verify: `grep -n "rural supply" seobetter/cloud-api/api/research.js`
+
+#### 5. OSM Overpass bbox auto-expanded to 25km radius — new [expandBbox()](../cloud-api/api/research.js) helper line ~735 + [overpassQuery()](../cloud-api/api/research.js)
+- New `expandBbox(bbox, minRadiusKm)` helper. If the Nominatim bbox is smaller than the requested radius, expand it around its center. At latitude L, 1° ≈ 111km for latitude and 111 × cos(L) km for longitude.
+- `overpassQuery()` now calls `expandBbox(bbox, 25)` before building the Overpass query. Small-town queries now cover a 25km radius; large cities are unaffected because their bbox is already larger.
+- Verify: `grep -n "expandBbox" seobetter/cloud-api/api/research.js`
+
+#### 6. HERE bbox 10km → 25km — [fetchHEREPlaces()](../cloud-api/api/research.js) line ~1057
+- latDelta 0.1 → 0.22 (≈ 25km), lonDelta correspondingly scaled.
+- Verify: `grep -n "latDelta = 0.22" seobetter/cloud-api/api/research.js`
+
+#### 7. Test Sonar Connection button now accepts a custom keyword + country — [seobetter.php::rest_test_sonar()](../seobetter.php) line ~716 + [admin/views/settings.php](../admin/views/settings.php)
+- New `keyword`, `country`, `domain` POST params on `POST /seobetter/v1/test-sonar`. Defaults preserved (`best gelato in lucignano italy 2026` / IT / travel) so existing button behavior is backwards compatible.
+- Added two input fields next to the Test Sonar button: keyword text input + 2-letter country code input. JS passes both in the AJAX call.
+- Cache keys are deleted before the test fires so every run hits the live API fresh.
+- Verify: `grep -n "seobetter-sonar-test-keyword" seobetter/admin/views/settings.php`
+
+### How to verify the full stack works for any location
+
+1. Redeploy cloud-api to Vercel.
+2. Reinstall the plugin zip.
+3. Settings → Test Sonar Connection:
+   - Enter keyword: `best pet shops in mudgee nsw 2026`
+   - Enter country code: `AU`
+   - Click Test
+   - Expected: `places_count >= 2` with names like "Mudgee Produce Plus", "Complete Steel & Rural", etc. Verdict: ✅ SONAR IS WORKING.
+4. If still 0, the verdict will show `sonar_empty_all_models: sonar-pro: X | sonar: Y` with the exact per-model errors.
+5. Repeat for any other city/keyword combo:
+   - `best pizza restaurants in rome italy` (country IT) — large city, should return 10
+   - `best pet stores in bathurst nsw australia` (country AU) — medium town
+   - `best bakeries in totnes devon uk` (country GB) — small UK town
+   - `best sushi in kyoto japan` (country JP) — large international city
+6. Every test should produce ≥2 verified places or a clear error message explaining which models were tried and what each one said.
+
+### Guiding principle change
+
+Previous releases chased specific cases (Lucignano, Mudgee) by adjusting filters incrementally. v1.5.55 takes the opposite approach: **widen every tier's search radius to 25km, default to the strongest Sonar model, relax the filter to name+type, and surface raw errors when things fail**. If Sonar Pro can't find real businesses for a location, Foursquare's broader synonym list has a chance. If FSQ is thin, HERE with a 25km bbox is the next shot. If everything fails, the diagnostic now tells the user exactly which tier failed and why.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.54 — Auto-suggest button now populates Secondary Keywords for long-tail keywords + plain-English Country/Language help text
 
 **Date:** 2026-04-15

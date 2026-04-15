@@ -388,6 +388,11 @@ $settings = get_option( 'seobetter_settings', [] );
                                 }
                                 ?></span>
                             </div>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+                                <input type="text" id="seobetter-sonar-test-keyword" placeholder="Test any keyword (e.g. best pet shops in mudgee nsw 2026)" style="flex:1;min-width:280px;padding:6px 10px;font-size:12px" value="" />
+                                <input type="text" id="seobetter-sonar-test-country" placeholder="AU" maxlength="2" style="width:56px;padding:6px 10px;font-size:12px;text-transform:uppercase" value="" />
+                            </div>
+                            <p class="description" style="margin:0 0 8px 0;font-size:11px"><?php esc_html_e( 'Leave both empty to run the default Lucignano Italy sanity check. Fill in the keyword + 2-letter country code to test your own location. The test clears the cache first so every run hits the live API.', 'seobetter' ); ?></p>
                             <button type="button" id="seobetter-test-sonar" class="button button-primary" style="margin-right:8px"><?php esc_html_e( '🧪 Test Sonar Connection', 'seobetter' ); ?></button>
                             <span id="seobetter-test-sonar-status" style="font-size:12px;color:#6b7280"></span>
                             <div id="seobetter-test-sonar-result" style="margin-top:12px;display:none;padding:14px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:400px;overflow-y:auto"></div>
@@ -656,11 +661,17 @@ jQuery(function($) {
         $btn.prop('disabled', true).text('Testing... (up to 60s)');
         $status.text('Calling cloud-api with Lucignano test keyword...');
         $result.hide().empty();
+        var customKw = $('#seobetter-sonar-test-keyword').val().trim();
+        var customCountry = $('#seobetter-sonar-test-country').val().trim().toUpperCase();
         $.ajax({
             url: '<?php echo esc_js( rest_url( 'seobetter/v1/test-sonar' ) ); ?>',
             method: 'POST',
             headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
-            data: {},
+            data: {
+                keyword: customKw,
+                country: customCountry,
+                domain: 'general'
+            },
             timeout: 70000
         }).done(function(res) {
             var verdict = res.verdict || 'No verdict returned';
