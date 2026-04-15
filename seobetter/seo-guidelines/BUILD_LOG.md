@@ -16,6 +16,87 @@
 
 ---
 
+## v1.5.42 — Surface Sonar errors + HERE bbox filter + location sanity check
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+v1.5.41's diagnostic card surfaced a critical contradiction in the user's Sonar test:
+```
+Sonar was tried: YES
+Sonar result count: 0
+[User's OpenRouter logs show ZERO perplexity calls]
+```
+
+The cloud-api reported that Sonar was attempted, but OpenRouter's activity log showed NO perplexity/sonar calls. That means `fetchSonarPlaces()` was erroring **before** or **during** the HTTP call, and the function's outer `try { ... } catch { return []; }` was silently swallowing the error with zero logging.
+
+Also surfaced a second bug: HERE returned `"The Best Gelato, 11a Fountain Road, Stirling, FK9 4ET, United Kingdom"` for a Lucignano Italy query. HERE's `at=lat,lng` parameter is only a soft proximity bias — a shop named "The Best Gelato" in Stirling matched the query text and outranked the Italian proximity.
+
+### Fixed
+
+- **Sonar error surfacing** — [cloud-api/api/research.js::fetchSonarPlaces()](../cloud-api/api/research.js) lines **~883-985**
+  - Replaced every silent `return []` inside the function with `throw new Error('sonar_{reason}: {details}')`
+  - 7 distinct error stages now surface their own message:
+    - `sonar_no_key` — sonarConfig or key is missing
+    - `sonar_no_location` — geo.display_name is empty
+    - `sonar_http_{status}` — OpenRouter returned non-200 (includes response body preview up to 500 chars)
+    - `sonar_empty_content` — OpenRouter response had no message.content (includes response preview)
+    - `sonar_no_json` — model returned non-JSON content
+    - `sonar_bad_json` — regex-extracted JSON failed to parse
+    - `sonar_bad_shape` — parsed response doesn't have a places array
+    - `sonar_exception` — any other uncaught exception
+  - Top-level try/catch re-throws with `sonar_exception:` prefix if the inner error wasn't already prefixed
+  - Verify: `grep -n "throw new Error..sonar_" seobetter/cloud-api/api/research.js`
+
+- **Waterfall catches Sonar errors + stores them in providers_tried** — [cloud-api/api/research.js::fetchPlacesWaterfall()](../cloud-api/api/research.js) Tier 0 block
+  - New try/catch around `fetchSonarPlaces()` call
+  - On error: pushes `{ name: 'Perplexity Sonar', count: 0, error: err.message }` into providers_tried
+  - Without this, a throwing fetchSonarPlaces would crash the entire waterfall — catching at the waterfall level keeps OSM/Foursquare/HERE/Google tiers running as fallback
+  - Verify: `grep -n "sonarErr\|catch ( sonarErr" seobetter/cloud-api/api/research.js`
+
+- **Diagnostic card surfaces per-provider errors** — [admin/views/settings.php](../admin/views/settings.php) JS report builder
+  - For each provider in `places_providers_tried`, if `p.error` is set, appends `❌ ERROR: {message}` below the count line
+  - User running the Test Sonar button will now see the exact reason Sonar failed instead of just "0 places"
+  - Verify: `grep -n "ERROR:.*p.error" seobetter/admin/views/settings.php`
+
+- **HERE hard bbox filter + location sanity check** — [cloud-api/api/research.js::fetchHEREPlaces()](../cloud-api/api/research.js) lines **~794-855**
+  - Added `in=bbox:west,south,east,north` parameter to the discover URL
+  - Bbox is ~10km around the geocoded coordinates (lat delta 0.1°, lon delta 0.1° adjusted for cos(lat))
+  - Post-filter drops any result whose address doesn't contain at least one 4+ character word from `geo.display_name`
+  - Example: for Lucignano Italy (display_name: "Lucignano, Arezzo, Toscana, 52046, Italia"), the filter keeps only results whose address contains "lucignano", "arezzo", "toscana", "italia", or "52046"
+  - This is the belt (bbox) + suspenders (post-filter) combo — if HERE's bbox honoring is flaky, the post-filter still catches wrong-country results
+  - Verify: `grep -n "locationWords\|in=bbox" seobetter/cloud-api/api/research.js`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.41` → `1.5.42`
+
+### Expected user experience after retest
+
+Install v1.5.42 → Vercel redeploys cloud-api → click 🧪 Test Sonar Connection again. Now the report will show the exact Sonar error. Likely candidates:
+
+1. **`sonar_http_401`** — OpenRouter key invalid for perplexity models (or doesn't have perplexity enabled)
+2. **`sonar_http_402`** — Out of credit / no payment method on file
+3. **`sonar_http_403`** — perplexity/sonar-pro not enabled on this OpenRouter account (some accounts require approval)
+4. **`sonar_http_404`** — wrong model ID (though `perplexity/sonar-pro` is correct at the time of writing)
+5. **`sonar_http_429`** — rate limited
+6. **`sonar_exception: fetch failed`** — network error reaching openrouter.ai from Vercel
+7. **`sonar_http_500`** — OpenRouter/Perplexity outage
+
+Whichever it is, the diagnostic report will now say so explicitly and the user can take targeted action (add credit, change model, contact OpenRouter support).
+
+### Also fixed as side effect
+
+- HERE no longer returns "The Best Gelato, Stirling UK" for Italy queries. The 10km bbox + 4+ char location-word filter guarantees only results actually in the target area pass through.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.41 — Sonar Diagnostic Card + Test Connection button + always-visible state report
 
 **Date:** 2026-04-15

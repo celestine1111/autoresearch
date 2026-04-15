@@ -670,7 +670,11 @@ jQuery(function($) {
             lines.push('');
             lines.push('─── PROVIDERS TRIED ───');
             (res.places_providers_tried || []).forEach(function(p) {
-                lines.push('  • ' + (p.name || '?') + ': ' + (p.count || 0) + ' places');
+                var line = '  • ' + (p.name || '?') + ': ' + (p.count || 0) + ' places';
+                if (p.error) {
+                    line += '\n      ❌ ERROR: ' + p.error;
+                }
+                lines.push(line);
             });
             if (res.places_sample && res.places_sample.length) {
                 lines.push('');
