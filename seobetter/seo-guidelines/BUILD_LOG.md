@@ -16,6 +16,47 @@
 
 ---
 
+## v1.5.36 — Defensive try/catch around rest_generate_start so silent PHP exceptions become visible JSON errors
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User reported `Error: Failed to start.` when clicking the Generate button. That generic fallback message fires when the `/generate/start` REST endpoint returns a response whose `res.success` is falsy AND `res.error` is missing — the JS line `errorMsg.textContent = res.error || 'Failed to start.'` hides any real error unless both conditions are met.
+
+Diagnosed by checking:
+- PHP file brace/paren balance across all 7 files touched in v1.5.32–v1.5.35 — all balanced, no syntax errors
+- start_job flow — references License_Manager::can_generate() → AI_Provider_Manager::get_active_provider() → get_saved_providers() plus rate_check helper, all paths return arrays with both `success` and `error` keys when failing
+- Fallback trigger analysis — the "Failed to start." fallback only fires when start_job throws a PHP exception that WP's REST handler catches and wraps in its own error format (`{code, message, data}` without a top-level `success` key)
+
+The root cause is a silent PHP exception somewhere in the start_job chain that's being caught by WP's REST handler and re-wrapped in a format the JS can't parse. Without defensive catching on our side, we can't see the real message.
+
+### Added
+
+- **try/catch wrapper in `rest_generate_start`** — [seobetter.php::rest_generate_start()](../seobetter.php) lines **~632-660**
+  - Wraps `Async_Generator::start_job()` in a try/catch that converts any thrown `\Throwable` into a `WP_REST_Response` with `success=false`, `error="PHP {class}: {message} at {file}:{line}"`, and the first 5 lines of the stack trace
+  - Also guarantees that the return value always has a `success` key — if start_job returns a non-array or an array missing `success`, the wrapper normalizes to `{success:false, error:"..."}`
+  - Purpose: diagnostic. The next time a user clicks Generate and hits this bug, the actual exception message (PHP class + file + line) will appear in the result panel instead of the generic "Failed to start." fallback.
+  - Verify: `grep -n "try {\|catch ( \\\\Throwable" seobetter/seobetter.php`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.35` → `1.5.36`
+
+### Next steps for user
+
+1. Install v1.5.36 zip, purge WP Engine cache
+2. Click Generate again
+3. If the issue persists, the new error message will show the exact PHP exception class, message, file, and line number — copy that into a reply and the real fix can be made in the next release
+4. If the issue was transient (e.g. a PHP opcache stale entry from a prior upgrade), this release still fixes the underlying symptom by normalizing the response shape
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.35 — Fix garbage LSI keywords from Datamuse (aborigines, balance of payments, lidl, arsenal) on long-tail queries
 
 **Date:** 2026-04-15
