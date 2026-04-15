@@ -19,7 +19,7 @@
 ## v1.5.61 — Bug sweep: density cap tighter, Citation_Pool soft-fail, readability URL parser, missing flag handlers, word-count truncation
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `7f294ba`
 
 ### Context
 
