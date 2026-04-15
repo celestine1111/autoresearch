@@ -19,7 +19,7 @@
 ## v1.5.65 — inject_citations uses Citation_Pool, inline [N] anchors, simplify_readability grade delta, redesigned score ring with cool transitions
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `d2f7455`
 
 ### Context
 
