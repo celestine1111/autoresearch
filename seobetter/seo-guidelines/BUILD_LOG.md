@@ -19,7 +19,7 @@
 ## v1.5.53 — Foursquare category post-filter: fixes "best pet shops" returning Best Western Hotel / Best Migration Services / Best Kumpir
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `ca160cb`
 
 ### Context
 
