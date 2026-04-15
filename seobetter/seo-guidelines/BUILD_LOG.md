@@ -19,7 +19,7 @@
 ## v1.5.67 — Citation count honesty, applied-fix persistence, readability threshold drop, Optimize Keyword Density inject mode
 
 **Date:** 2026-04-16
-**Commit:** `[pending]`
+**Commit:** `0009f37`
 
 ### Context
 
