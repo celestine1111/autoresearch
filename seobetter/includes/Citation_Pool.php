@@ -86,6 +86,27 @@ class Citation_Pool {
         // logged but doesn't reject the URL. An unverified-but-plausible
         // URL is infinitely better than no URL at all. The worst case is
         // one broken link in References which is recoverable.
+        // v1.5.62 — topical relevance filter. v1.5.61 removed HTTP content
+        // verification to fix the empty-pool issue on WP Engine, but that
+        // meant every always-on source (Brave/Reddit/HN/DDG/dev.to) flowed
+        // through unfiltered. Live test returned dev.to April Fools posts
+        // and a Wikipedia Veganism entry in references for a raw-dog-food
+        // article. Fix: require the source title to contain at least one
+        // content token from the keyword. No HTTP calls. Milliseconds.
+        $stopwords = [
+            'the','and','for','how','what','why','when','where','which','who',
+            'with','from','that','this','these','those','have','has','had',
+            'your','their','best','top','safely','guide','tips','2024','2025','2026','2027',
+        ];
+        $raw_terms = preg_split( '/\s+/', strtolower( $keyword ) );
+        $key_tokens = [];
+        foreach ( $raw_terms as $t ) {
+            $t = preg_replace( '/[^\w]/', '', $t );
+            if ( strlen( $t ) >= 4 && ! in_array( $t, $stopwords, true ) ) {
+                $key_tokens[] = $t;
+            }
+        }
+
         $pool = [];
         $seen_urls = [];
         foreach ( $candidates as $c ) {
@@ -98,10 +119,28 @@ class Citation_Pool {
             }
             $seen_urls[ $normalized ] = true;
 
-            // Hygiene check (URL format sanity) remains a HARD filter —
-            // rejects malformed URLs, localhost, file://, etc.
+            // Hygiene check (URL format sanity) remains a HARD filter
             if ( ! self::passes_hygiene( $url ) ) {
                 continue;
+            }
+
+            // v1.5.62 — topical relevance. Title OR URL slug must contain
+            // at least one content token from the keyword. Skips when the
+            // keyword has no usable tokens (e.g. pure stopwords).
+            if ( ! empty( $key_tokens ) ) {
+                $title_lower = strtolower( $c['title'] ?? '' );
+                $slug_lower  = strtolower( wp_parse_url( $url, PHP_URL_PATH ) ?? '' );
+                $haystack    = $title_lower . ' ' . $slug_lower;
+                $has_match   = false;
+                foreach ( $key_tokens as $t ) {
+                    if ( str_contains( $haystack, $t ) ) {
+                        $has_match = true;
+                        break;
+                    }
+                }
+                if ( ! $has_match ) {
+                    continue;
+                }
             }
 
             $pool[] = [

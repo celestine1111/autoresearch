@@ -293,24 +293,49 @@ Return ONLY the Markdown table, nothing else. Example format:
      * Flag readability issues — returns list of complex sentences, does NOT edit.
      */
     public static function flag_readability( string $content ): array {
-        // v1.5.61 — strip markdown image syntax and bare URLs BEFORE
-        // sentence tokenization. Live Mindiam test flagged image URL query
-        // strings like "auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200"
-        // as a long sentence because preg_split on periods tokenized the
-        // URL fragment. Image URLs aren't sentences and shouldn't count.
-        $clean = $content;
-        // Strip markdown images: ![alt](url)
+        // v1.5.62 — line-based preprocessing BEFORE tokenization. v1.5.61
+        // stripped URLs but still flagged table rows, list bullets, and
+        // heading-run-together paragraphs as "long sentences". Fix: walk
+        // the markdown line-by-line and drop any line that is structured
+        // content (table row, list item, heading, code block, blockquote).
+        // Then tokenize only the surviving prose lines.
+        $lines = preg_split( '/\r?\n/', $content );
+        $prose_lines = [];
+        $in_code_block = false;
+
+        foreach ( $lines as $line ) {
+            $trimmed = ltrim( $line );
+
+            // Track fenced code blocks
+            if ( str_starts_with( $trimmed, '```' ) ) {
+                $in_code_block = ! $in_code_block;
+                continue;
+            }
+            if ( $in_code_block ) continue;
+
+            // Skip structural markdown
+            if ( $trimmed === '' ) continue;
+            if ( str_starts_with( $trimmed, '#' ) ) continue;                   // headings
+            if ( str_starts_with( $trimmed, '|' ) ) continue;                   // table rows
+            if ( str_starts_with( $trimmed, '>' ) ) continue;                   // blockquotes
+            if ( preg_match( '/^[-*+•]\s/', $trimmed ) ) continue;              // bullet list items
+            if ( preg_match( '/^\d+\.\s/', $trimmed ) ) continue;               // numbered list items
+            if ( preg_match( '/^---+$/', $trimmed ) ) continue;                 // horizontal rules
+
+            $prose_lines[] = $line;
+        }
+
+        $clean = implode( "\n", $prose_lines );
+
+        // Strip markdown images, links, bare URLs, HTML img tags (v1.5.61)
         $clean = preg_replace( '/!\[[^\]]*\]\([^)]*\)/', '', $clean );
-        // Strip markdown links but keep the visible text: [text](url) → text
         $clean = preg_replace( '/\[([^\]]+)\]\([^)]+\)/', '$1', $clean );
-        // Strip bare URLs (http/https/www)
         $clean = preg_replace( '/https?:\/\/\S+/', '', $clean );
         $clean = preg_replace( '/\bwww\.\S+/', '', $clean );
-        // Strip HTML image tags
         $clean = preg_replace( '/<img[^>]*>/i', '', $clean );
 
         $text = wp_strip_all_tags( $clean );
-        // Also drop anything that still looks like a URL fragment (query strings)
+        // Drop URL-fragment remnants (key=value)
         $text = preg_replace( '/\b[a-z0-9_-]+=[^\s&]+/i', '', $text );
 
         $sentences = preg_split( '/[.!?]+/', $text, -1, PREG_SPLIT_NO_EMPTY );
@@ -318,12 +343,15 @@ Return ONLY the Markdown table, nothing else. Example format:
 
         foreach ( $sentences as $s ) {
             $s = trim( $s );
-            // v1.5.61 — skip anything that still looks like a URL remnant
-            // after cleanup. Real sentences don't contain = or & chars.
+            // Skip URL remnants, table fragments, markdown leakage
             if ( str_contains( $s, '=' ) || str_contains( $s, '&' ) ) continue;
-            // Also skip short "Title Case / Markdown heading" fragments
-            if ( str_starts_with( ltrim( $s ), '#' ) ) continue;
+            if ( str_contains( $s, '|' ) ) continue;
+            if ( str_starts_with( $s, '#' ) ) continue;
+            // Skip fragments with no real sentence shape — must have 4+ words
+            // AND contain at least one lowercase letter (real prose, not ALL CAPS table data)
             $words = str_word_count( $s );
+            if ( $words < 4 ) continue;
+            if ( ! preg_match( '/[a-z]/', $s ) ) continue;
             if ( $words > 25 ) {
                 $complex[] = [
                     'text'    => substr( $s, 0, 100 ) . ( strlen( $s ) > 100 ? '...' : '' ),

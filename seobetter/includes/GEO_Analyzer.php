@@ -497,14 +497,40 @@ class GEO_Analyzer {
             $density_score = 0;
         }
 
-        // H2 heading coverage component (0-100)
+        // v1.5.62 — H2 coverage now matches exact phrase OR any 4+ char
+        // content token from the keyword. Previously this counted only
+        // exact phrase matches, which on the live Mudgee test gave "14%"
+        // while the new Content_Injector::flag_keyword_placement() gave
+        // "62.5%" for the same article (because it counts variants).
+        // Same UI showing both numbers was confusing. Now both methods
+        // agree on variant-token counting, which is what AIOSEO actually
+        // honors for H2 coverage.
+        $stopwords = [ 'the','and','for','how','what','why','when','where','which','who','with','from','your','their','best','top','safely','guide','2024','2025','2026','2027' ];
+        $kw_tokens = array_filter(
+            array_map(
+                fn( $t ) => preg_replace( '/[^\w]/', '', strtolower( $t ) ),
+                explode( ' ', $keyword )
+            ),
+            fn( $t ) => strlen( $t ) >= 4 && ! in_array( $t, $stopwords, true )
+        );
+
         preg_match_all( '/<h2[^>]*>(.*?)<\/h2>/is', $content, $h2_matches );
         $h2_total   = count( $h2_matches[1] ?? [] );
         $h2_with_kw = 0;
         if ( $h2_total > 0 ) {
             foreach ( $h2_matches[1] as $h2 ) {
-                if ( stripos( wp_strip_all_tags( $h2 ), $keyword ) !== false ) {
+                $h2_plain = strtolower( wp_strip_all_tags( $h2 ) );
+                // Exact phrase match first (still counts)
+                if ( str_contains( $h2_plain, $lower_kw ) ) {
                     $h2_with_kw++;
+                    continue;
+                }
+                // Variant-token match: any 4+ char content token from keyword
+                foreach ( $kw_tokens as $t ) {
+                    if ( str_contains( $h2_plain, $t ) ) {
+                        $h2_with_kw++;
+                        break;
+                    }
                 }
             }
         }

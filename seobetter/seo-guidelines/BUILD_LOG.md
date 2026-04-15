@@ -16,6 +16,84 @@
 
 ---
 
+## v1.5.62 — Bug sweep: topical Citation_Pool filter, dev.to dropped for non-tech, hybrid format after inject, readability line-skipping, panel re-render, H2 count reconciliation
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+Live test of v1.5.61 Article 1 revealed 6 issues:
+1. Citation_Pool now populated (good) but contains **irrelevant URLs** — dev.to April Fools posts, Wikipedia Veganism page, random dev blog posts
+2. "Add Citations" button says `0 citations found` even after injecting 6 (description doesn't re-read)
+3. Preview images **break to full-size unstyled** after clicking any inject-fix button
+4. Check Readability still flags **table rows, list items, heading fragments** as long sentences
+5. `14%` H2 coverage in GEO_Analyzer vs `62.5%` H2 coverage in flag_keyword_placement — same article, contradictory stats
+6. Keyword density bump after clicking Add Citations (3.74% from ~2%) — injection adds keyword mentions
+
+### Fixed
+
+#### 1. Topical relevance filter in Citation_Pool — [includes/Citation_Pool.php::build()](../includes/Citation_Pool.php) line ~75
+- **Before (v1.5.61)**: after removing HTTP content verification, every source flowed through unfiltered. Pool returned dev.to April Fools posts for a raw-dog-food article.
+- **After (v1.5.62)**: extract content tokens from the keyword (4+ chars, stopwords removed). Require each candidate URL's title OR path slug to contain at least one token. No HTTP calls, milliseconds per candidate.
+- Worked example for `how to transition your dog to raw food safely 2026`: tokens = `['transition', 'food', 'safely']`. A dev.to article titled "9 Things You're Overengineering in the Browser" contains none → REJECTED. A Forbes article titled "Best Raw Dog Food" contains "food" → KEPT.
+- Verify: `grep -n "key_tokens\|topical relevance" seobetter/includes/Citation_Pool.php`
+
+#### 2. dev.to and lemmy dropped for non-tech domains — [cloud-api/api/research.js::buildResearchResult()](../cloud-api/api/research.js) line ~3183
+- dev.to is a developer blogging platform. Its fetcher returns tech posts for every query, polluting pet / health / travel / business articles with unrelated developer content.
+- **Fix**: if the article domain is NOT one of `['technology', 'blockchain', 'cryptocurrency']`, zero out `social.devto` and `social.lemmy` before they flow into the sources array.
+- Verify: `grep -n "isTechDomain\|social.devto = null" seobetter/cloud-api/api/research.js`
+
+#### 3. Inject-fix re-renders in hybrid mode not classic — [seobetter.php::rest_inject_fix()](../seobetter.php) line ~1355
+- **Before**: `$formatter->format( $updated_markdown, 'classic', ... )` — classic mode rendered images as raw `<img>` tags at full size, breaking preview styling after every inject-fix click.
+- **After**: `$formatter->format( $updated_markdown, 'hybrid', ... )` — matches the original generation mode. Images stay in styled figure blocks, tables get wp:html styling, stat callouts preserved.
+- Verify: `grep -n "format( .updated_markdown.*hybrid" seobetter/seobetter.php`
+
+#### 4. flag_readability line-based preprocessing — [includes/Content_Injector.php::flag_readability()](../includes/Content_Injector.php) line ~295
+- **Before (v1.5.61)**: stripped URLs but still tokenized table rows (`| col | col |`), list items (`- item`), and heading fragments (`## Heading`) as prose sentences.
+- **After (v1.5.62)**: walk the markdown line-by-line BEFORE tokenization. Drop any line that is structured markdown:
+  - Headings (starts with `#`)
+  - Table rows (starts with `|`)
+  - Blockquotes (starts with `>`)
+  - Bullet list items (starts with `-`, `*`, `+`, `•` followed by space)
+  - Numbered list items (starts with `1.`, `2.`, etc)
+  - Horizontal rules (`---`)
+  - Fenced code blocks
+- Plus stricter sentence-shape requirements: must have ≥4 words AND contain at least one lowercase letter (skips ALL CAPS table data leakage).
+- Verify: `grep -n "prose_lines\|in_code_block" seobetter/includes/Content_Injector.php`
+
+#### 5. Analyze & Improve panel updates inline after inject-fix — [admin/views/content-generator.php](../admin/views/content-generator.php) `sb-improve-btn` click handler
+- **Before**: only the button state (green/red) and the top score ring updated after an inject-fix. Description text (`0 citations found. Top content has 5+`) stayed stale from the original pre-click count.
+- **After**: when a fix succeeds, locate the specific fix row's description element and rewrite it from the fresh `result.checks` data. Per-fix update logic: citations count, quotes count, tables count, factual density score, freshness detail. Also stores `result.checks / geo_score / grade` in `draft` for any subsequent re-renders.
+- Verify: grep for `fixId === 'citations'` in content-generator.php
+
+#### 6. GEO_Analyzer H2 keyword coverage now counts variants — [includes/GEO_Analyzer.php::check_keyword_density()](../includes/GEO_Analyzer.php) line ~500
+- **Before**: `stripos($h2, $keyword) !== false` — required the EXACT keyword phrase in the H2, strict match. For the Mudgee test this returned 14% while `flag_keyword_placement()` returned 62.5% using variant-token matching. Same UI showing both was confusing.
+- **After**: counts exact phrase match first (still counts); if no exact match, walks content tokens from the keyword (≥4 chars, stopwords removed) and accepts any match. This is what AIOSEO actually honors for H2 coverage.
+- Example for `how to transition your dog to raw food safely 2026`: tokens = `['transition', 'food', 'safely']`. An H2 titled "Step-by-Step Guide to Transitioning Your Dog" contains "transition" → COUNTS. Previously this H2 was not counted because it lacked the exact phrase "how to transition your dog to raw food safely 2026".
+- Verify: `grep -n "Variant-token match" seobetter/includes/GEO_Analyzer.php`
+
+### Expected result after v1.5.62
+
+Regenerate Article 1. Target outcomes:
+
+| Check | v1.5.61 actual | v1.5.62 target |
+|---|---|---|
+| References section | 6 irrelevant URLs (dev.to, Veganism wiki) | **5-8 topically relevant URLs** (pet/health domains) |
+| Add Citations button | "0 citations found" after click | **"6 citations found"** |
+| Preview after inject | Images break to full-size | **Images stay styled** |
+| Check Readability flagger | 8 false positives on tables/lists | **Zero false positives** |
+| H2 coverage stat | 14% GEO_Analyzer vs 62.5% flag | **Both agree on ~62.5%** |
+
+### What's NOT in this release
+
+- **Post-generation readability rewriter** — still deferred until we measure a clean v1.5.62 regen's actual grade level.
+- **Density bump after inject fix** — will investigate in v1.5.63 if it persists after these fixes.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.61 — Bug sweep: density cap tighter, Citation_Pool soft-fail, readability URL parser, missing flag handlers, word-count truncation
 
 **Date:** 2026-04-15

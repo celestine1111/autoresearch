@@ -1260,6 +1260,14 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                         // Inject fix succeeded — update draft
                         draft.markdown = result.markdown || draft.markdown;
                         draft.content = result.content;
+                        // v1.5.62 — also store updated checks so any panel
+                        // re-render reads the latest scores, not the stale
+                        // original counts (user was seeing "0 citations
+                        // found" description even after 6 were injected).
+                        draft.checks = result.checks || draft.checks;
+                        draft.geo_score = result.geo_score;
+                        draft.grade = result.grade;
+
                         self.textContent = '✓ ' + (result.added || 'Done');
                         self.style.background = '#22c55e';
 
@@ -1275,6 +1283,23 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                             var newContent = result.content || '';
                             newContent = newContent.replace(/<style>[\s\S]*?<\/style>/, '');
                             preview.innerHTML = newContent;
+                        }
+
+                        // v1.5.62 — update the specific fix's description text
+                        // inline so the user sees "6 citations found" not "0
+                        // citations found" after clicking Add Citations. Also
+                        // lowers the impact label once the fix is applied.
+                        var fixRow = self.closest('[data-fix-id], div');
+                        var descEl = fixRow && fixRow.querySelector('[style*="color:#64748b"]');
+                        if (descEl && result.checks) {
+                            var newDesc = null;
+                            var c = result.checks;
+                            if (fixId === 'citations' && c.citations)      newDesc = c.citations.count + ' citations found. Target 5+.';
+                            if (fixId === 'quotes' && c.expert_quotes)     newDesc = c.expert_quotes.count + ' expert quotes found. Target 2+.';
+                            if (fixId === 'table' && c.tables)             newDesc = c.tables.count + ' tables found.';
+                            if (fixId === 'statistics' && c.factual_density) newDesc = 'Statistics updated. Factual density: ' + c.factual_density.score + '/100.';
+                            if (fixId === 'freshness' && c.freshness)      newDesc = c.freshness.detail || 'Freshness signal added.';
+                            if (newDesc) descEl.textContent = newDesc;
                         }
 
                         setTimeout(function() { self.parentElement.style.opacity = '0.6'; }, 1500);
