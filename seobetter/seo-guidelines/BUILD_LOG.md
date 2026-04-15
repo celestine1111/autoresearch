@@ -16,6 +16,72 @@
 
 ---
 
+## v1.5.35 — Fix garbage LSI keywords from Datamuse (aborigines, balance of payments, lidl, arsenal) on long-tail queries
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User reported the Auto-suggest LSI keywords for "best gelato shops in lucignano italy 2026" returned pure garbage: `magazine, aborigines, balance of payments, lidl, arsenal, population, romanic, cone, scoop, business`. None of these are related to gelato shops in small Italian towns.
+
+Root cause: the v1.5.22 auto-suggest endpoint `/api/topic-research` passes the FULL long-tail keyword directly to Datamuse's `ml=` (means like) endpoint. Datamuse is designed for 1-3 word queries — when given an 8-word phrase, it treats words in isolation and returns weak semantic associations to "Italy" (→ aborigines, balance of payments, population, romanic) and "shops" (→ lidl, arsenal). The old filter in `buildKeywordSets()` only checked length (4-30 chars) and niche overlap, which wasn't enough to catch topical noise.
+
+### Fixed
+
+- **New `extractCoreTopic()` helper** — [cloud-api/api/topic-research.js](../cloud-api/api/topic-research.js) lines **~110-165**
+  - Strips years (20XX), generic SEO qualifiers (best, top, must-try, guide), "in X" location clauses, and 30+ country/region names
+  - Falls back to the last 3 words of the original query if stripping leaves <3 chars
+  - Examples: `"best gelato shops in lucignano italy 2026"` → `"gelato shops"`, `"top 10 restaurants in rome italy"` → `"restaurants"`, `"dog vitamins australia"` → `"dog vitamins"`
+  - Verify: `grep -n "function extractCoreTopic" seobetter/cloud-api/api/topic-research.js`
+
+- **Datamuse called with core topic instead of full niche** — [cloud-api/api/topic-research.js](../cloud-api/api/topic-research.js) main handler
+  - Wikipedia + Google Suggest still get the full niche (they handle long queries correctly)
+  - Only Datamuse receives the trimmed `coreTopic` so `ml=` returns meaningful results
+  - Verify: `grep -n "fetchDatamuse(coreTopic)" seobetter/cloud-api/api/topic-research.js`
+
+- **Datamuse fetch now requests score + POS tags** — [cloud-api/api/topic-research.js::fetchDatamuse()](../cloud-api/api/topic-research.js)
+  - Changed `md=f` → `md=fp` to get part-of-speech tags
+  - Increased `max=20` → `max=40` so the stricter downstream filter has more candidates
+  - Each result now includes `{ word, score, freq, pos }` instead of just `{ word, freq }`
+  - New `parsePOS()` helper extracts the first n/v/adj/adv tag from the tags array
+  - Verify: `grep -n "md=fp\|parsePOS" seobetter/cloud-api/api/topic-research.js`
+
+- **Much stricter LSI filter in `buildKeywordSets()`** — [cloud-api/api/topic-research.js::buildKeywordSets()](../cloud-api/api/topic-research.js)
+  - **Score threshold:** reject results with Datamuse score < 1000 (below that is typically weak noise)
+  - **POS filter:** keep only nouns (`n`) and adjectives (`adj`). Verbs, adverbs, and POS-less results are dropped.
+  - **Phrase junk filter:** reject any result containing whitespace (Datamuse sometimes returns multi-word phrases that are almost always noise for LSI)
+  - **Blocklist:** 50+ terms that Datamuse commonly returns as false positives for localized queries — country names (italy, france, australia), economic terms (inflation, gdp, balance, payments), brand names (lidl, aldi, amazon, arsenal, chelsea, liverpool), generic media (magazine, newspaper, journal), generic adjectives (best, top, great), meta words (guide, review, list, example), year terms (year, decade, today)
+  - Verify: `grep -n "BLOCKLIST\|score \\|\\| 0" seobetter/cloud-api/api/topic-research.js`
+
+### Expected output after fix
+
+For `"best gelato shops in lucignano italy 2026"`:
+- `extractCoreTopic` returns `"gelato shops"`
+- Datamuse `ml=gelato+shops` returns: `sorbet, sherbet, ice cream, pistachio, confectionery, dessert, frozen, artisan, cone, scoop, flavor` (high scores, nouns/adjectives)
+- Blocklist removes: nothing (all are on-topic)
+- Final LSI: `sorbet, sherbet, pistachio, confectionery, dessert, frozen, artisan, cone, scoop, flavor`
+
+For `"dog vitamins australia"`:
+- `extractCoreTopic` returns `"dog vitamins"`
+- Datamuse `ml=dog+vitamins` returns: `supplement, mineral, calcium, nutrient, zinc, omega, canine, kibble, diet, protein`
+- Final LSI: same, minus duplicates of the niche words
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.34` → `1.5.35`
+
+### Required user action
+
+- **Vercel redeploy** — this release touches `cloud-api/api/topic-research.js`. Git push triggers auto-deploy; verify the new build appears in the Vercel dashboard before retesting Auto-suggest.
+- **Install zip** — replaces v1.5.34
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.34 — Critical bugfix trio: stale research cache + broken Pollinations download + "5%" leaking into article body
 
 **Date:** 2026-04-15
