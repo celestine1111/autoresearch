@@ -19,7 +19,7 @@
 ## v1.5.58 — Two critical fixes: persisted places cache (test-then-generate determinism) + location-aware auto-suggest
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `f426226`
 
 ### Context
 
