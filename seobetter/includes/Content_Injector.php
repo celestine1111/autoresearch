@@ -851,9 +851,15 @@ Return ONLY the Markdown table, nothing else. Example format:
                 continue;
             }
 
+            // v1.5.67 — lowered threshold from > 9 to > 8. User tested with
+            // grade 10.7 article and said "im not sure if it changes the
+            // article the score does not change". Likely only 1-2 sections
+            // were above the previous 9 threshold, leaving the bulk of the
+            // article untouched. Grade 8 threshold rewrites more sections
+            // which should drop the article average closer to the 7 target.
             $grade = self::calc_flesch_kincaid_grade( $section['body'] );
-            if ( $grade <= 9 ) {
-                continue; // Section already readable
+            if ( $grade <= 8 ) {
+                continue; // Section already readable enough
             }
 
             // Rewrite this section with an AI pass
@@ -902,7 +908,7 @@ Return ONLY the Markdown table, nothing else. Example format:
         if ( $rewritten_count === 0 ) {
             return [
                 'success' => false,
-                'error'   => 'No sections needed simplification (all already at grade ≤9) or AI rewrite failed.',
+                'error'   => 'No sections needed simplification (all already at grade ≤8) or AI rewrite failed.',
             ];
         }
 
@@ -912,12 +918,133 @@ Return ONLY the Markdown table, nothing else. Example format:
             $new_markdown .= $s['heading'] . $s['body'];
         }
 
+        // v1.5.67 — measure AFTER rewrite to show the actual grade delta
+        // in the success message. User reported "the score does not change"
+        // because the old message ("Simplified N sections to grade 7") was
+        // generic and didn't show proof of improvement.
+        $grade_after = self::calc_flesch_kincaid_grade( $new_markdown );
+        $delta_msg = sprintf(
+            'Simplified %d section%s: Grade %s → %s',
+            $rewritten_count,
+            $rewritten_count > 1 ? 's' : '',
+            number_format( $grade_before, 1 ),
+            number_format( $grade_after, 1 )
+        );
+
         return [
             'success' => true,
             'content' => $new_markdown,
-            'added'   => 'Simplified ' . $rewritten_count . ' section' . ( $rewritten_count > 1 ? 's' : '' ) . ' to grade 7',
+            'added'   => $delta_msg,
             'type'    => 'readability',
             'rewritten_sections' => $rewritten_sections,
+            'grade_before' => $grade_before,
+            'grade_after'  => $grade_after,
+        ];
+    }
+
+    /**
+     * v1.5.67 — AI-powered keyword density optimizer. Converts the former
+     * flag-mode Check Keyword Placement button into an inject-mode auto-fix.
+     *
+     * User reported: "when i click check keyword placement it gives this
+     * results, im not sure what it does to the article if not nothing do
+     * you edit this manually?" — the old flag mode was confusing. New
+     * behavior: rewrite mentions using an AI pass. Replaces 30-40% of
+     * exact-phrase keyword occurrences with pronouns, variations, or
+     * synonyms. Target: drop density from >2% → 0.8-1.2%.
+     */
+    public static function optimize_keyword_placement( string $markdown, string $keyword ): array {
+        $keyword = trim( (string) $keyword );
+        if ( $keyword === '' ) {
+            return [ 'success' => false, 'error' => 'No focus keyword configured.' ];
+        }
+
+        // Measure current density for the success message
+        $lower_md = strtolower( wp_strip_all_tags( $markdown ) );
+        $word_count = max( 1, str_word_count( $lower_md ) );
+        $kw_count_before = substr_count( $lower_md, strtolower( $keyword ) );
+        $kw_word_count = max( 1, str_word_count( $keyword ) );
+        $density_before = round( ( $kw_count_before * $kw_word_count / $word_count ) * 100, 2 );
+
+        // Only run if density is actually too high
+        if ( $density_before <= 1.5 ) {
+            return [
+                'success' => false,
+                'error'   => 'Keyword density is already ' . $density_before . '% (within the 0.5-1.5% target). No rewrite needed.',
+            ];
+        }
+
+        $provider = AI_Provider_Manager::get_active_provider();
+        if ( ! $provider ) {
+            return [ 'success' => false, 'error' => 'No AI provider configured.' ];
+        }
+
+        // Target drop: from current density down to ~1.0%. Roughly 30-50% of
+        // exact-phrase mentions need to become variations.
+        $target_count = max( 1, (int) round( 1.0 * $word_count / ( 100 * $kw_word_count ) ) );
+        $mentions_to_rewrite = max( 2, $kw_count_before - $target_count );
+
+        $prompt = "Rewrite the following article to reduce keyword density.\n\n"
+            . "FOCUS KEYWORD: \"{$keyword}\"\n"
+            . "CURRENT DENSITY: {$density_before}% ({$kw_count_before} exact-phrase mentions in {$word_count} words)\n"
+            . "TARGET DENSITY: 1.0% (approximately {$target_count} exact mentions)\n\n"
+            . "TASK: Rewrite about {$mentions_to_rewrite} of the exact-phrase \"{$keyword}\" occurrences using pronouns, variations, or natural synonyms. Keep 1-2 exact-phrase mentions in the introduction and 1-2 in H2 headings for SEO; rewrite the rest.\n\n"
+            . "RULES:\n"
+            . "1. PRESERVE the overall structure: H1, H2, H3 headings, paragraph breaks, bullet lists, tables, markdown links, image syntax.\n"
+            . "2. PRESERVE every fact, number, percentage, year, citation URL, expert quote, named entity.\n"
+            . "3. PRESERVE every markdown link `[text](url)` exactly.\n"
+            . "4. PRESERVE the Key Takeaways, FAQ, References, and Quick Comparison Table sections AS-IS.\n"
+            . "5. When replacing, use pronouns (\"this process\", \"the approach\"), shortenings (\"the transition\"), or natural word variants (\"switching your dog to raw feeding\").\n"
+            . "6. Do NOT add new sentences. Do NOT delete sentences. Only rewrite existing mentions.\n"
+            . "7. Keep the same word count (±5%).\n"
+            . "8. Keep the first paragraph's exact keyword mention — SEO plugins scan it.\n\n"
+            . "ARTICLE:\n\n"
+            . $markdown . "\n\n"
+            . "Output the full rewritten article in Markdown. No explanation, no commentary.";
+
+        $result = AI_Provider_Manager::send_request(
+            $provider['provider_id'],
+            $prompt,
+            'You are an SEO editor. Rewrite articles to reduce keyword stuffing while preserving every fact, citation, structural element, and markdown link exactly.',
+            [ 'max_tokens' => 6000, 'temperature' => 0.3 ]
+        );
+
+        if ( ! $result['success'] || empty( $result['content'] ) ) {
+            return [ 'success' => false, 'error' => 'AI rewrite failed: ' . ( $result['error'] ?? 'no content returned' ) ];
+        }
+
+        $new_markdown = trim( $result['content'] );
+
+        // Safety: the new content must contain roughly the same number of H2
+        // headings as the original. If it dropped more than 20% of H2s, the
+        // AI botched the rewrite — don't apply.
+        $h2_before = preg_match_all( '/^##\s/m', $markdown, $m1 );
+        $h2_after  = preg_match_all( '/^##\s/m', $new_markdown, $m2 );
+        if ( $h2_before > 0 && $h2_after < floor( $h2_before * 0.8 ) ) {
+            return [
+                'success' => false,
+                'error'   => 'AI rewrite returned structurally incomplete output (' . $h2_after . ' of ' . $h2_before . ' H2 headings preserved). Rewrite rejected for safety.',
+            ];
+        }
+
+        // Re-measure density after rewrite
+        $lower_new = strtolower( wp_strip_all_tags( $new_markdown ) );
+        $new_word_count = max( 1, str_word_count( $lower_new ) );
+        $kw_count_after = substr_count( $lower_new, strtolower( $keyword ) );
+        $density_after = round( ( $kw_count_after * $kw_word_count / $new_word_count ) * 100, 2 );
+
+        return [
+            'success' => true,
+            'content' => $new_markdown,
+            'added'   => sprintf(
+                'Keyword density %s%% → %s%% (rewrote %d mentions as variations)',
+                $density_before,
+                $density_after,
+                max( 0, $kw_count_before - $kw_count_after )
+            ),
+            'type'    => 'keyword',
+            'density_before' => $density_before,
+            'density_after'  => $density_after,
         ];
     }
 

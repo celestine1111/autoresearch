@@ -16,6 +16,79 @@
 
 ---
 
+## v1.5.67 — Citation count honesty, applied-fix persistence, readability threshold drop, Optimize Keyword Density inject mode
+
+**Date:** 2026-04-16
+**Commit:** `[pending]`
+
+### Context
+
+Live v1.5.66 test:
+- ✅ Article styling is perfect (user: *"the styling is good"*)
+- ✅ Buttons no longer crash to Retry (v1.5.66 parse-error fix worked)
+- ❌ Add Citations says "7 added" but only 1 actually appears in the article
+- ❌ All buttons become clickable again after scrolling back up (no completed state persistence)
+- ❌ Simplify Readability runs but the score doesn't visibly change (threshold too high, only 1-2 sections qualify)
+- ❌ Check Keyword Placement is flag-only — user says *"im not sure what it does to the article if not nothing do you edit this manually?"*
+
+### Fixed
+
+#### 1. Citation count matches the final post-validation state — [seobetter.php::rest_inject_fix()](../seobetter.php) line ~1360
+- **Root cause**: inject_citations would build a References list from the Citation Pool (e.g. 7 entries) and return `added: '7 citations added'`. THEN `validate_outbound_links()` ran and stripped 6 of them because they weren't in the trusted whitelist, leaving 1 in the final markdown. The user saw the "7" message but only 1 link in the output.
+- **Fix**: pre-count references BEFORE validate_outbound_links runs, recount AFTER, and overwrite `$result['added']` with the post-validation count. If URLs were stripped, the message explicitly says "N citations added (X dropped by whitelist — add domains to Settings → Integrations if needed)".
+- Verify: `grep -n "refs_before\|refs_after" seobetter/seobetter.php`
+
+#### 2. Applied-fix persistence across panel re-renders — [admin/views/content-generator.php](../admin/views/content-generator.php)
+- **Root cause**: v1.5.64's full-panel re-render rebuilds the Analyze & Improve panel from scratch every time. If a fix's check score is still below threshold after the inject, the fix appears again as a fresh clickable "Add now" button. User reported *"when i scroll back up, the button is available to press again, its not greyed out which it should be as it is already done"*.
+- **Fix**: new `window._seobetterAppliedFixes` Set that records every successful inject click with a timestamp and the success message. The renderResult panel-builder checks this Set when iterating fixes and renders applied fixes as a grey disabled card with:
+  - Green background (`#f0fdf4`)
+  - `yes-alt` (checkmark) icon in green
+  - Label suffixed with "• Applied" in green
+  - Description replaced with the actual success message (e.g. "5 citations added")
+  - Button text "✓ Done" with grey background `#d1d5db`, `disabled` attribute, `cursor: not-allowed`
+  - Card opacity 0.75
+- Reset on fresh generation: `window._seobetterAppliedFixes = {}` fires when `renderResult(res)` is called from the initial article response, so new articles start with all fixes clickable.
+
+#### 3. Simplify Readability threshold lowered from grade > 9 to grade > 8 + actual before/after delta — [includes/Content_Injector.php::simplify_readability()](../includes/Content_Injector.php) line ~854
+- User tested with grade 10.7 and reported *"It greys out as processing, im not sure if it changes the article the score does not change"*. Root cause: previous threshold rewrote only sections with grade > 9. In a grade-10.7 article, maybe 1-2 sections qualified. The rest (grade 8-9) stayed untouched, and the overall article grade barely moved because the untouched sections still dragged the average up.
+- **Fix**: lowered threshold to `grade > 8`. Now rewrites any section above grade 8, covering the long-tail of slightly-complex sections that previously slipped through.
+- Also added grade-delta measurement: `$grade_after = calc_flesch_kincaid_grade( $new_markdown )` measured AFTER the rewrite, returned in the `added` message as `"Simplified N sections: Grade X.X → Y.Y"`. Previously was a generic "Simplified N sections to grade 7" which didn't prove improvement.
+- Returns `grade_before` and `grade_after` fields for future use by the UI.
+
+#### 4. Check Keyword Placement converted to Optimize Keyword Density inject-mode — new [includes/Content_Injector.php::optimize_keyword_placement()](../includes/Content_Injector.php) line ~935 + [seobetter.php::rest_inject_fix()](../seobetter.php) case
+- User reported *"im not sure what it does to the article if not nothing do you edit this manually?"*. The old `flag_keyword_placement()` returned advice only — no article changes.
+- **New behavior**: new `optimize_keyword_placement()` method that runs an AI rewrite pass to reduce density from 2-3% → ~1%. Calculates target mention count from target density × word count, passes both to the AI prompt. Prompt rules:
+  - Keep 1-2 exact-phrase mentions in the intro + 1-2 in H2 headings for SEO
+  - Rewrite the rest as pronouns, shortenings, natural variants
+  - PRESERVE every fact, number, percentage, citation URL, named entity, markdown link
+  - PRESERVE Key Takeaways / FAQ / References / Quick Comparison Table sections AS-IS
+  - Same word count ±5%
+  - Keep the first paragraph's exact keyword mention (SEO plugins scan it)
+- Safety check: reject rewrite if >20% of H2 headings were dropped (AI structural failure)
+- Returns density before/after in the success message (e.g. `"Keyword density 2.84% → 1.02% (rewrote 6 mentions as variations)"`)
+- UI: button renamed from "Check Keyword Placement" (flag mode) to **"Optimize Keyword Density"** (inject mode)
+- Legacy `flag_keyword_placement()` still exists, wired to new case `keyword_flag` if anything wants to show advice only
+
+### Expected result after v1.5.67
+
+Regenerate Article 1 + click each fix:
+
+| Fix | v1.5.66 behavior | v1.5.67 target |
+|---|---|---|
+| Add Citations | Says "7 added" but only 1 appears | **"N citations added (M dropped by whitelist)"** — count matches reality |
+| Applied button state | Re-appears fresh after re-render | **Grey "✓ Done" card with green border** until page refresh |
+| Simplify Readability | No visible score change | **"Grade 10.7 → 7.9"** with actual delta, readability bar updates |
+| Keyword Placement | Flag-only advice, no article change | **"Density 2.84% → 1.02%"** — article is actually rewritten |
+
+### What's NOT in this release
+
+- Dynamic whitelist for Citation Pool URLs (preventing the 7→1 drop). Would require adding pool URLs to the whitelist before validate_outbound_links runs. Deferred — the accurate count message is enough for now to tell the user what happened.
+- Humanizer / CORE-EEAT flag modes → inject modes. Deferred — both would need AI rewrite passes similar to the keyword one. Ship after v1.5.67 testing confirms the current pattern works.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.66 — CRITICAL hotfix: stray `}` in Content_Injector broke all inject-fix buttons + Citation_Pool fallback
 
 **Date:** 2026-04-15

@@ -824,6 +824,9 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             // handlers can merge their updates on top of it instead of losing
             // headlines / meta / places_validator / citation_pool.
             window._seobetterLastResult = res;
+            // v1.5.67 — reset the applied-fixes set on every fresh generation
+            // so buttons start clickable on a new article.
+            window._seobetterAppliedFixes = {};
             renderResult(res);
         }).catch(function() {
             stopTimer();
@@ -975,8 +978,12 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             if (c.section_openings && c.section_openings.score < 70) fixes.push({id:'openers', label:'Check Section Openings', desc:c.section_openings.detail+'. Shows which sections need better openers.', icon:'editor-paragraph', impact:'+8 pts', mode:'flag'});
             // v1.5.11 NEW — flag-mode checks for the three new scoring dimensions
             if (c.keyword_density && c.keyword_density.score < 60) {
-                var kdDesc = (c.keyword_density.density ? 'Density '+c.keyword_density.density+'%. Target 0.5-1.5%. ' : '') + (c.keyword_density.h2_coverage ? c.keyword_density.h2_coverage+'% of H2s contain the keyword (target 30%+).' : 'Keyword placement needs work.');
-                fixes.push({id:'keyword', label:'Check Keyword Placement', desc:kdDesc+' Shows what AIOSEO/Yoast will flag.', icon:'search', impact:'+10 pts', mode:'flag'});
+                var kdDesc = (c.keyword_density.density ? 'Density '+c.keyword_density.density+'%. Target 0.5-1.5%. ' : '') + (c.keyword_density.h2_coverage ? c.keyword_density.h2_coverage+'% of H2s contain the keyword.' : 'Keyword placement needs work.');
+                // v1.5.67 — converted from flag to inject mode. New label
+                // "Optimize Keyword Density" runs an AI rewrite pass to
+                // drop density from 2-3% → ~1% by swapping exact-phrase
+                // mentions for pronouns and variations.
+                fixes.push({id:'keyword', label:'Optimize Keyword Density', desc:kdDesc+' Runs an AI pass to rewrite over-dense mentions as pronouns or variations, keeping the first and H2 mentions intact.', icon:'search', impact:'+10 pts', mode:'inject'});
             }
             if (c.humanizer && c.humanizer.score < 70) {
                 var hmDesc = 'Found '+(c.humanizer.tier1_count||0)+' Tier-1 AI red-flag words and '+(c.humanizer.tier2_count||0)+' Tier-2 words. Shows which words to rewrite for more natural prose.';
@@ -1000,15 +1007,33 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             // everyone — rename the CTA to match.
             h += '</div>';
 
+            // v1.5.67 — track applied fixes across panel re-renders.
+            // Previously, after clicking Add Citations → success → re-render,
+            // the citations check might still score below 80, so the fix
+            // appeared again as a fresh "Add now" button — the user
+            // reported "its not greyed out which it should be as it is
+            // already done". Now we persist a window._seobetterAppliedFixes
+            // Set across re-renders and render completed fixes as a grey
+            // disabled "✓ Done" card instead of a clickable button.
+            window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
+            var appliedSet = window._seobetterAppliedFixes;
+
             fixes.forEach(function(fix, idx) {
-                h += '<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:#f8fafc;border-radius:8px;margin-bottom:8px'+(idx===0?'':'')+'">';
-                h += '<span class="dashicons dashicons-'+fix.icon+'" style="color:#764ba2;font-size:20px;width:20px;height:20px;flex-shrink:0"></span>';
-                h += '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1e293b">'+fix.label+'</div>';
-                h += '<div style="font-size:11px;color:#64748b;margin-top:2px">'+fix.desc+'</div></div>';
-                h += '<span style="font-size:11px;font-weight:600;color:#22c55e;white-space:nowrap;margin-right:8px">'+fix.impact+'</span>';
-                var btnLabel = fix.mode === 'inject' ? 'Add now' : 'Check';
-                var btnColor = fix.mode === 'inject' ? '#764ba2' : '#6b7280';
-                h += '<button type="button" class="button sb-improve-btn" data-fix-id="'+fix.id+'" style="height:32px;font-size:12px;padding:0 14px;background:'+btnColor+';color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap">'+btnLabel+'</button>';
+                var isApplied = !!appliedSet[fix.id];
+                var bgColor = isApplied ? '#f0fdf4' : '#f8fafc';
+                h += '<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:'+bgColor+';border-radius:8px;margin-bottom:8px;transition:background 0.3s ease'+(isApplied?';opacity:0.75':'')+'">';
+                h += '<span class="dashicons dashicons-'+(isApplied?'yes-alt':fix.icon)+'" style="color:'+(isApplied?'#22c55e':'#764ba2')+';font-size:20px;width:20px;height:20px;flex-shrink:0"></span>';
+                h += '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1e293b">'+fix.label+(isApplied?' <span style="color:#22c55e;font-weight:500">• Applied</span>':'')+'</div>';
+                var desc = isApplied
+                    ? (appliedSet[fix.id].message || 'Already applied to this article. Re-generate to run again.')
+                    : fix.desc;
+                h += '<div style="font-size:11px;color:#64748b;margin-top:2px">'+desc+'</div></div>';
+                h += '<span style="font-size:11px;font-weight:600;color:'+(isApplied?'#94a3b8':'#22c55e')+';white-space:nowrap;margin-right:8px">'+fix.impact+'</span>';
+                var btnLabel = isApplied ? '✓ Done' : (fix.mode === 'inject' ? 'Add now' : 'Check');
+                var btnColor = isApplied ? '#d1d5db' : (fix.mode === 'inject' ? '#764ba2' : '#6b7280');
+                var disabledAttr = isApplied ? ' disabled' : '';
+                var cursor = isApplied ? 'not-allowed' : 'pointer';
+                h += '<button type="button"'+disabledAttr+' class="button sb-improve-btn" data-fix-id="'+fix.id+'" style="height:32px;font-size:12px;padding:0 14px;background:'+btnColor+';color:#fff;border:none;border-radius:6px;cursor:'+cursor+';white-space:nowrap">'+btnLabel+'</button>';
                 h += '</div>';
             });
 
@@ -1271,19 +1296,25 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
 
                     if (result.success && result.content) {
                         // v1.5.64 — FULL results-panel re-render after any
-                        // successful inject-fix. Previously only the score
-                        // ring and button state updated, leaving the bar
-                        // chart, suggestions, and stat cards stale. User
-                        // reported "the grading graph did not upgrade or
-                        // let the user know" after clicking Simplify
-                        // Readability — the method worked (4 sections
-                        // rewritten, GEO jumped to 83) but the Readability
-                        // bar stayed red at 26.
+                        // successful inject-fix.
                         draft.markdown = result.markdown || draft.markdown;
                         draft.content = result.content;
                         draft.checks = result.checks || draft.checks;
                         draft.geo_score = result.geo_score;
                         draft.grade = result.grade;
+
+                        // v1.5.67 — mark this fix as APPLIED so future
+                        // re-renders of the Analyze & Improve panel show
+                        // a grey "✓ Done" card instead of a fresh "Add now"
+                        // button. User reported clicking Simplify Readability
+                        // successfully but then "when i scroll back up it
+                        // goes back to being able to be pressed again when
+                        // it should be greyed out as done".
+                        window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
+                        window._seobetterAppliedFixes[fixId] = {
+                            applied_at: Date.now(),
+                            message: result.added || 'Applied successfully'
+                        };
 
                         // Flash the ✓ briefly so the user sees the success
                         self.textContent = '✓ ' + (result.added || 'Done');
