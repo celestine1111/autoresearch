@@ -19,7 +19,7 @@
 ## v1.5.42 — Surface Sonar errors + HERE bbox filter + location sanity check
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `59bc4bd`
 
 ### Context
 
