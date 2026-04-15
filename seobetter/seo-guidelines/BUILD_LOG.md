@@ -19,7 +19,7 @@
 ## v1.5.41 — Sonar Diagnostic Card + Test Connection button + always-visible state report
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `bf50641`
 
 ### Context
 
