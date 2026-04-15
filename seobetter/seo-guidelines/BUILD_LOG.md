@@ -16,6 +16,52 @@
 
 ---
 
+## v1.5.53 — Foursquare category post-filter: fixes "best pet shops" returning Best Western Hotel / Best Migration Services / Best Kumpir
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User ran the v1.5.52 Test Places Providers test for `best pet shops in sydney australia 2026` and got 20 Foursquare results — but none of them were pet shops:
+
+```
+1. Best Migration Services    (immigration law firm)
+2. Best Kumpir                 (Turkish food takeaway)
+3. Best Buy Pharmacy           (chemist)
+4. Best Western Plus Hotel     (hotel)
+5. Vet & Pet Jobs              (job listing site)
+```
+
+Root cause: [fetchFoursquarePlaces](../cloud-api/api/research.js) line ~876 passes `businessHint` as the `query` parameter to Foursquare's `/places/search` endpoint. Foursquare uses `query` for a loose name+category text match, which returns any business with the hint tokens in its NAME. For `businessHint = "best pet shops"`, every business starting with "Best" matched. No category filter was applied to the results.
+
+Foursquare v3's category taxonomy uses numeric IDs (e.g. 17069 for Pet Store, 13046 for Ice Cream Parlor), but we don't want to hardcode and maintain that numeric map. Instead, we post-filter by checking the returned category NAME.
+
+### Fixed
+
+#### Foursquare category-name post-filter + synonym expansion — [cloud-api/api/research.js::fetchFoursquarePlaces()](../cloud-api/api/research.js) line ~940 + new `FSQ_CATEGORY_SYNONYMS` constant line ~873
+- Added a `FSQ_CATEGORY_SYNONYMS` map covering the top ~30 local-business categories: pet shop → [pet store, pet shop, pet supplies, aquarium shop, bird shop]; gelato → [ice cream, gelato, frozen yogurt, dessert, sweet]; pizza → [pizza, pizzeria, italian]; hotel → [hotel, inn, resort, lodge, b&b]; veterinarian → [vet clinic, animal hospital]; etc.
+- `fsqCategorySynonyms(businessHint)` does a longest-key-first lookup so "pet shop" beats "pet" when both match.
+- Fallback: if no mapping exists for the hint, tokens ≥4 chars are used as literal substrings to match against the category name (stopwords like "best", "top", "near", "shops" filtered).
+- In `fetchFoursquarePlaces`, every returned result is mapped with a temporary `_catName` field, then filtered: the result's category name must contain at least one of the synonyms. Results with no category are rejected when we're filtering.
+- Worked example: `businessHint = "pet shops"` → synonyms `["pet store", "pet shop", "pet supplies", "pet supply", "aquarium shop", "bird shop"]`. Result "Pet Store" category → "pet store" match → KEPT. Result "Immigration Services" → no match → DROPPED. Result "Hotel" → no match → DROPPED.
+- Verify: `grep -n "FSQ_CATEGORY_SYNONYMS\|fsqCategorySynonyms" seobetter/cloud-api/api/research.js`
+
+#### Also raised the Foursquare search radius 5km → 10km and limit 20 → 30 — [fetchFoursquarePlaces()](../cloud-api/api/research.js) line ~939
+- Small towns often have pet shops / vets / specialty stores in neighboring suburbs within 5-10km. Previous 5km radius was too tight for Mudgee-class towns where the nearest real pet shop may be in the next village. Raising to 10km still keeps it genuinely local while capturing nearby coverage.
+- Raised the `limit` from 20 → 30 to give the post-filter more raw results to work with (expected survival rate after filter: 30-60%).
+
+### Verification
+
+1. Redeploy cloud-api to Vercel.
+2. Click "🧪 Test Places Providers" in Settings → Places Integrations.
+3. Expected Sydney sample: 5-20 real pet-related businesses (Pet Barn branches, Kellyville Pets, City Farmers, local pet supply stores), no more hotels/migration services/pharmacies.
+4. Regression: keywords without a FSQ_CATEGORY_SYNONYMS mapping fall back to token-based matching so obscure business types still return results.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.52 — Sonar two-attempt strategy + relaxed filter (Mudgee-class small towns), Brave Pro label removed
 
 **Date:** 2026-04-15
