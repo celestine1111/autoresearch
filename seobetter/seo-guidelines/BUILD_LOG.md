@@ -19,7 +19,7 @@
 ## v1.5.52 — Sonar two-attempt strategy + relaxed filter (Mudgee-class small towns), Brave Pro label removed
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `ec6e38a`
 
 ### Context
 
