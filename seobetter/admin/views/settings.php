@@ -314,7 +314,6 @@ $settings = get_option( 'seobetter_settings', [] );
                 </tr>
                 <tr>
                     <th><?php esc_html_e( 'Brave Search API Key', 'seobetter' ); ?>
-                        <?php if ( ! $license_info['is_pro'] ) : ?><span class="seobetter-score seobetter-score-ok" style="font-size:10px;margin-left:6px">PRO</span><?php endif; ?>
                     </th>
                     <td>
                         <input type="password" name="brave_api_key" value="<?php echo esc_attr( $settings['brave_api_key'] ?? '' ); ?>" class="regular-text" placeholder="BSA..." />
@@ -817,7 +816,7 @@ jQuery(function($) {
             lines.push('Test keyword:   ' + (res.test_keyword || '?'));
             lines.push('Domain:         ' + (res.domain || 'general'));
             lines.push('Country:        ' + (res.country || '(none)'));
-            lines.push('Brave (Pro):    ' + (res.brave_configured ? 'CONFIGURED' : 'not configured'));
+            lines.push('Brave Search:   ' + (res.brave_configured ? 'CONFIGURED' : 'not configured'));
             lines.push('');
 
             // Cloud-api sources

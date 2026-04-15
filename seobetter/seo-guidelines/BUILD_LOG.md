@@ -16,6 +16,66 @@
 
 ---
 
+## v1.5.52 — Sonar two-attempt strategy + relaxed filter (Mudgee-class small towns), Brave Pro label removed
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User tested "10 best pet shops in mudgee" directly in the Perplexity web UI and got 10 real businesses (Mudgee Produce Plus, Complete Steel & Rural, Mudgee Birds & Aquarium, Petbarn, Mudgee Dog-A-Cise, Rival Collars, Wooden Dog Kennels, The Kitty Ritz, BIG W Mudgee, etc) with mixed data quality — some had full street addresses, most had only name + source URL. Our Sonar API call had been returning 0 for the same location.
+
+Root cause: TWO problems in [fetchSonarPlaces](../cloud-api/api/research.js):
+
+1. **Filter required name AND address** — `.filter(p => p && p.name && p.address)` dropped 7 of 10 real businesses because most small-town listings expose name + Yelp/directory URL but no street number. A business with a name + verifiable source page is real; throwing it away is overkill.
+2. **System prompt labelled address as REQUIRED** — told the model to skip any business without a full street address + postal code, which for small towns is almost every listing.
+
+Combined with the default `perplexity/sonar` base model (shallower search than the `sonar-pro` tier the web UI uses), this produced 0 results for any town smaller than ~50k population.
+
+### Fixed
+
+#### 1. Relaxed Sonar prompt and filter — [cloud-api/api/research.js::callSonar()](../cloud-api/api/research.js) new function ~line 1017 + [fetchSonarPlaces()](../cloud-api/api/research.js) line ~1127
+- Extracted the single Sonar call into a standalone `callSonar(apiKey, model, keyword, location, geo)` helper so the retry logic in `fetchSonarPlaces` stays clean.
+- **System prompt** now marks `name`, `type`, and `source_url` as REQUIRED. `address` is `preferred but optional`. Explicit wording: "A business is 'verified' if you can cite at least one specific source page for it (source_url is required). Address is preferred but not mandatory — many small-town listings have name + website without a full street number. Include them anyway."
+- **User prompt** now says: "A business with a name + Yelp/directory URL is verifiable even if no street number is listed. Do NOT skip real businesses because they lack a full address."
+- **Filter** now accepts a place if it has `name` AND at least one of `address` / `website` / `source_url`. Previous hard requirement of `name && address` is gone. Places with only a source URL still flow through.
+- `max_tokens` increased 2000 → 3000 (more headroom for 10-place responses with longer source URLs)
+- Verify: `grep -n "A business with a name\|preferred but optional" seobetter/cloud-api/api/research.js`
+
+#### 2. Auto-upgrade to `perplexity/sonar-pro` on thin base results — [fetchSonarPlaces()](../cloud-api/api/research.js) line ~1160
+- `fetchSonarPlaces` now calls base `perplexity/sonar` first. If the result set has fewer than 2 usable places, it retries with `perplexity/sonar-pro` (Perplexity's deep-search tier, 6-8× better small-town coverage, ~$0.06 per call). Pro results are merged with base via name-keyed deduplication.
+- Cost impact: normal large-city keywords cost ~$0.008 as before (base returns ≥2, no retry). Small-town keywords that would have failed now cost ~$0.068 but return real data. The retry only fires when it's necessary.
+- Pro-retry failure is non-fatal — falls back to whatever the base call returned. Errors from the base call still throw normally so the diagnostic card can surface them.
+- Each place's `source` field is now either `"Perplexity Sonar"` or `"Perplexity Sonar Pro"` so you can see which tier produced which result.
+- Verify: `grep -n "perplexity/sonar-pro\|if (places.length < 2" seobetter/cloud-api/api/research.js`
+
+#### 3. Removed "PRO" label from Brave Search API Key field — [admin/views/settings.php](../admin/views/settings.php) line ~316
+- Was: `<span class="seobetter-score ...">PRO</span>` next to the Brave label when the user wasn't on a Pro license.
+- Now: no PRO badge. Brave is now a standard free-tier source anyone can add via https://brave.com/search/api/.
+- Also updated the Test Research Sources verdict string `"Brave (Pro):"` → `"Brave Search:"` so the diagnostic output matches.
+- Verify: `grep -n "Brave.*PRO\|score\">PRO" seobetter/admin/views/settings.php` (should return zero hits)
+
+### How the full pipeline fits together after this fix
+
+For a listicle keyword like `best pet shops in mudgee nsw 2026`:
+
+1. **[Trend_Researcher.php::cloud_research()](../includes/Trend_Researcher.php)** bundles your FSQ + HERE + Google + OpenRouter(Sonar) + Brave keys into a single `POST /api/research` call (60s timeout).
+2. **[research.js](../cloud-api/api/research.js)** fans out in parallel:
+   - **[fetchPlacesWaterfall](../cloud-api/api/research.js)** → Sonar base → (retry sonar-pro if thin) → OSM → Foursquare → HERE → Google. Stops at first tier ≥2 places.
+   - **9 always-on sources** (Reddit, HN, Wikipedia, Google Trends, DDG, Bluesky, Mastodon, Dev.to, Lemmy) + **Brave Search** (Pro-like inline citations now that you've added the key) + category/country APIs — all feeding stats, quotes, and citation URLs into the `for_prompt` block.
+3. **Pre-gen switch** in [Async_Generator.php::process_step()](../includes/Async_Generator.php): if `places_count >= 1`, Local Business Mode fires (capped listicle); if `places_count < 1`, informational mode fires (no business-name H2s).
+4. **Outline** produces exactly N business-name H2s (populated from the verified pool) + generic fill sections to hit the word count.
+5. **Each section** is generated individually with the v1.5.48 readability rules (grade 6-8, 12-16 word sentence cap, keyword density ≤1.5%, banned-phrase list).
+6. **Places_Validator** strips any H2 naming a business not in the verified pool.
+7. **Places_Link_Injector** adds 📍 address · Google Maps · Website · phone meta line under each business H2.
+8. **Citation_Pool** merges place URLs + research URLs → References section with clickable links.
+9. **validate_outbound_links** strips any URL not in the whitelist or pool.
+10. **GEO_Analyzer** scores the final HTML on 11 checks.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.51 — Test Research Sources diagnostic: per-source ok/error/latency for Reddit / HN / DDG / Bluesky / Mastodon / Dev.to / Lemmy / Wikipedia / Google Trends / Brave / Category APIs / Last30Days
 
 **Date:** 2026-04-15
