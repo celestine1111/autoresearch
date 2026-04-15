@@ -19,7 +19,7 @@
 ## v1.5.36 — Defensive try/catch around rest_generate_start so silent PHP exceptions become visible JSON errors
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `39d46cf`
 
 ### Context
 
