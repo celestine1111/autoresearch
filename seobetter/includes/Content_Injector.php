@@ -21,90 +21,160 @@ namespace SEOBetter;
 class Content_Injector {
 
     /**
-     * Add inline citations + References section using real sources.
-     * Calls the research API for verified URLs.
+     * v1.5.65 — REWRITTEN. Add inline citation anchor links + References
+     * section using the topic-filtered Citation_Pool.
+     *
+     * Previous behavior called Trend_Researcher::research() directly,
+     * bypassing the v1.5.62 Citation_Pool topical relevance filter. That's
+     * why articles about raw dog food kept getting "Veganism — Wikipedia"
+     * and 4 random dev.to posts injected as references. User reported the
+     * same bug 3 times; the root cause was this method not using the pool.
+     *
+     * New behavior:
+     *   1. Build the citation pool via Citation_Pool::build() which applies
+     *      the topical relevance filter (title/slug must contain a content
+     *      token from the keyword).
+     *   2. Append a numbered References section to the markdown (reuses
+     *      Citation_Pool::append_references_section which is the same helper
+     *      assemble_final uses — preview and inject-fix stay in sync).
+     *   3. Inject inline [N] anchor superscripts into the body at the end of
+     *      the first N sentences containing a statistic, a named entity, or
+     *      a strong factual claim. Each [N] is a clickable anchor link to
+     *      the matching #ref-N entry in the References section.
      */
     public static function inject_citations( string $content, string $keyword ): array {
-        // Get real sources from research API
-        $research = Trend_Researcher::research( $keyword );
-        $sources = $research['sources'] ?? [];
-
-        if ( empty( $sources ) ) {
-            return [ 'success' => false, 'error' => 'No sources found for this keyword. Try a different keyword.' ];
+        // v1.5.65 — use Citation_Pool::build() which has:
+        //   - v1.5.62 topical relevance filter (title must contain keyword token)
+        //   - v1.5.63 CACHE_VERSION bump to invalidate stale pools
+        //   - hygiene check + dedupe + length cap
+        $pool = Citation_Pool::build( $keyword );
+        if ( empty( $pool ) ) {
+            return [
+                'success' => false,
+                'error'   => 'No topically-relevant citations available for this keyword. The Citation Pool build returned zero entries after filtering — try a more specific keyword.',
+            ];
         }
 
-        $injected = $content;
-        $citations_added = 0;
-        $ref_list = [];
+        // Append the References section using the shared helper. If References
+        // already exists in the content (from assemble_final's preview path),
+        // it will be rebuilt with the pool. The helper handles both cases.
+        $injected = Citation_Pool::append_references_section( $content, $pool );
 
-        // Build reference entries — strict rules:
-        // 1. Must be a deep article URL (has a real path — no homepages)
-        // 2. Must not be an API / endpoint / data service
-        // 3. Anchor text must not contain "API"/"endpoint"/"dataset"
-        // 4. Must pass a live HEAD check (200-399)
-        // 5. Title must be a real page title, not just "Source" or a domain
-        foreach ( array_slice( $sources, 0, 20 ) as $source ) {
-            $url = is_array( $source ) ? ( $source['url'] ?? '' ) : $source;
-            $title = is_array( $source ) ? ( $source['title'] ?? '' ) : '';
-            $name = is_array( $source ) ? ( $source['source_name'] ?? wp_parse_url( $url, PHP_URL_HOST ) ) : wp_parse_url( $url, PHP_URL_HOST );
-
-            if ( empty( $url ) || ! filter_var( $url, FILTER_VALIDATE_URL ) ) continue;
-
-            // Must have a meaningful page title — skip generic "Source" / "Article" / empty
-            if ( empty( $title ) || strlen( $title ) < 8 || preg_match( '/^(source|article|link|untitled)$/i', trim( $title ) ) ) {
-                continue;
-            }
-
-            // Anchor text must not be an API / dataset / tool name
-            if ( preg_match( '/\b(api|endpoint|dataset|sdk|webhook)\b/i', $title ) ) {
-                continue;
-            }
-
-            // Reject API endpoints and dev-host patterns outright
-            if ( preg_match( '#/(api|v[1-9])/|/graphql|/rest/|\.herokuapp\.com|(^|\.)api\.|-api\.#i', $url ) ) {
-                continue;
-            }
-
-            // Must be a DEEP link — not a bare homepage
-            $path = trim( (string) wp_parse_url( $url, PHP_URL_PATH ), '/' );
-            if ( $path === '' || $path === 'index.html' || $path === 'index.php' ) {
-                continue;
-            }
-
-            // Live-check the URL
-            $response = wp_remote_head( $url, [
-                'timeout'     => 4,
-                'redirection' => 3,
-                'sslverify'   => false,
-                'user-agent'  => 'Mozilla/5.0 (compatible; SEOBetter/1.0)',
-            ] );
-            if ( is_wp_error( $response ) ) continue;
-            $code = wp_remote_retrieve_response_code( $response );
-            if ( $code < 200 || $code >= 400 ) continue;
-
-            $ref_num = count( $ref_list ) + 1;
-            $ref_list[] = "{$ref_num}. [{$title}]({$url}) — {$name}";
-
-            if ( count( $ref_list ) >= 8 ) break;
+        // Count how many references were actually added
+        if ( preg_match_all( '/^\d+\.\s+\[[^\]]+\]\(https?:\/\//m', $injected, $ref_matches ) ) {
+            $ref_count = count( $ref_matches[0] );
+        } else {
+            $ref_count = 0;
         }
 
-        if ( empty( $ref_list ) ) {
-            return [ 'success' => false, 'error' => 'No direct article sources found for this keyword. Citations only link to real article pages, never to homepages or APIs — try a more specific keyword, or skip this fix.' ];
+        if ( $ref_count === 0 ) {
+            return [
+                'success' => false,
+                'error'   => 'References section built but contained zero entries.',
+            ];
         }
 
-        // Append references section if not already present
-        if ( ! preg_match( '/##\s*References/i', $injected ) && ! empty( $ref_list ) ) {
-            $refs_block = "\n\n## References\n\n" . implode( "\n", $ref_list );
-            $injected .= $refs_block;
-            $citations_added = count( $ref_list );
-        }
+        // v1.5.65 — Inline [N] anchor injection. Find sentences in the body
+        // containing statistics, percentages, years, or strong named entities,
+        // and append a clickable [N] superscript that jumps to #ref-N in the
+        // References section. Caps at the number of references available.
+        $max_anchors = min( $ref_count, 8 );
+        $injected = self::inject_inline_citation_anchors( $injected, $max_anchors );
 
         return [
-            'success'  => true,
-            'content'  => $injected,
-            'added'    => $citations_added . ' references added',
-            'type'     => 'citations',
+            'success' => true,
+            'content' => $injected,
+            'added'   => $ref_count . ' citations added with inline anchor links',
+            'type'    => 'citations',
         ];
+    }
+
+    /**
+     * v1.5.65 — Walk the body text and append clickable [N] anchors to
+     * sentences containing factual claims (statistics, percentages, years,
+     * or proper-noun-heavy phrases). Each [N] links to #ref-N in the
+     * References section below. Max N anchors injected.
+     *
+     * Skips: Key Takeaways, FAQ, References sections. Only injects in
+     * main content sections.
+     */
+    private static function inject_inline_citation_anchors( string $markdown, int $max_anchors ): string {
+        if ( $max_anchors <= 0 ) return $markdown;
+
+        // Split at the References heading — we only inject in the content
+        // BEFORE References, never into the References list itself.
+        $parts = preg_split( '/(\n##\s*References\s*\n)/i', $markdown, 2, PREG_SPLIT_DELIM_CAPTURE );
+        if ( count( $parts ) < 3 ) {
+            // No References section — nothing to anchor to. Return as-is.
+            return $markdown;
+        }
+        $body = $parts[0];
+        $refs_separator = $parts[1];
+        $refs_content = $parts[2];
+
+        // Find candidate sentences: contains a statistic (\d+%), a year
+        // (20\d\d), a dollar amount, or a "N-N%" range. Also accept sentences
+        // with named entities (2+ consecutive capitalized words).
+        $candidates = [];
+        if ( preg_match_all( '/([^.\n!?]{20,200}(?:\d{1,3}\s*%|\d+[\.,]\d+\s*%|\$\d[\d,]*|\b(?:19|20)\d{2}\b|[A-Z][a-z]+\s+[A-Z][a-z]+)[^.\n!?]{0,100}[.!?])/', $body, $matches, PREG_OFFSET_CAPTURE ) ) {
+            foreach ( $matches[0] as $m ) {
+                $sentence = $m[0];
+                $offset = $m[1];
+                // Skip if already has a [N] anchor
+                if ( preg_match( '/\[\d+\]/', $sentence ) ) continue;
+                // Skip if inside a code block, heading, list item, or table
+                $line_start = strrpos( substr( $body, 0, $offset ), "\n" );
+                $line_start = $line_start === false ? 0 : $line_start + 1;
+                $line_prefix = substr( $body, $line_start, 5 );
+                if ( str_starts_with( ltrim( $line_prefix ), '#' ) ) continue;
+                if ( str_starts_with( ltrim( $line_prefix ), '|' ) ) continue;
+                if ( preg_match( '/^[-*+]\s/', ltrim( $line_prefix ) ) ) continue;
+                // Skip if inside a Key Takeaways or FAQ section — check backward for nearest H2
+                $preceding = substr( $body, 0, $offset );
+                if ( preg_match_all( '/\n##\s+([^\n]+)/', $preceding, $h2_matches ) ) {
+                    $last_h2 = end( $h2_matches[1] );
+                    if ( preg_match( '/key\s*takeaway|faq|frequently|reference/i', $last_h2 ) ) continue;
+                }
+                $candidates[] = [ 'text' => $sentence, 'offset' => $offset ];
+                if ( count( $candidates ) >= $max_anchors ) break;
+            }
+        }
+
+        if ( empty( $candidates ) ) return $markdown;
+
+        // Inject anchors from the END of the body backward so earlier offsets
+        // stay valid after each injection (appending shifts later offsets).
+        $anchor_num = count( $candidates );
+        for ( $i = count( $candidates ) - 1; $i >= 0; $i-- ) {
+            $c = $candidates[ $i ];
+            $sentence = $c['text'];
+            $end_offset = $c['offset'] + strlen( $sentence );
+            // Append [N](#ref-N) before the final punctuation if possible,
+            // otherwise after.
+            $last_char = substr( $sentence, -1 );
+            if ( in_array( $last_char, [ '.', '!', '?' ], true ) ) {
+                $inject_at = $end_offset - 1;
+                $anchor = ' [' . $anchor_num . '](#ref-' . $anchor_num . ')';
+                $body = substr( $body, 0, $inject_at ) . $anchor . substr( $body, $inject_at );
+            }
+            $anchor_num--;
+        }
+
+        // Add HTML id anchors to the References list entries so the [N]
+        // links actually jump. Convert `1. [title](url)` to
+        // `1. <span id="ref-1"></span>[title](url)`.
+        // This is markdown — the HTML span survives through format_hybrid
+        // because inline HTML is allowed in markdown.
+        $refs_content = preg_replace_callback(
+            '/^(\d+)\.\s+(\[)/m',
+            function( $m ) {
+                return $m[1] . '. <span id="ref-' . $m[1] . '"></span>' . $m[2];
+            },
+            $refs_content
+        );
+
+        return $body . $refs_separator . $refs_content;
+    }
     }
 
     /**
@@ -712,6 +782,10 @@ Return ONLY the Markdown table, nothing else. Example format:
         if ( ! $provider ) {
             return [ 'success' => false, 'error' => 'No AI provider configured.' ];
         }
+
+        // v1.5.65 — measure the article's grade BEFORE rewriting so the
+        // success message can show the actual improvement.
+        $grade_before = self::calc_flesch_kincaid_grade( $markdown );
 
         // Split at H2 boundaries
         $parts = preg_split( '/(^##\s[^\n]+$)/m', $markdown, -1, PREG_SPLIT_DELIM_CAPTURE );

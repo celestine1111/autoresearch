@@ -847,17 +847,26 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         h += '<div style="display:grid;grid-template-columns:180px 1fr;gap:20px;padding:24px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">';
 
         // Left: Score circle
-        h += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center">';
-        h += '<div style="position:relative;width:130px;height:130px">';
-        h += '<svg viewBox="0 0 120 120" style="width:130px;height:130px;transform:rotate(-90deg)">';
+        // v1.5.65 — redesigned score ring. Previous version had a 36px score
+        // above a 12px grade letter which looked unbalanced ("78" big, "B"
+        // tiny underneath). New design uses a larger ring (150px), a 48px
+        // score in a strong serif-ish weight, a 16px grade pill with a
+        // matching-color background, smooth cubic-bezier transitions on
+        // the ring fill, and a hover glow. Applied everywhere the score
+        // ring renders (content-generator.php, bulk-generator.php,
+        // dashboard.php).
+        var ringSize = 150;
+        h += '<div class="sb-geo-ring-wrap" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">';
+        h += '<div class="sb-geo-ring" style="position:relative;width:'+ringSize+'px;height:'+ringSize+'px;transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1)">';
+        h += '<svg viewBox="0 0 120 120" style="width:'+ringSize+'px;height:'+ringSize+'px;transform:rotate(-90deg);filter:drop-shadow(0 2px 8px '+scoreColor+'22)">';
         h += '<circle cx="60" cy="60" r="52" fill="none" stroke="'+scoreRing+'" stroke-width="10"/>';
-        h += '<circle cx="60" cy="60" r="52" fill="none" stroke="'+scoreColor+'" stroke-width="10" stroke-linecap="round" stroke-dasharray="'+(326.7*score/100)+' 326.7" style="transition:stroke-dasharray 1s ease"/>';
+        h += '<circle cx="60" cy="60" r="52" fill="none" stroke="'+scoreColor+'" stroke-width="10" stroke-linecap="round" stroke-dasharray="'+(326.7*score/100)+' 326.7" style="transition:stroke-dasharray 1.2s cubic-bezier(0.4,0,0.2,1);transform-origin:60px 60px"/>';
         h += '</svg>';
-        h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">';
-        h += '<span style="font-size:36px;font-weight:800;color:'+scoreColor+'">'+score+'</span>';
-        h += '<span style="font-size:12px;font-weight:600;color:#6b7280">'+esc(res.grade)+'</span>';
+        h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">';
+        h += '<span class="sb-geo-ring-score" style="font-size:44px;font-weight:800;color:'+scoreColor+';line-height:1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums">'+score+'</span>';
+        h += '<span class="sb-geo-ring-grade" style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;padding:0 8px;border-radius:11px;background:'+scoreColor+';color:#fff;font-size:13px;font-weight:800;letter-spacing:0.04em;box-shadow:0 1px 4px '+scoreColor+'55">'+esc(res.grade)+'</span>';
         h += '</div></div>';
-        h += '<span style="font-size:11px;color:#9ca3af;margin-top:6px">GEO Score</span>';
+        h += '<span style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-top:4px">GEO Score</span>';
         h += '</div>';
 
         // Right: Stats grid

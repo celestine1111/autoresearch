@@ -16,6 +16,84 @@
 
 ---
 
+## v1.5.65 — inject_citations uses Citation_Pool, inline [N] anchors, simplify_readability grade delta, redesigned score ring with cool transitions
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+Live v1.5.64 test revealed the **real root cause** of the persistent "irrelevant citations" issue (Veganism wiki + 4 dev.to posts injected into a raw-dog-food article for the 3rd time):
+
+**`Content_Injector::inject_citations()` was calling `Trend_Researcher::research()` directly and iterating `$research['sources']`. It NEVER called `Citation_Pool::build()`** — which is where the v1.5.62 topical relevance filter, v1.5.63 cache versioning, and all the quality filters live. Every previous "fix" updated Citation_Pool but inject_citations bypassed all of them.
+
+Plus user reported the score ring styling looked unbalanced ("78" huge, "B" tiny underneath) and requested "cool transition CSS" with updates in plugin_UX.md.
+
+### Fixed
+
+#### 1. inject_citations now uses Citation_Pool — [includes/Content_Injector.php::inject_citations()](../includes/Content_Injector.php) line ~27
+- Completely rewrote the method. New flow:
+  1. Call `Citation_Pool::build( $keyword )` — gets topically-filtered URLs from the cached pool
+  2. Call `Citation_Pool::append_references_section( $content, $pool )` — reuses the shared helper so inject-fix and preview render identical References sections
+  3. Call new `inject_inline_citation_anchors()` to append `[N]` superscript links to factual sentences
+- Removed the previous direct research() call + manual title/URL filter + redundant live-check HTTP loop
+- The junk URL problem (Veganism wiki, dev.to April Fools, etc) is now correctly filtered because the Citation_Pool topical filter applies: keyword content tokens must appear in the candidate's title or URL slug
+- Verify: `grep -n "Citation_Pool::build\|inject_inline_citation_anchors" seobetter/includes/Content_Injector.php`
+
+#### 2. Inline [N] anchor links in body text — new [inject_inline_citation_anchors()](../includes/Content_Injector.php)
+- Splits the markdown at the `## References` heading so anchors are only injected in body content, never inside References itself
+- Finds candidate sentences that contain: percentages (`\d+%`), decimal stats (`\d+\.\d+%`), dollar amounts (`$\d+`), years (`(19|20)\d\d`), or proper-noun phrases (two+ consecutive capitalized words — Organizations, named experts, breed names)
+- Skips: sentences already containing `[N]`, table rows (lines starting `|`), headings, list items, and sentences inside Key Takeaways/FAQ/References sections (by walking backward to find the nearest H2)
+- Appends ` [N](#ref-N)` before the final punctuation — each inline anchor is a clickable markdown link pointing to `#ref-N` in the References section
+- Walks offsets from the END backward so earlier offsets stay valid
+- Adds matching `<span id="ref-N"></span>` anchors to each References list entry so the inline links actually jump when clicked
+- Capped at `min(ref_count, 8)` anchors per article
+- Verify: `grep -n "inject_inline_citation_anchors\|ref-N" seobetter/includes/Content_Injector.php`
+
+#### 3. simplify_readability measures grade-before for clearer feedback — [simplify_readability()](../includes/Content_Injector.php) line ~707
+- Measures the article's Flesch-Kincaid grade BEFORE the rewrite pass so the success message can show the actual improvement (e.g. "Simplified 4 sections. Grade 13.2 → 7.8. Readability score 27 → 82")
+- Stores as `$grade_before` at the top of the method
+
+#### 4. Redesigned GEO score ring — [admin/views/content-generator.php::renderResult()](../admin/views/content-generator.php) line ~846 + [admin/css/admin.css](../admin/css/admin.css) `.seobetter-score-circle` block
+- **Size**: ring grew from 130px → **150px**
+- **Score number**: `font-size 36px → 44px`, weight 800, tabular numerals, letter-spacing -0.02em, score color (green/amber/red)
+- **Grade letter**: was a plain 12px gray text; now a **filled pill badge** — `background: {scoreColor}, color: #fff, min-width: 30px × 22px, border-radius: 11px, font-weight: 800, box-shadow: 0 1px 4px {scoreColor}55`. Reads like the Key Takeaways/Pros/Cons eyebrow labels for visual consistency.
+- **Ring fill animation**: `stroke-dasharray: 1.2s cubic-bezier(0.4, 0, 0.2, 1)` — smooth ease-in-out as the ring fills from 0 to final value on first render
+- **Drop-shadow glow**: `filter: drop-shadow(0 2px 8px {scoreColor}22)` on the SVG — subtle colored halo matching the score
+- **Hover effect**: `.sb-geo-ring:hover { transform: translateY(-2px) scale(1.02) }` with `transition: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)` (slight spring overshoot)
+- **Pop-in entry animation**: new `@keyframes sb-score-pop` — scales from 0.85 → 1.04 → 1 over 0.6s with cubic-bezier bounce. Applied to both `.seobetter-score-circle` (admin views) and `.sb-geo-ring-wrap` (content-generator)
+- **"GEO Score" label**: now 11px uppercase with letter-spacing 0.08em
+- **`.seobetter-score-circle` upgraded** in admin.css to match the content-generator design: 140px circle, 44px score, pill-badge grade, color-mix box-shadow glow per state (good/ok/poor), hover lift, pop animation
+- **`.seobetter-score` text badges** (Posts list, Analytics) now have `transform: translateY(-1px)` hover lift and 0.2s ease transition
+- Verify: `grep -n "sb-geo-ring\|sb-score-pop" seobetter/admin/views/content-generator.php seobetter/admin/css/admin.css`
+
+#### 5. Documented the locked score ring spec — [plugin_UX.md §3.1](../seo-guidelines/plugin_UX.md)
+- Replaced the old "SVG ring gauge (130px)" spec with a detailed LOCKED FORMAT section
+- Lists every style rule (ring size, score size, grade badge pill, transitions, hover, pop animation)
+- Lists every location the ring/circle renders across the plugin + the source file anchor for each
+- Explicit user-feedback quote so future releases don't drift from this spec
+
+### Expected result
+
+Regenerate Article 1, then:
+
+| Observation | v1.5.64 | v1.5.65 target |
+|---|---|---|
+| Citations injected | Veganism wiki + 4 dev.to posts + 1 Forbes | **5-8 topically relevant URLs only** (no Veganism, no dev.to) |
+| Inline citation anchors | None — References just appended at bottom | **`[N]` superscript links after factual sentences**, clickable to footer |
+| Score ring balance | 36px "78" dominates 12px "B" underneath | **44px "78" + filled pill "B" badge**, balanced |
+| Score ring animation | Static | **Ring fills 0→X on render, pops in with spring, hovers with lift** |
+| Simplify Readability success message | Generic "Simplified 4 sections to grade 7" | **Specific "Grade 13.2 → 7.8"** with actual delta |
+
+### What's NOT in this release
+
+- **Button state persistence after full-panel re-render** (Simplify Readability goes grey → normal bug). Needs investigation — likely requires the fix to not show the button at all if it was just clicked successfully, even if the check score is still below threshold. Deferred to v1.5.66.
+- **Check Keyword Placement actionable mode** (currently flag-mode only, user wants auto-fix). Deferred — would need an AI pass to rewrite H2s.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.64 — Inject-fix revert to classic mode, full results panel re-render, References in preview, styled numbered References block
 
 **Date:** 2026-04-15

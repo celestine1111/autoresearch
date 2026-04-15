@@ -58,11 +58,45 @@ Appears when Generate is clicked. Contains:
 
 ## 3. RESULTS SECTION (After Generation) — MUST ALL BE PRESENT
 
-### 3.1 GEO Score Dashboard (REQUIRED)
-- **SVG ring gauge** — animated circular score display (130px)
-  - Background ring in light color
-  - Foreground ring in score color (green/amber/red)
-  - Center: score number (36px bold) + grade letter
+### 3.1 GEO Score Dashboard (REQUIRED, LOCKED FORMAT v1.5.65+)
+
+**Score Ring Specification — LOCKED FORMAT**
+
+User feedback 2026-04-15: *"fix this styling across the board in all areas where it appears the letter is to small and not styled properly use some cool transition css"*. Previous design had `font-size: 36px` score above a `font-size: 12px` grade letter which looked unbalanced ("78" huge, "B" tiny). New design unifies the ring across every admin view and adds smooth motion.
+
+- **SVG ring gauge — 150px** (was 130px)
+  - Background ring: `stroke: {scoreRing}, stroke-width: 10` in a light variant of the score color (`#dcfce7` / `#fef3c7` / `#fee2e2`)
+  - Foreground ring: `stroke: {scoreColor}, stroke-width: 10, stroke-linecap: round` in the active score color (`#22c55e` green ≥80 / `#f59e0b` amber 60-79 / `#ef4444` red <60)
+  - Fill-in transition: `stroke-dasharray 1.2s cubic-bezier(0.4, 0, 0.2, 1)` — ring animates from 0 to final value over 1.2 seconds when the score first renders
+  - Drop-shadow glow: `filter: drop-shadow(0 2px 8px {scoreColor}22)` — subtle colored shadow matching the score
+- **Score number — 44px bold** (was 36px)
+  - `font-weight: 800, letter-spacing: -0.02em, font-variant-numeric: tabular-nums`
+  - `color: {scoreColor}`, same as the ring
+  - Tabular numerals so 78 and 100 align visually
+- **Grade badge — pill with filled background** (was plain 12px text)
+  - Min-width 30px × 22px height, 11px border-radius (pill shape)
+  - `background: {scoreColor}, color: #fff, font-size: 13px, font-weight: 800, letter-spacing: 0.05em`
+  - `box-shadow: 0 1px 4px {scoreColor}55` — subtle colored shadow
+  - Solid filled badge (like Key Takeaways/Pros/Cons eyebrow labels) so the letter reads clearly at a glance
+- **"GEO Score" label — 11px uppercase**
+  - `font-weight: 600, text-transform: uppercase, letter-spacing: 0.08em, color: #6b7280`
+- **Hover effect** (content-generator + dashboard)
+  - `.sb-geo-ring:hover { transform: translateY(-2px) scale(1.02) }` with `transition: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)` (slight spring-bounce)
+- **Pop-in entry animation**
+  - `@keyframes sb-score-pop { 0% { scale: 0.85; opacity: 0 } 60% { scale: 1.04 } 100% { scale: 1 } }` — 0.6s cubic-bezier entry when the score ring first renders
+
+**Where this spec applies (LOCKED — do not change without updating this file):**
+
+| Location | Element | Source |
+|---|---|---|
+| Content Generator results panel | `.sb-geo-ring-wrap + .sb-geo-ring` (inline-styled SVG) | [admin/views/content-generator.php::renderResult()](../admin/views/content-generator.php) line ~850 |
+| Dashboard card | `.seobetter-score-circle` (div-based circle with border) | [admin/css/admin.css](../admin/css/admin.css) `.seobetter-score-circle` block |
+| Bulk generator batch card | `.seobetter-score-circle` (same class) | [admin/views/bulk-generator.php](../admin/views/bulk-generator.php) |
+| Text-only score badges (Posts list, Analytics) | `.seobetter-score.good/.ok/.poor` | [admin/css/admin.css](../admin/css/admin.css) `.seobetter-score` block — hover lift via `transform: translateY(-1px)` |
+| Editor sidebar toolbar badge | `#seobetter-toolbar-badge` (inline styled) | [assets/js/editor-sidebar.js](../assets/js/editor-sidebar.js) injectToolbarBadge() — kept compact (32px) because it sits in the WordPress admin toolbar |
+
+Both ring variants (SVG-based in content-generator, div-bordered in CSS class form for dashboard/bulk) share the `@keyframes sb-score-pop` entry animation and the hover translate/scale.
+
 - **3 stat cards** in a grid:
   - Words count (formatted with locale)
   - Citations count (green if >=5, red if not)

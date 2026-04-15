@@ -217,11 +217,17 @@
 /* --- Score Badges --- */
 .seobetter-score {
     display: inline-block;
-    padding: 3px 10px;
+    padding: 4px 12px;
     border-radius: 20px;
     font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.seobetter-score:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .seobetter-score-good, .seobetter-score.good {
@@ -239,7 +245,13 @@
     color: var(--sb-error);
 }
 
-/* --- Score Circle --- */
+/* --- Score Circle (v1.5.65 — unified across content-generator, dashboard,
+   bulk generator, and editor sidebar. Previously dashboard used a 100px
+   circle with a 32px score + 13px grade which looked unbalanced; content-
+   generator used a 130px SVG ring with 36px score + 12px grade which had
+   the same issue. New design: larger ring, 44px score, grade badge with
+   filled background, cubic-bezier transitions, subtle drop-shadow glow.
+   Documented in plugin_UX.md §3. */
 .seobetter-score-card {
     text-align: center;
 }
@@ -249,28 +261,90 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 100px;
-    height: 100px;
+    gap: 4px;
+    width: 140px;
+    height: 140px;
     border-radius: 50%;
-    border: 5px solid var(--sb-border);
-    margin: 10px auto;
+    border: 8px solid var(--sb-border);
+    margin: 12px auto;
+    position: relative;
+    background: #fff;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.3s ease;
 }
 
-.seobetter-score-circle.good { border-color: var(--sb-success); }
-.seobetter-score-circle.ok { border-color: var(--sb-warning); }
-.seobetter-score-circle.poor { border-color: var(--sb-error); }
+.seobetter-score-circle:hover {
+    transform: translateY(-2px) scale(1.02);
+}
+
+.seobetter-score-circle.good {
+    border-color: var(--sb-success);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--sb-success) 18%, transparent);
+}
+.seobetter-score-circle.ok {
+    border-color: var(--sb-warning);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--sb-warning) 18%, transparent);
+}
+.seobetter-score-circle.poor {
+    border-color: var(--sb-error);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--sb-error) 18%, transparent);
+}
 
 .seobetter-score-circle .score-number {
-    font-size: 32px;
-    font-weight: 700;
+    font-size: 44px;
+    font-weight: 800;
     line-height: 1;
     color: var(--sb-text);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.4s ease;
 }
 
+.seobetter-score-circle.good .score-number { color: var(--sb-success); }
+.seobetter-score-circle.ok .score-number   { color: var(--sb-warning); }
+.seobetter-score-circle.poor .score-number { color: var(--sb-error); }
+
 .seobetter-score-circle .score-grade {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 11px;
+    background: var(--sb-border);
+    color: #fff;
     font-size: 13px;
-    color: var(--sb-text-secondary);
-    margin-top: 2px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.05em;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    transition: background 0.3s ease;
+}
+
+.seobetter-score-circle.good .score-grade { background: var(--sb-success); }
+.seobetter-score-circle.ok .score-grade   { background: var(--sb-warning); }
+.seobetter-score-circle.poor .score-grade { background: var(--sb-error); }
+
+/* Animated entry — ring "pops in" when the panel first renders */
+@keyframes sb-score-pop {
+    0% { transform: scale(0.85); opacity: 0; }
+    60% { transform: scale(1.04); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.seobetter-score-circle,
+.sb-geo-ring-wrap {
+    animation: sb-score-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Content-generator ring wrapper (inline-styled via content-generator.php).
+   Matching hover glow + pop animation. */
+.sb-geo-ring {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                filter 0.3s ease;
+}
+.sb-geo-ring:hover {
+    transform: translateY(-2px) scale(1.02);
 }
 
 /* --- Suggestions --- */
