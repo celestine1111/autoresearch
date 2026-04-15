@@ -977,8 +977,9 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             h += '</div>';
             if (pv.places_insufficient) {
                 h += '<div style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.6);border-radius:6px;font-size:12px;color:#78350f">';
-                h += '<strong>Why:</strong> The Places waterfall (OpenStreetMap → Foursquare → HERE → Google Places) returned fewer than 2 verified businesses for this location. To prevent hallucinated business names, the article was written as a general informational guide instead of a listicle. ';
-                h += 'If you already configured Foursquare/HERE keys and expected them to return results, (1) verify the keys are saved in <a href="'+(window.ajaxurl||'').replace('admin-ajax.php','admin.php?page=seobetter-settings')+'">Settings → Places Integrations</a>, (2) check whether the location is too small for those providers to have coverage, or (3) try a larger nearby city to confirm the keys work.';
+                h += '<strong>Why:</strong> The Places waterfall (Perplexity Sonar → OpenStreetMap → Foursquare → HERE → Google Places) returned fewer than 2 verified businesses for this location. To prevent hallucinated business names, the article was written as a general informational guide instead of a listicle.<br><br>';
+                h += '<strong>Best fix:</strong> configure Perplexity Sonar via OpenRouter in <a href="'+(window.ajaxurl||'').replace('admin-ajax.php','admin.php?page=seobetter-settings')+'">Settings → Places Integrations</a>. Sonar searches TripAdvisor / Yelp / Wikivoyage and typically finds real businesses for small cities worldwide. 1 min signup at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>, ~$0.008 per article.<br><br>';
+                h += '<strong>If Sonar is already configured and still returns empty:</strong> (1) verify the OpenRouter key is saved in Settings, (2) check for typos in the key, (3) try a larger nearby city (e.g. Cortona, Siena) to confirm Sonar is working — if the larger city returns real results, the smaller one genuinely has no verified sources. Secondary fallbacks (Foursquare / HERE, both free tier) are below in the same settings card.';
                 h += '</div>';
             }
             h += '</div>';

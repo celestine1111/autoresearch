@@ -16,6 +16,89 @@
 
 ---
 
+## v1.5.39 — Lower Sonar min from 3 to 2 + waterfall threshold 3→2 + remove "5% entity density" literal + update banner to mention Sonar
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+After v1.5.38 actually fired the pre-gen switch for Lucignano, the user saw the places_insufficient banner and informational article. Good — structural fix worked. But the user asked three follow-up questions:
+
+1. **"Sonar should find 2 real shops — why didn't it?"** The Perplexity Web UI finds Gelateria C'era una Volta + Snoopy's (2 real gelaterie) for Lucignano. Sonar via OpenRouter returned empty.
+2. **"What is this 5% in the article?"** User saw a standalone "5%" in the informational article body with no surrounding stats context.
+3. **"The banner says OpenStreetMap → Foursquare → HERE → Google Places — where's Perplexity?"** The waterfall has Sonar as Tier 0 since v1.5.30 but the banner text and the places_insufficient suggestion both pre-date that and don't mention it.
+
+### Diagnosis
+
+**Bug 1 — Sonar system prompt hard-coded ≥3 minimum.** [cloud-api/api/research.js::fetchSonarPlaces()](../cloud-api/api/research.js) line 905 said: `If you cannot find at least 3 real verified businesses for the given location, return an empty places array`. Lucignano has exactly 2 real gelaterie. Sonar correctly found them but returned empty because it was told to require 3. Plus the user prompt said "Find 5-10 real verified businesses" — also pushing the model to either pad or return empty.
+
+**Bug 2 — Waterfall tier stop threshold was ≥3 for every tier.** Even if Sonar returned 2 real places, the waterfall's `if (places.length >= 3) provider_used = 'Perplexity Sonar'` never fired, so the waterfall kept running through OSM/Foursquare/HERE/Google (all returning 0) and the accumulated count stayed at 2, which is `< 3`, so `provider_used` stayed null and the cumulative pool was passed through. The PHP side only triggers Local Business Mode at `places_count >= 2`, so a 2-item pool would work IF it made it through — but the waterfall's `>= 3` stop condition was the gate.
+
+**Bug 3 — "5% entity density" literal in the system prompt.** v1.5.34 tried to fix this by wrapping it as an example of what NOT to write: `NEVER write phrases like \"5% entity density\", \"0.5% density\"`. But the model was parroting the literal example text from the instruction back into the article body. The fix is to NOT use any specific percentage numbers as examples — use generic wording that doesn't contain any percent symbols at all.
+
+**Bug 4 — Places validator panel banner and places_insufficient suggestion both pre-date Sonar (v1.5.27 text) and list only "OpenStreetMap → Foursquare → HERE → Google Places", misleading the user into thinking Sonar isn't in the pipeline.**
+
+### Fixed
+
+- **Sonar system prompt — accept ≥1 real verified result** — [cloud-api/api/research.js::fetchSonarPlaces()](../cloud-api/api/research.js) system prompt
+  - Removed "If you cannot find at least 3 real verified businesses... return empty array"
+  - New text: "Small towns often have only 1-3 real businesses for a given category — that's fine. Return however many you can actually verify (even just 1 or 2). Do NOT pad the list with fabricated entries to hit a minimum count."
+  - User prompt also updated from `Find 5-10 real verified businesses` → `Find every real verified business matching the keyword in this location — even if there are only 1 or 2. Small towns often have very few. Do NOT pad with invented entries.`
+  - Verify: `grep -n "Small towns often have only 1-3" seobetter/cloud-api/api/research.js`
+
+- **Waterfall tier stop threshold 3→2** — [cloud-api/api/research.js::fetchPlacesWaterfall()](../cloud-api/api/research.js) lines **~1023-1067**
+  - All 5 tiers changed from `if (places.length >= 3) provider_used = '...'` to `if (places.length >= 2) provider_used = '...'`
+  - Matches the PHP-side Local Business Mode which triggers at `places_count >= 2`
+  - A 2-item pool now stops the waterfall AND triggers Local Business Mode AND produces a real 2-item listicle with both verified places
+  - Verify: `grep -n "places.length >= 2" seobetter/cloud-api/api/research.js`
+
+- **Removed literal "5% entity density" from system prompt instruction** — [includes/Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php) line **~942**
+  - Before: `NEVER write phrases like \"5% entity density\", \"0.5% density\", or any literal percentage-as-filler in the article body`
+  - After: `Do NOT output any standalone percentage numbers as filler content in the article body. Only use percentages when they appear in actual research data with a cited source. Never write a percentage on its own line, never use percentages to describe the article itself, and never echo back any SEO density targets or ratios from these instructions.`
+  - Zero literal percentages remain in the prompt. The model has nothing to parrot.
+  - Also simplified the line 983 `"entity density"` instruction to use generic "SEO technical jargon" wording.
+  - Verify: `grep -n "standalone percentage numbers as filler" seobetter/includes/Async_Generator.php`
+
+- **Updated places_insufficient suggestion to recommend Sonar first** — [includes/Async_Generator.php::assemble_final()](../includes/Async_Generator.php) ~line **615**
+  - Removed the v1.5.27 text that recommended Foursquare as the primary fix
+  - New text names Perplexity Sonar as the "BEST FIX" with the OpenRouter setup link, mentions that Perplexity Web UI finds 2 real gelaterie for the exact Lucignano test, and demotes Foursquare / HERE to "secondary fallbacks"
+  - Verify: `grep -n "BEST FIX: configure Perplexity Sonar" seobetter/includes/Async_Generator.php`
+
+- **Updated Places Validator banner in content-generator.php JS** — [admin/views/content-generator.php](../admin/views/content-generator.php)
+  - Banner waterfall list changed from `OpenStreetMap → Foursquare → HERE → Google Places` to `Perplexity Sonar → OpenStreetMap → Foursquare → HERE → Google Places`
+  - Added dedicated "Best fix" paragraph pointing to OpenRouter signup + Sonar configuration
+  - Added troubleshooting block: if Sonar is configured and still returns empty, check key/typo/try larger city
+  - Verify: `grep -n "Perplexity Sonar → OpenStreetMap" seobetter/admin/views/content-generator.php`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.38` → `1.5.39`
+
+### Critical — Vercel redeploy required
+
+This release modifies `cloud-api/api/research.js`. Git push triggers the Vercel auto-deploy; verify the new build appears at seobetter.vercel.app before testing.
+
+### Expected behavior after fix
+
+For `best gelato in lucignano italy 2026` with OpenRouter Sonar configured:
+1. Cloud-api calls Sonar Tier 0
+2. Sonar prompt now says "return however many you can verify, even just 1 or 2"
+3. Sonar finds Gelateria C'era una Volta + Snoopy's → returns 2 places
+4. Waterfall stops at Tier 0 (2 >= 2 is now the threshold)
+5. `places_count = 2`, `is_local_intent = true`
+6. `local_business_mode = true`, `local_business_cap = 2`
+7. Outline generates exactly 2 business H2s + generic fill sections
+8. Each business section uses the strict per-section prompt with the verified pool entry
+9. Places_Link_Injector adds 📍 address + Google Maps link below each H2
+10. Places_Validator post-gen pass: kept_sections = 2, removed_sections = 0, green banner
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.38 — The REAL hallucination fix: 20s cloud timeout + missing is_local_intent in fallback paths
 
 **Date:** 2026-04-15

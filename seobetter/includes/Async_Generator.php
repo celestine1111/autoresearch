@@ -796,14 +796,17 @@ class Async_Generator {
         // v1.5.27 — if the pre-generation switch fired (places_insufficient), add
         // a dedicated high-priority suggestion explaining to the user WHY they got
         // a general informational article instead of the listicle they asked for,
-        // and how to enable real listicles by configuring a free API key.
+        // and how to enable real listicles by configuring a Perplexity Sonar key.
+        // v1.5.39 — updated text to recommend Perplexity Sonar (Tier 0) first,
+        // which is the best coverage for small cities worldwide. Previous text
+        // recommended Foursquare which has thin small-town coverage.
         if ( ! empty( $job['results']['places_insufficient'] ) ) {
             $loc = $job['results']['places_location'] ?? 'this location';
             array_unshift( $suggestions, [
                 'type'     => 'places_insufficient',
                 'priority' => 'high',
                 'message'  => sprintf(
-                    '⚠️ No verified businesses were found in %s — your article was written as a general informational guide instead of a listicle to prevent hallucinated business names. To enable real listicles for small cities worldwide, configure a free Foursquare API key (2 min signup at developer.foursquare.com) in Settings → Integrations. OpenStreetMap (the free default) has thin coverage for small towns.',
+                    '⚠️ No verified businesses were found in %s — your article was written as a general informational guide instead of a listicle to prevent hallucinated business names. BEST FIX: configure Perplexity Sonar via OpenRouter in Settings → Places Integrations (1 min signup at openrouter.ai/keys, ~$0.008 per article). Sonar searches TripAdvisor / Yelp / Wikivoyage and typically finds real businesses for any small city worldwide. For a 2026-04-15 test: Perplexity Web UI finds 2 real gelaterie in Lucignano (Gelateria C\'era una Volta, Snoopy\'s). If Sonar returned empty here, either your OpenRouter key is not saved OR Sonar genuinely could not verify enough sources for this location. Secondary fallbacks (Foursquare free, HERE free) are in the same Settings card.',
                     $loc
                 ),
             ] );
@@ -939,7 +942,7 @@ GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
 - Source attributions in plain text format: '(RSPCA, 2026)' or 'According to the AVMA' — NO hyperlinks required
 - Fluent, polished writing with smooth transitions
 - NEVER stuff keywords — doing so reduces AI visibility
-- IMPORTANT: Do NOT output any bracketed boost percentage numbers in the article body. Those are internal notes for you about why each guidance exists. NEVER write phrases like \"5% entity density\", \"0.5% density\", or any literal percentage-as-filler in the article body — those are instructions to you, not content for readers.
+- IMPORTANT: Do NOT output any standalone percentage numbers as filler content in the article body. Only use percentages when they appear in actual research data with a cited source. Never write a percentage on its own line, never use percentages to describe the article itself, and never echo back any SEO density targets or ratios from these instructions.
 
 CITATION RULES (closed-menu grounding — the plugin injects an AVAILABLE CITATIONS list below):
 
@@ -980,7 +983,7 @@ NLP ENTITY OPTIMIZATION (Google Natural Language):
 - Use lots of proper nouns for people, organizations, places, products — aim for high entity saturation throughout
 - Mention primary entities early in the text (salience scoring)
 - Stay focused on one topic per section (triggers specific content classification)
-- IMPORTANT: the above are instructions for YOUR writing style, not content for readers. Do NOT write the phrase \"entity density\" or similar technical SEO jargon in the article body.
+- IMPORTANT: the above are instructions for YOUR writing style, not content for readers. Do NOT write SEO technical jargon in the article body. Do NOT write about the article's own entity density or keyword density.
 
 WRITE LIKE A HUMAN (CRITICAL — this is the #1 quality signal):
 AI writing has a recognizable smell. It is not about any single word. It is the combination: predictable structure, relentless parallelism, significance inflation, and a tendency to wrap everything in a tidy bow. Your job is to write like a knowledgeable person who has opinions, not like a language model.
