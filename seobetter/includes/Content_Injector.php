@@ -8,6 +8,15 @@ namespace SEOBetter;
  * Each method APPENDS or INSERTS new elements into the article
  * without touching any existing text. Uses real sources from
  * the Vercel research API — zero hallucinated URLs.
+ *
+ * v1.5.63 exception: `simplify_readability()` is the ONLY method that
+ * rewrites existing content. It runs a second AI pass on sections
+ * whose Flesch-Kincaid grade > 9, explicitly instructing the model
+ * to preserve all facts, statistics, citations, and expert quotes
+ * while breaking long sentences and swapping complex words. This is
+ * gated behind explicit user consent (Check Readability → Rewrite
+ * button) because it's the only path to reliably hit grade 6-8
+ * (prompts alone land at grade 11-13).
  */
 class Content_Injector {
 
@@ -475,7 +484,19 @@ Return ONLY the Markdown table, nothing else. Example format:
             ];
         }
 
-        $text = wp_strip_all_tags( $content );
+        // v1.5.63 — strip markdown syntax BEFORE counting so density
+        // matches GEO_Analyzer's HTML-based count. Previously this method
+        // counted on raw markdown (which included #, **, [], (), | chars
+        // as "words"), producing 3.76% while GEO_Analyzer reported 2.78%
+        // on the same article. Now both strip to plain prose first.
+        $clean = $content;
+        $clean = preg_replace( '/^[#>|]+/m', '', $clean );
+        $clean = preg_replace( '/^[-*+]\s/m', '', $clean );
+        $clean = preg_replace( '/\*\*([^*]+)\*\*/', '$1', $clean );
+        $clean = preg_replace( '/!\[[^\]]*\]\([^)]*\)/', '', $clean );
+        $clean = preg_replace( '/\[([^\]]+)\]\([^)]+\)/', '$1', $clean );
+        $clean = preg_replace( '/`([^`]+)`/', '$1', $clean );
+        $text = wp_strip_all_tags( $clean );
         $word_count = max( 1, str_word_count( $text ) );
         $lower_text = strtolower( $text );
         $lower_kw = strtolower( $keyword );
@@ -673,5 +694,151 @@ Return ONLY the Markdown table, nothing else. Example format:
             'violations' => array_slice( $missing, 0, 10 ),
             'message'    => count( $missing ) . ' of 10 CORE-EEAT rubric items are missing. Fix each for a +10 score boost per item.',
         ];
+    }
+
+    /**
+     * v1.5.63 — Post-generation readability rewriter. Splits the markdown
+     * into H2 sections, measures Flesch-Kincaid grade per section, and if
+     * grade > 9 runs a single AI pass per section with an explicit grade-7
+     * target. Preserves all facts, numbers, citations, named entities, and
+     * structural elements (lists, tables, code). Only rewrites prose.
+     *
+     * Returns an inject-mode response with the rewritten markdown. The
+     * caller (rest_inject_fix) re-formats and re-scores. Cost: ~$0.02 per
+     * over-complex section (1-4 sections per article typically = $0.02-0.08).
+     */
+    public static function simplify_readability( string $markdown ): array {
+        $provider = AI_Provider_Manager::get_active_provider();
+        if ( ! $provider ) {
+            return [ 'success' => false, 'error' => 'No AI provider configured.' ];
+        }
+
+        // Split at H2 boundaries
+        $parts = preg_split( '/(^##\s[^\n]+$)/m', $markdown, -1, PREG_SPLIT_DELIM_CAPTURE );
+        if ( count( $parts ) < 3 ) {
+            return [ 'success' => false, 'error' => 'No sections to simplify.' ];
+        }
+
+        $preamble = $parts[0];
+        $sections = [];
+        for ( $i = 1; $i < count( $parts ); $i += 2 ) {
+            $sections[] = [
+                'heading' => $parts[ $i ],
+                'body'    => $parts[ $i + 1 ] ?? '',
+            ];
+        }
+
+        // Sections we protect from rewrites (structural, not prose)
+        $protected_pattern = '/key\s*takeaway|faq|frequently|reference|quick\s*comparison|at\s*a\s*glance/i';
+
+        $rewritten_count = 0;
+        $rewritten_sections = [];
+
+        foreach ( $sections as $idx => $section ) {
+            if ( preg_match( $protected_pattern, $section['heading'] ) ) {
+                continue;
+            }
+
+            $grade = self::calc_flesch_kincaid_grade( $section['body'] );
+            if ( $grade <= 9 ) {
+                continue; // Section already readable
+            }
+
+            // Rewrite this section with an AI pass
+            $prompt = "Rewrite the following article section to Flesch-Kincaid grade 7. Target grade 6-8.\n\n"
+                . "RULES:\n"
+                . "1. Break any sentence over 18 words into two shorter sentences.\n"
+                . "2. Replace multi-syllable words with simpler ones: 'use' not 'utilize', 'help' not 'facilitate', 'show' not 'demonstrate', 'most' not 'the majority of', 'about' not 'regarding', 'start' not 'commence'.\n"
+                . "3. Write to ONE reader using 'you' / 'your'. Not 'pet owners' or 'readers'.\n"
+                . "4. Active voice only.\n"
+                . "5. PRESERVE EVERY FACT: names, numbers, percentages, years, citation URLs, expert quotes, organization names, bullet lists, tables.\n"
+                . "6. PRESERVE EVERY MARKDOWN LINK [text](url) exactly as written. Do not invent new URLs.\n"
+                . "7. PRESERVE the H2 heading line exactly as provided.\n"
+                . "8. Keep roughly the same word count (±10%). Don't pad. Don't summarize.\n"
+                . "9. Keep structural elements: bullet lists stay bullet lists, tables stay tables, blockquotes stay blockquotes.\n\n"
+                . "EXAMPLES — WRITE LIKE THIS:\n"
+                . "  ✅ \"Raw feeding works for many dogs. Start small. Mix one spoonful into the usual food for three days.\"\n"
+                . "  ✅ \"Most vets agree that gradual change is safer. Watch your dog's stool. Firm means good.\"\n\n"
+                . "NOT LIKE THIS:\n"
+                . "  ❌ \"The implementation of a raw feeding protocol necessitates a gradual transition phase, during which pet owners must carefully monitor gastrointestinal responses.\"\n\n"
+                . "SECTION TO REWRITE:\n\n"
+                . $section['heading'] . "\n"
+                . $section['body'] . "\n\n"
+                . "Output ONLY the rewritten section (heading + body). No explanation, no commentary. Start with the heading line.";
+
+            $result = AI_Provider_Manager::send_request(
+                $provider['provider_id'],
+                $prompt,
+                'You are a readability editor. Rewrite text to Flesch-Kincaid grade 7 while preserving every fact, citation, and structural element.',
+                [ 'max_tokens' => 2500, 'temperature' => 0.4 ]
+            );
+
+            if ( $result['success'] && ! empty( $result['content'] ) ) {
+                $new_content = trim( $result['content'] );
+                // Safety: new content must still contain the heading
+                if ( str_contains( $new_content, trim( $section['heading'] ) ) ) {
+                    // Split the rewritten output back into heading + body
+                    $heading_pos = strpos( $new_content, trim( $section['heading'] ) );
+                    $rest = substr( $new_content, $heading_pos + strlen( trim( $section['heading'] ) ) );
+                    $sections[ $idx ]['body'] = "\n" . ltrim( $rest ) . "\n\n";
+                    $rewritten_count++;
+                    $rewritten_sections[] = trim( $section['heading'] );
+                }
+            }
+        }
+
+        if ( $rewritten_count === 0 ) {
+            return [
+                'success' => false,
+                'error'   => 'No sections needed simplification (all already at grade ≤9) or AI rewrite failed.',
+            ];
+        }
+
+        // Rebuild the markdown
+        $new_markdown = $preamble;
+        foreach ( $sections as $s ) {
+            $new_markdown .= $s['heading'] . $s['body'];
+        }
+
+        return [
+            'success' => true,
+            'content' => $new_markdown,
+            'added'   => 'Simplified ' . $rewritten_count . ' section' . ( $rewritten_count > 1 ? 's' : '' ) . ' to grade 7',
+            'type'    => 'readability',
+            'rewritten_sections' => $rewritten_sections,
+        ];
+    }
+
+    /**
+     * v1.5.63 — Fast Flesch-Kincaid grade calculation for a text chunk.
+     * Mirrors GEO_Analyzer's formula: 0.39 × (words/sentences) + 11.8 × (syllables/words) - 15.59
+     */
+    private static function calc_flesch_kincaid_grade( string $text ): float {
+        // Strip markdown that isn't prose
+        $text = preg_replace( '/^[#>|]+/m', '', $text );
+        $text = preg_replace( '/^[-*+]\s/m', '', $text );
+        $text = preg_replace( '/!\[[^\]]*\]\([^)]*\)/', '', $text );
+        $text = preg_replace( '/\[([^\]]+)\]\([^)]+\)/', '$1', $text );
+        $text = trim( $text );
+
+        if ( $text === '' ) return 0.0;
+
+        $sentences = preg_split( '/[.!?]+/', $text, -1, PREG_SPLIT_NO_EMPTY );
+        $sentence_count = max( 1, count( $sentences ) );
+        $words = str_word_count( $text );
+        if ( $words === 0 ) return 0.0;
+
+        // Syllable count: approximate by vowel groups
+        $syllables = 0;
+        foreach ( preg_split( '/\s+/', strtolower( $text ) ) as $word ) {
+            $word = preg_replace( '/[^a-z]/', '', $word );
+            if ( strlen( $word ) === 0 ) continue;
+            $count = max( 1, preg_match_all( '/[aeiouy]+/', $word ) );
+            if ( str_ends_with( $word, 'e' ) && $count > 1 ) $count--;
+            $syllables += $count;
+        }
+
+        $grade = 0.39 * ( $words / $sentence_count ) + 11.8 * ( $syllables / $words ) - 15.59;
+        return max( 0, round( $grade, 1 ) );
     }
 }

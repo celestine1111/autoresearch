@@ -16,6 +16,102 @@
 
 ---
 
+## v1.5.63 — Citation_Pool cache invalidation, preview CSS preservation, post-gen readability rewriter, density unification, tighter word truncation, References format locked
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+Live v1.5.62 test of Article 1 showed:
+- GEO score 71/B (below the 90+ target)
+- Readability 27 (grade 13.1 — still way over target 6-8)
+- Keyword Density 50 (actual 2.78%, target 0.5-1.5%)
+- Citations 20 (only 1 citation detected)
+- Word count 1940 on a 1500 target (29% overshoot, previous 1.15× hard cap was too lenient)
+- "Add Citations" button STILL adding dev.to April Fools + Veganism wiki (v1.5.62's topical filter didn't fire)
+- Preview images lose rounded/centered styling after clicking any inject-fix button
+- Density shown as 2.78% in GEO panel AND 3.76% in flag panel for the same article — contradiction
+- User explicitly requested: preserve the numbered references format and document it in article_design.md
+
+### Fixed
+
+#### 1. Citation_Pool cache invalidation — [includes/Citation_Pool.php](../includes/Citation_Pool.php) line ~26 + line ~48
+- **Root cause**: v1.5.62's topical relevance filter was correct but never ran. `Citation_Pool::build()` caches results with a 6-hour TTL via transient `seobetter_pool_{md5}`. Stale pools from v1.5.61 (pre-filter) were still being returned on every inject_citations call, bypassing the new filter entirely.
+- **Fix**: new `CACHE_VERSION = 'v2'` constant prepended to the cache key → all pre-v1.5.62 pools invalidated instantly. Future schema changes just bump the version.
+- Verify: `grep -n "CACHE_VERSION" seobetter/includes/Citation_Pool.php`
+
+#### 2. Preview CSS preservation on inject-fix — [admin/views/content-generator.php](../admin/views/content-generator.php) `sb-improve-btn` click handler
+- **Root cause**: the JS was stripping the `<style>` block from the new content before injecting into the preview pane:
+  ```js
+  newContent = newContent.replace(/<style>[\s\S]*?<\/style>/, '');  // ❌ strips all scoped styling
+  preview.innerHTML = newContent;
+  ```
+  The stripped styles were the scoped `.sb-{uid}` rules that made images rounded, centered, at the right max-width, and that set font family / text width for the preview. After strip, preview fell back to inherited admin theme CSS → images raw full-size, text wider, different font.
+- **Fix**: extract the style tag, remove any existing `#seobetter-preview-style` sibling, then inject the fresh style tag as a dedicated sibling element that persists across re-renders. Body HTML injected separately into the preview without the style block.
+- User feedback: *"the images preview which used to be rounded centred, it shouldnt change this"* and *"the text width and font changes a bit when you click the pro. buttons"*.
+- Verify: `grep -n "seobetter-preview-style" seobetter/admin/views/content-generator.php`
+
+#### 3. Post-generation readability rewriter — [includes/Content_Injector.php::simplify_readability()](../includes/Content_Injector.php) line ~687
+- **Root cause**: prompt-based readability rules (v1.5.48, v1.5.60) consistently landed at grade 11-13 despite explicit grade-7 targets with DO/DON'T examples. LLMs do not reliably control Flesch-Kincaid grade through prompt directives alone.
+- **Fix**: new `simplify_readability( $markdown )` method — splits the markdown at H2 boundaries, calculates Flesch-Kincaid grade per section via a new `calc_flesch_kincaid_grade()` helper, and for any section with grade > 9 runs a single AI rewrite pass with explicit preservation rules:
+  - Break sentences > 18 words into two
+  - Swap multi-syllable words for simpler ones (use/help/show/most/about/start)
+  - Write to one reader using 'you'/'your'
+  - Active voice only
+  - **PRESERVE every fact**: names, numbers, percentages, years, citation URLs, expert quotes, organization names, bullet lists, tables
+  - **PRESERVE every markdown link** `[text](url)` exactly as written
+  - **PRESERVE the H2 heading line** exactly as provided
+  - Keep roughly the same word count (±10%)
+  - Keep structural elements (lists stay lists, tables stay tables)
+- Prompt includes concrete grade-7 vs grade-12 example pairs so the model imitates the target style.
+- Protected sections (Key Takeaways / FAQ / References / Quick Comparison Table) are never rewritten.
+- Safety check: rewritten output must still contain the original heading line before it's accepted.
+- The "Check Readability" button was changed from `mode: 'flag'` to `mode: 'inject'` in the UI and renamed "Simplify Readability". Clicking it now runs the AI pass, not just shows a list.
+- Cost: ~$0.02 per over-complex section × 1-4 sections per article = $0.02-0.08 per fix.
+- Verify: `grep -n "simplify_readability\|calc_flesch_kincaid_grade" seobetter/includes/Content_Injector.php`
+
+#### 4. Density count unification in flag_keyword_placement — [includes/Content_Injector.php::flag_keyword_placement()](../includes/Content_Injector.php) line ~468
+- **Root cause**: `flag_keyword_placement()` was called from `rest_inject_fix()` with `$markdown` as the content param. It then did `wp_strip_all_tags($markdown)` which leaves markdown syntax like `##`, `**`, `[`, `]`, `(`, `)`, `|` intact — counting them as "words" in `str_word_count()`. GEO_Analyzer ran on HTML (already rendered) which had a different word count. Same article showed 2.78% in one place and 3.76% in another.
+- **Fix**: strip markdown syntax before counting in `flag_keyword_placement()`. Remove `#`, `>`, `|`, list bullets, bold markers `**`, markdown images, markdown links (keep visible text), and backtick code spans. Both methods now operate on the same plain-prose base, so density numbers agree.
+- Verify: `grep -n "strip markdown syntax BEFORE counting" seobetter/includes/Content_Injector.php`
+
+#### 5. Word count hard cap tightened from 1.15× to 1.10× — [includes/Async_Generator.php::truncate_to_target()](../includes/Async_Generator.php)
+- **Root cause**: v1.5.61's truncate was lenient at 1.15× target (2000 → allows 2300). User picked 1500, got 1940 (29% overshoot), which was under the 1.15× hard cap of 1725... wait, 1940 > 1725 so the truncate didn't fire at all. Likely because the article was under 1.15× before generation finished OR the markdown had a lot of hidden structural content.
+- **Fix**: tightened cap to 1.10×. For a 1500 target, hard cap = 1650. More aggressive truncation means overshoot lands at 1550-1650 instead of 1940.
+
+#### 6. References format locked and documented — [seo-guidelines/article_design.md §10](../seo-guidelines/article_design.md)
+- Added explicit "LOCKED FORMAT" section per user request: *"Can you keep the formatted numbered points which shows as references before.. keep that add to article_design.md so it stays."*
+- Documented strict format rules:
+  - Heading must be exactly `## References`
+  - One entry per line, numbered sequentially
+  - Each entry is a markdown link `N. [title](url)` — no trailing source name, no date suffix
+  - Titles come from Citation Pool metadata, not the AI
+  - Only body-cited entries appear (v1.5.60 fallback: if body cites zero URLs, include first 8 pool entries)
+  - Hybrid mode renders as `<!-- wp:list {"ordered":true} -->` Gutenberg block
+
+### Expected result after v1.5.63
+
+Regenerate Article 1 (1500 words):
+
+| Metric | v1.5.62 | v1.5.63 target |
+|---|---|---|
+| Readability grade | 13.1 (score 27) | **grade 7-9 (score 80+)** after clicking Simplify Readability |
+| Word count | 1940 | **≤ 1650** |
+| Add Citations adds junk | dev.to + Veganism + Forbes | **Forbes only** (Wikipedia Veganism and all dev.to titles rejected by topical filter) |
+| Images after inject-fix | Broken to full-size | **Stay rounded + centered + max-width** |
+| Density stats contradiction | 2.78% / 3.76% | **Both ~1.0%** on the same article |
+| References format | Numbered links | **Numbered links (locked in article_design.md)** |
+
+### What's NOT in this release
+
+- **Reducing the first-pass density overshoot**. If the AI keeps producing 2-3% density on generation, the density injection loop still needs a second AI pass to rewrite. v1.5.64 if needed.
+- **Entity Density boost** (currently 51). Requires stronger prompt + first-hand language. Deferred.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.62 — Bug sweep: topical Citation_Pool filter, dev.to dropped for non-tech, hybrid format after inject, readability line-skipping, panel re-render, H2 count reconciliation
 
 **Date:** 2026-04-15

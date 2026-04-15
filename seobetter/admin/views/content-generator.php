@@ -957,7 +957,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             if (c.tables && c.tables.score < 50) fixes.push({id:'table', label:'Add Comparison Table', desc:'No tables found. Tables get cited 30-40% more by AI. Inserts a table without editing existing text.', icon:'editor-table', impact:'+5 pts', mode:'inject'});
             if (c.freshness && c.freshness.score < 100) fixes.push({id:'freshness', label:'Add Freshness Signal', desc:'No "Last Updated" date. Adds date at top without editing existing text.', icon:'calendar-alt', impact:'+6 pts', mode:'inject'});
             // FLAG fixes (show issues, user edits manually)
-            if (c.readability && c.readability.score < 70) fixes.push({id:'readability', label:'Check Readability', desc:'Grade '+((c.readability.flesch_grade||'?'))+' is too complex. Shows complex sentences and words to simplify manually.', icon:'editor-spellcheck', impact:'+10 pts', mode:'flag'});
+            if (c.readability && c.readability.score < 70) fixes.push({id:'readability', label:'Simplify Readability', desc:'Grade '+((c.readability.flesch_grade||'?'))+' is too complex. Runs an AI pass to rewrite over-complex sections to grade 7 while preserving every fact and citation.', icon:'editor-spellcheck', impact:'+10 pts', mode:'inject'});
             if (c.island_test && c.island_test.score < 80) fixes.push({id:'island', label:'Check Pronoun Starts', desc:c.island_test.detail+'. Shows which paragraphs to fix manually.', icon:'editor-removeformatting', impact:'+8 pts', mode:'flag'});
             if (c.section_openings && c.section_openings.score < 70) fixes.push({id:'openers', label:'Check Section Openings', desc:c.section_openings.detail+'. Shows which sections need better openers.', icon:'editor-paragraph', impact:'+8 pts', mode:'flag'});
             // v1.5.11 NEW — flag-mode checks for the three new scoring dimensions
@@ -1277,12 +1277,36 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                         var gradeEl = document.querySelector('.sb-geo-ring-grade');
                         if (gradeEl) gradeEl.textContent = result.grade;
 
-                        // Update preview
+                        // v1.5.63 — CRITICAL preview-styling fix. The old code
+                        // stripped the <style> tag from the new content before
+                        // injecting, which removed all the scoped .sb-{uid}
+                        // styling: rounded images, centered figures, consistent
+                        // font/text width, stat callout colors, etc. After an
+                        // inject-fix click the preview fell back to inherited
+                        // admin theme CSS, making images raw full-size and
+                        // text inherit whatever default width the parent
+                        // container provided. New approach: inject the style
+                        // tag INTO a dedicated sibling element that persists
+                        // across re-renders, then inject just the body HTML.
                         var preview = document.querySelector('.seobetter-content-preview');
                         if (preview) {
                             var newContent = result.content || '';
-                            newContent = newContent.replace(/<style>[\s\S]*?<\/style>/, '');
-                            preview.innerHTML = newContent;
+                            // Extract and re-apply the style tag so scoped
+                            // styles survive. Keep exactly one style tag
+                            // before the preview to avoid duplication.
+                            var styleMatch = newContent.match(/<style>[\s\S]*?<\/style>/);
+                            var bodyOnly = newContent.replace(/<style>[\s\S]*?<\/style>/, '');
+                            if (styleMatch) {
+                                // Remove any existing seobetter preview style
+                                var oldStyle = document.querySelector('#seobetter-preview-style');
+                                if (oldStyle) oldStyle.remove();
+                                // Inject fresh style tag with an ID we can find again
+                                var styleEl = document.createElement('div');
+                                styleEl.id = 'seobetter-preview-style';
+                                styleEl.innerHTML = styleMatch[0];
+                                preview.parentNode.insertBefore(styleEl, preview);
+                            }
+                            preview.innerHTML = bodyOnly;
                         }
 
                         // v1.5.62 — update the specific fix's description text

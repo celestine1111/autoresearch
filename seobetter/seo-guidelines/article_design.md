@@ -512,15 +512,28 @@ All dark mode styles are scoped inside:
 - **Titles come from the pool**, not the AI — they match the real destination page
 - **If zero pool URLs were cited, no References section is appended** — the article simply ends at its last content section
 
-### Rendered output (hybrid mode)
+### Rendered output (hybrid mode) — LOCKED FORMAT (v1.5.63+)
+
+**Format contract** — this numbered-list format with clickable markdown links is the ONLY format the References section should ever use. Do not change it without updating this file first. User feedback 2026-04-15 explicitly requested the numbered format be preserved:
+
+> "Can you keep the formatted numbered points which shows as references before.. keep that add to article_design.md so it stays."
 
 ```markdown
 ## References
 
-1. [How to Choose a Dog Bed](https://www.akc.org/expert-advice/home-living/how-to-choose-dog-bed/) — akc.org
-2. [Orthopedic Pet Beds Guide](https://www.petbarn.com.au/petspot/dog/orthopedic-beds/) — petbarn.com.au
-3. [Best Beds for Anxious Dogs](https://www.rspca.org.au/knowledgebase/anxious-dog-beds/) — rspca.org.au
+1. [How to Choose a Dog Bed](https://www.akc.org/expert-advice/home-living/how-to-choose-dog-bed/)
+2. [Orthopedic Pet Beds Guide](https://www.petbarn.com.au/petspot/dog/orthopedic-beds/)
+3. [Best Beds for Anxious Dogs](https://www.rspca.org.au/knowledgebase/anxious-dog-beds/)
 ```
+
+**Strict format rules:**
+
+- Heading: exactly `## References` (not "Sources", "Further Reading", or "Bibliography")
+- One entry per line, numbered sequentially starting at `1.`
+- Each entry is a markdown link: `N. [title](url)` — no trailing source name, no date suffix, no provider attribution (v1.5.46 removed the ` — {source_name}` suffix per user feedback)
+- Titles come from the Citation Pool metadata, not from the AI
+- Only entries the body actually cites appear here (v1.5.60 fallback: if body cites zero URLs but pool is non-empty, include first 8 pool entries as fallback)
+- Rendered in hybrid mode as a standard `<!-- wp:list {"ordered":true} -->` Gutenberg block so WordPress themes apply native numbered-list styling
 
 In hybrid output this renders as:
 

@@ -888,8 +888,13 @@ class Async_Generator {
      * Truncates content sections from the END of the content area first.
      */
     private static function truncate_to_target( string $markdown, int $target_words ): string {
+        // v1.5.63 — tightened from 1.15× to 1.10×. Live test landed at
+        // 1940 words on a 1500 target (29% overshoot). Previous hard cap
+        // of 1.15× = 1725 which was still 15% over the user's explicit
+        // target. New cap 1.10× = 1650 which is closer to the target
+        // without being surgical.
         $current_words = str_word_count( wp_strip_all_tags( $markdown ) );
-        $hard_cap = (int) round( $target_words * 1.15 );
+        $hard_cap = (int) round( $target_words * 1.10 );
 
         if ( $current_words <= $hard_cap ) {
             return $markdown;
