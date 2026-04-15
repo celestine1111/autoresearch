@@ -19,7 +19,7 @@
 ## v1.5.47 — Local Business Mode now fires at places_count ≥ 1 so a single verified place still gets a dedicated H2 + meta line
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `99d1ce4`
 
 ### Context
 
