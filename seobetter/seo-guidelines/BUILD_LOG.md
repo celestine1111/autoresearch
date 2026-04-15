@@ -19,7 +19,7 @@
 ## v1.5.49 — Test Places Providers diagnostic: verify Foursquare / HERE / Google keys are actually being called
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `616f96c`
 
 ### Context
 
