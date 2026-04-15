@@ -16,6 +16,42 @@
 
 ---
 
+## v1.5.50 — Test Places Providers diagnostic short-circuits all non-places sources
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User ran the v1.5.49 Test Places Providers button and got:
+```
+─── ERROR ───
+Research failed: Unexpected token '<', "<!doctype "... is not valid JSON
+```
+Plus empty `plugin_version` and `test_keyword` fields, meaning the cloud-api's outer try/catch fired and returned HTTP 500 with a generic "Research failed: ..." message before the places waterfall ever finished.
+
+Root cause: the `/api/research` handler runs every always-on source in parallel via `Promise.all([Promise.all(freeSearches), Promise.all(catPromises)])` — Reddit, HN, Wikipedia, Google Trends, DuckDuckGo, Bluesky, Mastodon, Dev.to, Lemmy, plus any category/country APIs. ONE of those sources called `response.json()` on what was actually an HTML 4xx/5xx error page, threw a `SyntaxError`, and `Promise.all`'s fail-fast semantics propagated the rejection to the outer catch. Even though our test mode didn't care about any of those results, one of them failing was enough to block the places waterfall from reporting.
+
+### Fixed
+
+#### Added TEST MODE short-circuit in the `/api/research` handler — [cloud-api/api/research.js](../cloud-api/api/research.js) line ~41
+- When `test_all_places_tiers === true`, the handler now skips every `freeSearches` source, every category API, and every country API. It calls `fetchPlacesWaterfall()` directly and returns a minimal JSON shape with just the places-related fields.
+- Benefits: (a) completely immune to any always-on source flaking out, (b) much faster response (no 10-source parallel fanout), (c) cleaner mental model — the test button measures only what it claims to measure.
+- Normal article generation path is completely unchanged — the short-circuit is gated on `test_all_places_tiers`, which PHP only sets from the `rest_test_places_providers` handler.
+- Verify: `grep -n "TEST MODE short-circuit\|test_all_places_tiers" seobetter/cloud-api/api/research.js`
+
+### Verification
+
+1. Redeploy cloud-api to Vercel (required — this is a JS-side fix).
+2. Click "🧪 Test Places Providers" in Settings → Places Integrations.
+3. Expected: full per-tier report with Foursquare and HERE counts and verdicts, no "Research failed: Unexpected token" error.
+4. Expected fast response (should complete in under 10 seconds since we skip the 10-source parallel fanout).
+5. Normal article generation regression: create a test article, confirm `placesData` and all the usual research fields still populate — the short-circuit is gated on `test_all_places_tiers` so production flows are unaffected.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.49 — Test Places Providers diagnostic: verify Foursquare / HERE / Google keys are actually being called
 
 **Date:** 2026-04-15
