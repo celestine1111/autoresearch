@@ -16,6 +16,48 @@
 
 ---
 
+## v1.5.54 — Auto-suggest button now populates Secondary Keywords for long-tail keywords + plain-English Country/Language help text
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User reported two UX problems:
+
+1. **Auto-suggest only populates LSI, never Secondary Keywords.** For a long-tail keyword like `best pet shops in mudgee nsw 2026`, the Secondary Keywords field stayed empty while LSI (Datamuse) populated normally.
+2. **Country/Language help text used Lucignano as an example.** Most users outside Italy have never heard of Lucignano — the example was confusing instead of clarifying.
+
+### Fixed
+
+#### 1. Google Suggest now receives the core topic in addition to the full niche — [cloud-api/api/topic-research.js](../cloud-api/api/topic-research.js) line ~47
+- **Root cause**: `fetchGoogleSuggest(niche)` passed the full 8-word long-tail keyword to Google's `suggestqueries` endpoint. Google has no completion data for ultra-long phrases like "best pet shops in mudgee nsw 2026" and returns zero suggestions. Datamuse already used `extractCoreTopic(niche)` to get "pet shops" first, but Google Suggest did not. Result: LSI (Datamuse) always populated, Secondary (Google Suggest) never did.
+- **Fix**: call `fetchGoogleSuggest` TWICE in parallel — once with the full niche (in case it has any completions) AND once with the extracted core topic. Merge the results, deduped. For "best pet shops in mudgee nsw 2026", the core topic "pet shops" returns Google Suggest completions like "pet shops near me", "pet shops sydney", "pet shops online", "best pet shops australia" etc.
+- Verify: `grep -n "suggestLong\|suggestCore" seobetter/cloud-api/api/topic-research.js`
+
+#### 2. Overlap filter in buildKeywordSets relaxed — [topic-research.js::buildKeywordSets()](../cloud-api/api/topic-research.js) line ~295
+- Old filter: `niche.split(/\s+/).filter(w => w.length > 3)` → for "best pet shops in mudgee nsw 2026" the allowed words were ["best", "shops", "mudgee", "2026"] — missed "pet" (3 chars).
+- New filter: `length >= 3` with a small stopword blocklist. "pet", "cat", "gym", "vet", "bar" now count as overlap signals. Suggestions like "pet supplies online" or "vet clinic near me" that would have been dropped now flow through.
+- Blocked stopwords: the, and, for, with, from, are, you, can, how, why, what, when, where, who, 2024-2028.
+- Verify: `grep -n "length >= 3 && ![''the','and'" seobetter/cloud-api/api/topic-research.js`
+
+#### 3. Country/Language help text rewritten in plain English — [admin/views/content-generator.php](../admin/views/content-generator.php) line ~461
+- **Before**: "Writing about Lucignano gelato shops for a US audience? Set Target Country = Italy (so the plugin finds real Italian gelaterie via Places waterfall)..." — the Lucignano reference meant nothing to users who hadn't seen the SEOBetter test keyword.
+- **After**: plain-English explanation with no place-specific example. Structured as two short statements: "Target Country tells the plugin where to look up real local businesses. Article Language is the language your readers will read. These are independent — you can write an English article about Japanese restaurants by setting Country = Japan and Language = English."
+- Verify: `grep -n "Target Country.*tells the plugin\|Japanese restaurants" seobetter/admin/views/content-generator.php`
+
+### Verification
+
+1. Redeploy cloud-api to Vercel (topic-research.js was touched).
+2. Upload the new plugin zip.
+3. Open Content Generator, enter `best pet shops in mudgee nsw 2026`, click Auto-suggest.
+4. Expected: Secondary Keywords field populated with 3-7 real Google Suggest phrases (e.g. "pet shops near me", "pet shops sydney", "best pet shops"). LSI Keywords also populated as before.
+5. The help text below the Country/Language row now explains the distinction in plain English without mentioning Lucignano.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.53 — Foursquare category post-filter: fixes "best pet shops" returning Best Western Hotel / Best Migration Services / Best Kumpir
 
 **Date:** 2026-04-15

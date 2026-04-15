@@ -459,7 +459,9 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                     </div>
 
                     <p class="sb-help" style="margin:-8px 0 16px 0;padding:10px 12px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:4px;color:#1e3a5f;font-size:12px">
-                        <strong>💡 Example:</strong> Writing about Lucignano gelato shops for a US audience? Set <strong>Target Country = Italy</strong> (so the plugin finds real Italian gelaterie via Places waterfall) and <strong>Article Language = English</strong> (so your readers can understand it). These are two separate settings.
+                        <strong>💡 Tip — these are two separate settings:</strong><br>
+                        <strong>Target Country</strong> tells the plugin <em>where to look up real local businesses</em> (shops, restaurants, vets, hotels, etc). Pick the country your keyword is about.<br>
+                        <strong>Article Language</strong> is the language your readers will read. These are independent — you can write an English article about Japanese restaurants by setting Country = Japan and Language = English.
                     </p>
                 </div>
 
