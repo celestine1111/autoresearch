@@ -19,7 +19,7 @@
 ## v1.5.35 — Fix garbage LSI keywords from Datamuse (aborigines, balance of payments, lidl, arsenal) on long-tail queries
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `4a022f8`
 
 ### Context
 
