@@ -16,6 +16,52 @@
 
 ---
 
+## v1.5.37 — FIX PHP fatal: unescaped double quotes in get_system_prompt() introduced in v1.5.34
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+v1.5.36 shipped a defensive try/catch wrapper around `rest_generate_start` which successfully surfaced the real PHP error:
+
+```
+PHP ParseError: syntax error, unexpected identifier "boost", expecting ";" at Async_Generator.php:942
+```
+
+The v1.5.34 edit to `Async_Generator::get_system_prompt()` introduced literal double quotes inside a double-quoted PHP string at lines 942 and 983 — `"boost percentages"`, `"+41"`, `"+40"`, `"5% entity density"`, `"0.5-1.5% density"`, and `"entity density"`. Each of these prematurely closed the containing string, causing the parser to see `boost` as a bare identifier and fatal with "expecting ;".
+
+This meant EVERY article generation in v1.5.34, v1.5.35, and v1.5.36 was silently fataling at the system prompt construction — explaining the user's "Error: Failed to start." reports.
+
+### Why the Node brace-balance check in v1.5.35 missed this
+
+My earlier static check counted `{`, `}`, `(`, `)` pairs with awareness of comments and string delimiters. The unescaped quotes on lines 942 and 983 didn't produce brace imbalance because the line contained an EVEN number of them, so the string state toggled closed/open/closed symmetrically and the subsequent braces were counted with the correct nesting level.
+
+### Fixed
+
+- **Line 942** — [includes/Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php)
+  - Before: `Do NOT output any of the bracketed "boost percentages" shown here (like "+41", "+40", etc.). ... NEVER write phrases like "5% entity density" or "0.5-1.5% density" in the article body`
+  - After: escaped quotes throughout + rewrote to `"boost percentage numbers"`, `\"5% entity density\"`, `\"0.5% density\"`
+- **Line 983** — [includes/Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php)
+  - Before: `Do NOT write the phrase "entity density" or similar technical terms in the article body`
+  - After: `Do NOT write the phrase \"entity density\" or similar technical SEO jargon in the article body`
+- Verified the entire `return "..."` string in `get_system_prompt()` (lines 924-1059) contains exactly 2 unescaped double quotes — the opening and closing delimiters. Zero stray quotes inside.
+- Verify: `grep -n 'entity density\|boost percentage' seobetter/includes/Async_Generator.php`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.36` → `1.5.37`
+
+### Post-mortem note
+
+The v1.5.36 defensive try/catch wrapper in `rest_generate_start` was the only reason we could diagnose this in one round. Without it, the JS would have kept showing "Failed to start." forever. Keeping the wrapper in place going forward so any future silent fatals surface immediately.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.36 — Defensive try/catch around rest_generate_start so silent PHP exceptions become visible JSON errors
 
 **Date:** 2026-04-15

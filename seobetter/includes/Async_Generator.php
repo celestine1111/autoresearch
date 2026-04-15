@@ -939,7 +939,7 @@ GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
 - Source attributions in plain text format: '(RSPCA, 2026)' or 'According to the AVMA' — NO hyperlinks required
 - Fluent, polished writing with smooth transitions
 - NEVER stuff keywords — doing so reduces AI visibility
-- IMPORTANT: Do NOT output any of the bracketed "boost percentages" shown here (like "+41", "+40", etc.). Those are internal notes about why the guidance exists. NEVER write phrases like "5% entity density" or "0.5-1.5% density" in the article body — those are instructions to you, not content for readers.
+- IMPORTANT: Do NOT output any bracketed boost percentage numbers in the article body. Those are internal notes for you about why each guidance exists. NEVER write phrases like \"5% entity density\", \"0.5% density\", or any literal percentage-as-filler in the article body — those are instructions to you, not content for readers.
 
 CITATION RULES (closed-menu grounding — the plugin injects an AVAILABLE CITATIONS list below):
 
@@ -980,7 +980,7 @@ NLP ENTITY OPTIMIZATION (Google Natural Language):
 - Use lots of proper nouns for people, organizations, places, products — aim for high entity saturation throughout
 - Mention primary entities early in the text (salience scoring)
 - Stay focused on one topic per section (triggers specific content classification)
-- IMPORTANT: the above are instructions for YOUR writing style, not content for readers. Do NOT write the phrase "entity density" or similar technical terms in the article body.
+- IMPORTANT: the above are instructions for YOUR writing style, not content for readers. Do NOT write the phrase \"entity density\" or similar technical SEO jargon in the article body.
 
 WRITE LIKE A HUMAN (CRITICAL — this is the #1 quality signal):
 AI writing has a recognizable smell. It is not about any single word. It is the combination: predictable structure, relentless parallelism, significance inflation, and a tendency to wrap everything in a tidy bow. Your job is to write like a knowledgeable person who has opinions, not like a language model.
