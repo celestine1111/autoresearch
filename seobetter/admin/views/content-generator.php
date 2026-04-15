@@ -587,9 +587,11 @@ window.sbSuggestTopics = function(btn) {
     if(!niche){alert('Enter your niche.');return;}
     var st=document.getElementById('sb-topics-status');
     btn.disabled=true; if(st) st.textContent='Researching real search demand...';
+    var sbCountryEl2 = document.querySelector('[name="country"]') || document.getElementById('sb-country-val');
+    var sbCountry2 = sbCountryEl2 ? (sbCountryEl2.value || '').toUpperCase() : '';
     fetch(CLOUD + '/api/topic-research', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ niche: niche, site_url: SITE })
+        body: JSON.stringify({ niche: niche, site_url: SITE, country: sbCountry2 })
     }).then(function(r){return r.json();}).then(function(d) {
         btn.disabled=false;
         if (d && d.success && d.topics && d.topics.length) {
@@ -675,10 +677,16 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
     if (!kw) { alert('Enter a keyword first.'); return; }
     var btn = this, st = document.getElementById('seobetter-auto-status');
     btn.disabled = true; st.textContent = 'Fetching real-data keywords...';
+    // v1.5.57 — pass the selected country code so Google Suggest returns
+    // region-appropriate completions. Without this, "pet shops" returns
+    // US-centric suggestions like "pet shops washington" even when the
+    // user has Australia selected.
+    var sbCountryEl = document.querySelector('[name="country"]') || document.getElementById('sb-country-val');
+    var sbCountry = sbCountryEl ? (sbCountryEl.value || '').toUpperCase() : '';
     fetch(CLOUD + '/api/topic-research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ niche: kw, site_url: SITE })
+        body: JSON.stringify({ niche: kw, site_url: SITE, country: sbCountry })
     }).then(function(r) { return r.json(); }).then(function(d) {
         btn.disabled = false;
         if (!d || !d.success) {

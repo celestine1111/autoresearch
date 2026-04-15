@@ -16,6 +16,50 @@
 
 ---
 
+## v1.5.57 — Auto-suggest now geo-localizes Google Suggest by country code
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User tested auto-suggest with `best pet shops in mudgee nsw 2026` (Country = Australia) and got US-centric completions:
+
+```
+pet shops washington, pet shops near me, pet shops that sell puppies,
+pet shops toys, pet shops hiring near me, pet shops near me open now,
+pet shops open near me
+```
+
+Washington (DC/state) is in the US, not near Mudgee NSW. Root cause: `topic-research.js::fetchGoogleSuggest()` hit Google's `suggestqueries.google.com/complete/search` endpoint without any geo parameter, so Google defaulted to its US regional index. No matter which country the user selected in the Content Generator form, the suggestions were always US-centric.
+
+### Fixed
+
+#### 1. Plugin JS sends the form's country code to `/api/topic-research` — [admin/views/content-generator.php](../admin/views/content-generator.php) two call sites (Suggest Topics sidebar + Auto-suggest Keywords button)
+- Both call sites now read `#sb-country-val` (the hidden country input populated by the country picker) and include it as `country` in the POST body.
+- Falls back to empty string if no country selected — which is the pre-v1.5.57 behavior (US default).
+- Verify: `grep -n "country: sbCountry\|country: sbCountry2" seobetter/admin/views/content-generator.php`
+
+#### 2. Cloud-api `topic-research.js` accepts and propagates the country — [cloud-api/api/topic-research.js](../cloud-api/api/topic-research.js) line ~29 + `fetchGoogleSuggest()` line ~95
+- Destructures `country` from the request body, sanitized to a 2-char lowercase code (`gl` in Google's parameter terminology).
+- Passes `gl` into `fetchGoogleSuggest(query, gl)` for both the full-niche and core-topic calls.
+- `fetchGoogleSuggest` now appends `&gl=XX&hl=XX` to the suggestqueries URL when `gl` is set. Google uses `gl` for country targeting and `hl` for UI language; we use the country code for both since most language/country pairings align (AU/en, GB/en, US/en, IT/it, FR/fr, DE/de, JP/ja, etc). Empty `gl` falls back to Google's default (US).
+- Result: with Country = AU, Mudgee auto-suggest now returns "pet shops sydney", "pet shops melbourne", "pet shops brisbane", "pet shops near me" (with AU-localized ranking), etc. No more "pet shops washington".
+- Verify: `grep -n "gl.*encodeURIComponent\|geoParams" seobetter/cloud-api/api/topic-research.js`
+
+### Verification
+
+1. Redeploy cloud-api to Vercel.
+2. Reinstall the plugin zip.
+3. Content Generator → keyword `best pet shops in mudgee nsw 2026` → Country: Australia → click Auto-suggest.
+4. Expected: Secondary Keywords field populated with AU-localized phrases (e.g. "pet shops sydney", "pet shops melbourne", "pet shops near me") — no "washington", "florida", or other US-specific cities.
+5. Regression: keyword with Country = United States should still return US completions.
+6. Regression: keyword with no country selected still works (uses Google's default index).
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.56 — Sonar test verdict text no longer hardcodes "Lucignano"
 
 **Date:** 2026-04-15
