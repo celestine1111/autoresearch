@@ -19,7 +19,7 @@
 ## v1.5.66 — CRITICAL hotfix: stray `}` in Content_Injector broke all inject-fix buttons + Citation_Pool fallback
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `3ab7a38`
 
 ### Context
 
