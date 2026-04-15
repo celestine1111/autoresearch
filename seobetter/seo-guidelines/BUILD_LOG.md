@@ -19,7 +19,7 @@
 ## v1.5.54 — Auto-suggest button now populates Secondary Keywords for long-tail keywords + plain-English Country/Language help text
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `fa71ded`
 
 ### Context
 
