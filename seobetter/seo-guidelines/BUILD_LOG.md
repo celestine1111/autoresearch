@@ -19,7 +19,7 @@
 ## v1.5.44 — Shared places-only cache (keyword + country) so test button results are reused by article generation
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `ca55c49`
 
 ### Context
 
