@@ -68,6 +68,39 @@
 ### Advanced Pro
 - [ ] Unlimited AI provider connections
 - [ ] Social content generator (Twitter, LinkedIn, Instagram)
+- [ ] **Booking.com affiliate program integration into Places links (NEW — requested 2026-04-15)**
+
+  **What it does:** when the Places_Link_Injector (v1.5.29) renders the meta line below every verified business H2, for hotel / motel / B&B / hostel / apartment / villa categories, append a Booking.com affiliate search link alongside the existing Google Maps + website links.
+
+  **Example rendered line after feature ships:**
+  ```
+  📍 Via Rosini 20, 52046 Lucignano AR ·
+  View on Google Maps · Website · ⭐ 4.7 (Foursquare) ·
+  🛏️ Book on Booking.com
+  ```
+
+  **How it works:**
+  - User configures Booking.com affiliate ID once in Settings → Branding or a new Settings → Affiliate Links card
+  - Places_Link_Injector checks if the matched pool entry's `type` field contains one of: `hotel`, `motel`, `b&b`, `hostel`, `apartment`, `villa`, `guesthouse`, `lodging`, `resort`, `inn`
+  - If yes AND user has an affiliate ID configured, appends a Booking.com search URL with the user's aid: `https://www.booking.com/searchresults.html?ss={urlencode(name+location)}&aid={user_affiliate_id}&label=seobetter`
+  - The `label` param lets the user track which SEOBetter articles generate bookings in the Booking.com affiliate dashboard
+  - Only fires for lodging business types — restaurants, cafes, shops, gelaterias get the normal meta line without the affiliate link
+
+  **Extensions (later releases):**
+  - **Expedia Group affiliate** (Hotels.com, Vrbo) as an alternative provider the user picks in settings
+  - **GetYourGuide affiliate** for activity/tour listings (would trigger on `attraction`, `museum`, `tour` categories)
+  - **Amazon affiliate** for product review listicles (would need an SKU lookup layer, more complex)
+  - **Automatic affiliate-ID injection into v1.5.30 Sonar results** — when Sonar returns a TripAdvisor URL, optionally rewrite it to a TripAdvisor affiliate URL (requires TripAdvisor partner API key)
+
+  **Why this matters:** lodging is the highest-paying affiliate vertical. A single booking can pay $20-$150 in commission. For travel-niche bloggers running articles like "best hotels in Lucignano Italy" or "where to stay in Kyoto", monetizing the verified Places data is the single biggest revenue lever the plugin could add.
+
+  **Integration point:** [includes/Places_Link_Injector.php::build_meta_line()](includes/Places_Link_Injector.php) — add a conditional branch that checks `$entry['type']` against the lodging category list and appends the affiliate link when the user's `seobetter_settings['booking_affiliate_id']` is non-empty.
+
+  **Estimated effort:** ~2 hours (settings field + category detection + URL builder + meta line injection).
+
+  **Free-to-Pro gating:** could be Pro-only (unlock revenue vertical behind a paywall) or ship free (gives users immediate reason to get the plugin and try it).
+
+
 - [x] **Branding page + AI-generated featured image — ✅ SHIPPED in v1.5.32 (2026-04-15)**
 
   See [BUILD_LOG.md v1.5.32](BUILD_LOG.md) for anchors. Settings → Branding & AI Featured Image card with business name/description, logo upload, 3 brand color pickers, 4 providers (Pollinations free / Gemini Nano Banana / DALL-E 3 / FLUX Pro), 7 style presets, negative prompt, and a `Stock_Image_Inserter::set_featured_image()` hook that tries the AI generator first and falls back to Pexels → Picsum. Original backlog entry kept below for reference:
