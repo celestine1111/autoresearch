@@ -19,7 +19,7 @@
 ## v1.5.63 — Citation_Pool cache invalidation, preview CSS preservation, post-gen readability rewriter, density unification, tighter word truncation, References format locked
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `0590f74`
 
 ### Context
 
