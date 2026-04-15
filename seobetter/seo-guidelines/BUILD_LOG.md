@@ -16,6 +16,91 @@
 
 ---
 
+## v1.5.43 — THE ACTUAL FIX: Remove response_format: json_object from Sonar (Perplexity rejects it with 400)
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context — 14 releases chasing a 1-line bug
+
+v1.5.42's error surfacing finally exposed the real reason Sonar has never worked since v1.5.30 shipped. The diagnostic report shows:
+
+```
+sonar_http_400: OpenRouter returned 400 Bad Request. Body: {
+  "error": {
+    "message": "Provider returned error",
+    "metadata": {
+      "raw": "At body -> response_format -> ResponseFormatText -> type: Input should be 'text',
+              At body -> response_format -> ResponseFormatJSONSchema -> type: Input should be 'json_schema',
+              At body -> response_format -> ResponseFormatJSONSchema -> json_schema: Field required"
+    }
+  }
+}
+```
+
+**Perplexity Sonar does NOT support OpenAI-style `response_format: { type: 'json_object' }`.** Perplexity's API only accepts:
+- `{ type: 'text' }` — default
+- `{ type: 'json_schema', json_schema: { ...schema... } }` — requires full JSON schema
+- `{ type: 'regex', regex: '...' }`
+
+My v1.5.30 fetchSonarPlaces() copied the OpenAI `response_format: { type: 'json_object' }` pattern which works for Claude/GPT/Gemini but **causes Perplexity to hard-reject with 400 every time**. Before v1.5.42 this was swallowed into `return []` with zero logging. Every Sonar call since v1.5.30 has failed silently with this exact 400, and the waterfall has been falling back through OSM/Foursquare/HERE with every call.
+
+This is why the user's OpenRouter activity log shows zero perplexity/sonar calls despite hundreds of successful Claude Sonnet 4 calls — Perplexity was actually being reached, rejecting the request at the body-validation stage BEFORE any generation, and OpenRouter was returning the 400 without logging it as a completed call.
+
+### Fixed
+
+- **Removed `response_format: { type: 'json_object' }`** — [cloud-api/api/research.js::fetchSonarPlaces()](../cloud-api/api/research.js) ~line **929**
+  - Perplexity Sonar rejects this field with a hard 400
+  - Replaced with an explicit user-prompt directive: *"OUTPUT FORMAT: Return ONLY a raw JSON object matching the schema {...}. Do NOT wrap it in markdown code fences. Do NOT add any explanation before or after the JSON. The first character of your response must be '{' and the last must be '}'."*
+  - Sonar models are trained to follow this kind of directive reliably — the existing v1.5.30 JSON-extraction fallback (`content.match(/\{[\s\S]*\}/)`) handles both raw JSON and any stray markdown fence the model might still wrap it in
+  - Verify: `grep -n "response_format\|Perplexity Sonar does NOT support" seobetter/cloud-api/api/research.js`
+
+### Why this bug survived 14 releases (v1.5.30 → v1.5.42)
+
+Each release of the Sonar tier chased a different symptom of the same silent failure:
+
+- **v1.5.30** — shipped fetchSonarPlaces with the buggy response_format, error swallowed by outer try/catch
+- **v1.5.34** — added cache busting; assumed cache was stale
+- **v1.5.38** — added cloud_research timeout bump + PHP-side local_intent safety net; assumed cloud_research was timing out
+- **v1.5.39** — lowered Sonar minimum 3→2, waterfall threshold 3→2; assumed Sonar was returning 2 and being filtered out
+- **v1.5.40** — added OpenRouter key auto-discovery from AI Providers; assumed user had key in wrong field
+- **v1.5.41** — added Sonar diagnostic card with always-visible state; assumed user needed better diagnostic UI
+- **v1.5.42** — replaced silent `return []` with `throw new Error('sonar_{reason}...')`; FINALLY surfaced the actual 400 error body
+- **v1.5.43** — this release, deletes 1 line that was causing the 400
+
+**Lesson for future debugging:** when a wrapper function has a catch-all `try { ... } catch { return []; }` with no logging, every downstream symptom is a distraction from the real error. **Always surface the error first, then fix the root cause.** The v1.5.42 error surfacing was what made v1.5.43 possible — without it, the team would still be guessing.
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.42` → `1.5.43`
+
+### Expected after Vercel redeploys
+
+User retests with v1.5.43 → cloud-api redeployed → 🧪 Test Sonar Connection → expected verdict:
+
+```
+VERDICT: ✅ SONAR IS WORKING. Found 2 verified places for Lucignano...
+─── PROVIDERS TRIED ───
+  • Perplexity Sonar: 2 places
+─── PLACES SAMPLE (first 3) ───
+  1. Gelateria C'era una Volta
+     Via Rosini 20, 52046 Lucignano AR, Italy
+     via Perplexity Sonar
+  2. Snoopy's Gelateria
+     Via Rosini [address], Lucignano, Italy
+     via Perplexity Sonar
+```
+
+OpenRouter activity log will show perplexity/sonar-pro calls for the first time ever.
+
+Then the user can generate an article normally and get a real 2-item listicle with Local Business Mode cap, strict per-section prompts, Places_Link_Injector address lines, and a green Places Validator banner.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.42 — Surface Sonar errors + HERE bbox filter + location sanity check
 
 **Date:** 2026-04-15
