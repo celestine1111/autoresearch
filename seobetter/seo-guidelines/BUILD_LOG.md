@@ -19,7 +19,7 @@
 ## v1.5.56 — Sonar test verdict text no longer hardcodes "Lucignano"
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `e7bc2e4`
 
 ### Context
 
