@@ -351,12 +351,37 @@ $settings = get_option( 'seobetter_settings', [] );
             <table class="form-table">
 
                 <!-- Perplexity Sonar (v1.5.30, RECOMMENDED for small cities) -->
+                <?php
+                // v1.5.40 — detect if the user has an OpenRouter provider
+                // configured in the AI Providers section but has NOT populated
+                // this Places Sonar field. If so, show a prominent reuse banner
+                // so they don't have to paste the same key twice.
+                $has_ai_openrouter = false;
+                $ai_providers_cfg = get_option( 'seobetter_ai_providers', [] );
+                if ( is_array( $ai_providers_cfg ) && ! empty( $ai_providers_cfg['openrouter']['api_key'] ) ) {
+                    $has_ai_openrouter = true;
+                }
+                $places_openrouter_empty = empty( $settings['openrouter_api_key'] );
+                ?>
+                <?php if ( $has_ai_openrouter && $places_openrouter_empty ) : ?>
+                <tr>
+                    <td colspan="2" style="padding:0;background:transparent">
+                        <div style="padding:14px 18px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;margin-bottom:8px">
+                            <strong style="color:#92400e;font-size:14px">⚠️ <?php esc_html_e( 'Good news:', 'seobetter' ); ?></strong>
+                            <?php esc_html_e( 'You already have an OpenRouter API key configured in the AI Providers section above. v1.5.40 will AUTO-REUSE that same key for Perplexity Sonar Tier 0 below — you do NOT need to paste it twice. Just pick a Sonar model below and save. The Places waterfall will now use Sonar to find real businesses for any small city worldwide.', 'seobetter' ); ?>
+                        </div>
+                    </td>
+                </tr>
+                <?php endif; ?>
                 <tr>
                     <th><?php esc_html_e( 'Perplexity Sonar (via OpenRouter)', 'seobetter' ); ?>
                         <span class="seobetter-score seobetter-score-good" style="font-size:10px;margin-left:6px;background:#dbeafe;color:#1e40af"><?php esc_html_e( 'RECOMMENDED', 'seobetter' ); ?></span>
+                        <?php if ( $has_ai_openrouter && $places_openrouter_empty ) : ?>
+                            <br><span class="seobetter-score" style="font-size:10px;background:#dcfce7;color:#166534;margin-top:4px;display:inline-block"><?php esc_html_e( '✨ AUTO-REUSING AI PROVIDERS KEY', 'seobetter' ); ?></span>
+                        <?php endif; ?>
                     </th>
                     <td>
-                        <input type="password" name="openrouter_api_key" value="<?php echo esc_attr( $settings['openrouter_api_key'] ?? '' ); ?>" class="regular-text" placeholder="sk-or-v1-..." autocomplete="off" />
+                        <input type="password" name="openrouter_api_key" value="<?php echo esc_attr( $settings['openrouter_api_key'] ?? '' ); ?>" class="regular-text" placeholder="<?php echo $has_ai_openrouter ? esc_attr__( 'Leave empty to auto-reuse the key from AI Providers above', 'seobetter' ) : 'sk-or-v1-...'; ?>" autocomplete="off" />
                         <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get OpenRouter Key', 'seobetter' ); ?></a>
                         <br><br>
                         <label for="sonar_model" style="display:inline-block;min-width:60px"><strong><?php esc_html_e( 'Model:', 'seobetter' ); ?></strong></label>

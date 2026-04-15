@@ -283,6 +283,22 @@ class AI_Provider_Manager {
     }
 
     /**
+     * v1.5.40 — public helper to retrieve a saved provider's decrypted API key.
+     * Used by Trend_Researcher to auto-discover an OpenRouter key for Places
+     * Sonar Tier 0 when the Places Integrations field is empty. Users naturally
+     * think one OpenRouter key should cover both the article writer and the
+     * Places tier, so we reuse it when available.
+     */
+    public static function get_provider_key( string $provider_id ): string {
+        $saved = self::get_saved_providers();
+        $config = $saved[ $provider_id ] ?? null;
+        if ( ! is_array( $config ) || empty( $config['api_key'] ) ) {
+            return '';
+        }
+        return self::decrypt_key( $config['api_key'] );
+    }
+
+    /**
      * Encrypt a value for storage using WordPress auth keys.
      */
     private static function encrypt_key( string $value ): string {

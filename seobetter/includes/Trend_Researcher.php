@@ -193,7 +193,28 @@ class Trend_Researcher {
         $here_key   = $settings['here_api_key'] ?? '';
         $google_key = $settings['google_places_api_key'] ?? '';
         // v1.5.30 — Perplexity Sonar via OpenRouter as Tier 0 of the waterfall
+        // v1.5.40 — also auto-discover an OpenRouter key from the AI Providers
+        // section if the Places Integrations field is empty. Users naturally
+        // think one OpenRouter key should cover both the article writer and
+        // the Places Sonar tier — it should, and now it does.
         $openrouter_key   = $settings['openrouter_api_key'] ?? '';
+        if ( empty( $openrouter_key ) ) {
+            $ai_providers = get_option( 'seobetter_ai_providers', [] );
+            if ( is_array( $ai_providers ) && ! empty( $ai_providers['openrouter'] ) ) {
+                $or = $ai_providers['openrouter'];
+                // AI_Provider_Manager stores keys encrypted — use its decrypt method
+                if ( ! empty( $or['api_key'] ) && class_exists( 'SEOBetter\\AI_Provider_Manager' ) ) {
+                    try {
+                        $decrypted = AI_Provider_Manager::get_provider_key( 'openrouter' );
+                        if ( ! empty( $decrypted ) ) {
+                            $openrouter_key = $decrypted;
+                        }
+                    } catch ( \Throwable $e ) {
+                        // Fall through — leave key empty, Sonar tier will be skipped
+                    }
+                }
+            }
+        }
         $sonar_model      = $settings['sonar_model'] ?? 'perplexity/sonar';
         if ( ! empty( $fsq_key ) )    $places_keys['foursquare'] = $fsq_key;
         if ( ! empty( $here_key ) )   $places_keys['here']       = $here_key;

@@ -16,6 +16,85 @@
 
 ---
 
+## v1.5.40 — Auto-discover OpenRouter key from AI Providers for Places Sonar Tier 0 (THE reason Sonar was never called)
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User retested Lucignano after v1.5.39 and reported the Places Validator banner STILL shows "Pool size: 0 verified places" + "Perplexity Sonar → OpenStreetMap → Foursquare → HERE → Google Places". User then exported their OpenRouter activity log spanning April 8–15: **231 API calls, 100% to `anthropic/claude-4-sonnet-20250522` (the article writer), ZERO to `perplexity/sonar` or `perplexity/sonar-pro`.** Sonar was never being called. At all. The entire Places Tier 0 pipeline I shipped in v1.5.30 has never actually run in production.
+
+### Root cause
+
+The plugin has **two separate OpenRouter key fields** that store to different options:
+
+1. **AI Providers section** (`seobetter_ai_providers` option, managed by `AI_Provider_Manager`) — used by the article writer
+2. **Places Integrations "Perplexity Sonar (via OpenRouter)" row** (`seobetter_settings['openrouter_api_key']`) — used by `Trend_Researcher::cloud_research()` for Tier 0
+
+The user configured option 1 (successfully — Claude Sonnet 4 calls work). They left option 2 empty. `Trend_Researcher::cloud_research()` at line 128 reads ONLY from `$settings['openrouter_api_key']` (option 2). Since it was empty, `places_keys.openrouter_sonar` was never added to the request body, cloud-api's `fetchPlacesWaterfall()` never received a Sonar key, `fetchSonarPlaces()` was never called, and the waterfall fell straight through to OSM Tier 1 (0 for Lucignano) → pre-gen switch fires → informational article.
+
+Users naturally think one OpenRouter key should cover both — they're right. This release makes that true.
+
+### Fixed
+
+- **Auto-discover OpenRouter key** — [includes/Trend_Researcher.php::cloud_research()](../includes/Trend_Researcher.php) lines **~127-150**
+  - If `$settings['openrouter_api_key']` (Places field) is empty, now checks `seobetter_ai_providers['openrouter']` and calls `AI_Provider_Manager::get_provider_key('openrouter')` to get the decrypted key
+  - Falls through silently (leaving key empty → Sonar tier skipped) if neither is configured
+  - Wrapped in try/catch to handle any decryption errors without breaking the research pipeline
+  - Verify: `grep -n "Auto-discover an OpenRouter key\|get_provider_key" seobetter/includes/Trend_Researcher.php`
+
+- **New `AI_Provider_Manager::get_provider_key()` public helper** — [includes/AI_Provider_Manager.php::get_provider_key()](../includes/AI_Provider_Manager.php) new method after `get_saved_providers()`
+  - Takes a provider_id, returns the decrypted api_key or empty string
+  - Used by Trend_Researcher to read the article-writer OpenRouter key for reuse as a Places Sonar key
+  - Verify: `grep -n "function get_provider_key" seobetter/includes/AI_Provider_Manager.php`
+
+- **Settings banner when auto-reuse applies** — [admin/views/settings.php](../admin/views/settings.php) Places Integrations card Perplexity Sonar row
+  - Checks if `seobetter_ai_providers['openrouter']['api_key']` is set AND `seobetter_settings['openrouter_api_key']` is empty
+  - If both conditions match, shows a prominent amber banner above the row: *"Good news: You already have an OpenRouter API key configured in AI Providers. v1.5.40 will AUTO-REUSE that same key for Perplexity Sonar Tier 0 — you do NOT need to paste it twice. Just pick a Sonar model below and save."*
+  - Also adds a green `✨ AUTO-REUSING AI PROVIDERS KEY` badge next to the row title
+  - Input placeholder changes from `sk-or-v1-...` to `"Leave empty to auto-reuse the key from AI Providers above"` in this state
+  - Verify: `grep -n "AUTO-REUSING AI PROVIDERS KEY\|has_ai_openrouter" seobetter/admin/views/settings.php`
+
+### User's question — does the issue affect all keywords or just their Lucignano test?
+
+The user asked: "does it produce the same output if people have the same issue but with the different keyword, or does this only now show this for my keyword?"
+
+**Answer:** the Sonar-not-being-called bug fires on **EVERY local-intent keyword** where the user has an OpenRouter key in AI Providers but not in Places Integrations. Any keyword matching one of the 4 `detectLocalIntent` regex patterns (`X in Y`, `best X in Y`, `X near me`, `what's the best X in Y`) would fall through to the same failure path — OSM-only waterfall → 0 for small towns → pre-gen switch → informational article. So for any local keyword targeting a small town, the user would get the same "⚠️ No verified businesses found" banner. Keywords with large cities (Rome, Paris, New York) would coincidentally "work" because OSM has dense coverage there — but even those would silently miss out on Sonar's richer results with photos/ratings/citations.
+
+### What the OpenRouter dashboard settings (Observability, Web Search plugin) do NOT do
+
+User also asked whether OpenRouter's "Observability" and "Web Search plugin" settings would fix this. Answer: no.
+- **Observability** is request-logging only. Useful for verifying what's being called (user can enable Input/Output Logging beta to see that ZERO sonar calls were made, confirming the bug), but doesn't change plugin behavior.
+- **Web Search plugin** adds real-time web search to any model call via OpenRouter. It's an interesting alternative — enabling it on the user's Claude Sonnet 4 provider would give the article writer web search during generation, partially mitigating hallucination. But it does NOT produce a structured `places` array, so Local Business Mode, Places_Validator, Places_Link_Injector, and the strict per-section prompt all remain disabled. The v1.5.40 Tier 0 fix is still the primary path because it gives the plugin structured verified data that all downstream safeguards depend on.
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.39` → `1.5.40`
+
+### Expected behavior after fix
+
+For the user's Lucignano retest after installing v1.5.40:
+1. Trend_Researcher reads `seobetter_settings['openrouter_api_key']` — empty
+2. Falls back to `AI_Provider_Manager::get_provider_key('openrouter')` — returns the decrypted article-writer key
+3. Builds `places_keys.openrouter_sonar = { key, model: 'perplexity/sonar-pro' }` (user selected sonar-pro)
+4. Sends to cloud-api `/api/research`
+5. Cloud-api's `fetchSonarPlaces()` is finally called with a real key
+6. Sonar calls OpenRouter, OpenRouter's activity log finally shows `perplexity/sonar-pro` calls
+7. Sonar finds 2 real gelaterie (Gelateria C'era una Volta + Snoopy's)
+8. Waterfall stops at Tier 0 (2 >= 2 threshold from v1.5.39)
+9. `places_count = 2`, `local_business_mode = true`, `local_business_cap = 2`
+10. Outline produces exactly 2 business H2s + generic fill sections
+11. Each business section uses strict per-section prompt with verified pool entry
+12. Places_Link_Injector adds 📍 address + Google Maps + website below each H2
+13. Places_Validator post-gen: kept_sections = 2, removed_sections = 0, green banner
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.39 — Lower Sonar min from 3 to 2 + waterfall threshold 3→2 + remove "5% entity density" literal + update banner to mention Sonar
 
 **Date:** 2026-04-15
