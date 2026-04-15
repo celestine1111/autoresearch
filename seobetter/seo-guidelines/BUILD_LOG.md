@@ -19,7 +19,7 @@
 ## v1.5.39 — Lower Sonar min from 3 to 2 + waterfall threshold 3→2 + remove "5% entity density" literal + update banner to mention Sonar
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `2fd9479`
 
 ### Context
 
