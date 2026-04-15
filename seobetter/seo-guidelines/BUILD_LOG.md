@@ -19,7 +19,7 @@
 ## v1.5.46 — Four production fixes from live Lucignano article: language drift, save-path place links, references suffix, word count accuracy
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `321edd4`
 
 ### Context
 
