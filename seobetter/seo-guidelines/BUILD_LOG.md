@@ -19,7 +19,7 @@
 ## v1.5.34 — Critical bugfix trio: stale research cache + broken Pollinations download + "5%" leaking into article body
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `4b717d2`
 
 ### Context
 
