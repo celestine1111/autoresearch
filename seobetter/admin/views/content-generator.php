@@ -1109,6 +1109,13 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             // validate_outbound_links() as the primary allow-list and by
             // build_references_section() to build References programmatically.
             citation_pool: res.citation_pool || [],
+            // v1.5.46 — verified Places pool from generation. Used by
+            // rest_save_draft() to run Places_Link_Injector on the saved
+            // hybrid HTML so the 📍 address + Google Maps + website meta
+            // line below each business H2 survives into the WP draft.
+            // Without this, the preview shows the meta lines but the saved
+            // draft loses them.
+            places: res.places || [],
             // 5-Part Framework phase report (§28) — persisted to post meta
             // so future audits can see which phases passed/failed.
             framework: res.framework || {}

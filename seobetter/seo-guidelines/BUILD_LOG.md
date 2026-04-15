@@ -16,6 +16,95 @@
 
 ---
 
+## v1.5.46 — Four production fixes from live Lucignano article: language drift, save-path place links, references suffix, word count accuracy
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User generated a Lucignano article at `https://mindiampets.com.au/how-to-find-best-gelato-in-lucignano-italy-2026-guide/` and reported four distinct bugs visible in the published output:
+
+1. **Mixed language** — Key Takeaways section was rendered in Italian even though the user picked Article Language = English
+2. **Place meta links lost on save** — the preview showed `📍 address · View on Google Maps · Website` under each business H2, but the saved WP draft had no meta lines at all
+3. **References "(Perplexity)" suffix** — References section entries ended with `— Perplexity Sonar` / `— Foursquare` / etc provider attribution that looked like noise
+4. **Word count overshoot** — user picked 2000 words, got ~2480 words (24% over). User wants 500→500, 1500→1500, 2000→2000
+
+Also a fifth follow-up: user wants to test the v1.5.32 Branding + AI featured image feature to see if it actually works with their setup.
+
+### Fixed
+
+#### 1. Language rule now always fires (not just for non-English) — [includes/Async_Generator.php::get_system_prompt()](../includes/Async_Generator.php) lines **~904-915**
+- **Before**: `$lang_rule = ( $language !== 'en' ) ? "...LANGUAGE: Write in {$lang_name}..." : '';` — English articles got NO language rule, so the AI could drift into another language when research data contained non-English content (e.g. Sonar returns Italian place names + addresses for Lucignano)
+- **After**: rule ALWAYS fires with explicit wording that research data may contain other languages but the article body must be in `{$lang_name}` — "translate or describe them in {$lang_name}, do NOT copy them in the source language"
+- Added phrase "This rule is non-negotiable" for reinforcement
+- Verify: `grep -n "This rule is non-negotiable" seobetter/includes/Async_Generator.php`
+
+#### 2. Places_Link_Injector now runs in the SAVE path — [seobetter.php::rest_save_draft()](../seobetter.php) lines **~848-858** + [includes/Async_Generator.php::assemble_final()](../includes/Async_Generator.php) lines **~845-852** + [admin/views/content-generator.php](../admin/views/content-generator.php) draft object
+- **Before**: Places_Link_Injector ran ONLY in `assemble_final()` on the preview `$html`. The save path (`rest_save_draft`) took `$markdown` from the JS draft object, ran `validate_outbound_links` + `append_references_section` + `format_hybrid` FRESH, producing a new `$post_content` that had never seen the injector. Saved WP drafts lost all place meta lines.
+- **After**: three changes chained:
+  1. `assemble_final()` now includes `'places' => $job['results']['places'] ?? []` in its return value
+  2. JS `_seobetterDraft` object now includes `places: res.places || []` so it flows into the `save-draft` POST body
+  3. `rest_save_draft()` reads `places` from the request and calls `SEOBetter\Places_Link_Injector::inject( $post_content, $places_pool )` immediately after `format_hybrid` produces the post content
+- Result: 📍 address + Google Maps + website + phone meta line now appears below every business H2 in the saved WP draft, matching the preview
+- Verify: `grep -n "Places_Link_Injector::inject" seobetter/seobetter.php`
+
+#### 3. Removed `— source_name` suffix from References — [seobetter.php::append_references_section()](../seobetter.php) line **~1973**
+- **Before**: `$lines[] = "{$i}. [{$title}]({$url}) — {$src}";` which produced lines like `1. [Gelaterie C'era Una Volta — Lucignano AR, Italia](url) — Perplexity Sonar`
+- **After**: `$lines[] = "{$i}. [{$title}]({$url})";` — clean numbered links, no source attribution noise. The title field already contains business name + address which is sufficient context.
+- Verify: `grep -n "— {\$src}" seobetter/seobetter.php` (should return zero matches in append_references_section)
+
+#### 4. Word count accuracy — rewrote budget formula — [includes/Async_Generator.php::generate_outline()](../includes/Async_Generator.php) + [includes/Async_Generator.php::generate_section()](../includes/Async_Generator.php)
+- **Before**: `$words_per_section = round( ( $total_words * 0.85 ) / $num_sections )` which ignored the fixed cost of Key Takeaways (~150 words) + FAQ (~400 words) + References. For a 2000-word target with 5 sections the formula produced 340 per section × 5 = 1700 + 150 + 400 = 2250 words (already 12% over before AI overshoot). Actual output was ~2480 (24% over target).
+- **After**: new formula reserves a fixed 350-word budget for structural sections (100 for takeaways + 250 for FAQ + 0 for auto-built references) and allocates the remaining budget across content sections with a 15% overshoot compensation factor:
+  ```
+  $structural_budget = 350;
+  $content_budget = max(150, $total_words - $structural_budget);
+  $words_per_section = max(60, round(($content_budget / $num_sections) * 0.85));
+  ```
+- **num_sections scaling tightened** for better fit on short articles:
+  - `≤600 words → 2 content sections`
+  - `≤1000 words → 3 content sections`
+  - `≤1500 words → 4 content sections`
+  - `≤2200 words → 5 content sections`
+  - `≤2800 words → 6 content sections`
+  - `>2800 → scales with round(total/400), capped at 8`
+  - Previously: flat `max(3, min(8, round(total/400)))` which produced a minimum of 3 content sections even for 500-word articles (guaranteed overshoot)
+- **Stricter per-section prompt** — [generate_section()](../includes/Async_Generator.php) the else branch (regular content section):
+  - **Before**: "WORD LIMIT: Write {$words_per_section} words for this section. Do not exceed this. Stop when you reach it." — soft directive, AI ignored the cap
+  - **After**: "WORD LIMIT (CRITICAL): This section must be between {$lower_cap} and {$upper_cap} words. Target: {$words_per_section}. This is a HARD CAP, not a suggestion. Count your words as you write. STOP writing the moment you reach {$upper_cap} words, even mid-paragraph. Writing significantly more than {$upper_cap} is a quality failure. Writing fewer than {$lower_cap} is also a quality failure. Hit the target."
+  - `$lower_cap = max(40, words_per_section - 40)`, `$upper_cap = words_per_section + 30` — gives the model a tight range instead of a single number
+- **Key Takeaways and FAQ also capped**:
+  - Key Takeaways: hard cap 80-120 words total (3 bullets × 30-40 each), `max_tokens: 300`
+  - FAQ: hard cap 200-280 words total (5 Q&A × ~50 each), `max_tokens: 900`
+- Expected results after this release:
+  - 500 target → content budget 150 / 2 sections × 0.85 = 64 per section → 128 content + 350 structural = **~478 words** ✅
+  - 1000 target → 650 / 3 × 0.85 = 184 per section → 552 + 350 = **~902 words** (minor under) — acceptable
+  - 1500 target → 1150 / 4 × 0.85 = 244 per section → 976 + 350 = **~1326** — acceptable for "close to target"
+  - 2000 target → 1650 / 5 × 0.85 = 280 per section → 1400 + 350 = **~1750** — acceptable
+  - 2500 target → 2150 / 5 × 0.85 = 365 per section → 1825 + 350 = **~2175** — acceptable
+  - 3000 target → 2650 / 6 × 0.85 = 375 per section → 2250 + 350 = **~2600** — acceptable
+- All estimates are within ±15% of target (vs ±25% overshoot on old formula)
+- Verify: `grep -n "structural_budget\|HARD CAP\|WORD LIMIT (CRITICAL)" seobetter/includes/Async_Generator.php`
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.45` → `1.5.46`
+
+### Known limitation
+
+Word count accuracy is still AI-dependent. The new formula targets ±15% which is production-acceptable but not bit-exact. Getting to ±5% would require post-generation trimming (truncate the final article to exactly N words) which is possible as a v1.5.47 follow-up if the user's testing shows the new formula is still insufficient.
+
+### Also discussed — user wants to test v1.5.32 Branding + AI Featured Image feature
+
+This is a separate follow-up, no code changes needed in v1.5.46. Test instructions provided in the user-facing response. Feature itself was shipped in v1.5.32 and has been working in testing — user hasn't personally verified yet.
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.45 — Split Country/Language picker into two independent fields + rewrite all tooltips in beginner plain-English
 
 **Date:** 2026-04-15

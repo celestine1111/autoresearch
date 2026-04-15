@@ -418,8 +418,25 @@ class Async_Generator {
      */
     private static function generate_outline( string $keyword, array $options, array $secondary, array $lsi ): array {
         $total_words = $options['word_count'] ?? 2000;
-        // Scale sections to word count: 1000w = 3 content sections, 2000w = 5, 3000w = 7
-        $content_sections = max( 3, min( 8, round( $total_words / 400 ) ) );
+        // v1.5.46 — scale content sections to the actual word target more
+        // tightly. Previously: max(3, min(8, round(total/400))) which produced
+        // 3 sections for any target <=1200 words and overshot by 25% on short
+        // articles. New scale matches the per-section formula in
+        // generate_section() so outline length and section word budgets are
+        // consistent end-to-end.
+        if ( $total_words <= 600 ) {
+            $content_sections = 2;
+        } elseif ( $total_words <= 1000 ) {
+            $content_sections = 3;
+        } elseif ( $total_words <= 1500 ) {
+            $content_sections = 4;
+        } elseif ( $total_words <= 2200 ) {
+            $content_sections = 5;
+        } elseif ( $total_words <= 2800 ) {
+            $content_sections = 6;
+        } else {
+            $content_sections = min( 8, round( $total_words / 400 ) );
+        }
         // Total sections = content + takeaways + FAQ + references
         $num_sections = $content_sections + 3;
         $kw_context = '';
@@ -553,8 +570,31 @@ class Async_Generator {
      */
     private static function generate_section( string $keyword, string $heading, int $index, array $options, array $secondary, array $lsi, string $system, string $trends, string $intent = 'informational', array $places_pool = [], string $places_location = '' ): string {
         $total_words = $options['word_count'] ?? 2000;
-        $num_sections = max( 3, round( $total_words / 400 ) );
-        $words_per_section = max( 100, round( ( $total_words * 0.85 ) / $num_sections ) );
+        // v1.5.46 — stricter word budget formula. Previously: 0.85 × total /
+        // num_sections, which ignored the fixed cost of Key Takeaways + FAQ
+        // and produced 25%+ overshoot on short articles (user selected 2000,
+        // got 2480). New formula reserves a fixed 350-word budget for the
+        // structural sections (takeaways ~100, FAQ ~250) and distributes the
+        // remaining budget across content sections. Also trimmed num_sections
+        // scaling for better fit on 500/1000/1500 targets.
+        $structural_budget = 350; // Key Takeaways + FAQ + References combined
+        $content_budget = max( 150, $total_words - $structural_budget );
+        // Scale number of content sections to match total target more tightly
+        if ( $total_words <= 600 ) {
+            $num_sections = 2;
+        } elseif ( $total_words <= 1000 ) {
+            $num_sections = 3;
+        } elseif ( $total_words <= 1500 ) {
+            $num_sections = 4;
+        } elseif ( $total_words <= 2200 ) {
+            $num_sections = 5;
+        } elseif ( $total_words <= 2800 ) {
+            $num_sections = 6;
+        } else {
+            $num_sections = min( 8, round( $total_words / 400 ) );
+        }
+        // Reduce per-section budget by 15% to compensate for average AI overshoot
+        $words_per_section = max( 60, round( ( $content_budget / $num_sections ) * 0.85 ) );
         $tone = $options['tone'] ?? 'authoritative';
         $audience = $options['audience'] ?? '';
         $domain = $options['domain'] ?? 'general';
@@ -601,12 +641,17 @@ class Async_Generator {
 
         if ( $is_takeaways ) {
             $trends_context = ( $trends ) ? "\n\nUse these real data points if relevant:\n{$trends}" : '';
-            $prompt = "Write the Key Takeaways section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\nReturn:\n## Key Takeaways\n- [Takeaway 1]\n- [Takeaway 2]\n- [Takeaway 3]\n\nRules:\n- The FIRST bullet MUST contain the exact keyword \"{$keyword}\" — this is the first text SEO plugins scan in the article.\n- Make each bullet a different length. One short and punchy. One longer with a specific number or fact.\n- If research data is available, use a real statistic in one bullet.\n- Match the tone and audience specified above.\n- Do not use AI words (pivotal, crucial, landscape, delve, leverage).";
-            $max = 400;
+            // v1.5.46 — Key Takeaways capped at ~100 words total. Three
+            // bullets × ~30 words each. Part of the 350-word structural
+            // budget reserved in the new word-count formula.
+            $prompt = "Write the Key Takeaways section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\nWORD LIMIT (HARD CAP): The entire Key Takeaways section must be 80-120 words total. Three bullets, ~30-40 words each. Do not exceed 120 words.\n\nReturn:\n## Key Takeaways\n- [Takeaway 1]\n- [Takeaway 2]\n- [Takeaway 3]\n\nRules:\n- The FIRST bullet MUST contain the exact keyword \"{$keyword}\" — this is the first text SEO plugins scan in the article.\n- Make each bullet a different length. One short and punchy. One longer with a specific number or fact.\n- If research data is available, use a real statistic in one bullet.\n- Match the tone and audience specified above.\n- Do not use AI words (pivotal, crucial, landscape, delve, leverage).";
+            $max = 300;
         } elseif ( $is_faq ) {
             $trends_context = ( $trends ) ? "\n\nUse real data from research when answering:\n{$trends}" : '';
-            $prompt = "Write an FAQ section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\nWrite 5 question-answer pairs. Vary the answer lengths — some short (25-35 words), some longer (50-80 words). Do not make every answer the same length or structure.{$readability_rule}\n\nRules:\n- Phrase questions exactly how real people search (use 'you' and natural language)\n- Answer directly in the first sentence — no throat-clearing\n- Include the keyword \"{$keyword}\" in at least 2 questions\n- Use a real statistic or fact from the research data in at least one answer\n- Never start answers with pronouns (It, This, They)\n- Never start with 'Yes,' or 'No,' followed by a restatement\n- Match the tone specified above\n\nFormat:\n\n## Frequently Asked Questions\n\n### [Question]?\n[Answer]";
-            $max = 2000;
+            // v1.5.46 — FAQ capped at ~250 words total. 5 Q&A pairs averaging
+            // ~50 words each. Part of the 350-word structural reserve.
+            $prompt = "Write an FAQ section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\nWORD LIMIT (HARD CAP): The entire FAQ section must be 200-280 words total. 5 question-answer pairs, averaging ~45-55 words each (question + answer combined). Do not exceed 280 words.\n\nVary the answer lengths — some short (15-25 words), some longer (40-60 words). Do not make every answer the same length or structure.{$readability_rule}\n\nRules:\n- Phrase questions exactly how real people search (use 'you' and natural language)\n- Answer directly in the first sentence — no throat-clearing\n- Include the keyword \"{$keyword}\" in at least 2 questions\n- Use a real statistic or fact from the research data in at least one answer\n- Never start answers with pronouns (It, This, They)\n- Never start with 'Yes,' or 'No,' followed by a restatement\n- Match the tone specified above\n\nFormat:\n\n## Frequently Asked Questions\n\n### [Question]?\n[Answer]";
+            $max = 900;
         } elseif ( $is_references ) {
             // The References section is now built programmatically by the plugin
             // at save time from the verified citation pool — the AI no longer
@@ -682,7 +727,14 @@ class Async_Generator {
                 $intro_rule = "\n\nINTRODUCTION RULE (SEO PLUGINS CHECK THIS PARAGRAPH):\n- The FIRST SENTENCE of this section must contain the exact phrase \"{$keyword}\" naturally\n- Bold the keyword once: **{$keyword}**\n- SEO plugins (AIOSEO, Yoast, RankMath) check this paragraph for the focus keyword\n- Write the intro like a human opening a conversation — not a definition or press release\n- Do NOT start with '[Keyword] is...' or '[Keyword] refers to...' — those are AI patterns\n- Jump into a specific fact, opinion, or context that includes the keyword naturally";
             }
 
-            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\nWORD LIMIT: Write {$words_per_section} words for this section. Do not exceed this. Stop when you reach it.{$trends_inject}{$readability_rule}{$intro_rule}\n\nKEYWORD RULES:\n- The phrase \"{$keyword}\" should appear 2-3 times in this section, naturally\n- Include it in the first paragraph\n- Also use variations and rearrangements\n\nWRITING RULES:\n- Start with: ## {$heading}\n- Open with a paragraph that directly answers the heading. Do not restate the heading.\n- Vary paragraph lengths — some short (2-3 sentences), some longer (4-5). Do not make every paragraph the same size.\n- Include statistics from the RESEARCH DATA if available. Do NOT invent numbers or statistics.\n- Include expert quotes from the research data if available. Use real names and organizations.\n- When citing a source, use a clickable Markdown link: [Source Name](URL). Use ONLY URLs that appear in the RESEARCH DATA above. If you want to mention an organization but its URL is not in the research data, link to their homepage domain only (e.g., https://www.rspca.org.au/) — NEVER invent a page path like /adopt-pet/guide because it will be a 404 error. If no URL exists at all, state the claim without any link.\n- NEVER invent URLs, page paths, book titles, study names, or years. Every link you produce must come from the RESEARCH DATA or be a verified homepage domain.\n- Add a comparison table ONLY if the section genuinely compares things. Do not force tables.\n- Use a bullet list ONLY when listing items. Do not default to bullets for every section.\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- No bold except the keyword once in the intro section\n- Vary your sentence rhythm. Mix short direct statements with longer explanations. Do not write every sentence the same length.\n- Write like someone who knows this topic well and has an opinion about it.\n\nOutput Markdown only.";
+            // v1.5.46 — stricter word-count enforcement. User reported that
+            // picking 2000 words produced ~2480 words (24% overshoot). New
+            // prompt directive makes the word cap a hard limit, not a target.
+            $lower_cap = max( 40, $words_per_section - 40 );
+            $upper_cap = $words_per_section + 30;
+            $prompt = "Write a section for an article about \"{$keyword}\".\n{$kw_context}\n\nSection heading: \"{$heading}\"\n\n"
+                . "WORD LIMIT (CRITICAL): This section must be between {$lower_cap} and {$upper_cap} words. Target: {$words_per_section}. This is a HARD CAP, not a suggestion. Count your words as you write. STOP writing the moment you reach {$upper_cap} words, even mid-paragraph. Writing significantly more than {$upper_cap} is a quality failure. Writing fewer than {$lower_cap} is also a quality failure. Hit the target."
+                . "{$trends_inject}{$readability_rule}{$intro_rule}\n\nKEYWORD RULES:\n- The phrase \"{$keyword}\" should appear 2-3 times in this section, naturally\n- Include it in the first paragraph\n- Also use variations and rearrangements\n\nWRITING RULES:\n- Start with: ## {$heading}\n- Open with a paragraph that directly answers the heading. Do not restate the heading.\n- Vary paragraph lengths — some short (2-3 sentences), some longer (4-5). Do not make every paragraph the same size.\n- Include statistics from the RESEARCH DATA if available. Do NOT invent numbers or statistics.\n- Include expert quotes from the research data if available. Use real names and organizations.\n- When citing a source, use a clickable Markdown link: [Source Name](URL). Use ONLY URLs that appear in the RESEARCH DATA above. If you want to mention an organization but its URL is not in the research data, link to their homepage domain only (e.g., https://www.rspca.org.au/) — NEVER invent a page path like /adopt-pet/guide because it will be a 404 error. If no URL exists at all, state the claim without any link.\n- NEVER invent URLs, page paths, book titles, study names, or years. Every link you produce must come from the RESEARCH DATA or be a verified homepage domain.\n- Add a comparison table ONLY if the section genuinely compares things. Do not force tables.\n- Use a bullet list ONLY when listing items. Do not default to bullets for every section.\n- NEVER start any paragraph with: It, This, They, These, Those, He, She, We\n- No bold except the keyword once in the intro section\n- Vary your sentence rhythm. Mix short direct statements with longer explanations. Do not write every sentence the same length.\n- Write like someone who knows this topic well and has an opinion about it.\n\nOutput Markdown only.";
             $max = 4096;
         }
 
@@ -843,6 +895,13 @@ class Async_Generator {
             // validate_outbound_links() can use it as the primary allow-list
             // and build_references_section() can auto-generate References.
             'citation_pool' => $job['results']['citation_pool'] ?? [],
+            // v1.5.46 — thread the verified Places pool through to the save
+            // path so rest_save_draft() can run Places_Link_Injector on the
+            // hybrid-formatted HTML. Without this, the preview shows 📍
+            // address + Google Maps links below each H2 but the saved WP
+            // draft loses them because the save path runs format_hybrid
+            // fresh from the markdown and never calls the injector.
+            'places'        => $job['results']['places'] ?? [],
             // 5-Part Framework phase tracking (§28)
             'framework'     => array_merge(
                 $job['results']['framework'] ?? [],
@@ -922,7 +981,13 @@ class Async_Generator {
             'et' => 'Estonian', 'lv' => 'Latvian', 'lt' => 'Lithuanian',
         ];
         $lang_name = $lang_names[ $language ] ?? 'English';
-        $lang_rule = ( $language !== 'en' ) ? "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every heading, paragraph, FAQ, key takeaway, and reference description must be in {$lang_name}. Do NOT write in English unless the language is English. The keyword may be in any language — use it as-is." : '';
+        // v1.5.46 — language rule now ALWAYS fires, including for English.
+        // Before, language='en' produced no rule, so if the research data
+        // contained non-English content (e.g. Sonar returns Italian place
+        // names + addresses for Lucignano gelaterie), the AI could drift
+        // into Italian for Key Takeaways or FAQ sections despite the user
+        // picking English. Explicit per-article language rule prevents drift.
+        $lang_rule = "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every H1, H2, H3, paragraph, bullet list, FAQ question, FAQ answer, Key Takeaways item, and reference description must be in {$lang_name}. Research data may contain terms or place names in other languages — translate or describe them in {$lang_name}, do NOT copy them in the source language. The primary keyword may be in any language but the article body text must be {$lang_name}. This rule is non-negotiable.";
 
         return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).{$lang_rule}
 
