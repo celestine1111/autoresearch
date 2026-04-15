@@ -19,7 +19,7 @@
 ## v1.5.57 — Auto-suggest now geo-localizes Google Suggest by country code
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `5d80e82`
 
 ### Context
 
