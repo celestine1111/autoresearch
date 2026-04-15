@@ -19,7 +19,7 @@
 ## v1.5.48 — Five production fixes from Mudgee test: Lucignano/Cortona mentions, article-body disclaimer, stat badge regex, grade-13 readability, 3.53% density
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `309cf3f`
 
 ### Context
 
