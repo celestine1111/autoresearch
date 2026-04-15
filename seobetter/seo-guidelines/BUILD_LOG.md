@@ -16,6 +16,53 @@
 
 ---
 
+## v1.5.59 — extractCoreTopic strips action verbs, pronouns, prepositions, and adverbs so Datamuse returns relevant LSI
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User tested Auto-suggest for Article 1 (`how to transition your dog to raw food safely 2026`) and got LSI keywords: `lion, curb, race, cuts, changing, change, motion, captain, establishment, nose`. Completely unrelated to raw dog food nutrition.
+
+Root cause: `extractCoreTopic()` only stripped SEO qualifiers (best, top, guide) and location/country names, leaving `"transition your dog to raw food safely"` — 6 words, then truncated to 30 chars producing `"transition your dog to raw foo"`. Datamuse's `ml=` endpoint treats each word independently and returns semantic associations for "transition" (motion, change, curb), "dog" (lion, nose), "foo" (unrelated nonsense). Terrible for LSI keyword generation.
+
+### Fixed
+
+#### Aggressive stopword stripping in `extractCoreTopic()` — [cloud-api/api/topic-research.js::extractCoreTopic()](../cloud-api/api/topic-research.js) line ~196
+- New `stopContentWords` array with ~100 entries covering:
+  - Action verbs common in how-to queries (transition, introduce, train, teach, feed, choose, switch, make, start, begin, stop, prepare, give, find, know, understand, use, try, help, keep, avoid, prevent, fix, solve, improve, learn) and their -ing forms
+  - Adverbs (safely, quickly, easily, properly, correctly, slowly, carefully, gradually, naturally, effectively, efficiently)
+  - Articles + pronouns (a, an, the, your, my, his, her, their, our, its, some)
+  - Prepositions (to, for, from, with, about, into, onto, by, of, on, at, as, like, up, down, off, out, over, under)
+  - Conjunctions (and, or, but, so, if, then, that, than, because)
+  - Generic meta nouns (way, method, step, thing, type, kind, sort, option)
+- Replaced the 30-char truncation with a **3-word cap** on content words. Character truncation previously cut "raw food" to "raw foo" (matching a different semantic cluster).
+- Fallback for over-stripped queries now takes the last 3 CONTENT words (skipping stopwords) instead of the literal last 3 words.
+
+### Worked examples
+
+```
+"how to transition your dog to raw food safely 2026"  →  "dog raw food"       ✅
+"how to introduce raw food to a puppy"                →  "raw food puppy"     ✅
+"best washable dog beds australia 2026"               →  "washable dog beds"  ✅
+"best gelato in lucignano italy 2026"                 →  "gelato"             ✅
+"raw dog food bulk"                                    →  "dog food bulk"     ✅
+```
+
+Datamuse will now receive clean noun phrases and return real LSI like `nutrition, kibble, protein, diet, carnivore, feeding, meal, biscuit, morsel` — actually relevant to raw dog food articles.
+
+### Verification
+
+1. Redeploy cloud-api to Vercel.
+2. Open Content Generator, enter `how to transition your dog to raw food safely 2026`, click Auto-suggest.
+3. Expected LSI keywords: real terms like `nutrition, protein, diet, kibble, feeding, raw, meal, digestive, carnivore, enzymes` — NOT lion/curb/race/nose/captain.
+4. Regression: all previously-working keywords still produce the expected core topic (run the test script at the commit to verify).
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.58 — Two critical fixes: persisted places cache (test-then-generate determinism) + location-aware auto-suggest
 
 **Date:** 2026-04-15
