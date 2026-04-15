@@ -19,7 +19,7 @@
 ## v1.5.59 — extractCoreTopic strips action verbs, pronouns, prepositions, and adverbs so Datamuse returns relevant LSI
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `022aced`
 
 ### Context
 
