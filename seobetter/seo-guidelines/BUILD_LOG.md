@@ -16,6 +16,33 @@
 
 ---
 
+## v1.5.56 — Sonar test verdict text no longer hardcodes "Lucignano"
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+v1.5.55 added custom keyword + country inputs to the Test Sonar Connection button, but the verdict string was still built from a hardcoded "Lucignano" reference. User tested `best pet shops in mudgee nsw 2026` and got `✅ SONAR IS WORKING. Found 3 verified places for Lucignano` even though the test ran against Mudgee. Three real Mudgee places were returned (Rival Collars, Mudgee Birds & Aquarium, Mudgee Produce Plus — confirming v1.5.55 works end-to-end), but the verdict was confusing because of the stale town name.
+
+### Fixed
+
+#### `build_sonar_verdict()` now accepts a location label — [seobetter.php::build_sonar_verdict()](../seobetter.php) line ~776
+- Added fourth parameter `$location_label` with a sensible default ("this location"). All verdict strings referring to "Lucignano" replaced with `$loc`. Empty-result message generalized to: "Sonar genuinely could not verify any businesses online for this exact location" (was "(unlikely — Perplexity Web UI finds 2 real gelaterie)").
+- `rest_test_sonar()` now passes `$result['places_location'] ?? $test_keyword` as the fourth argument so the verdict reflects the actual geocoded location or keyword the user entered.
+- Verify: `grep -n "location_label\|for ' . \$loc" seobetter/seobetter.php`
+
+### Verification
+
+1. Upload the new plugin zip.
+2. Settings → Test Sonar Connection → enter keyword `best pet shops in mudgee nsw 2026` + country `AU` → Test.
+3. Expected verdict: `✅ SONAR IS WORKING. Found 3 verified places for Mudgee, Mid-Western Regional Council, NSW, Australia via the places_integrations key source.` (no Lucignano reference anywhere).
+4. Leave the fields empty and retest → verdict should mention Lucignano because that's the default keyword. Both paths now honest.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.55 — Any-city-any-topic fix: Sonar Pro default, retry-on-error, 25km rural radius, name+type filter, custom keyword test
 
 **Date:** 2026-04-15
