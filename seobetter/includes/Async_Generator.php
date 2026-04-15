@@ -676,8 +676,13 @@ class Async_Generator {
         // words. Plus hard requirements for first-hand language ("we tested",
         // "in our experience") to fire CORE-EEAT E1, and 3+ named entities per
         // section to fire CORE-EEAT A1 and Entity Density.
-        $kw_min = max( 2, round( $words_per_section / 250 ) );
-        $kw_max = max( 3, round( $words_per_section / 150 ) );
+        // v1.5.61 — tightened from v1.5.60's max(2, /250) min / max(3, /150)
+        // max which produced 2.31% density on live Mudgee test (target 0.5-1.5%).
+        // New formula: target 1 mention per 300-400 words, hard-capped at 2 per
+        // section regardless of length. For a 400-word section: 1-2 mentions
+        // = 0.5-1% article-wide. For 300-word: 1 mention = 0.4-0.6%.
+        $kw_min = 1;
+        $kw_max = max( 1, min( 2, round( $words_per_section / 300 ) ) );
         $readability_rule = "\n\nREADABILITY (HARD RULES — Flesch-Kincaid grade 6-8, measured post-generation):\n"
             . "- AVERAGE SENTENCE LENGTH: 12-15 words. Never write a sentence longer than 20 words. Break long sentences into two.\n"
             . "- EXAMPLES — WRITE LIKE THIS (grade 7):\n"
@@ -844,6 +849,14 @@ class Async_Generator {
 
     /**
      * Assemble markdown from completed sections.
+     *
+     * v1.5.61 — post-generation word count truncation. LLMs treat the
+     * "HARD CAP" directive as a soft target and routinely produce 20-40%
+     * more words than requested (user reported 2800 on a 2000 target).
+     * This method now enforces the cap programmatically: if the total
+     * word count exceeds target × 1.15, trim content sections from the
+     * end until the total is within 105% of target. Always preserves
+     * Key Takeaways, FAQ, and References.
      */
     private static function assemble_markdown( array $job ): string {
         $keyword = $job['keyword'];
@@ -859,7 +872,91 @@ class Async_Generator {
             $md .= trim( $job['results'][ $key ] ) . "\n\n";
         }
 
+        // v1.5.61 — truncate if over target
+        $target_words = (int) ( $job['options']['word_count'] ?? 0 );
+        if ( $target_words > 0 ) {
+            $md = self::truncate_to_target( $md, $target_words );
+        }
+
         return $md;
+    }
+
+    /**
+     * v1.5.61 — Trim the markdown at paragraph boundaries if it exceeds
+     * the target word count by more than 15%. Always preserves structural
+     * sections (Key Takeaways at the top, FAQ + References at the bottom).
+     * Truncates content sections from the END of the content area first.
+     */
+    private static function truncate_to_target( string $markdown, int $target_words ): string {
+        $current_words = str_word_count( wp_strip_all_tags( $markdown ) );
+        $hard_cap = (int) round( $target_words * 1.15 );
+
+        if ( $current_words <= $hard_cap ) {
+            return $markdown;
+        }
+
+        // Split at H2 boundaries
+        $parts = preg_split( '/(^##\s[^\n]+$)/m', $markdown, -1, PREG_SPLIT_DELIM_CAPTURE );
+        if ( count( $parts ) < 3 ) {
+            // No H2s — can't safely truncate, return as-is
+            return $markdown;
+        }
+
+        // Preamble before first H2
+        $preamble = $parts[0];
+        // Build sections array: [ [heading, body], ... ]
+        $sections = [];
+        for ( $i = 1; $i < count( $parts ); $i += 2 ) {
+            $sections[] = [
+                'heading' => $parts[ $i ],
+                'body'    => $parts[ $i + 1 ] ?? '',
+            ];
+        }
+
+        // Identify structural sections that must never be truncated
+        $protected_headings = '/key\s*takeaway|faq|frequently|reference|quick\s*comparison|at\s*a\s*glance/i';
+
+        // Walk from the end, trimming body content of non-protected sections
+        // one paragraph at a time until we're under the hard cap.
+        $attempts = 0;
+        while ( $current_words > $hard_cap && $attempts < 40 ) {
+            $attempts++;
+            $trimmed = false;
+            // Scan sections in reverse order
+            for ( $i = count( $sections ) - 1; $i >= 0; $i-- ) {
+                if ( preg_match( $protected_headings, $sections[ $i ]['heading'] ) ) {
+                    continue;
+                }
+                $body = $sections[ $i ]['body'];
+                // Drop the last paragraph (split on double newline)
+                $paragraphs = preg_split( '/\n{2,}/', trim( $body ) );
+                if ( count( $paragraphs ) <= 1 ) {
+                    // Section has only one paragraph — drop the whole section
+                    array_splice( $sections, $i, 1 );
+                    $trimmed = true;
+                    break;
+                }
+                array_pop( $paragraphs );
+                $sections[ $i ]['body'] = "\n" . implode( "\n\n", $paragraphs ) . "\n\n";
+                $trimmed = true;
+                break;
+            }
+            if ( ! $trimmed ) break; // nothing left to trim
+
+            // Recount
+            $rebuilt = $preamble;
+            foreach ( $sections as $s ) {
+                $rebuilt .= $s['heading'] . $s['body'];
+            }
+            $current_words = str_word_count( wp_strip_all_tags( $rebuilt ) );
+        }
+
+        // Rebuild
+        $result = $preamble;
+        foreach ( $sections as $s ) {
+            $result .= $s['heading'] . $s['body'];
+        }
+        return $result;
     }
 
     /**

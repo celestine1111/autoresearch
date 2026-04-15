@@ -293,12 +293,36 @@ Return ONLY the Markdown table, nothing else. Example format:
      * Flag readability issues — returns list of complex sentences, does NOT edit.
      */
     public static function flag_readability( string $content ): array {
-        $text = wp_strip_all_tags( $content );
+        // v1.5.61 — strip markdown image syntax and bare URLs BEFORE
+        // sentence tokenization. Live Mindiam test flagged image URL query
+        // strings like "auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200"
+        // as a long sentence because preg_split on periods tokenized the
+        // URL fragment. Image URLs aren't sentences and shouldn't count.
+        $clean = $content;
+        // Strip markdown images: ![alt](url)
+        $clean = preg_replace( '/!\[[^\]]*\]\([^)]*\)/', '', $clean );
+        // Strip markdown links but keep the visible text: [text](url) → text
+        $clean = preg_replace( '/\[([^\]]+)\]\([^)]+\)/', '$1', $clean );
+        // Strip bare URLs (http/https/www)
+        $clean = preg_replace( '/https?:\/\/\S+/', '', $clean );
+        $clean = preg_replace( '/\bwww\.\S+/', '', $clean );
+        // Strip HTML image tags
+        $clean = preg_replace( '/<img[^>]*>/i', '', $clean );
+
+        $text = wp_strip_all_tags( $clean );
+        // Also drop anything that still looks like a URL fragment (query strings)
+        $text = preg_replace( '/\b[a-z0-9_-]+=[^\s&]+/i', '', $text );
+
         $sentences = preg_split( '/[.!?]+/', $text, -1, PREG_SPLIT_NO_EMPTY );
         $complex = [];
 
         foreach ( $sentences as $s ) {
             $s = trim( $s );
+            // v1.5.61 — skip anything that still looks like a URL remnant
+            // after cleanup. Real sentences don't contain = or & chars.
+            if ( str_contains( $s, '=' ) || str_contains( $s, '&' ) ) continue;
+            // Also skip short "Title Case / Markdown heading" fragments
+            if ( str_starts_with( ltrim( $s ), '#' ) ) continue;
             $words = str_word_count( $s );
             if ( $words > 25 ) {
                 $complex[] = [
@@ -401,6 +425,225 @@ Return ONLY the Markdown table, nothing else. Example format:
             'fix_type' => 'openers',
             'sections' => $sections,
             'message'  => count( $sections ) . ' sections have opening paragraphs outside the 40-60 word target.',
+        ];
+    }
+
+    /**
+     * v1.5.61 — Flag keyword placement issues. Shows the user WHICH H2s
+     * lack the keyword, WHERE the density is out of range, and whether
+     * the first paragraph is missing the keyword.
+     *
+     * Returns a flag-mode response that the UI renders as an amber panel.
+     */
+    public static function flag_keyword_placement( string $content, string $keyword ): array {
+        $keyword = trim( (string) $keyword );
+        if ( $keyword === '' ) {
+            return [
+                'success'  => true,
+                'type'     => 'flag',
+                'fix_type' => 'keyword',
+                'message'  => 'No focus keyword configured. Add one in the Primary Keyword field before regenerating.',
+                'violations' => [],
+            ];
+        }
+
+        $text = wp_strip_all_tags( $content );
+        $word_count = max( 1, str_word_count( $text ) );
+        $lower_text = strtolower( $text );
+        $lower_kw = strtolower( $keyword );
+        $kw_count = substr_count( $lower_text, $lower_kw );
+        $kw_word_count = max( 1, str_word_count( $keyword ) );
+        $density = round( ( $kw_count * $kw_word_count / $word_count ) * 100, 2 );
+
+        // H2 analysis — which H2s contain the keyword (or a close variant)?
+        preg_match_all( '/^##\s*(.+)$/m', $content, $h2_matches );
+        $h2s = $h2_matches[1] ?? [];
+        $kw_tokens = array_filter( preg_split( '/\s+/', $lower_kw ), fn( $t ) => strlen( $t ) >= 4 );
+        $h2_with_kw = 0;
+        $h2_without_kw = [];
+        foreach ( $h2s as $h2 ) {
+            $lower_h2 = strtolower( wp_strip_all_tags( $h2 ) );
+            $matches_exact = str_contains( $lower_h2, $lower_kw );
+            $matches_variant = false;
+            if ( ! $matches_exact && ! empty( $kw_tokens ) ) {
+                foreach ( $kw_tokens as $t ) {
+                    if ( str_contains( $lower_h2 , $t ) ) { $matches_variant = true; break; }
+                }
+            }
+            if ( $matches_exact || $matches_variant ) {
+                $h2_with_kw++;
+            } else {
+                $h2_without_kw[] = [
+                    'text' => trim( $h2 ),
+                    'tip'  => 'Rewrite this H2 to include "' . $keyword . '" or a variant (e.g. one of: ' . implode( ', ', array_slice( $kw_tokens, 0, 3 ) ) . ').',
+                ];
+            }
+        }
+        $h2_coverage = count( $h2s ) > 0 ? round( ( $h2_with_kw / count( $h2s ) ) * 100 ) : 0;
+
+        // Density violations
+        $violations = [];
+        if ( $density < 0.5 ) {
+            $target = max( 1, round( 0.75 * $word_count / ( 100 * $kw_word_count ) ) );
+            $violations[] = [
+                'text' => 'Density ' . $density . '% — too low (target 0.5-1.5%).',
+                'tip'  => 'Add ~' . ( $target - $kw_count ) . ' more mentions of "' . $keyword . '" across the article to reach 0.75%.',
+            ];
+        } elseif ( $density > 1.5 ) {
+            $target = max( 1, round( 1.0 * $word_count / ( 100 * $kw_word_count ) ) );
+            $violations[] = [
+                'text' => 'Density ' . $density . '% — too high, risks keyword stuffing penalty (target 0.5-1.5%).',
+                'tip'  => 'Rewrite ~' . ( $kw_count - $target ) . ' mentions as pronouns, variations, or synonyms to drop density to ~1%.',
+            ];
+        }
+        if ( $h2_coverage < 30 ) {
+            $violations[] = [
+                'text' => 'Only ' . $h2_coverage . '% of H2s contain the keyword or a variant (target 30%+).',
+                'tip'  => 'Rewrite ' . max( 1, ceil( count( $h2s ) * 0.3 ) - $h2_with_kw ) . ' H2 headings to include the keyword phrase.',
+            ];
+        }
+
+        // First-paragraph check — does the intro paragraph contain the keyword?
+        $first_para = '';
+        if ( preg_match( '/(?<=\n\n|\A)([^\n#]{40,})/', $text, $fp_match ) ) {
+            $first_para = $fp_match[1];
+        }
+        if ( $first_para && ! str_contains( strtolower( $first_para ), $lower_kw ) ) {
+            $violations[] = [
+                'text' => 'First paragraph does not contain the exact keyword phrase.',
+                'tip'  => 'Add "' . $keyword . '" naturally to the first sentence of the intro. AIOSEO and Yoast both check this specifically.',
+            ];
+        }
+
+        return [
+            'success'    => true,
+            'type'       => 'flag',
+            'fix_type'   => 'keyword',
+            'violations' => $violations,
+            'sections'   => array_slice( $h2_without_kw, 0, 5 ),
+            'density'    => $density,
+            'h2_coverage' => $h2_coverage,
+            'message'    => sprintf(
+                'Keyword "%s": density %.2f%% (target 0.5-1.5%%), %d of %d H2s contain it (target 30%%+), %d violations flagged.',
+                $keyword,
+                $density,
+                $h2_with_kw,
+                count( $h2s ),
+                count( $violations )
+            ),
+        ];
+    }
+
+    /**
+     * v1.5.61 — Flag humanizer violations (Tier 1 + Tier 2 AI red-flag words).
+     * Mirrors GEO_Analyzer::check_humanizer()'s word list.
+     */
+    public static function flag_humanizer( string $content ): array {
+        $text = strtolower( wp_strip_all_tags( $content ) );
+        $tier1 = [
+            'delve', 'tapestry', 'landscape', 'paradigm', 'leverage', 'harness',
+            'navigate', 'realm', 'embark', 'myriad', 'plethora', 'multifaceted',
+            'groundbreaking', 'revolutionize', 'synergy', 'ecosystem', 'resonate',
+            'streamline', 'testament', 'pivotal', 'cornerstone', 'game-changer',
+            'nestled', 'breathtaking', 'stunning', 'seamless', 'vibrant', 'renowned',
+        ];
+        $tier2 = [
+            'robust', 'cutting-edge', 'innovative', 'comprehensive', 'nuanced',
+            'compelling', 'transformative', 'bolster', 'underscore', 'evolving',
+            'fostering', 'imperative', 'intricate', 'overarching', 'unprecedented',
+            'profound', 'showcasing', 'garner', 'crucial', 'vital',
+        ];
+        $violations = [];
+        $tier1_count = 0;
+        $tier2_count = 0;
+        foreach ( $tier1 as $w ) {
+            $c = substr_count( $text, $w );
+            if ( $c > 0 ) {
+                $tier1_count += $c;
+                $violations[] = [
+                    'text' => '"' . $w . '" (Tier 1 AI tell) — appears ' . $c . ' time' . ( $c > 1 ? 's' : '' ),
+                    'tip'  => 'Replace every instance. Tier 1 words are instant AI red flags for Google Helpful Content.',
+                ];
+            }
+        }
+        foreach ( $tier2 as $w ) {
+            $c = substr_count( $text, $w );
+            if ( $c >= 3 ) {
+                $tier2_count += $c;
+                $violations[] = [
+                    'text' => '"' . $w . '" (Tier 2) — appears ' . $c . ' times (3+ = AI tell)',
+                    'tip'  => 'Replace 2+ instances. Tier 2 words are fine alone but 3+ in one article looks machine-generated.',
+                ];
+            }
+        }
+
+        return [
+            'success'     => true,
+            'type'        => 'flag',
+            'fix_type'    => 'humanizer',
+            'violations'  => array_slice( $violations, 0, 10 ),
+            'tier1_count' => $tier1_count,
+            'tier2_count' => $tier2_count,
+            'message'     => sprintf(
+                'Found %d Tier-1 violations and %d Tier-2 violations. Rewrite each flagged word for more natural prose.',
+                $tier1_count,
+                $tier2_count
+            ),
+        ];
+    }
+
+    /**
+     * v1.5.61 — Flag CORE-EEAT gaps. Reports which of the 10 rubric items
+     * failed so the user knows exactly what to add (first-hand voice,
+     * tradeoffs, named entities, table, etc).
+     */
+    public static function flag_core_eeat( string $content ): array {
+        $text = wp_strip_all_tags( $content );
+        $word_count = str_word_count( $text );
+        $missing = [];
+
+        // C1 — Direct answer in first 150 words
+        $first_150 = implode( ' ', array_slice( preg_split( '/\s+/', trim( $text ) ), 0, 150 ) );
+        if ( ! preg_match( '/[^.!?]{20,}\./', $first_150 ) ) {
+            $missing[] = [ 'text' => 'C1: No direct answer in the first 150 words.', 'tip' => 'Write a 20-50 word declarative statement at the top that directly answers the article title.' ];
+        }
+        // C2 — FAQ
+        if ( ! preg_match( '/faq|frequently\s*asked/i', $content ) ) {
+            $missing[] = [ 'text' => 'C2: No FAQ section.', 'tip' => 'Add an "## FAQ" H2 with 3-5 question-answer pairs.' ];
+        }
+        // O2 — Table
+        if ( stripos( $content, '<table' ) === false && strpos( $content, '|---' ) === false ) {
+            $missing[] = [ 'text' => 'O2: No comparison table.', 'tip' => 'Add a 3-5 row markdown table comparing options. Click "Add Comparison Table" to auto-insert.' ];
+        }
+        // R1 — 5+ specific numbers
+        preg_match_all( '/\b\d+[\.,]?\d*\s*(?:%|percent|billion|million|thousand|USD|\$|kg|lb|mg|km|mi|hours?|days?|years?)\b|\b(?:19|20)\d{2}\b/i', $text, $num_matches );
+        if ( count( $num_matches[0] ) < 5 ) {
+            $missing[] = [ 'text' => 'R1: Only ' . count( $num_matches[0] ) . ' specific numbers (target 5+).', 'tip' => 'Add more statistics with specific percentages, dollar amounts, or years. Click "Add Statistics".' ];
+        }
+        // E1 — First-hand language
+        if ( ! preg_match( '/\b(we (found|tested|tried|discovered|learned)|in our (test|experience|review)|i\'ve (used|tried|tested)|my experience|from our testing)\b/i', $text ) ) {
+            $missing[] = [ 'text' => 'E1: No first-hand experience phrases.', 'tip' => 'Rewrite 1-2 sentences with "we tested", "in our experience", or "we found" — signals real experience to Google.' ];
+        }
+        // Exp1 — Practical examples
+        if ( ! preg_match( '/\b(for example|for instance|such as|e\.g\.|consider)\b/i', $text ) ) {
+            $missing[] = [ 'text' => 'Exp1: No practical examples.', 'tip' => 'Add "For example, ..." or "Consider, ..." to at least one section.' ];
+        }
+        // A1 — Named entities
+        preg_match_all( '/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}\b/', $text, $entity_matches );
+        if ( count( $entity_matches[0] ) < 3 ) {
+            $missing[] = [ 'text' => 'A1: Only ' . count( $entity_matches[0] ) . ' named entities (target 3+).', 'tip' => 'Replace generic nouns with specific names: "The RSPCA" not "animal welfare", "Dr. Karen Becker" not "a vet".' ];
+        }
+        // T1 — Tradeoffs
+        if ( ! preg_match( '/\b(however|but|though|while|limitation|drawback|caveat|tradeoff|trade.off|downside|weakness)\b/i', $text ) ) {
+            $missing[] = [ 'text' => 'T1: No tradeoff/limitation acknowledgment.', 'tip' => 'Add one sentence with "however" or "drawback" — signals balanced perspective.' ];
+        }
+
+        return [
+            'success'    => true,
+            'type'       => 'flag',
+            'fix_type'   => 'core_eeat',
+            'violations' => array_slice( $missing, 0, 10 ),
+            'message'    => count( $missing ) . ' of 10 CORE-EEAT rubric items are missing. Fix each for a +10 score boost per item.',
         ];
     }
 }

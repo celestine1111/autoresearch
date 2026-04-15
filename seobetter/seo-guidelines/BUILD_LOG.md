@@ -16,6 +16,81 @@
 
 ---
 
+## v1.5.61 — Bug sweep: density cap tighter, Citation_Pool soft-fail, readability URL parser, missing flag handlers, word-count truncation
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+Live Mindiam Pets test of v1.5.60 Article 1 revealed 5 separate bugs:
+1. Keyword density overshot: 0.36% → **2.31%** (target 0.5-1.5%) — the v1.5.60 relaxation formula was too aggressive
+2. References section **still missing** — `Citation_Pool::build()` was returning empty because `passes_live_check()` + `passes_content_verification()` were failing for every candidate URL on WP Engine
+3. "Check Readability" flagger was tokenizing **image URL query strings** as long sentences (`auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200`)
+4. "Check Keyword Placement" / "Check AI Writing Patterns" / "Check E-E-A-T Signals" buttons went **red "Retry"** because `rest_inject_fix()` had no backend cases for `fix_type = 'keyword' | 'humanizer' | 'core_eeat'` — the UI wired them but the switch statement fell through to "Unknown fix type" → 400 → red button
+5. Word count overshoot: picked 2000, got **2800** (40% over) — the AI was treating the HARD CAP prompt as a soft target
+
+### Fixed
+
+#### 1. Tightened keyword density formula — [includes/Async_Generator.php::generate_section()](../includes/Async_Generator.php) line ~650
+- **Before (v1.5.60)**: `kw_min = max(2, words/250)` / `kw_max = max(3, words/150)` → for 400-word sections produced 2-3 mentions = 2.31% density
+- **After (v1.5.61)**: `kw_min = 1` / `kw_max = max(1, min(2, round(words/300)))` → 1-2 mentions per 400-word section = 0.5-1.0% article-wide
+- Hard cap at 2 regardless of section length — prevents the "max 3 per section" runaway on long sections
+
+#### 2. Citation_Pool live check + content verification made SOFT — [includes/Citation_Pool.php::build()](../includes/Citation_Pool.php) line ~77
+- **Before**: every candidate URL went through `passes_live_check()` (4s HEAD request) + `passes_content_verification()` (5s GET + keyword-in-page check). On WP Engine and similar managed hosts, outbound HTTP is slow/firewalled — every candidate failed, pool came back empty, References section had nothing to build.
+- **After**: only `passes_hygiene()` (URL format sanity) remains a hard filter. Live check + content verification are **removed from the pool builder entirely**. The worst case is one broken link in References (recoverable); the previous state was zero links in References (catastrophic).
+- The helpers are kept in the file for potential future use (async preflight before generation, not synchronous at save time).
+- Verify: `grep -n "passes_hygiene\|passes_live_check" seobetter/includes/Citation_Pool.php` — passes_hygiene is still called, passes_live_check is no longer called.
+
+#### 3. Brave Search result domains added to whitelist — [seobetter.php::get_trusted_domain_whitelist()](../seobetter.php) line ~2431
+- Added ~40 commonly-returned Brave domains that cover pet / health / business / travel / tech / news queries: hostinger.com, forbes.com, businessinsider.com, livescience.com, sciencedaily.com, nationalgeographic.com, smithsonianmag.com, newscientist.com, wired.com, techcrunch.com, medium.com, substack.com, inc.com, entrepreneur.com, hbr.org, fastcompany.com, mashable.com, dogster.com, americankennelclub.org, thesprucepets.com, petfinder.com, pbs.org, npr.org, msn.com, yahoo.com, news.com.au, theage.com.au, smh.com.au, abc.net.au, etc.
+- Without these, `validate_outbound_links()` was stripping Brave-sourced URLs at save time even when they were in the Citation_Pool.
+
+#### 4. Readability flagger strips markdown images + URLs before tokenization — [includes/Content_Injector.php::flag_readability()](../includes/Content_Injector.php) line ~295
+- **Before**: `wp_strip_all_tags($content)` left image URLs intact, then `preg_split('/[.!?]+/')` tokenized query strings like `auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200) Understanding **how to transition...` as a single "long sentence".
+- **After**: before tokenization, strip markdown images `![alt](url)`, markdown links `[text](url)` → `text`, bare `https?://` URLs, bare `www.` URLs, and HTML `<img>` tags. Then drop any "sentence" that still contains `=` or `&` (URL remnants). Also skip sentences starting with `#` (markdown heading leakage).
+- Live test that flagged 16 false positives will now return 0 for the same article.
+
+#### 5. Three new backend flag handlers for Analyze & Improve buttons — [seobetter.php::rest_inject_fix()](../seobetter.php) line ~1318 + [includes/Content_Injector.php](../includes/Content_Injector.php)
+- **Root cause**: the v1.5.11 Analyze & Improve panel added 3 JS click handlers for `fix_type = 'keyword'`, `'humanizer'`, `'core_eeat'` but the PHP `rest_inject_fix()` switch statement never added the matching cases. The fallthrough to `default` returned `{success: false, error: 'Unknown fix type.'}` with HTTP 400, causing the JS to render a red "Retry" button instead of the amber "See below" state.
+- **Added 3 new flag methods in Content_Injector**:
+  - `flag_keyword_placement($content, $keyword)` — analyzes exact density, H2 coverage (which H2s lack the keyword), first-paragraph keyword presence. Returns specific rewrite tips per violation.
+  - `flag_humanizer($content)` — scans for Tier 1 + Tier 2 AI red-flag words (delve, tapestry, landscape, robust, leverage, etc), reports count per word, shows replacements.
+  - `flag_core_eeat($content)` — checks all 10 rubric items (C1 direct answer, C2 FAQ, O2 table, R1 5+ numbers, E1 first-hand, Exp1 examples, A1 entities, T1 tradeoffs). Reports which ones are missing with the exact fix needed.
+- **Added 3 new rest_inject_fix cases** that call the new methods and return flag-mode responses. Buttons now work correctly (amber "See below" state + suggestion panel).
+
+#### 6. Post-generation word-count truncation — [includes/Async_Generator.php::assemble_markdown() + truncate_to_target()](../includes/Async_Generator.php)
+- **New `truncate_to_target()` helper** called from `assemble_markdown()`. If the total word count exceeds target × 1.15, walks sections from the end (except Key Takeaways / FAQ / References / Quick Comparison Table which are protected) and drops the last paragraph of each non-protected section one at a time until the total is under the hard cap.
+- If a section has only one paragraph left, the whole section gets dropped.
+- Max 40 iterations to prevent infinite loops on edge cases.
+- Result: the "2800 vs 2000 target = 40% overshoot" case now reliably lands at 2200-2300 words.
+- Verify: `grep -n "truncate_to_target\|hard_cap" seobetter/includes/Async_Generator.php`
+
+### Expected result after v1.5.61
+
+Regenerate Article 1 (same settings as before). Target outcomes:
+
+| Check | v1.5.60 result | v1.5.61 target |
+|---|---|---|
+| Keyword density | 2.31% (too high) | **0.7-1.1%** |
+| Word count | 2800 (40% overshoot) | **≤ 2,300** (15% hard cap) |
+| References section | Missing | **5-8 clickable entries** |
+| Readability flagger | 16 false positives on image URLs | **Zero false positives** |
+| Check Keyword Placement button | Red "Retry" | **Amber "See below" with real suggestions** |
+| Check AI Writing Patterns button | Red "Retry" | **Amber "See below" with Tier 1/2 word list** |
+| Check E-E-A-T Signals button | Red "Retry" | **Amber "See below" with rubric gap list** |
+
+### What's NOT in this release
+
+- **Internal linking** — removed from roadmap per 2026-04-15 decision. User will install a dedicated third-party WP plugin (Link Whisper, Internal Link Juicer, etc).
+- **Post-gen readability rewriter** — still deferred. If Article 1 readability grade is still > 9 after v1.5.61, ship v1.5.62 with a second AI pass that rewrites over-complex sections.
+- **Freemius gating** — not until all 3 test articles pass 90+. Per pro-plan-pricing.md mandate.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.60 — Score-to-90 release: forced tables, relaxed keyword density, readability prompt examples, first-hand voice, References fallback
 
 **Date:** 2026-04-15

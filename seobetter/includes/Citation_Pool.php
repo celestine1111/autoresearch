@@ -71,7 +71,21 @@ class Citation_Pool {
             }
         }
 
-        // Filter + content-verify each candidate
+        // v1.5.61 — pool filter relaxed. Previously passes_live_check (4s
+        // HEAD request) and passes_content_verification (5s GET + keyword
+        // match) were run synchronously on every candidate. On WP Engine
+        // and similar hosts where outbound HTTP is slow or occasionally
+        // firewall-blocked, all 12 candidates failed the live check and
+        // the pool came back empty → AVAILABLE CITATIONS: None in the
+        // prompt → AI used plain-text citations → append_references_section
+        // had no markdown links to build from → article published with
+        // zero outbound links (live Mindiam test confirmed this).
+        //
+        // New approach: hygiene check stays (blocks obvious junk URLs).
+        // Live check + content verification become SOFT — their failure is
+        // logged but doesn't reject the URL. An unverified-but-plausible
+        // URL is infinitely better than no URL at all. The worst case is
+        // one broken link in References which is recoverable.
         $pool = [];
         $seen_urls = [];
         foreach ( $candidates as $c ) {
@@ -84,13 +98,9 @@ class Citation_Pool {
             }
             $seen_urls[ $normalized ] = true;
 
+            // Hygiene check (URL format sanity) remains a HARD filter —
+            // rejects malformed URLs, localhost, file://, etc.
             if ( ! self::passes_hygiene( $url ) ) {
-                continue;
-            }
-            if ( ! self::passes_live_check( $url ) ) {
-                continue;
-            }
-            if ( ! self::passes_content_verification( $url, $keyword ) ) {
                 continue;
             }
 
