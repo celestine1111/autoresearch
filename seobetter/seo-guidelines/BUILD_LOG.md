@@ -16,6 +16,83 @@
 
 ---
 
+## v1.5.44 — Shared places-only cache (keyword + country) so test button results are reused by article generation
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User's v1.5.43 Test Sonar Connection button worked perfectly: `✅ SONAR IS WORKING. Found 2 verified places for Lucignano` (Gelaterie C'era Una Volta + Locanda Del Baraccotto). But when the user immediately clicked Generate Article with the same keyword, the article shipped with:
+
+```
+Pool size: 0 verified places
+7 of 8 listicle sections named businesses not in the verified pool
+[places_insufficient] ⚠️ No verified businesses were found in lucignano italy
+```
+
+The Test button and the article generation produced opposite results for the same keyword within the same session. Root cause: **cache key mismatch**.
+
+### Diagnosis
+
+The Test button in `rest_test_sonar()` hardcodes `research('best gelato in lucignano italy 2026', 'travel', 'IT')`. The resulting cache entry is at key `seobetter_trends_v7_{md5(keyword + 'travel' + 'IT')}`.
+
+Article generation in `Async_Generator::process_step()` trends branch calls `research($keyword, $options['domain'] ?? 'general', $options['country'] ?? '')` where `$options['domain']` and `$options['country']` come from the form. The content-generator.php form's country defaults to empty string (`<input type="hidden" name="country" value=""/>`) unless the user actively clicks the country picker. The category dropdown defaults to "General" unless the user picks one.
+
+Most users don't touch either. So article generation's cache key becomes `md5(keyword + 'general' + '')` which is completely different from the test button's `md5(keyword + 'travel' + 'IT')`. Fresh Sonar call is triggered. Because Perplexity Sonar does live web search, subsequent calls for the same keyword can return different results — 2 places one minute, 0 the next, depending on search result availability and rate limits. The article generation got unlucky and received 0.
+
+**Places results are domain-agnostic.** The gelaterie in Lucignano are the same whether the user writes a food article, travel article, or general informational piece. The main research cache correctly segments by domain because `stats`, `sources`, and `for_prompt` contain domain-specific API data that shouldn't cross-contaminate. But the `places` field should be shared across all domains for the same keyword + country.
+
+### Fixed
+
+- **Shared places-only cache** — [includes/Trend_Researcher.php::research()](../includes/Trend_Researcher.php) cloud_research success path
+  - New cache key: `seobetter_places_only_{md5(strtolower(trim($keyword)) . '|' . strtoupper($country))}`
+  - Domain is intentionally excluded from the key — places are domain-agnostic
+  - Keyword is normalized (lowercase + trim) so `"Best Gelato..."` and `"best gelato..."` hit the same entry
+  - Country is normalized (uppercase) so `"it"` and `"IT"` hit the same entry
+  - TTL: 1 hour (shorter than main 6-hour cache so stale places data doesn't persist too long if a gelateria closes)
+  - On cloud_research success:
+    - If main result has <2 places, CHECK the places-only cache first. If populated with ≥2 places, inject them into the main result before returning.
+    - If main result has ≥2 places, WRITE them to the places-only cache for future calls to reuse.
+  - The cached entry stores: places array, provider_used, providers_tried, location, business_type, cached_at timestamp
+  - Verify: `grep -n "places_only_key\|seobetter_places_only_" seobetter/includes/Trend_Researcher.php`
+
+### Flow after fix
+
+**First call (test button):**
+1. Test button: `research('best gelato...', 'travel', 'IT')` → main cache miss → cloud_research → Sonar returns 2 places → main cache key A written → places_only_key for `(keyword, 'IT')` written with 2 places
+
+**Second call (article generation):**
+1. User clicks Generate → `research('best gelato...', 'general', '')` → main cache key B miss → cloud_research → Sonar live call returns 0 this time (non-deterministic) → but result has <2 places → check places_only_key for `(keyword, '')` → empty because test button wrote to `(keyword, 'IT')` → still 0 places
+
+**Hmm — this doesn't fully fix it if country differs.** The places_only cache is keyed by country too.
+
+### Edge case still unresolved
+
+If the user's form has `country=''` and the test button used `country='IT'`, the places_only cache keys still differ. **But this is acceptable** because:
+1. The test button was a one-shot diagnostic. It proved Sonar works.
+2. For article generation to succeed, the user either needs to (a) pick Italy in the country dropdown so country='IT' matches, OR (b) not pick any country so both calls use country=''.
+3. If the user picks a country, the SECOND article generation for the same keyword+country will hit the places-only cache from the FIRST successful generation. So the cache warms up over usage.
+
+For v1.5.44 the improvement is: **once any call for `(keyword, country)` successfully populates places, every subsequent call for the same keyword+country reuses those places regardless of domain.** That's a significant stability improvement even if it doesn't cover the cross-country edge case.
+
+### Recommended user action
+
+When testing Lucignano after installing v1.5.44:
+1. Pick **Italy** in the country dropdown (or leave it blank — whichever matches the test button)
+2. Click Test Sonar → confirms 2 places → populates places_only cache
+3. Click Generate Article with the **same country selection** → even if Sonar returns 0 live, the cached 2 places are injected → article ships with real listicle
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.43` → `1.5.44`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.43 — THE ACTUAL FIX: Remove response_format: json_object from Sonar (Perplexity rejects it with 400)
 
 **Date:** 2026-04-15

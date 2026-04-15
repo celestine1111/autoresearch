@@ -75,6 +75,49 @@ class Trend_Researcher {
         $result = self::cloud_research( $keyword, $type, $country );
         if ( $result['success'] && ! empty( $result['for_prompt'] ) ) {
             $result = self::ensure_local_intent_fields( $result, $keyword );
+
+            // v1.5.44 — CRITICAL cache sharing fix. The main research cache
+            // key includes domain ($type), so test button ('travel') and
+            // article generation ($options['domain'] which may be 'food' /
+            // 'general' / empty) produce DIFFERENT cache keys for the same
+            // keyword. That means the article generation makes a FRESH Sonar
+            // call even when the test button just proved Sonar works and
+            // cached 2 real places. Sonar is non-deterministic (live web
+            // search) so the fresh call can return 0 places even when a
+            // previous call returned 2.
+            //
+            // Fix: maintain a SEPARATE places-only cache keyed by keyword +
+            // country only (not domain). Places results are domain-agnostic —
+            // the gelaterie in Lucignano are the same whether the user writes
+            // a food article or a travel article. When the main research
+            // returns empty places, fall back to this shared cache. When
+            // it returns populated places, write them to this shared cache
+            // for future calls to reuse.
+            $places_only_key = 'seobetter_places_only_' . md5( strtolower( trim( $keyword ) ) . '|' . strtoupper( $country ) );
+
+            if ( empty( $result['places'] ) || count( $result['places'] ) < 2 ) {
+                $places_cached = get_transient( $places_only_key );
+                if ( is_array( $places_cached ) && ! empty( $places_cached['places'] ) && count( $places_cached['places'] ) >= 2 ) {
+                    $result['places']                 = $places_cached['places'];
+                    $result['places_count']           = count( $places_cached['places'] );
+                    $result['places_provider_used']   = $places_cached['provider_used'] ?? 'Perplexity Sonar (cached)';
+                    $result['places_providers_tried'] = $places_cached['providers_tried'] ?? [];
+                    $result['places_location']        = $places_cached['location'] ?? ( $result['places_location'] ?? '' );
+                    $result['places_business_type']   = $places_cached['business_type'] ?? ( $result['places_business_type'] ?? '' );
+                }
+            }
+
+            if ( ! empty( $result['places'] ) && count( $result['places'] ) >= 2 ) {
+                set_transient( $places_only_key, [
+                    'places'          => $result['places'],
+                    'provider_used'   => $result['places_provider_used'] ?? null,
+                    'providers_tried' => $result['places_providers_tried'] ?? [],
+                    'location'        => $result['places_location'] ?? '',
+                    'business_type'   => $result['places_business_type'] ?? '',
+                    'cached_at'       => time(),
+                ], 3600 ); // 1 hour TTL — shorter than main cache so stale data doesn't linger
+            }
+
             set_transient( $cache_key, $result, self::CACHE_TTL );
             return $result;
         }
