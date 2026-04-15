@@ -19,7 +19,7 @@
 ## v1.5.55 — Any-city-any-topic fix: Sonar Pro default, retry-on-error, 25km rural radius, name+type filter, custom keyword test
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `632401f`
 
 ### Context
 
