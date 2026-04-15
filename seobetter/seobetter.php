@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.50
+ * Version: 1.5.51
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.50' );
+define( 'SEOBETTER_VERSION', '1.5.51' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -421,7 +421,7 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
-        // v1.5.50 — diagnostic endpoint that tests the full Places Sonar
+        // v1.5.51 — diagnostic endpoint that tests the full Places Sonar
         // Tier 0 chain end-to-end. Calls Trend_Researcher::cloud_research()
         // with a sample local-intent keyword and reports (a) which OpenRouter
         // key source was used (Places field / AI Providers auto-discover /
@@ -435,7 +435,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.50 — diagnostic endpoint for Foursquare + HERE + Google Places.
+        // v1.5.51 — diagnostic endpoint for Foursquare + HERE + Google Places.
         // Calls the cloud-api research endpoint directly with only the paid
         // place provider keys (no Sonar, no category APIs) and runAllTiers=true
         // so the waterfall doesn't short-circuit. Lets users verify their
@@ -444,6 +444,19 @@ final class SEOBetter {
         register_rest_route( 'seobetter/v1', '/test-places-providers', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_test_places_providers' ],
+            'permission_callback' => function () {
+                return current_user_can( 'manage_options' );
+            },
+        ]);
+        // v1.5.51 — diagnostic endpoint for every always-on research source
+        // (Reddit, HN, Wikipedia, Google Trends, DuckDuckGo, Bluesky,
+        // Mastodon, Dev.to, Lemmy, Brave Search, category APIs, country APIs)
+        // PLUS the local Last30Days Python skill. Reports per-source ok/empty
+        // /error + latency so users can see which sources are reaching their
+        // articles and which are flaking.
+        register_rest_route( 'seobetter/v1', '/test-research-sources', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_test_research_sources' ],
             'permission_callback' => function () {
                 return current_user_can( 'manage_options' );
             },
@@ -657,7 +670,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.50 — Test Sonar connection diagnostic endpoint.
+     * v1.5.51 — Test Sonar connection diagnostic endpoint.
      *
      * Runs a real cloud-api research call against a known-good keyword
      * (Lucignano, which we know should produce 2 real gelaterie when Sonar
@@ -770,7 +783,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.50 — Test Foursquare / HERE / Google Places directly, bypassing
+     * v1.5.51 — Test Foursquare / HERE / Google Places directly, bypassing
      * Sonar and the waterfall short-circuit. Users report "I added my
      * Foursquare key but no businesses show up" — they need to know whether
      * the key is actually being called (and returning data) or whether Sonar
@@ -874,7 +887,7 @@ final class SEOBetter {
                         $verdict_lines[] = "⚠️ Foursquare: key was called but returned 0 places. Key may be invalid or Sydney pet-shop search scope is wrong.";
                     }
                 } else {
-                    $verdict_lines[] = "❌ Foursquare: key configured but the cloud-api NEVER called the Foursquare tier. This usually means the cloud-api Vercel deployment is outdated. Check Vercel → seobetter-cloud → latest deployment is >= v1.5.50.";
+                    $verdict_lines[] = "❌ Foursquare: key configured but the cloud-api NEVER called the Foursquare tier. This usually means the cloud-api Vercel deployment is outdated. Check Vercel → seobetter-cloud → latest deployment is >= v1.5.51.";
                 }
             } else {
                 $verdict_lines[] = "⚪ Foursquare: no key configured (skipped).";
@@ -892,7 +905,7 @@ final class SEOBetter {
                         $verdict_lines[] = "⚠️ HERE: key was called but returned 0 places. Key may be invalid, or the HERE discover endpoint is filtering pet-shop results.";
                     }
                 } else {
-                    $verdict_lines[] = "❌ HERE: key configured but the cloud-api NEVER called the HERE tier. Check Vercel deployment is >= v1.5.50.";
+                    $verdict_lines[] = "❌ HERE: key configured but the cloud-api NEVER called the HERE tier. Check Vercel deployment is >= v1.5.51.";
                 }
             } else {
                 $verdict_lines[] = "⚪ HERE: no key configured (skipped).";
@@ -934,11 +947,115 @@ final class SEOBetter {
         }
     }
 
+    /**
+     * v1.5.51 — Test every research source (cloud-api + local Last30Days)
+     * with per-source ok/error/latency breakdown. Complements the Sonar and
+     * Places Providers tests by covering the rest of the research pipeline:
+     * Reddit, Hacker News, Wikipedia, Google Trends, DuckDuckGo, Bluesky,
+     * Mastodon, Dev.to, Lemmy, Brave Search (Pro), category APIs, country
+     * APIs, and the local Last30Days Python skill.
+     *
+     * Uses Promise.allSettled pattern server-side so a single flaking source
+     * cannot block the others.
+     */
+    public function rest_test_research_sources( \WP_REST_Request $request ): \WP_REST_Response {
+        $settings     = get_option( 'seobetter_settings', [] );
+        $brave_key    = $settings['brave_api_key'] ?? '';
+        $test_keyword = sanitize_text_field( $request->get_param( 'keyword' ) ?: 'small business marketing 2026' );
+        $domain       = sanitize_text_field( $request->get_param( 'domain' ) ?: 'general' );
+        $country      = sanitize_text_field( $request->get_param( 'country' ) ?: '' );
+
+        // --- 1. Local Last30Days Python skill ---
+        $last30 = [
+            'available'    => false,
+            'python_found' => false,
+            'script_found' => false,
+            'message'      => '',
+            'duration_ms'  => null,
+        ];
+        try {
+            $script_rel = '.agents/skills/last30days/scripts/last30days.py';
+            $script_abs = SEOBETTER_PLUGIN_DIR . $script_rel;
+            $last30['script_found'] = file_exists( $script_abs );
+            $python_check = trim( (string) @shell_exec( 'which python3 2>/dev/null' ) );
+            $last30['python_found'] = ! empty( $python_check );
+            $last30['available']    = SEOBetter\Trend_Researcher::is_available();
+            if ( ! $last30['python_found'] ) {
+                $last30['message'] = 'python3 not found on this server. Last30Days runs locally via shell_exec; it is optional and the cloud-api provides the same data remotely. WP Engine and most managed hosts block shell_exec, so this will usually say "not available" — the plugin still works because it falls back to the cloud-api.';
+            } elseif ( ! $last30['script_found'] ) {
+                $last30['message'] = "Last30Days Python script missing at {$script_rel}. Re-upload the plugin zip.";
+            } else {
+                $last30['message'] = 'Last30Days is available locally. It runs only when the cloud-api research call fails or times out (fallback source).';
+            }
+        } catch ( \Throwable $e ) {
+            $last30['message'] = 'Last30Days check failed: ' . $e->getMessage();
+        }
+
+        // --- 2. Cloud-api TEST ALL SOURCES call ---
+        $cloud_url = SEOBetter\Cloud_API::get_cloud_url();
+        $body = [
+            'keyword'          => $test_keyword,
+            'site_url'         => home_url(),
+            'domain'           => $domain,
+            'country'          => $country,
+            'test_all_sources' => true,
+        ];
+        if ( ! empty( $brave_key ) ) {
+            $body['brave_key'] = $brave_key;
+        }
+
+        $cloud = [
+            'ok'      => false,
+            'error'   => null,
+            'sources' => [],
+            'summary' => null,
+            'keyword' => $test_keyword,
+        ];
+        try {
+            $response = wp_remote_post( $cloud_url . '/api/research', [
+                'timeout' => 60,
+                'headers' => [ 'Content-Type' => 'application/json' ],
+                'body'    => wp_json_encode( $body ),
+            ] );
+            if ( is_wp_error( $response ) ) {
+                $cloud['error'] = 'Cloud API request failed: ' . $response->get_error_message();
+            } else {
+                $code    = wp_remote_retrieve_response_code( $response );
+                $raw     = wp_remote_retrieve_body( $response );
+                $decoded = json_decode( $raw, true );
+                if ( $code !== 200 ) {
+                    $cloud['error'] = 'HTTP ' . $code . ': ' . ( is_array( $decoded ) && isset( $decoded['error'] ) ? $decoded['error'] : substr( (string) $raw, 0, 200 ) );
+                } elseif ( ! is_array( $decoded ) ) {
+                    $cloud['error'] = 'Cloud-api returned non-JSON: ' . substr( (string) $raw, 0, 200 );
+                } else {
+                    $cloud['ok']      = true;
+                    $cloud['sources'] = is_array( $decoded['sources'] ?? null ) ? $decoded['sources'] : [];
+                    $cloud['summary'] = $decoded['summary'] ?? null;
+                    $cloud['total_latency_ms'] = $decoded['total_latency_ms'] ?? null;
+                    $cloud['brave_configured'] = $decoded['brave_configured'] ?? false;
+                }
+            }
+        } catch ( \Throwable $e ) {
+            $cloud['error'] = 'PHP ' . get_class( $e ) . ': ' . $e->getMessage() . ' at ' . basename( $e->getFile() ) . ':' . $e->getLine();
+        }
+
+        return new \WP_REST_Response( [
+            'success'        => true,
+            'plugin_version' => SEOBETTER_VERSION,
+            'test_keyword'   => $test_keyword,
+            'domain'         => $domain,
+            'country'        => $country,
+            'cloud'          => $cloud,
+            'last30days'     => $last30,
+            'brave_configured' => ! empty( $brave_key ),
+        ] );
+    }
+
     public function rest_generate_start( \WP_REST_Request $request ): \WP_REST_Response {
         $rate_check = $this->check_rate_limit( 'generate' );
         if ( $rate_check ) return $rate_check;
 
-        // v1.5.50 — wrap start_job in a try/catch so any thrown exception
+        // v1.5.51 — wrap start_job in a try/catch so any thrown exception
         // becomes a visible JSON error with the actual message + file + line,
         // instead of the mystery "Failed to start." fallback in the JS. If
         // something in the generation pipeline is silently fataling, this
@@ -1023,7 +1140,7 @@ final class SEOBetter {
                 'content_type' => sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' ),
             ] );
 
-            // v1.5.50 — run Places_Link_Injector on the saved hybrid HTML so
+            // v1.5.51 — run Places_Link_Injector on the saved hybrid HTML so
             // the 📍 address + Google Maps + website meta line below each
             // business H2 survives into the WP draft. Previously this was
             // only run in assemble_final's preview path, so the result panel
@@ -2159,7 +2276,7 @@ final class SEOBetter {
             if ( $title === '' ) {
                 $title = $src ?: 'Source';
             }
-            // v1.5.50 — removed the " — {$src}" suffix. User feedback:
+            // v1.5.51 — removed the " — {$src}" suffix. User feedback:
             // "at the end of the link it will reference (perplexity) it
             // doesnt need to do this... just as long as it is accurate and
             // works". The title field already contains business name +
@@ -2263,7 +2380,7 @@ final class SEOBetter {
             'here.com', 'www.here.com', 'discover.search.hereapi.com',
             'maps.google.com', 'maps.googleapis.com',
             'places.googleapis.com', 'google.com/maps',
-            // v1.5.50 — Perplexity Sonar (Tier 0) scrapes these tourism and
+            // v1.5.51 — Perplexity Sonar (Tier 0) scrapes these tourism and
             // review sites for citations. They need to be whitelisted so
             // source_urls returned by Sonar pass validate_outbound_links().
             'openrouter.ai', 'perplexity.ai', 'www.perplexity.ai',
@@ -2296,7 +2413,7 @@ final class SEOBetter {
 
         $image_url = '';
 
-        // v1.5.50 — Branding AI image generation first. Try the user's
+        // v1.5.51 — Branding AI image generation first. Try the user's
         // configured AI image provider (Pollinations / Gemini Nano Banana /
         // DALL-E 3 / FLUX Pro). Returns empty string on any error, at which
         // point we fall through to the existing Pexels → Picsum flow.

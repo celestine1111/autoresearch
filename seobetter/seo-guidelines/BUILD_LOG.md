@@ -16,6 +16,50 @@
 
 ---
 
+## v1.5.51 — Test Research Sources diagnostic: per-source ok/error/latency for Reddit / HN / DDG / Bluesky / Mastodon / Dev.to / Lemmy / Wikipedia / Google Trends / Brave / Category APIs / Last30Days
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+After the places diagnostic landed in v1.5.49/50, user asked to also verify the general-purpose research sources are being called — Reddit, Hacker News, DuckDuckGo, Bluesky, Mastodon, Dev.to, Lemmy, Wikipedia, Google Trends, Brave Search (Pro), the category/country APIs, AND the local Last30Days Python skill. These are the sources that produce stats, quotes, trends, and citation URLs for the article body. If any of them are silently failing, articles lose grounding data and citations. The prior "Unexpected token '<'" error during the places test proved at least one of them is throwing — we need a diagnostic that surfaces which one.
+
+### Added
+
+#### 1. `test_all_sources` flag in cloud-api /api/research — [cloud-api/api/research.js](../cloud-api/api/research.js) line ~41 (after the places short-circuit)
+- New short-circuit branch. When `test_all_sources === true`, the handler wraps each source in a per-source `instrument()` helper that records: `{ name, ok, count, latency_ms, sample, error }` and runs them all via `Promise.all` of already-error-caught promises (equivalent to `Promise.allSettled`) so one failing source can NEVER block the others.
+- Count detection reads common shapes: top-level arrays, `.posts`, `.results`, `.items`, `.articles`, `.stats`, `.quotes`, `.trends`, or `.summary`. Sample is the first item JSON-stringified and truncated to 200 chars.
+- Also tests category APIs (based on `domain`) and country APIs (based on `country`), labelled by `name (source)`.
+- Returns `{ success, test_mode: 'all_sources', keyword, domain, country, brave_configured, total_latency_ms, summary: { total, ok, empty, errors }, sources: [...] }`.
+- Normal article generation never passes the flag — production behavior is unchanged.
+- Verify: `grep -n "test_all_sources\|instrument = async" seobetter/cloud-api/api/research.js`
+
+#### 2. New REST endpoint `POST /seobetter/v1/test-research-sources` — [seobetter.php::rest_test_research_sources()](../seobetter.php) line ~949
+- Calls the cloud-api with `test_all_sources: true` + optional Brave key from settings
+- Additionally probes the local Last30Days Python skill: checks `Trend_Researcher::is_available()`, looks for `python3` via `shell_exec('which python3')`, checks the script file exists, and surfaces a plain-English message explaining why it's or isn't available. On managed WP hosts like WP Engine that block shell_exec, this will always say "not available" — that's EXPECTED because the cloud-api provides the same data remotely; Last30Days is only a fallback.
+- Returns unified shape: `{ plugin_version, test_keyword, domain, country, cloud: { ok, sources[], summary, total_latency_ms }, last30days: { available, python_found, script_found, message }, brave_configured }`
+- Verify: `grep -n "rest_test_research_sources" seobetter/seobetter.php`
+
+#### 3. "🧪 Test Research Sources" button in Settings → Places Integrations card — [admin/views/settings.php](../admin/views/settings.php)
+- Sibling to the existing Test Places Providers button
+- Renders one line per source with ✅/⚪/❌ icon, count/empty/error status, latency in ms, and either a sample preview or the error message as a secondary indented line
+- Separate section for the Last30Days probe with its own icon (✅ available, ⚠️ Python/script found but skill broken, ⚪ not available)
+- Verify: grep for `seobetter-test-research-sources` in settings.php
+
+### Verification
+
+1. Redeploy cloud-api to Vercel (required — JS-side fix in research.js).
+2. Upload the new plugin zip.
+3. Click "🧪 Test Research Sources" in Settings → Places Integrations.
+4. Expected: a per-source list showing which of the 9+ free sources returned data, which returned empty, and which threw an error (with the error message inline). Latency in ms shown per source. Cloud summary like "6 ok / 2 empty / 1 errors".
+5. Last30Days row: on WP Engine will report `⚪ Available: NO` with the message "python3 not found on this server". On a self-hosted box with Python3 it will report `✅ Available: YES`.
+6. Production article generation regression: create a test article, confirm research sources still aggregate and `for_prompt` is populated — the `test_all_sources` short-circuit is gated and production flows never set the flag.
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.50 — Test Places Providers diagnostic short-circuits all non-places sources
 
 **Date:** 2026-04-15

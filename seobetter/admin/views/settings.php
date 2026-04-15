@@ -494,6 +494,16 @@ $settings = get_option( 'seobetter_settings', [] );
             <div id="seobetter-test-places-providers-result" style="margin-top:12px;display:none;padding:14px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:400px;overflow-y:auto"></div>
         </div>
 
+        <div style="margin:16px 0 8px;padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
+            <strong style="font-size:14px;color:#0f172a"><?php esc_html_e( '🧪 Test all research sources (Reddit / HN / DDG / Bluesky / Mastodon / Dev.to / Lemmy / Wikipedia / Google Trends / Brave / Category APIs / Last30Days)', 'seobetter' ); ?></strong>
+            <p class="description" style="margin:6px 0 10px">
+                <?php esc_html_e( 'Calls every always-on research source independently against the keyword "small business marketing 2026" and reports per-source ok / empty / error status plus latency. Uses Promise.allSettled in the cloud-api so one flaking source cannot block the others. Also probes the local Last30Days Python skill and reports availability.', 'seobetter' ); ?>
+            </p>
+            <button type="button" id="seobetter-test-research-sources" class="button button-primary" style="margin-right:8px"><?php esc_html_e( '🧪 Test Research Sources', 'seobetter' ); ?></button>
+            <span id="seobetter-test-research-sources-status" style="font-size:12px;color:#6b7280"></span>
+            <div id="seobetter-test-research-sources-result" style="margin-top:12px;display:none;padding:14px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:500px;overflow-y:auto"></div>
+        </div>
+
         <p class="description" style="padding:8px 12px;background:#f0fdf4;border-radius:4px;color:#166534;margin-top:8px">
             <span class="dashicons dashicons-info-outline"></span>
             <strong><?php esc_html_e( 'How the waterfall works:', 'seobetter' ); ?></strong>
@@ -781,6 +791,83 @@ jQuery(function($) {
             $result.text('Request failed: ' + status + ' ' + err + '\n\nResponse: ' + (xhr.responseText || 'empty')).show();
             $status.text('Failed.');
             $btn.prop('disabled', false).text('🧪 Test Places Providers');
+        });
+    });
+
+    // v1.5.51 — Test all research sources button
+    $('#seobetter-test-research-sources').on('click', function(e) {
+        e.preventDefault();
+        var $btn = $(this);
+        var $status = $('#seobetter-test-research-sources-status');
+        var $result = $('#seobetter-test-research-sources-result');
+        $btn.prop('disabled', true).text('Testing... (up to 60s)');
+        $status.text('Calling cloud-api test-all-sources + probing Last30Days...');
+        $result.hide().empty();
+        $.ajax({
+            url: '<?php echo esc_js( rest_url( 'seobetter/v1/test-research-sources' ) ); ?>',
+            method: 'POST',
+            headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
+            data: {},
+            timeout: 70000
+        }).done(function(res) {
+            var lines = [];
+            lines.push('═══ RESEARCH SOURCES DIAGNOSTIC ═══');
+            lines.push('');
+            lines.push('Plugin version: ' + (res.plugin_version || '?'));
+            lines.push('Test keyword:   ' + (res.test_keyword || '?'));
+            lines.push('Domain:         ' + (res.domain || 'general'));
+            lines.push('Country:        ' + (res.country || '(none)'));
+            lines.push('Brave (Pro):    ' + (res.brave_configured ? 'CONFIGURED' : 'not configured'));
+            lines.push('');
+
+            // Cloud-api sources
+            lines.push('─── CLOUD API SOURCES ───');
+            if (res.cloud && res.cloud.ok) {
+                var s = res.cloud.summary || {};
+                lines.push('Total latency: ' + (res.cloud.total_latency_ms || '?') + 'ms');
+                lines.push('Summary:       ' + (s.ok || 0) + ' ok / ' + (s.empty || 0) + ' empty / ' + (s.errors || 0) + ' errors  (of ' + (s.total || 0) + ')');
+                lines.push('');
+                (res.cloud.sources || []).forEach(function(src) {
+                    var icon, label;
+                    if (!src.ok) { icon = '❌'; label = 'ERROR'; }
+                    else if (src.count > 0) { icon = '✅'; label = src.count + ' items'; }
+                    else { icon = '⚪'; label = 'empty'; }
+                    var line = icon + ' ' + (src.name || '?') + ' — ' + label + '  [' + (src.latency_ms || 0) + 'ms]';
+                    lines.push(line);
+                    if (src.error) {
+                        lines.push('     ↳ ' + src.error);
+                    } else if (src.sample) {
+                        lines.push('     ↳ ' + src.sample);
+                    }
+                });
+            } else {
+                lines.push('❌ Cloud API test failed');
+                if (res.cloud && res.cloud.error) {
+                    lines.push('   ' + res.cloud.error);
+                }
+            }
+
+            // Last30Days local skill
+            lines.push('');
+            lines.push('─── LAST30DAYS (local Python skill, fallback only) ───');
+            if (res.last30days) {
+                var l = res.last30days;
+                var icon2 = l.available ? '✅' : (l.python_found && l.script_found ? '⚠️' : '⚪');
+                lines.push(icon2 + ' Available:    ' + (l.available ? 'YES' : 'NO'));
+                lines.push('   Python3 found:     ' + (l.python_found ? 'YES' : 'NO'));
+                lines.push('   Script file found: ' + (l.script_found ? 'YES' : 'NO'));
+                if (l.message) {
+                    lines.push('   ' + l.message);
+                }
+            }
+
+            $result.text(lines.join('\n')).show();
+            $status.text('Test complete.');
+            $btn.prop('disabled', false).text('🧪 Test Research Sources');
+        }).fail(function(xhr, status, err) {
+            $result.text('Request failed: ' + status + ' ' + err + '\n\nResponse: ' + (xhr.responseText || 'empty')).show();
+            $status.text('Failed.');
+            $btn.prop('disabled', false).text('🧪 Test Research Sources');
         });
     });
 
