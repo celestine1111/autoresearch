@@ -19,7 +19,7 @@
 ## v1.5.38 — The REAL hallucination fix: 20s cloud timeout + missing is_local_intent in fallback paths
 
 **Date:** 2026-04-15
-**Commit:** `[pending]`
+**Commit:** `a0d63f5`
 
 ### Context
 
