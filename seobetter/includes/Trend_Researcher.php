@@ -63,7 +63,34 @@ class Trend_Researcher {
         // ignore transient expiry.
         $cache_key = 'seobetter_trends_' . self::CACHE_VERSION . '_' . md5( $keyword . $type . $country );
         $cached = get_transient( $cache_key );
+
+        // v1.5.58 — places-override pass. Sonar is a live non-deterministic
+        // web search so calling it twice with the same query can return
+        // different counts. Test button + article generation on the same
+        // keyword frequently disagreed. Fix: the test button writes any
+        // successful result to a durable places-only cache (24h TTL, keyword
+        // + country keyed, domain-agnostic). Every subsequent research()
+        // call OVERRIDES its places result with the cached one regardless
+        // of whether the main cache also hit. This makes the pipeline
+        // deterministic: test once → every subsequent generation for that
+        // keyword in the next 24h uses the exact same verified pool.
+        $places_only_key = 'seobetter_places_only_' . md5( strtolower( trim( $keyword ) ) . '|' . strtoupper( $country ) );
+        $persisted_places = get_transient( $places_only_key );
+        $has_persisted = is_array( $persisted_places ) && ! empty( $persisted_places['places'] ) && count( $persisted_places['places'] ) >= 1;
+
         if ( is_array( $cached ) && isset( $cached['is_local_intent'] ) && array_key_exists( 'places', $cached ) ) {
+            // v1.5.58 — even on main cache hit, if the persisted places cache
+            // has ≥1 entries, override. Handles the case where a previous
+            // generation cached a 0-places result before Sonar was fixed.
+            if ( $has_persisted && ( empty( $cached['places'] ) || count( $cached['places'] ) < count( $persisted_places['places'] ) ) ) {
+                $cached['places']                 = $persisted_places['places'];
+                $cached['places_count']           = count( $persisted_places['places'] );
+                $cached['places_provider_used']   = $persisted_places['provider_used'] ?? 'Perplexity Sonar (persisted)';
+                $cached['places_providers_tried'] = $persisted_places['providers_tried'] ?? [];
+                $cached['places_location']        = $persisted_places['location'] ?? ( $cached['places_location'] ?? '' );
+                $cached['places_business_type']   = $persisted_places['business_type'] ?? ( $cached['places_business_type'] ?? '' );
+                $cached['is_local_intent']        = true;
+            }
             return $cached;
         }
         // If an old-format cache entry is still here, delete it so we re-fetch
@@ -93,25 +120,30 @@ class Trend_Researcher {
             // returns empty places, fall back to this shared cache. When
             // it returns populated places, write them to this shared cache
             // for future calls to reuse.
-            $places_only_key = 'seobetter_places_only_' . md5( strtolower( trim( $keyword ) ) . '|' . strtoupper( $country ) );
-
-            // v1.5.47 — threshold lowered from < 2 to < 1 to match
-            // Async_Generator's Local Business Mode threshold. With 1 verified
-            // place we still prefer reusing the shared cache over a fresh
-            // empty result, and we still save single-place results into the
-            // shared cache so the next generation can reuse them.
-            if ( empty( $result['places'] ) || count( $result['places'] ) < 1 ) {
-                $places_cached = get_transient( $places_only_key );
-                if ( is_array( $places_cached ) && ! empty( $places_cached['places'] ) && count( $places_cached['places'] ) >= 1 ) {
-                    $result['places']                 = $places_cached['places'];
-                    $result['places_count']           = count( $places_cached['places'] );
-                    $result['places_provider_used']   = $places_cached['provider_used'] ?? 'Perplexity Sonar (cached)';
-                    $result['places_providers_tried'] = $places_cached['providers_tried'] ?? [];
-                    $result['places_location']        = $places_cached['location'] ?? ( $result['places_location'] ?? '' );
-                    $result['places_business_type']   = $places_cached['business_type'] ?? ( $result['places_business_type'] ?? '' );
+            // v1.5.58 — always check the persisted places cache after the
+            // cloud call. If the persisted pool has MORE places than the
+            // fresh call returned, override. This handles Sonar non-
+            // determinism where the same query sometimes returns 3 places
+            // and sometimes 0. The persisted cache is keyed by normalized
+            // keyword + country (domain-agnostic) so test button results
+            // flow into article generation regardless of domain.
+            if ( $has_persisted ) {
+                $fresh_count = is_array( $result['places'] ?? null ) ? count( $result['places'] ) : 0;
+                $persisted_count = count( $persisted_places['places'] );
+                if ( $persisted_count > $fresh_count ) {
+                    $result['places']                 = $persisted_places['places'];
+                    $result['places_count']           = $persisted_count;
+                    $result['places_provider_used']   = $persisted_places['provider_used'] ?? 'Perplexity Sonar (persisted)';
+                    $result['places_providers_tried'] = $persisted_places['providers_tried'] ?? [];
+                    $result['places_location']        = $persisted_places['location'] ?? ( $result['places_location'] ?? '' );
+                    $result['places_business_type']   = $persisted_places['business_type'] ?? ( $result['places_business_type'] ?? '' );
+                    $result['is_local_intent']        = true;
                 }
             }
 
+            // v1.5.58 — write to persisted places cache with 24h TTL whenever
+            // we have a usable pool. Raised from 1h so the test-then-generate
+            // flow reliably reuses results across the whole session.
             if ( ! empty( $result['places'] ) && count( $result['places'] ) >= 1 ) {
                 set_transient( $places_only_key, [
                     'places'          => $result['places'],
@@ -120,7 +152,7 @@ class Trend_Researcher {
                     'location'        => $result['places_location'] ?? '',
                     'business_type'   => $result['places_business_type'] ?? '',
                     'cached_at'       => time(),
-                ], 3600 ); // 1 hour TTL — shorter than main cache so stale data doesn't linger
+                ], 24 * HOUR_IN_SECONDS );
             }
 
             set_transient( $cache_key, $result, self::CACHE_TTL );

@@ -16,6 +16,59 @@
 
 ---
 
+## v1.5.58 — Two critical fixes: persisted places cache (test-then-generate determinism) + location-aware auto-suggest
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+Two user-reported issues after v1.5.57:
+
+1. **Test button returns 3 Mudgee places, article generation returns 0.** Sonar is a live web search and non-deterministic. The shared places-only cache from v1.5.44 had a 1-hour TTL and only kicked in as a fallback when cloud_research returned empty — it didn't override stale cached results in the main cache. User could prove Sonar found 3 Mudgee pet shops via the test button, then hit Generate and watch the article fall into places_insufficient mode because the fresh cloud call returned 0 this time. Broken determinism.
+
+2. **Auto-suggest returns other-city names for a Mudgee article.** v1.5.57's geo-localized Google Suggest returned AU-localized completions but they were still generic — "pet shops sydney", "pet shops melbourne", "pet shops brisbane". For an article explicitly about Mudgee, these are WRONG secondary keywords. The user wants either Mudgee-specific variations or generic non-city phrases, never other-city names.
+
+### Fixed
+
+#### 1. Persisted places cache now overrides main cache on read — [includes/Trend_Researcher.php::research()](../includes/Trend_Researcher.php) line ~57
+- **Before**: places-only cache was only read as a FALLBACK when cloud_research returned empty. If the main cache had a 0-places result (from a previous run before Sonar was working), that stale result was returned without ever consulting the places cache.
+- **After**: persisted places cache is checked FIRST (even on main cache hit). If it has ≥1 places AND the main cache has fewer, the main cache result is overridden with the persisted places. The research data (stats, quotes, citations) still flows from the main cache — only the `places` field is overridden.
+- Also added override-after-cloud-call: if a fresh cloud_research returns fewer places than the persisted cache has, override.
+- TTL raised from 1 hour → 24 hours (`24 * HOUR_IN_SECONDS`) so the test-then-generate flow reliably reuses results across a whole session.
+- Result: click Test Sonar Connection with a keyword → get 3 Mudgee places → click Generate Article with the same keyword within 24h → guaranteed to use the same 3 places, no Sonar non-determinism roulette.
+- Verify: `grep -n "persisted places cache\|has_persisted" seobetter/includes/Trend_Researcher.php`
+
+#### 2. Location-aware auto-suggest — [cloud-api/api/topic-research.js](../cloud-api/api/topic-research.js) new `extractLocationTokens()` + `OTHER_CITY_BLOCKLIST` constant + `buildKeywordSets()` filter
+- New `extractLocationTokens(niche)` helper extracts target location tokens from "in X" / "near X" / "at X" patterns. For "best pet shops in mudgee nsw 2026" → `["mudgee", "nsw"]`. Empty array if no location clause.
+- New `OTHER_CITY_BLOCKLIST` constant — ~100 common English-speaking cities (US, UK, AU, CA, EU, Asia) plus all 50 US states. Frequent Google Suggest noise sources.
+- `buildKeywordSets()` now runs a location-aware filter on Google Suggest results:
+  - If the niche has a target location AND a suggestion doesn't contain any target-location tokens AND contains a blocklist city → REJECT.
+  - Otherwise keep (suggestions with the target location, or generic phrases with no city, both pass).
+- Worked example for `best pet shops in mudgee nsw 2026`:
+  - `pet shops sydney` → no "mudgee"/"nsw", contains "sydney" (blocklist) → REJECT ❌
+  - `pet shops washington` → no target, contains "washington" (blocklist) → REJECT ❌
+  - `pet shops near me` → no target, no blocklist → KEEP ✅
+  - `pet shops mudgee` → contains "mudgee" → KEEP ✅
+  - `best pet shops` → no target, no blocklist → KEEP ✅
+- **Synthetic keyword augmentation**: small towns rarely have Google Suggest data for their specific business types, so the filter leaves the secondary list thin. `buildKeywordSets()` now auto-generates up to 5 synthetic secondary keywords for local-intent niches by combining the target location with the core topic: `{core} {location}`, `{location} {core}`, `{core} near {location}`, `best {core} {location}`, plus a shops→supplies swap. For Mudgee: "pet shops mudgee nsw", "mudgee nsw pet shops", "pet shops near mudgee nsw", "best pet shops mudgee nsw", "mudgee nsw pet supplies".
+- Verify: `grep -n "extractLocationTokens\|OTHER_CITY_BLOCKLIST" seobetter/cloud-api/api/topic-research.js`
+
+### Verification
+
+1. Redeploy cloud-api to Vercel.
+2. Reinstall the plugin zip.
+3. **Test determinism**: Settings → Test Sonar Connection → enter `best pet shops in mudgee nsw 2026` + `AU` → click Test. Expected: 3 verified Mudgee places. Then navigate to Content Generator, same keyword, hit Generate. Expected: Pool size 3, real Mudgee H2s, no places_insufficient banner.
+4. **Test auto-suggest**: Content Generator → same keyword → click Auto-suggest. Expected Secondary Keywords (no Sydney/Melbourne/Washington):
+   ```
+   pet shops mudgee nsw, mudgee nsw pet shops, pet shops near mudgee nsw, best pet shops mudgee nsw, mudgee nsw pet supplies
+   ```
+5. Regression: non-local keyword like `how to train a puppy` — should still use Google Suggest as before (no location filter applies).
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.57 — Auto-suggest now geo-localizes Google Suggest by country code
 
 **Date:** 2026-04-15
