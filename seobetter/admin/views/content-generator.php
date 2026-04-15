@@ -96,7 +96,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         <div class="sb-field">
                             <label>Secondary Keywords
                                 <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text">Related phrases placed in headings and body to rank for multiple terms.</span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Extra keyword phrases the AI will weave into headings and body text so your article ranks for multiple related search terms, not just the primary keyword. Comma-separated. Leave empty to let the AI auto-pick from research data.</span>
                                 </span>
                             </label>
                             <input type="text" name="secondary_keywords" value="<?php echo esc_attr( $_POST['secondary_keywords'] ?? '' ); ?>" placeholder="horse vet supplies, equine medical supplies" />
@@ -105,7 +105,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         <div class="sb-field">
                             <label>LSI / Semantic Keywords
                                 <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text">Terms AI models expect alongside your keyword. Boosts citations by Google AI Overviews, ChatGPT, Perplexity &amp; Gemini.</span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Semantically-related single words and short phrases that AI search engines (ChatGPT, Perplexity, Google AI Overviews, Gemini) expect to see alongside your keyword. Helps your article get cited by AI answers. Comma-separated. Leave empty and the Auto-suggest button will fill it for you.</span>
                                 </span>
                             </label>
                             <input type="text" name="lsi_keywords" value="<?php echo esc_attr( $_POST['lsi_keywords'] ?? '' ); ?>" placeholder="equine wound care, horse first aid" />
@@ -122,7 +122,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         <div class="sb-field">
                             <label>Content Type
                                 <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text">Changes the article structure, tone, and JSON-LD schema. Each type uses a different prose template optimized for its format.</span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Tells the AI what shape of article to write. A Listicle produces numbered business/product picks. A How-To produces step-by-step instructions. A Review produces a hands-on evaluation. Each type changes the section structure, tone, and schema markup automatically. Pick the one that matches what you&rsquo;re writing.</span>
                                 </span>
                             </label>
                             <select name="content_type" id="sb-content-type" onchange="sbContentTypeChanged(this.value)">
@@ -159,7 +159,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         <div class="sb-field">
                             <label>Word Count
                                 <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text">Longer content ranks better for competitive keywords. 2,000+ words is optimal for AI citations (ChatGPT, Perplexity). Shorter works for transactional pages.</span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> How long the finished article will be. 2,000 words is the sweet spot for AI search citations (ChatGPT, Perplexity, Google AI Overviews tend to cite longer authoritative pieces). Shorter (800-1,000) works for product pages and buying guides. Longer (3,000+) is for ultimate-guide content.</span>
                                 </span>
                             </label>
                             <select name="word_count">
@@ -184,7 +184,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         <div class="sb-field">
                             <label>Category <span style="color:#ef4444">*</span>
                                 <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text">Required. Pulls real-time data from free public APIs relevant to your topic for better citations and statistics.</span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Picks which free public data sources the plugin pulls real-time statistics from while writing your article. For example, &ldquo;Food &amp; Drink&rdquo; pulls from OpenFoodFacts and recipe databases, &ldquo;Finance&rdquo; pulls from economic data APIs, &ldquo;Travel &amp; Tourism&rdquo; pulls from destination info sources. This is ONLY about supporting stats woven into the article prose — it does NOT affect where the plugin looks for places or businesses (that&rsquo;s controlled by Target Country below). Pick the category that best matches your article topic.</span>
                                 </span>
                             </label>
                             <select name="domain" required>
@@ -234,19 +234,25 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         </div>
                     </div>
 
+                    <!-- v1.5.45 — split Country and Language into two independent fields.
+                         The old combined picker forced country→language coupling: picking
+                         "Italy" made the article Italian. For travel bloggers writing in
+                         English about Italian places, that was exactly wrong. Now the
+                         country selector controls WHERE data comes from (Places API
+                         waterfall + country-specific govt stats APIs) and the language
+                         selector controls what LANGUAGE the article is written in. -->
                     <div class="sb-field-row">
                         <div class="sb-field" style="flex:1">
-                            <label>Country &amp; Language
+                            <label><strong>📍 Target Country</strong> <span style="color:#6b7280;font-weight:400;font-size:11px">— where your article&rsquo;s places &amp; data come from</span>
                                 <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text">Sets the article language and pulls statistics from country-specific government APIs. Article will be written entirely in the selected language.</span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Tells the plugin WHERE to find real places, businesses, and statistics for your article. Pick Italy if you&rsquo;re writing about gelaterie in Lucignano. Pick Japan if you&rsquo;re writing about ramen shops in Tokyo. This is how the Places waterfall (Perplexity Sonar → OpenStreetMap → Foursquare → HERE → Google Places) knows which country&rsquo;s data to search. <br><br><strong>This does NOT set the article language.</strong> You can pick Italy here and still write the article in English — use the Article Language dropdown next to this for that. Leave as &ldquo;Global&rdquo; only for topics that aren&rsquo;t tied to any specific country (like general how-to guides).</span>
                                 </span>
                             </label>
                             <input type="hidden" name="country" id="sb-country-val" value="<?php echo esc_attr( $_POST['country'] ?? '' ); ?>" />
-                            <input type="hidden" name="language" id="sb-lang-val" value="<?php echo esc_attr( $_POST['language'] ?? 'en' ); ?>" />
                             <div id="sb-country-picker" style="position:relative">
                                 <div id="sb-country-selected" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border:1px solid var(--sb-border,#d1d5db);border-radius:6px;cursor:pointer;background:#fff;font-size:13px" onclick="document.getElementById('sb-country-dropdown').style.display=document.getElementById('sb-country-dropdown').style.display==='block'?'none':'block';document.getElementById('sb-country-search').focus()">
                                     <span id="sb-country-flag" style="font-size:18px">🌐</span>
-                                    <span id="sb-country-label" style="flex:1;color:#374151">Global — English</span>
+                                    <span id="sb-country-label" style="flex:1;color:#374151">Global (no country filter)</span>
                                     <svg style="width:14px;height:14px;color:#6b7280;flex-shrink:0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                                 </div>
                                 <div id="sb-country-dropdown" style="display:none;position:absolute;top:44px;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:9999;max-height:320px;overflow:hidden">
@@ -383,11 +389,14 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                                 list.innerHTML = html || '<div style="padding:16px;text-align:center;color:#9ca3af;font-size:13px">No countries found</div>';
                             }
                             function sbFilterCountries(q) { sbRenderCountries(q); }
+                            // v1.5.45 — sbSelectCountry only sets country now. Language is
+                            // a separate independent dropdown below. This lets a US/UK/AU
+                            // blogger write in English about Italian gelaterie — pick
+                            // "Italy" for country, keep language as English.
                             function sbSelectCountry(v, c, f, n, l, ln) {
                                 document.getElementById('sb-country-val').value = c;
-                                document.getElementById('sb-lang-val').value = l;
                                 document.getElementById('sb-country-flag').textContent = f;
-                                document.getElementById('sb-country-label').textContent = n + ' — ' + ln;
+                                document.getElementById('sb-country-label').textContent = n + (c === '' ? ' (no country filter)' : '');
                                 document.getElementById('sb-country-dropdown').style.display = 'none';
                                 document.getElementById('sb-country-search').value = '';
                             }
@@ -403,13 +412,55 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                             <?php if ( ! empty( $_POST['country'] ) ) : ?>
                             (function() {
                                 var saved = '<?php echo esc_js( $_POST['country'] ?? '' ); ?>';
-                                var lang = '<?php echo esc_js( $_POST['language'] ?? 'en' ); ?>';
-                                sbCountries.forEach(function(c) { if (c.c === saved && c.l === lang) sbSelectCountry(c.v,c.c,c.f,c.n,c.l,c.ln); });
+                                sbCountries.forEach(function(c) { if (c.c === saved) sbSelectCountry(c.v,c.c,c.f,c.n,c.l,c.ln); });
                             })();
                             <?php endif; ?>
                             </script>
                         </div>
+                        <div class="sb-field" style="flex:1">
+                            <label><strong>🗣 Article Language</strong> <span style="color:#6b7280;font-weight:400;font-size:11px">— what language the article is written in</span>
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Tells the AI which language to WRITE the article in. Headings, paragraphs, lists, FAQ answers — all rendered in this language. <br><br><strong>This is completely separate from Target Country.</strong> If you&rsquo;re a US blogger writing for an English-speaking audience about Italian gelaterie, keep this on English and set Target Country to Italy. The plugin will pull real data from Italy but write the article in English. Default is English because that&rsquo;s the most common audience language.</span>
+                                </span>
+                            </label>
+                            <?php $sb_lang = $_POST['language'] ?? 'en'; ?>
+                            <select name="language" id="sb-lang-val" style="height:40px;padding:0 12px;border:1px solid var(--sb-border,#d1d5db);border-radius:6px;background:#fff;font-size:13px;width:100%">
+                                <option value="en" <?php selected( $sb_lang, 'en' ); ?>>🇬🇧 English</option>
+                                <option value="es" <?php selected( $sb_lang, 'es' ); ?>>🇪🇸 Español (Spanish)</option>
+                                <option value="fr" <?php selected( $sb_lang, 'fr' ); ?>>🇫🇷 Français (French)</option>
+                                <option value="de" <?php selected( $sb_lang, 'de' ); ?>>🇩🇪 Deutsch (German)</option>
+                                <option value="it" <?php selected( $sb_lang, 'it' ); ?>>🇮🇹 Italiano (Italian)</option>
+                                <option value="pt" <?php selected( $sb_lang, 'pt' ); ?>>🇵🇹 Português (Portuguese)</option>
+                                <option value="nl" <?php selected( $sb_lang, 'nl' ); ?>>🇳🇱 Nederlands (Dutch)</option>
+                                <option value="sv" <?php selected( $sb_lang, 'sv' ); ?>>🇸🇪 Svenska (Swedish)</option>
+                                <option value="no" <?php selected( $sb_lang, 'no' ); ?>>🇳🇴 Norsk (Norwegian)</option>
+                                <option value="da" <?php selected( $sb_lang, 'da' ); ?>>🇩🇰 Dansk (Danish)</option>
+                                <option value="fi" <?php selected( $sb_lang, 'fi' ); ?>>🇫🇮 Suomi (Finnish)</option>
+                                <option value="pl" <?php selected( $sb_lang, 'pl' ); ?>>🇵🇱 Polski (Polish)</option>
+                                <option value="cs" <?php selected( $sb_lang, 'cs' ); ?>>🇨🇿 Čeština (Czech)</option>
+                                <option value="hu" <?php selected( $sb_lang, 'hu' ); ?>>🇭🇺 Magyar (Hungarian)</option>
+                                <option value="ro" <?php selected( $sb_lang, 'ro' ); ?>>🇷🇴 Română (Romanian)</option>
+                                <option value="el" <?php selected( $sb_lang, 'el' ); ?>>🇬🇷 Ελληνικά (Greek)</option>
+                                <option value="tr" <?php selected( $sb_lang, 'tr' ); ?>>🇹🇷 Türkçe (Turkish)</option>
+                                <option value="ru" <?php selected( $sb_lang, 'ru' ); ?>>🇷🇺 Русский (Russian)</option>
+                                <option value="uk" <?php selected( $sb_lang, 'uk' ); ?>>🇺🇦 Українська (Ukrainian)</option>
+                                <option value="ja" <?php selected( $sb_lang, 'ja' ); ?>>🇯🇵 日本語 (Japanese)</option>
+                                <option value="ko" <?php selected( $sb_lang, 'ko' ); ?>>🇰🇷 한국어 (Korean)</option>
+                                <option value="zh" <?php selected( $sb_lang, 'zh' ); ?>>🇨🇳 中文 (Chinese)</option>
+                                <option value="ar" <?php selected( $sb_lang, 'ar' ); ?>>🇸🇦 العربية (Arabic)</option>
+                                <option value="he" <?php selected( $sb_lang, 'he' ); ?>>🇮🇱 עברית (Hebrew)</option>
+                                <option value="hi" <?php selected( $sb_lang, 'hi' ); ?>>🇮🇳 हिन्दी (Hindi)</option>
+                                <option value="th" <?php selected( $sb_lang, 'th' ); ?>>🇹🇭 ไทย (Thai)</option>
+                                <option value="vi" <?php selected( $sb_lang, 'vi' ); ?>>🇻🇳 Tiếng Việt (Vietnamese)</option>
+                                <option value="id" <?php selected( $sb_lang, 'id' ); ?>>🇮🇩 Bahasa Indonesia</option>
+                                <option value="ms" <?php selected( $sb_lang, 'ms' ); ?>>🇲🇾 Bahasa Melayu</option>
+                            </select>
+                        </div>
                     </div>
+
+                    <p class="sb-help" style="margin:-8px 0 16px 0;padding:10px 12px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:4px;color:#1e3a5f;font-size:12px">
+                        <strong>💡 Example:</strong> Writing about Lucignano gelato shops for a US audience? Set <strong>Target Country = Italy</strong> (so the plugin finds real Italian gelaterie via Places waterfall) and <strong>Article Language = English</strong> (so your readers can understand it). These are two separate settings.
+                    </p>
                 </div>
 
                 <!-- Generate Button —

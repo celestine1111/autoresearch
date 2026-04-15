@@ -16,6 +16,67 @@
 
 ---
 
+## v1.5.45 — Split Country/Language picker into two independent fields + rewrite all tooltips in beginner plain-English
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+User observation: *"how would a user know what country to select as it says country and language? some might think that is the language it writes it in, rather they what it pulls data from"*.
+
+The single "Country & Language" picker in the article generator form had two critical problems:
+
+1. **Coupled country and language in one selection.** Picking "Italy" in the dropdown set BOTH `country='IT'` and `language='it'`, which forced the article to be written in Italian. Most users writing about foreign places (US blogger writing about Italian gelato, AU blogger writing about Japanese ramen) want the country selector to affect ONLY the data source, not the article language. The old picker made that impossible without advanced config.
+2. **Confusing label.** "Country & Language" implied a single concept and the tooltip referenced "country-specific government APIs" which leaked internal jargon and didn't explain what the field actually did for the user.
+
+### Fixed
+
+- **Split the combined picker into two independent fields** — [admin/views/content-generator.php](../admin/views/content-generator.php) lines **~237-470**
+  - **Target Country** field: flag+name picker with label "📍 Target Country — where your article's places & data come from". The existing country list (`sbCountries`) is reused but `sbSelectCountry()` no longer touches the language field. Label shows just the country name (no more "Italy — Italiano" combined display).
+  - **Article Language** field: new `<select name="language">` with 29 languages (English, Spanish, French, German, Italian, Portuguese, Dutch, Scandinavian languages, Eastern European, Russian, Ukrainian, Japanese, Korean, Chinese, Arabic, Hebrew, Hindi, Thai, Vietnamese, Indonesian, Malay). Default: English. Completely independent from country selection.
+  - **Example info box** below both fields: *"💡 Example: Writing about Lucignano gelato shops for a US audience? Set Target Country = Italy (so the plugin finds real Italian gelaterie via Places waterfall) and Article Language = English (so your readers can understand it). These are two separate settings."*
+  - Verify: `grep -n "Target Country\|Article Language\|sb-lang-val" seobetter/admin/views/content-generator.php`
+
+- **All 7 tooltips rewritten in plain-English "What this does:" framing** — [admin/views/content-generator.php](../admin/views/content-generator.php)
+  - **Secondary Keywords**: explains they're extra keyword phrases woven into the article so it ranks for multiple terms
+  - **LSI Keywords**: explains they're semantically-related terms AI search engines expect, and that Auto-suggest will fill them
+  - **Content Type**: explains it tells the AI what SHAPE of article to write (listicle vs how-to vs review) with concrete examples
+  - **Word Count**: explains it's the article length and gives concrete recommendations per use case (2000 for AI citations, 800-1000 for product pages, 3000+ for ultimate guides)
+  - **Domain / Category**: explains it picks which public data sources the plugin pulls statistics from, with concrete examples per category, and EXPLICITLY clarifies it does NOT affect where places/businesses are found (that's Target Country)
+  - **Target Country**: new tooltip explains it's for WHERE to find places and that it does NOT set the article language
+  - **Article Language**: new tooltip explains it's for the language the article is WRITTEN in and that it's completely separate from Target Country
+  - All tooltips start with `<strong>What this does:</strong>` for consistency
+  - Zero mentions of "government APIs" — internal jargon removed
+  - Verify: `grep -c "What this does:" seobetter/admin/views/content-generator.php` (should be 7)
+
+- **Updated `sbSelectCountry()` JS** — [admin/views/content-generator.php](../admin/views/content-generator.php)
+  - Removed the line `document.getElementById('sb-lang-val').value = l;` so picking a country no longer overrides the language
+  - Label display changed from `"Italy — Italiano"` to just `"Italy"` (with "(no country filter)" appended when Global is selected)
+  - Backward-compat init: if `$_POST['country']` is set from a previous submission, the picker still restores the country flag + name correctly, but language is restored independently from the new `<select name="language">`
+
+### Why this matters for the Lucignano hallucination chain
+
+This is not a cosmetic fix — it's a root cause of the Places_Validator failures the user has been seeing. Here's the chain:
+
+1. Old picker default: `country=''`, `language='en'` (Global — English)
+2. Test button hardcoded: `country='IT'`, `language='en'`
+3. Article generation cache key: `md5(keyword + domain + '')` (because country='' from default picker)
+4. Test button cache key: `md5(keyword + 'travel' + 'IT')`
+5. Different keys → article generation makes fresh Sonar call → Sonar non-deterministic → sometimes 0 places
+
+By making Target Country a prominent, clearly-labeled field with explicit help, users are MUCH more likely to set `country='IT'` before generating, which aligns the cache key with the Test button's cache key and lets v1.5.44's shared places-only cache do its job.
+
+### Changed
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION`: `1.5.44` → `1.5.45`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.44 — Shared places-only cache (keyword + country) so test button results are reused by article generation
 
 **Date:** 2026-04-15
