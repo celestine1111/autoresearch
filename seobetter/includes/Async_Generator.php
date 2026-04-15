@@ -976,6 +976,18 @@ class Async_Generator {
         $image_inserter = new Stock_Image_Inserter();
         $markdown = $image_inserter->insert_images( $markdown, $keyword );
 
+        // v1.5.64 — append References section to the PREVIEW path too,
+        // not just the save path. Previously append_references_section
+        // only ran at save time in rest_save_draft, which meant the
+        // live preview had no References section even when the citation
+        // pool was non-empty. User reported: "no citations, article
+        // design looks good but no external links and no citations at
+        // footer". Now the preview matches the saved draft.
+        $citation_pool = $job['results']['citation_pool'] ?? [];
+        if ( ! empty( $citation_pool ) ) {
+            $markdown = Citation_Pool::append_references_section( $markdown, $citation_pool );
+        }
+
         // Format as classic HTML for preview
         $formatter = new Content_Formatter();
         $html = $formatter->format( $markdown, 'classic', [

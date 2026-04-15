@@ -348,6 +348,20 @@ class Content_Formatter {
                     $level = $section['level'];
                     $text = $section['content'];
 
+                    // v1.5.64 — suppress the H2 "References" heading because
+                    // the next list section will emit a styled wp:html block
+                    // with its own "References" eyebrow. Without this suppress,
+                    // the output would show two References headers stacked.
+                    if ( $level === 2 && preg_match( '/^(references|sources|bibliography|further\s*reading|citations)\s*$/i', $text ) ) {
+                        // Check next section — if it's an ordered list, the
+                        // list handler will emit the styled References block.
+                        // Skip emitting the H2 so we don't double up.
+                        $next = $sections[ $i + 1 ] ?? null;
+                        if ( $next && $next['type'] === 'list' && ( $next['list_type'] ?? '' ) === 'ol' ) {
+                            break; // skip this heading entirely
+                        }
+                    }
+
                     // v1.5.18 — apply accent color to H2 headings via Gutenberg
                     // style attribute JSON + inline style. This makes saved
                     // drafts visually match the preview's colored H2s while
@@ -521,6 +535,11 @@ class Content_Formatter {
                     $is_pros = ( preg_match( '/\bpros?\b|advantage|strength|benefit|upside|highlight/i', $prev_context ) && ! preg_match( '/cons/i', $prev_context ) );
                     $is_cons = (bool) preg_match( '/\bcons?\b|disadvantage|weakness|drawback|downside|limitation|trade-?off/i', $prev_context );
                     $is_ingredients = (bool) preg_match( '/ingredient|you.ll need|what you need|supplies|materials|tools|prerequisite/i', $prev_context );
+                    // v1.5.64 — detect References section so we can render it
+                    // with styled numbered badges (purple circles + hover
+                    // effect) instead of plain Gutenberg ordered list.
+                    // Documented in article_design.md §10.
+                    $is_references = (bool) preg_match( '/^(references|sources|bibliography|further\s*reading|citations)\b/i', $prev_context );
 
                     // v1.5.14 — HowTo step boxes: when content_type is how_to AND
                     // the list is ordered AND it's not already classified as
@@ -528,7 +547,29 @@ class Content_Formatter {
                     $content_type = $options['content_type'] ?? '';
                     $is_howto_steps = ( $content_type === 'how_to' && $tag === 'ol' && ! $is_takeaways && ! $is_pros && ! $is_cons && ! $is_ingredients );
 
-                    if ( $is_takeaways ) {
+                    if ( $is_references ) {
+                        // v1.5.64 — styled References section per
+                        // article_design.md §10 LOCKED FORMAT. Renders the
+                        // numbered list with purple circle badges, clean
+                        // typography, hover underline on links. Replaces
+                        // plain Gutenberg ordered list which looked default.
+                        $icon = $this->sb_icon( 'social', 18 );
+                        $html = '<div style="background:#faf5ff !important;border:1px solid #e9d5ff;border-radius:12px;padding:1.5em 1.75em;margin:2em 0 1em;color:#1e293b !important">';
+                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:' . $accent . ' !important;margin-bottom:1em;display:flex;align-items:center">' . $icon . 'References</div>';
+                        $html .= '<ol style="list-style:none;counter-reset:sb-ref;padding:0;margin:0">';
+                        $n = 1;
+                        foreach ( $section['items'] as $item ) {
+                            $item_html = $this->inline_markdown( $item );
+                            $html .= '<li style="display:flex;align-items:flex-start;gap:0.75em;margin-bottom:0.65em;padding-bottom:0.65em;border-bottom:1px solid #f3e8ff;font-size:0.95em;line-height:1.55;color:#374151 !important">';
+                            $html .= '<span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:' . $accent . ';color:#ffffff !important;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:0.75em;line-height:1">' . $n . '</span>';
+                            $html .= '<span style="flex:1;color:#374151 !important;word-break:break-word">' . $item_html . '</span>';
+                            $html .= '</li>';
+                            $n++;
+                        }
+                        $html .= '</ol>';
+                        $html .= '</div>';
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    } elseif ( $is_takeaways ) {
                         $icon = $this->sb_icon( 'takeaways', 18 );
                         $html = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0;color:' . $accent . '">';
                         $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:' . $accent . ' !important;margin-bottom:0.6em;display:flex;align-items:center">' . $icon . 'Key Takeaways</div>';

@@ -526,14 +526,54 @@ All dark mode styles are scoped inside:
 3. [Best Beds for Anxious Dogs](https://www.rspca.org.au/knowledgebase/anxious-dog-beds/)
 ```
 
-**Strict format rules:**
+**Strict format rules (markdown source):**
 
 - Heading: exactly `## References` (not "Sources", "Further Reading", or "Bibliography")
 - One entry per line, numbered sequentially starting at `1.`
 - Each entry is a markdown link: `N. [title](url)` — no trailing source name, no date suffix, no provider attribution (v1.5.46 removed the ` — {source_name}` suffix per user feedback)
 - Titles come from the Citation Pool metadata, not from the AI
 - Only entries the body actually cites appear here (v1.5.60 fallback: if body cites zero URLs but pool is non-empty, include first 8 pool entries as fallback)
-- Rendered in hybrid mode as a standard `<!-- wp:list {"ordered":true} -->` Gutenberg block so WordPress themes apply native numbered-list styling
+
+**Rendered as styled wp:html block (v1.5.64+ LOCKED):**
+
+The References section is NOT rendered as a plain Gutenberg ordered list. [Content_Formatter.php::format_hybrid()](../includes/Content_Formatter.php) detects the "References" heading immediately before an ordered list and emits a styled `wp:html` block:
+
+- Purple gradient background (`#faf5ff` with `#e9d5ff` border, `border-radius: 12px`, `padding: 1.5em 1.75em`)
+- "References" eyebrow label above the list in accent color + uppercase + letter-spacing (matches the Key Takeaways / Pros / Cons block pattern)
+- Numbered items as flexbox rows with:
+  - 24×24px circular **purple badge** containing the item number (`background: var(--accent)`, white text, border-radius 50%)
+  - Item title + link as markdown-parsed HTML
+  - `border-bottom: 1px solid #f3e8ff` divider between entries
+- The `<h2>References</h2>` Gutenberg heading block is **suppressed** before this rendering so the styled block's eyebrow is the only "References" label (no double header).
+
+**Example rendered output:**
+
+```html
+<!-- wp:html -->
+<div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:1.5em 1.75em;margin:2em 0 1em;color:#1e293b">
+    <div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#764ba2;margin-bottom:1em;display:flex;align-items:center">
+        [shield icon] References
+    </div>
+    <ol style="list-style:none;padding:0;margin:0">
+        <li style="display:flex;align-items:flex-start;gap:0.75em;margin-bottom:0.65em;padding-bottom:0.65em;border-bottom:1px solid #f3e8ff;font-size:0.95em">
+            <span style="width:24px;height:24px;border-radius:50%;background:#764ba2;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:0.75em">1</span>
+            <span><a href="https://www.akc.org/expert-advice/home-living/how-to-choose-dog-bed/">How to Choose a Dog Bed</a></span>
+        </li>
+        <li>...</li>
+    </ol>
+</div>
+<!-- /wp:html -->
+```
+
+**Why styled, not plain list:**
+
+- User feedback 2026-04-15 (3rd request): *"i like the citations styling before with numbered styled css.  the article styling looks good so make sure it keeps that in article_design.md but you have numbered styling before so add that again for citations and others."*
+- Plain Gutenberg `<ol>` inherits the theme's default list styling which varies wildly across sites. The wp:html block has inline styles that render identically on every WordPress theme.
+- The purple circle badges are the same pattern used for Key Takeaways numbered lists and HowTo step cards, keeping the article's visual language consistent.
+
+### Preview parity (v1.5.64+)
+
+The References section now appears in the **live preview** in addition to the saved WordPress draft. Previously `append_references_section()` only ran at save time in `rest_save_draft()`, so users testing articles saw no References in the preview even when citations were in the body. v1.5.64 also calls `Citation_Pool::append_references_section()` in `Async_Generator::assemble_final()` before formatting, so preview and saved draft are always in sync.
 
 In hybrid output this renders as:
 

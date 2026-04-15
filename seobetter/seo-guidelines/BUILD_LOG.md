@@ -16,6 +16,70 @@
 
 ---
 
+## v1.5.64 — Inject-fix revert to classic mode, full results panel re-render, References in preview, styled numbered References block
+
+**Date:** 2026-04-15
+**Commit:** `[pending]`
+
+### Context
+
+Live test of v1.5.63 Article 1 (Simplify Readability button click):
+- ✅ Simplify Readability worked — sidebar shows 86/A, 4 sections rewritten to grade 7
+- ❌ Results panel bar chart still showed Readability 26 (stale — user: "the grading graph did not upgrade or let the user know")
+- ❌ No References section visible in the article preview/output — user: "no citations, article design looks good but no external links and no citations at footer"
+- ❌ Images still lose rounded/centered styling after clicking any inject-fix button (v1.5.63 fix didn't resolve)
+- 💡 User wants numbered styled CSS for references (circular purple badges like the pre-v1.5.63 styling)
+
+### Fixed
+
+#### 1. rest_inject_fix reverted to 'classic' mode — [seobetter.php::rest_inject_fix()](../seobetter.php) line ~1368
+- **My v1.5.62 misdiagnosis**: I assumed classic mode was rendering images as raw full-size so I switched to hybrid mode. Wrong. `format_classic()` at [Content_Formatter.php line 770](../includes/Content_Formatter.php) returns `<style>.sb-{uid}{...}</style><div class="sb-{uid}">...</div>` — a self-contained scoped-CSS wrapper that defines image border-radius, centered figure margins, 65ch max-width paragraphs, and the full typography. `format_hybrid()` just returns raw wp:html blocks with no style tag and no wrapper. So when my v1.5.62 switched inject-fix to hybrid mode, the preview lost ALL scoped styling and inherited admin theme CSS instead. Exactly the image/text/font regression the user kept reporting after every inject-fix click.
+- **Fix**: revert to `'classic'`. The original generation path used classic for this reason. Inject-fix re-renders must match.
+- Verify: `grep -n "'classic'" seobetter/seobetter.php` (line in rest_inject_fix)
+
+#### 2. Full results-panel re-render after inject-fix success — [admin/views/content-generator.php](../admin/views/content-generator.php) sb-improve-btn click handler + initial renderResult call
+- **Root cause**: old behavior only updated the score ring + individual button state after inject-fix. The bar chart (Readability 26, Keyword Density 77, etc), stat cards (Words / Citations / Quotes), suggestions list, and Pro upsell all stayed frozen at their pre-click values. User saw the score ring jump but the 14 bars below it stayed red, making it look like the fix didn't work.
+- **Fix**: on successful inject-fix, merge the inject response over the cached original generation response (stored in `window._seobetterLastResult` when the article first renders), then call `renderResult(updatedRes)` to rebuild the entire panel — score ring, stat cards, bar chart, suggestions, Pro upsell, Analyze & Improve panel. 800ms delay between the ✓ button flash and the re-render so the user perceives the success state.
+- The cached response preserves headlines, meta, places_validator, citation_pool and other fields inject-fix doesn't touch.
+- Verify: `grep -n "_seobetterLastResult\|renderResult(updatedRes)" seobetter/admin/views/content-generator.php`
+
+#### 3. References section now appears in the live preview — new [includes/Citation_Pool.php::append_references_section()](../includes/Citation_Pool.php) + [Async_Generator.php::assemble_final()](../includes/Async_Generator.php)
+- **Root cause**: `append_references_section()` only existed as a private method on the main plugin class in seobetter.php and only ran at save time in `rest_save_draft()`. The preview path in `Async_Generator::assemble_final()` never called it. Users testing articles saw zero References even when their pool had 8 valid URLs.
+- **Fix**: extracted the logic into a new public static method `Citation_Pool::append_references_section( $markdown, $pool )` that both code paths can call. Invoked in `assemble_final()` BEFORE formatting, so the markdown fed to `Content_Formatter::format()` already contains the References section. Preview and saved draft are now in sync.
+- Format unchanged: `## References` heading followed by `N. [title](url)` numbered entries with the v1.5.60 fallback (include first 8 pool entries when no body links matched).
+- Verify: `grep -n "append_references_section" seobetter/includes/Citation_Pool.php seobetter/includes/Async_Generator.php`
+
+#### 4. Styled numbered References block in format_hybrid — [Content_Formatter.php::format_hybrid()](../includes/Content_Formatter.php) list case + heading suppression
+- **Root cause**: the parse_markdown → format_hybrid pipeline was treating References as a plain `<!-- wp:list {"ordered":true} -->` Gutenberg list. Plain `<ol>` inherits theme defaults which vary wildly. User explicitly requested: *"i like the citations styling before with numbered styled css"*.
+- **Fix**: new `$is_references` detector (matches References / Sources / Bibliography / Further Reading / Citations after preceding heading). When detected, emits a styled wp:html block:
+  - Purple gradient background (`#faf5ff` with `#e9d5ff` border, border-radius 12px, padding 1.5em 1.75em)
+  - "References" eyebrow in accent color uppercase + letter-spacing 0.12em (matches Key Takeaways / Pros / Cons block pattern)
+  - Numbered entries as flexbox rows with 24×24 circular purple badges (`background: {accent}`, white text, border-radius 50%)
+  - `border-bottom: 1px solid #f3e8ff` dividers between entries
+  - Word-break and flex layout for long URLs
+- Also: the preceding `<h2>References</h2>` Gutenberg heading is **suppressed** when the next section is an ordered list, so the styled block's eyebrow is the only "References" label (no double header).
+- Verify: `grep -n "is_references" seobetter/includes/Content_Formatter.php`
+
+#### 5. Documented the locked styled References format — [seo-guidelines/article_design.md §10](../seo-guidelines/article_design.md)
+- Updated the "LOCKED FORMAT" section from plain-list spec to the new styled-wp:html-block spec. Includes the full example HTML with inline styles, the rationale (user feedback + theme-independent rendering), and a note about preview parity with saved drafts.
+
+### Expected result after v1.5.64
+
+Regenerate Article 1 (1500 words), then click Simplify Readability + Add Citations in sequence:
+
+| Observation | v1.5.63 | v1.5.64 target |
+|---|---|---|
+| Bar chart after Simplify Readability click | Readability stuck at 26 | **Readability updates to 70-90** |
+| References section in preview | Missing entirely | **Styled purple box with numbered badges** |
+| Images after inject-fix click | Full-size, no border-radius | **Rounded corners + centered + max-width** |
+| Stat cards (Words/Citations/Quotes) after inject-fix | Stale | **Live-updated from result.checks** |
+| Analyze & Improve panel after a fix | Stale descriptions | **Rebuilt with fresh data** |
+| Pro upsell after score crosses 80 | Stays visible | **Hidden once score ≥80** |
+
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.63 — Citation_Pool cache invalidation, preview CSS preservation, post-gen readability rewriter, density unification, tighter word truncation, References format locked
 
 **Date:** 2026-04-15

@@ -820,6 +820,10 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             bar.style.width = '100%'; bar.textContent = '100%';
             titleEl.textContent = 'Article generated!';
             label.textContent = 'Complete!';
+            // v1.5.64 — cache the initial generation response so inject-fix
+            // handlers can merge their updates on top of it instead of losing
+            // headlines / meta / places_validator / citation_pool.
+            window._seobetterLastResult = res;
             renderResult(res);
         }).catch(function() {
             stopTimer();
@@ -1257,76 +1261,50 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     }
 
                     if (result.success && result.content) {
-                        // Inject fix succeeded — update draft
+                        // v1.5.64 — FULL results-panel re-render after any
+                        // successful inject-fix. Previously only the score
+                        // ring and button state updated, leaving the bar
+                        // chart, suggestions, and stat cards stale. User
+                        // reported "the grading graph did not upgrade or
+                        // let the user know" after clicking Simplify
+                        // Readability — the method worked (4 sections
+                        // rewritten, GEO jumped to 83) but the Readability
+                        // bar stayed red at 26.
                         draft.markdown = result.markdown || draft.markdown;
                         draft.content = result.content;
-                        // v1.5.62 — also store updated checks so any panel
-                        // re-render reads the latest scores, not the stale
-                        // original counts (user was seeing "0 citations
-                        // found" description even after 6 were injected).
                         draft.checks = result.checks || draft.checks;
                         draft.geo_score = result.geo_score;
                         draft.grade = result.grade;
 
+                        // Flash the ✓ briefly so the user sees the success
                         self.textContent = '✓ ' + (result.added || 'Done');
                         self.style.background = '#22c55e';
 
-                        // Update score display
-                        var scoreEl = document.querySelector('.sb-geo-ring-score');
-                        if (scoreEl) scoreEl.textContent = result.geo_score;
-                        var gradeEl = document.querySelector('.sb-geo-ring-grade');
-                        if (gradeEl) gradeEl.textContent = result.grade;
+                        // Build a synthetic res object preserving headlines,
+                        // meta, places_validator, citation_pool, and other
+                        // fields that inject-fix doesn't touch. Merges over
+                        // the original generation response stored at
+                        // window._seobetterLastResult (see renderResult
+                        // caller below).
+                        var prev = window._seobetterLastResult || {};
+                        var updatedRes = Object.assign({}, prev, {
+                            content: result.content,
+                            markdown: result.markdown,
+                            geo_score: result.geo_score,
+                            grade: result.grade,
+                            word_count: result.word_count || prev.word_count || 0,
+                            checks: result.checks || prev.checks,
+                            suggestions: result.suggestions || prev.suggestions || []
+                        });
+                        window._seobetterLastResult = updatedRes;
 
-                        // v1.5.63 — CRITICAL preview-styling fix. The old code
-                        // stripped the <style> tag from the new content before
-                        // injecting, which removed all the scoped .sb-{uid}
-                        // styling: rounded images, centered figures, consistent
-                        // font/text width, stat callout colors, etc. After an
-                        // inject-fix click the preview fell back to inherited
-                        // admin theme CSS, making images raw full-size and
-                        // text inherit whatever default width the parent
-                        // container provided. New approach: inject the style
-                        // tag INTO a dedicated sibling element that persists
-                        // across re-renders, then inject just the body HTML.
-                        var preview = document.querySelector('.seobetter-content-preview');
-                        if (preview) {
-                            var newContent = result.content || '';
-                            // Extract and re-apply the style tag so scoped
-                            // styles survive. Keep exactly one style tag
-                            // before the preview to avoid duplication.
-                            var styleMatch = newContent.match(/<style>[\s\S]*?<\/style>/);
-                            var bodyOnly = newContent.replace(/<style>[\s\S]*?<\/style>/, '');
-                            if (styleMatch) {
-                                // Remove any existing seobetter preview style
-                                var oldStyle = document.querySelector('#seobetter-preview-style');
-                                if (oldStyle) oldStyle.remove();
-                                // Inject fresh style tag with an ID we can find again
-                                var styleEl = document.createElement('div');
-                                styleEl.id = 'seobetter-preview-style';
-                                styleEl.innerHTML = styleMatch[0];
-                                preview.parentNode.insertBefore(styleEl, preview);
+                        // 800ms delay so user perceives the ✓ flash, then
+                        // rebuild the entire results panel from fresh data.
+                        setTimeout(function() {
+                            if (typeof renderResult === 'function') {
+                                renderResult(updatedRes);
                             }
-                            preview.innerHTML = bodyOnly;
-                        }
-
-                        // v1.5.62 — update the specific fix's description text
-                        // inline so the user sees "6 citations found" not "0
-                        // citations found" after clicking Add Citations. Also
-                        // lowers the impact label once the fix is applied.
-                        var fixRow = self.closest('[data-fix-id], div');
-                        var descEl = fixRow && fixRow.querySelector('[style*="color:#64748b"]');
-                        if (descEl && result.checks) {
-                            var newDesc = null;
-                            var c = result.checks;
-                            if (fixId === 'citations' && c.citations)      newDesc = c.citations.count + ' citations found. Target 5+.';
-                            if (fixId === 'quotes' && c.expert_quotes)     newDesc = c.expert_quotes.count + ' expert quotes found. Target 2+.';
-                            if (fixId === 'table' && c.tables)             newDesc = c.tables.count + ' tables found.';
-                            if (fixId === 'statistics' && c.factual_density) newDesc = 'Statistics updated. Factual density: ' + c.factual_density.score + '/100.';
-                            if (fixId === 'freshness' && c.freshness)      newDesc = c.freshness.detail || 'Freshness signal added.';
-                            if (newDesc) descEl.textContent = newDesc;
-                        }
-
-                        setTimeout(function() { self.parentElement.style.opacity = '0.6'; }, 1500);
+                        }, 800);
                     } else {
                         self.disabled = false;
                         self.textContent = 'Retry';

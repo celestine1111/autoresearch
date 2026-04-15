@@ -194,6 +194,82 @@ class Citation_Pool {
      * Check if a URL is present in the pool (pool membership check for the validator).
      * URLs are compared after normalization (scheme+host+path, query string ignored).
      */
+    /**
+     * v1.5.64 — Build and append a programmatic References section to a
+     * markdown article using the verified citation pool. Previously this
+     * logic only lived in seobetter.php::append_references_section() and
+     * ran at save time, which meant the live preview never showed the
+     * References section even when citations were cited in the body.
+     *
+     * Walks the markdown for every `[text](url)` link, collects pool
+     * entries in first-mention order, and appends a numbered
+     * `## References` section. If no body links match pool URLs but the
+     * pool is non-empty, falls back to the first 8 pool entries so the
+     * article always has clickable outbound citations.
+     *
+     * Format: `N. [title](url)` — no source suffix (v1.5.46 decision).
+     */
+    public static function append_references_section( string $markdown, array $pool ): string {
+        if ( empty( $pool ) ) {
+            return $markdown;
+        }
+
+        // Remove any existing References section the AI may have written
+        $markdown = preg_replace(
+            '/\n(##+)\s*(references|sources|further reading|bibliography|citations)\b[^\n]*(\n[\s\S]*?)?(?=\n#{1,6}\s|\z)/i',
+            "\n",
+            $markdown
+        );
+
+        // Find every markdown link (non-image) and match against pool
+        preg_match_all( '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER );
+
+        $cited_entries = [];
+        $cited_urls = [];
+        foreach ( $matches as $m ) {
+            $url = $m[2];
+            $entry = self::get_entry( $pool, $url );
+            if ( $entry && ! in_array( $url, $cited_urls, true ) ) {
+                $cited_urls[] = $url;
+                $cited_entries[] = $entry;
+            }
+        }
+
+        // Fallback: if no body links matched but pool is non-empty, include
+        // the first 8 pool entries (v1.5.60 feature preserved)
+        if ( empty( $cited_entries ) && ! empty( $pool ) ) {
+            $count = 0;
+            foreach ( $pool as $entry ) {
+                if ( empty( $entry['url'] ) ) continue;
+                $cited_entries[] = $entry;
+                $count++;
+                if ( $count >= 8 ) break;
+            }
+        }
+
+        if ( empty( $cited_entries ) ) {
+            return $markdown;
+        }
+
+        // Build the section. Locked format per article_design.md §10:
+        //   ## References
+        //   1. [title](url)
+        //   2. [title](url)
+        $lines = [ '', '## References', '' ];
+        $i = 1;
+        foreach ( $cited_entries as $entry ) {
+            $title = trim( (string) ( $entry['title'] ?? '' ) );
+            $url   = $entry['url'];
+            if ( $title === '' ) {
+                $title = (string) ( $entry['source_name'] ?? wp_parse_url( $url, PHP_URL_HOST ) ?: 'Source' );
+            }
+            $lines[] = "{$i}. [{$title}]({$url})";
+            $i++;
+        }
+
+        return rtrim( $markdown ) . "\n" . implode( "\n", $lines ) . "\n";
+    }
+
     public static function contains_url( array $pool, string $url ): bool {
         $normalized = self::normalize_url( $url );
         foreach ( $pool as $entry ) {
