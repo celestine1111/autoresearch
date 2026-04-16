@@ -1518,13 +1518,25 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 6: Keyword Density (AI rewrite — LAST) ----
-        $kw_score = $scores['keyword_density']['score'] ?? 0;
-        if ( $kw_score < 60 ) {
+        // v1.5.78b — Re-measure density AFTER readability (which often reduces
+        // it as a side effect). Only run the density optimizer if still needed.
+        // Also pass depth=1 to PREVENT auto-retry inside optimize_all —
+        // the auto-retry adds another 10-20s AI call which pushes the total
+        // request past PHP timeout on WP Engine (~60s).
+        $lower_md = strtolower( wp_strip_all_tags( $markdown ) );
+        $wc = max( 1, str_word_count( $lower_md ) );
+        $kw_lower = strtolower( $keyword );
+        $kw_wc = max( 1, str_word_count( $keyword ) );
+        $kw_hits = substr_count( $lower_md, $kw_lower );
+        $current_density = round( ( $kw_hits * $kw_wc / $wc ) * 100, 2 );
+
+        if ( $current_density > 1.5 ) {
             try {
-                $result = self::optimize_keyword_placement( $markdown, $keyword );
+                // depth=1 means: run ONE pass only, no auto-retry
+                $result = self::optimize_keyword_placement( $markdown, $keyword, 1 );
                 if ( $result['success'] ) {
                     $markdown = $result['content'];
-                    $steps_run[] = 'keyword';
+                    $steps_run[] = 'keyword (' . $current_density . '% → ' . ( $result['density_after'] ?? '?' ) . '%)';
                 } else {
                     $steps_skipped[] = 'keyword: ' . ( $result['error'] ?? 'not needed' );
                 }
@@ -1532,7 +1544,7 @@ Return ONLY the Markdown table, nothing else.";
                 $steps_skipped[] = 'keyword: ' . $e->getMessage();
             }
         } else {
-            $steps_skipped[] = 'keyword: score already ' . $kw_score;
+            $steps_skipped[] = 'keyword: density already ' . $current_density . '%';
         }
 
         if ( empty( $steps_run ) ) {
