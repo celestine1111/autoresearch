@@ -157,6 +157,7 @@ Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validat
 - **Applied-fix persistence (v1.5.67+):** applied fixes tracked in `window._seobetterAppliedFixes` across panel re-renders — completed fixes render as disabled green "Done" cards
 - **Threshold-crossing persistence (v1.5.68+):** fixes that pass their score threshold after inject (and drop out of the `fixes[]` array) are re-injected as "Done" cards via `appliedLabels` lookup map so they remain visible instead of disappearing
 - **No-scroll re-render (v1.5.69+):** after inject-fix success, `renderResult(res, skipScroll=true)` re-renders the panel WITHOUT scrolling to the top — user stays at their current position and can see the content preview update in place
+- **"Changes applied" banner (v1.5.70+):** green banner appears above the content preview after each inject-fix showing what was done (e.g. "Simplified 4 sections: Grade 12.9 → 10.5"). Auto-clears on next render. Stored in `window._seobetterLastFixMessage`.
 - After flag check: button turns amber "See below", suggestions appear inline below the button
 - Bottom info banner: "💡 Inject fixes add content without editing existing text. Check fixes show what to fix manually. Potential: +X points"
 - **Implementation:** `includes/Content_Injector.php` class with 8 methods, REST endpoint `POST /seobetter/v1/inject-fix`

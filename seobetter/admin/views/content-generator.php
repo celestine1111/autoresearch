@@ -1121,6 +1121,16 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         var content = res.content || '';
         var styleMatch = content.match(/<style>[\s\S]*?<\/style>/);
         if (styleMatch) { h += styleMatch[0]; content = content.replace(/<style>[\s\S]*?<\/style>/, ''); }
+        // v1.5.70 — "Changes applied" banner above the content preview.
+        // Shows after inject-fix so user can see what was done. Auto-clears
+        // after 8 seconds. Only appears on re-renders (skipScroll=true).
+        if (skipScroll && window._seobetterLastFixMessage) {
+            h += '<div id="sb-fix-banner" style="margin:0 0 12px;padding:10px 14px;background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border:1px solid #86efac;border-radius:8px;font-size:13px;color:#166534;display:flex;align-items:center;gap:8px">';
+            h += '<span style="font-size:16px">✓</span>';
+            h += '<span><strong>Changes applied to article below</strong> — ' + esc(window._seobetterLastFixMessage) + '</span>';
+            h += '</div>';
+            window._seobetterLastFixMessage = null;
+        }
         h += '<div class="seobetter-content-preview">' + content + '</div>';
 
         // Headlines — score, rank, and make selectable
@@ -1368,6 +1378,12 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                             suggestions: result.suggestions || prev.suggestions || []
                         });
                         window._seobetterLastResult = updatedRes;
+
+                        // v1.5.70 — store the fix message so renderResult
+                        // can show a "Changes applied" banner above the
+                        // content preview. User reported not being able to
+                        // tell if fixes actually changed the article.
+                        window._seobetterLastFixMessage = result.added || 'Changes applied to article';
 
                         // 800ms delay so user perceives the ✓ flash, then
                         // rebuild the entire results panel from fresh data.

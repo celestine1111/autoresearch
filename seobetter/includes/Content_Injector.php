@@ -883,6 +883,10 @@ Return ONLY the Markdown table, nothing else. Example format:
             }
 
             // Rewrite this section with an AI pass
+            // v1.5.70 — added rules 10-11 and tightened rule 9 to stop
+            // the AI converting markdown list syntax (- item) to Unicode
+            // bullet characters (• item). Content_Formatter only recognises
+            // dash/asterisk/plus list markers; • becomes an unstyled paragraph.
             $prompt = "Rewrite the following article section to Flesch-Kincaid grade 7. Target grade 6-8.\n\n"
                 . "RULES:\n"
                 . "1. Break any sentence over 18 words into two shorter sentences.\n"
@@ -893,7 +897,9 @@ Return ONLY the Markdown table, nothing else. Example format:
                 . "6. PRESERVE EVERY MARKDOWN LINK [text](url) exactly as written. Do not invent new URLs.\n"
                 . "7. PRESERVE the H2 heading line exactly as provided.\n"
                 . "8. Keep roughly the same word count (±10%). Don't pad. Don't summarize.\n"
-                . "9. Keep structural elements: bullet lists stay bullet lists, tables stay tables, blockquotes stay blockquotes.\n\n"
+                . "9. Keep structural elements EXACTLY in markdown format: `- item` lists stay as `- item`, tables stay as `| col |` tables, blockquotes stay as `> text`.\n"
+                . "10. NEVER convert list markers to bullet characters (•, ●, ◦). Use ONLY `- ` (dash space) for unordered lists and `1. ` for ordered lists.\n"
+                . "11. NEVER convert markdown to HTML. Output pure markdown only — no <ul>, <li>, <table>, <p> tags.\n\n"
                 . "EXAMPLES — WRITE LIKE THIS:\n"
                 . "  ✅ \"Raw feeding works for many dogs. Start small. Mix one spoonful into the usual food for three days.\"\n"
                 . "  ✅ \"Most vets agree that gradual change is safer. Watch your dog's stool. Firm means good.\"\n\n"
@@ -913,6 +919,14 @@ Return ONLY the Markdown table, nothing else. Example format:
 
             if ( $result['success'] && ! empty( $result['content'] ) ) {
                 $new_content = trim( $result['content'] );
+
+                // v1.5.70 — post-processing: fix AI list corruption.
+                // Models frequently convert `- item` to `• item` or `● item`
+                // despite explicit prompt rules. Convert back to markdown.
+                $new_content = preg_replace( '/^[•●◦▪▸►]\s*/m', '- ', $new_content );
+                // Also strip any HTML tags the AI may have introduced
+                $new_content = preg_replace( '/<\/?(ul|ol|li|p|br|div)[^>]*>/i', '', $new_content );
+
                 // Safety: new content must still contain the heading
                 if ( str_contains( $new_content, trim( $section['heading'] ) ) ) {
                     // Split the rewritten output back into heading + body
@@ -1004,20 +1018,37 @@ Return ONLY the Markdown table, nothing else. Example format:
         $target_count = max( 1, (int) round( 1.0 * $word_count / ( 100 * $kw_word_count ) ) );
         $mentions_to_rewrite = max( 2, $kw_count_before - $target_count );
 
-        $prompt = "Rewrite the following article to reduce keyword density.\n\n"
+        // v1.5.70 — much more explicit prompt. Previous version said "rewrite
+        // about N mentions" and the AI only did half. New version says "the
+        // output MUST contain at most N exact mentions" which gives the AI
+        // a concrete, checkable target. Also lists WHICH mentions to keep.
+        $keep_in_intro = 1;
+        $keep_in_h2s = min( 2, max( 0, $target_count - $keep_in_intro ) );
+        $max_total = $target_count;
+
+        $prompt = "Rewrite the following article to DRASTICALLY reduce keyword density.\n\n"
             . "FOCUS KEYWORD: \"{$keyword}\"\n"
-            . "CURRENT DENSITY: {$density_before}% ({$kw_count_before} exact-phrase mentions in {$word_count} words)\n"
-            . "TARGET DENSITY: 1.0% (approximately {$target_count} exact mentions)\n\n"
-            . "TASK: Rewrite about {$mentions_to_rewrite} of the exact-phrase \"{$keyword}\" occurrences using pronouns, variations, or natural synonyms. Keep 1-2 exact-phrase mentions in the introduction and 1-2 in H2 headings for SEO; rewrite the rest.\n\n"
+            . "CURRENT: {$kw_count_before} exact-phrase mentions ({$density_before}% density)\n"
+            . "TARGET: At most {$max_total} exact-phrase mentions (~1.0% density)\n"
+            . "YOU MUST REMOVE: at least {$mentions_to_rewrite} of the {$kw_count_before} mentions\n\n"
+            . "WHICH MENTIONS TO KEEP (exact phrase \"{$keyword}\"):\n"
+            . "- {$keep_in_intro} mention in the first paragraph (SEO plugins check this)\n"
+            . "- {$keep_in_h2s} mention(s) in H2 headings\n"
+            . "- ALL OTHER mentions must be replaced with variations, pronouns, or natural rewording\n\n"
+            . "REPLACEMENT STRATEGIES:\n"
+            . "- Pronouns: \"this brand\", \"the product\", \"it\", \"these formulas\"\n"
+            . "- Shortened: drop one word (\"the dog food\", \"the brand\")\n"
+            . "- Natural variants: rearrange words (\"dog food from Pure Life\")\n"
+            . "- Category noun: \"the kibble\", \"the formula\", \"this option\"\n\n"
             . "RULES:\n"
-            . "1. PRESERVE the overall structure: H1, H2, H3 headings, paragraph breaks, bullet lists, tables, markdown links, image syntax.\n"
-            . "2. PRESERVE every fact, number, percentage, year, citation URL, expert quote, named entity.\n"
+            . "1. PRESERVE the overall structure: H1, H2, H3 headings, paragraph breaks, bullet lists (as `- item`), tables, markdown links, image syntax.\n"
+            . "2. PRESERVE every fact, number, percentage, year, citation URL, expert quote.\n"
             . "3. PRESERVE every markdown link `[text](url)` exactly.\n"
-            . "4. PRESERVE the Key Takeaways, FAQ, References, and Quick Comparison Table sections AS-IS.\n"
-            . "5. When replacing, use pronouns (\"this process\", \"the approach\"), shortenings (\"the transition\"), or natural word variants (\"switching your dog to raw feeding\").\n"
-            . "6. Do NOT add new sentences. Do NOT delete sentences. Only rewrite existing mentions.\n"
-            . "7. Keep the same word count (±5%).\n"
-            . "8. Keep the first paragraph's exact keyword mention — SEO plugins scan it.\n\n"
+            . "4. PRESERVE the Key Takeaways, FAQ, References sections AS-IS (do NOT change their content).\n"
+            . "5. Do NOT add or delete sentences. Only rewrite the keyword phrase within existing sentences.\n"
+            . "6. Keep the same word count (±5%).\n"
+            . "7. NEVER use bullet characters (•). Use `- ` (dash space) for list items.\n\n"
+            . "VERIFICATION: Count the exact phrase \"{$keyword}\" in your output. If it appears more than {$max_total} times, you have not removed enough. Go back and replace more.\n\n"
             . "ARTICLE:\n\n"
             . $markdown . "\n\n"
             . "Output the full rewritten article in Markdown. No explanation, no commentary.";
@@ -1047,16 +1078,38 @@ Return ONLY the Markdown table, nothing else. Example format:
             ];
         }
 
+        // v1.5.70 — post-processing: fix any bullet corruption from the AI
+        $new_markdown = preg_replace( '/^[•●◦▪▸►]\s*/m', '- ', $new_markdown );
+
         // Re-measure density after rewrite
         $lower_new = strtolower( wp_strip_all_tags( $new_markdown ) );
         $new_word_count = max( 1, str_word_count( $lower_new ) );
         $kw_count_after = substr_count( $lower_new, strtolower( $keyword ) );
         $density_after = round( ( $kw_count_after * $kw_word_count / $new_word_count ) * 100, 2 );
 
-        // v1.5.69 — warn if density is still above the 1.5% target after
-        // the AI pass. Previously reported "7.14% → 4.23%" as if that were
-        // a success, but 4.23% is still keyword stuffing. The user needs to
-        // know it didn't fully work and may need a second pass or manual edit.
+        // v1.5.70 — auto-retry if density is still above 2%. The first pass
+        // often only gets halfway (7% → 4%) because the AI is conservative.
+        // A second pass with the partially-reduced text usually finishes the job.
+        if ( $density_after > 2.0 ) {
+            $retry = self::optimize_keyword_placement( $new_markdown, $keyword );
+            if ( $retry['success'] ) {
+                // Use the retry result but report the full journey
+                $retry_density = $retry['density_after'] ?? $density_after;
+                $retry['added'] = sprintf(
+                    'Keyword density %s%% → %s%% → %s%% (2 passes, rewrote %d total mentions)',
+                    $density_before,
+                    $density_after,
+                    $retry_density,
+                    max( 0, $kw_count_before - (int) ( $retry_density * $new_word_count / ( 100 * $kw_word_count ) ) )
+                );
+                if ( $retry_density > 1.5 ) {
+                    $retry['added'] .= '. ⚠️ Still above 1.5% — try one more click or manual edits.';
+                }
+                $retry['density_before'] = $density_before;
+                return $retry;
+            }
+        }
+
         $still_high = $density_after > 1.5;
         $added_msg = sprintf(
             'Keyword density %s%% → %s%% (rewrote %d mentions as variations)',
@@ -1066,7 +1119,7 @@ Return ONLY the Markdown table, nothing else. Example format:
         );
         if ( $still_high ) {
             $added_msg .= sprintf(
-                '. ⚠️ Still above the 1.5%% target — click again for another pass or manually replace %d more mentions with pronouns/variations.',
+                '. ⚠️ Still above 1.5%% — click again or manually replace %d more mentions.',
                 max( 1, $kw_count_after - $target_count )
             );
         }

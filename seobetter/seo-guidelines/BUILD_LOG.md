@@ -16,6 +16,45 @@
 
 ---
 
+## v1.5.70 — Readability list fix, keyword density auto-retry, "changes applied" banner
+
+**Date:** 2026-04-16
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Readability rewriter: list corruption** — `includes/Content_Injector.php::simplify_readability()` line **~886**
+  - Previous: AI converted `- item` markdown lists to `• item` Unicode bullets → Content_Formatter couldn't parse them → rendered as unstyled paragraphs
+  - New: (a) prompt rules 10-11 explicitly forbid `•` and HTML tags, (b) post-processing regex converts any `•●◦▪▸►` back to `- `, (c) strips stray `<ul>/<li>/<p>` tags
+  - User report: "bullet points show like this • Protein levels range from 18-26%"
+  - Verify: `grep -n 'bullet characters' seobetter/includes/Content_Injector.php`
+
+- **Keyword density: auto-retry when still above 2%** — `includes/Content_Injector.php::optimize_keyword_placement()` line **~1085**
+  - Previous: single AI pass reduced 7% → 4% (AI was conservative), user had to click again manually
+  - New: (a) rewritten prompt with explicit MAX mentions allowed and verification instruction, (b) auto-retries recursively if density > 2% after first pass, (c) reports full journey "7% → 4% → 1.2% (2 passes)"
+  - Also: bullet corruption post-processing added to density optimizer output
+  - User report: "7.08% → 4.09%... I dont know what it does to the article"
+  - Verify: `grep -n 'auto-retry' seobetter/includes/Content_Injector.php`
+
+### Added
+
+- **"Changes applied" banner** — `admin/views/content-generator.php` inline JS, line **~1124**
+  - Green banner appears above the content preview after each inject-fix showing what was done
+  - Stored in `window._seobetterLastFixMessage`, rendered on next `renderResult(res, skipScroll=true)` call
+  - Clears after display so it doesn't persist across generations
+  - User report: "im not sure if it does anything to the article"
+  - Verify: `grep -n 'sb-fix-banner' seobetter/admin/views/content-generator.php`
+
+### Guideline updates (same commit)
+
+- **plugin_UX.md** §3.4 — Added "Changes applied" banner spec
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.69 — Inject-fix bug sweep: silent failures, scroll UX, density warnings
 
 **Date:** 2026-04-16
