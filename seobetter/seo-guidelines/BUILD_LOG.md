@@ -19,7 +19,7 @@
 ## v1.5.74 — Loading spinner on inject-fix buttons, error messages shown
 
 **Date:** 2026-04-16
-**Commit:** `[pending]`
+**Commit:** `bc97af2`
 
 ### Added
 
