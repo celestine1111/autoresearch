@@ -19,7 +19,7 @@
 ## v1.5.70 — Readability list fix, keyword density auto-retry, "changes applied" banner
 
 **Date:** 2026-04-16
-**Commit:** `[pending]`
+**Commit:** `07278db`
 
 ### Fixed
 
