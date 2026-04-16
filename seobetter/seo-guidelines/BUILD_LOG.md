@@ -19,7 +19,7 @@
 ## v1.5.74b — Hide Add Citations when article already has links
 
 **Date:** 2026-04-17
-**Commit:** `[pending]`
+**Commit:** `d7d35f5`
 
 ### Fixed
 
