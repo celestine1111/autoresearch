@@ -259,6 +259,11 @@ class Content_Injector {
         // expert commentary on the topic.
         $quotes = [];
 
+        // v1.5.84 — source links use the source name as anchor text per
+        // external-links-policy.md FM-8 (no vague "source"/"here"/"learn more").
+        // Format: "quote text" — [Source Name](url)
+        // This produces a clickable link with descriptive anchor text that
+        // passes the RLFKV content-word overlap check.
         $sonar = $sonar_data ?? self::call_sonar_research( $keyword );
         if ( $sonar && ! empty( $sonar['quotes'] ) ) {
             foreach ( $sonar['quotes'] as $q ) {
@@ -267,8 +272,11 @@ class Content_Injector {
                 if ( strlen( $text ) < 20 || strlen( $text ) > 300 ) continue;
                 $source = $q['source'] ?? 'Industry expert';
                 $url = $q['url'] ?? '';
-                $formatted = "\"{$text}\" — {$source}";
-                if ( $url ) $formatted .= " ([source]({$url}))";
+                if ( $url ) {
+                    $formatted = "\"{$text}\" — [{$source}]({$url})";
+                } else {
+                    $formatted = "\"{$text}\" — {$source}";
+                }
                 $quotes[] = $formatted;
                 if ( count( $quotes ) >= 3 ) break;
             }
@@ -285,10 +293,12 @@ class Content_Injector {
                 if ( strlen( $text ) > 200 ) $text = substr( $text, 0, 197 ) . '...';
                 $source = $q['source'] ?? 'Online discussion';
                 $url = $q['url'] ?? '';
-                // Skip obvious junk: April Fools, challenges, giveaways, unrelated
                 if ( preg_match( '/april fool|challenge|giveaway|prize|contest/i', $text ) ) continue;
-                $formatted = "\"{$text}\" — {$source}";
-                if ( $url ) $formatted .= " ([source]({$url}))";
+                if ( $url ) {
+                    $formatted = "\"{$text}\" — [{$source}]({$url})";
+                } else {
+                    $formatted = "\"{$text}\" — {$source}";
+                }
                 $quotes[] = $formatted;
                 if ( count( $quotes ) >= 3 ) break;
             }
@@ -354,7 +364,7 @@ class Content_Injector {
                 return [
                     'success' => true,
                     'content' => $injected,
-                    'added'   => 'Comparison table inserted (powered by Perplexity Sonar — real product data)',
+                    'added'   => 'Comparison table inserted with real product data',
                     'type'    => 'table',
                 ];
             }
@@ -1556,8 +1566,11 @@ Return ONLY the Markdown table, nothing else.";
                         if ( strlen( $text ) > 200 ) $text = substr( $text, 0, 197 ) . '...';
                         $source = $q['source'] ?? 'Industry source';
                         $url = $q['url'] ?? '';
-                        $formatted = "\"{$text}\" — {$source}";
-                        if ( $url ) $formatted .= " ([source]({$url}))";
+                        if ( $url ) {
+                            $formatted = "\"{$text}\" — [{$source}]({$url})";
+                        } else {
+                            $formatted = "\"{$text}\" — {$source}";
+                        }
                         $quotes[] = $formatted;
                         if ( count( $quotes ) >= 3 ) break;
                     }
@@ -1750,7 +1763,7 @@ Return ONLY the Markdown table, nothing else.";
             'steps_skipped' => $steps_skipped,
             'sonar_used'    => $sonar_used,
             'added'         => count( $steps_run ) . ' fixes applied: ' . implode( ', ', $steps_run )
-                . ( $sonar_used ? ' (powered by Perplexity Sonar)' : '' ),
+                ,
         ];
     }
 }
