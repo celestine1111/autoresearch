@@ -19,7 +19,7 @@
 ## v1.5.72 — CRITICAL: Citations/Quotes scoring fix, list cleanup
 
 **Date:** 2026-04-16
-**Commit:** `[pending]`
+**Commit:** `2ef1e52`
 
 ### Fixed
 
