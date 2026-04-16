@@ -19,7 +19,7 @@
 ## v1.5.71 — Centralized bullet cleanup, keyword density 2-pass with depth guard
 
 **Date:** 2026-04-16
-**Commit:** `[pending]`
+**Commit:** `9adb6c9`
 
 ### Fixed
 
