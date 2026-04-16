@@ -19,7 +19,7 @@
 ## v1.5.76b — Table error handling, Tympanus-style progress bar
 
 **Date:** 2026-04-17
-**Commit:** `[pending]`
+**Commit:** `b3d548d`
 
 ### Fixed
 
