@@ -731,11 +731,19 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 7. `flag_pronouns()` — returns paragraphs starting with It/This/They/These/Those/He/She/We
 8. `flag_openers()` — returns H2 headings whose first paragraph isn't 30-70 words
 
-**REST endpoint:** `POST /seobetter/v1/inject-fix`
-- Params: `fix_type`, `markdown`, `keyword`, `accent_color`
+**REST endpoint (individual):** `POST /seobetter/v1/inject-fix`
+- Params: `fix_type`, `markdown`, `keyword`, `accent_color`, `citation_pool`
 - Returns: `success`, `content`, `markdown`, `geo_score`, `grade`, `checks`, `added`, `type`
 - Routes to appropriate `Content_Injector::inject_*` or `flag_*` method
 - Re-formats and re-scores the updated content
+
+**REST endpoint (all-in-one, v1.5.78):** `POST /seobetter/v1/optimize-all`
+- Params: `markdown`, `keyword`, `accent_color`, `citation_pool`, `scores` (current check scores)
+- Returns: `success`, `content`, `markdown`, `geo_score`, `grade`, `checks`, `steps_run`, `steps_skipped`, `sonar_used`, `added`
+- Makes ONE Perplexity Sonar call for citations + quotes + statistics + table data
+- Runs all 6 inject fixes sequentially on the markdown, then formats/scores ONCE
+- Fallback: if no OpenRouter key, each step uses its existing method (DDG, Vercel, AI)
+- Implementation: `Content_Injector::optimize_all()` → `seobetter.php::rest_optimize_all()`
 
 **Why this approach:**
 - Zero hallucinated URLs (citations come from real web search)

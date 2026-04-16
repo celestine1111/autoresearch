@@ -16,6 +16,63 @@
 
 ---
 
+## v1.5.78 — Optimize All: single Sonar call + sequential fixes + progress bar
+
+**Date:** 2026-04-17
+**Commit:** `[pending]`
+
+### Added
+
+- **"⚡ Optimize All" button** — `admin/views/content-generator.php` line **~1012**
+  - Single button in the Analyze & Improve panel header replaces clicking 6 buttons individually
+  - Gradient purple button with hover lift, shimmer progress bar, elapsed timer, step labels
+  - On completion: green bar at 100%, shows which steps ran, "Powered by Perplexity Sonar"
+  - Verify: `grep -n 'sb-optimize-all' seobetter/admin/views/content-generator.php`
+
+- **`Content_Injector::optimize_all()`** — `includes/Content_Injector.php` line **~1200**
+  - Orchestrates all 6 inject fixes in one pass
+  - Step 0: ONE Perplexity Sonar call via `call_sonar_research()` for citations, quotes, stats, table data
+  - Steps 1-4: inject research data (citations, quotes, stats, table) from Sonar
+  - Steps 5-6: AI rewrites (readability, keyword density) using active provider
+  - Checks scores first — skips fixes where the score already passes
+  - Each step has try/catch — failures don't abort the pipeline
+  - Fallback chain: if Sonar fails, each step falls back to existing method
+  - Verify: `grep -n 'optimize_all' seobetter/includes/Content_Injector.php`
+
+- **`Content_Injector::call_sonar_research()`** — `includes/Content_Injector.php` line **~1198**
+  - Direct call to OpenRouter with `perplexity/sonar` model
+  - Single prompt returns structured JSON: `{citations, quotes, statistics, table_data}`
+  - Auto-discovers OpenRouter key from AI_Provider_Manager
+  - Returns null if no key configured (triggers fallback chain)
+  - Verify: `grep -n 'call_sonar_research' seobetter/includes/Content_Injector.php`
+
+- **`rest_optimize_all()` REST endpoint** — `seobetter.php::rest_optimize_all()` line **~1500**
+  - `POST /seobetter/v1/optimize-all`
+  - Receives: markdown, keyword, accent_color, citation_pool, scores
+  - Calls optimize_all(), then validate_outbound_links + cleanup_ai_markdown + format + score (ONCE)
+  - Returns: full response with steps_run, steps_skipped, sonar_used
+  - Verify: `grep -n 'rest_optimize_all' seobetter/seobetter.php`
+
+- **`Citation_Pool::passes_hygiene_public()`** — `includes/Citation_Pool.php` line **~297**
+  - Public wrapper for the private hygiene check. Used by optimize_all() to validate Sonar URLs before merging into the citation pool.
+  - Verify: `grep -n 'passes_hygiene_public' seobetter/includes/Citation_Pool.php`
+
+- **CSS: shimmer progress bar** — `admin/css/admin.css`
+  - `@keyframes sb-opt-shimmer` — purple gradient sweeps across the bar
+  - Optimize All button hover/active/disabled states
+  - Verify: `grep -n 'sb-opt-shimmer' seobetter/admin/css/admin.css`
+
+### Guideline updates (same commit)
+
+- **plugin_UX.md** §3.4 — Added Optimize All button spec
+- **plugin_functionality_wordpress.md** §6.1 — Added optimize-all REST endpoint docs
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.77 — CRITICAL: inject_quotes now uses REAL research data, not hallucinated
 
 **Date:** 2026-04-17

@@ -293,6 +293,15 @@ class Citation_Pool {
         return null;
     }
 
+    /**
+     * v1.5.78 — Public wrapper for hygiene check. Used by
+     * Content_Injector::optimize_all() to validate Sonar-provided URLs
+     * before merging them into the citation pool.
+     */
+    public static function passes_hygiene_public( string $url ): bool {
+        return self::passes_hygiene( $url );
+    }
+
     // ================================================================
     // Private helpers
     // ================================================================

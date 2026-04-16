@@ -1009,12 +1009,20 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             h += '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">';
             h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
             h += '<div><h3 style="margin:0;font-size:16px;font-weight:700">Analyze &amp; Improve</h3>';
-            h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'+fixes.length+' improvements found — click each to apply or check</p></div>';
-            // v1.5.60 — removed PRO badge. The inject-fix endpoint is
-            // already free (permission_callback is edit_posts not
-            // License_Manager::can_use), so the PRO badge was misleading
-            // and made users think they had to pay. The buttons work for
-            // everyone — rename the CTA to match.
+            h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'+fixes.length+' improvements found</p></div>';
+            // v1.5.78 — Optimize All button: single click runs all fixes
+            h += '<button type="button" id="sb-optimize-all" class="button" style="height:36px;font-size:12px;padding:0 20px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;letter-spacing:0.02em;transition:all 0.2s ease">&#9889; Optimize All</button>';
+            h += '</div>';
+            // v1.5.78 — Progress panel (hidden until Optimize All is clicked)
+            h += '<div id="sb-optimize-progress" style="display:none;margin-bottom:16px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">';
+            h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+            h += '<span id="sb-opt-step-label" style="font-size:13px;font-weight:600;color:#1e293b">Starting optimization...</span>';
+            h += '<span id="sb-opt-timer" style="font-size:12px;color:#6b7280;font-variant-numeric:tabular-nums">0s</span>';
+            h += '</div>';
+            h += '<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">';
+            h += '<div id="sb-opt-bar" style="height:100%;width:0%;border-radius:3px;transition:width 0.5s cubic-bezier(0.4,0,0.2,1)"></div>';
+            h += '</div>';
+            h += '<div id="sb-opt-steps-detail" style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.6"></div>';
             h += '</div>';
 
             // v1.5.67 — track applied fixes across panel re-renders.
@@ -1444,6 +1452,134 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                 });
             });
         });
+
+        // v1.5.78 — Optimize All button handler
+        var optBtn = document.getElementById('sb-optimize-all');
+        if (optBtn) {
+            optBtn.addEventListener('click', function() {
+                var draft = window._seobetterDraft;
+                if (!draft || !draft.markdown) { alert('No content to optimize.'); return; }
+                var self = this;
+                self.disabled = true;
+                self.style.opacity = '0.6';
+
+                var progressPanel = document.getElementById('sb-optimize-progress');
+                var barEl = document.getElementById('sb-opt-bar');
+                var stepLabel = document.getElementById('sb-opt-step-label');
+                var timerEl = document.getElementById('sb-opt-timer');
+                var detailEl = document.getElementById('sb-opt-steps-detail');
+                progressPanel.style.display = 'block';
+
+                // Simulated progress steps (client-side animation)
+                var steps = [
+                    {pct:8, label:'Researching via Perplexity Sonar...'},
+                    {pct:25, label:'Adding citations & references...'},
+                    {pct:40, label:'Inserting expert quotes...'},
+                    {pct:55, label:'Adding statistics...'},
+                    {pct:68, label:'Building comparison table...'},
+                    {pct:80, label:'Simplifying readability...'},
+                    {pct:92, label:'Optimizing keyword density...'}
+                ];
+                var stepIdx = 0;
+                var startTime = Date.now();
+                var stepInterval = setInterval(function() {
+                    var elapsed = Math.round((Date.now() - startTime) / 1000);
+                    timerEl.textContent = elapsed + 's';
+                    if (stepIdx < steps.length) {
+                        barEl.style.width = steps[stepIdx].pct + '%';
+                        stepLabel.textContent = 'Step '+(stepIdx+1)+'/'+steps.length+': '+steps[stepIdx].label;
+                        stepIdx++;
+                    }
+                }, 4000);
+                // Start first step immediately
+                barEl.style.width = steps[0].pct + '%';
+                stepLabel.textContent = 'Step 1/'+steps.length+': '+steps[0].label;
+                stepIdx = 1;
+
+                // Collect current scores to tell backend which fixes are needed
+                var checksForApi = {};
+                if (draft.checks) checksForApi = draft.checks;
+
+                api('optimize-all', 'POST', {
+                    markdown: draft.markdown,
+                    keyword: draft.keyword,
+                    accent_color: draft.accent_color,
+                    citation_pool: draft.citation_pool || [],
+                    scores: checksForApi
+                }).then(function(result) {
+                    clearInterval(stepInterval);
+                    var elapsed = Math.round((Date.now() - startTime) / 1000);
+                    timerEl.textContent = elapsed + 's';
+
+                    if (result.success) {
+                        barEl.style.width = '100%';
+                        barEl.style.background = 'linear-gradient(90deg,#22c55e,#16a34a)';
+                        stepLabel.textContent = '✓ ' + (result.added || 'Optimization complete');
+                        stepLabel.style.color = '#166534';
+
+                        // Show step details
+                        var detail = '';
+                        if (result.steps_run && result.steps_run.length) {
+                            detail += '<span style="color:#166534">✓ Applied: ' + result.steps_run.join(', ') + '</span>';
+                        }
+                        if (result.steps_skipped && result.steps_skipped.length) {
+                            detail += '<br><span style="color:#9ca3af">Skipped: ' + result.steps_skipped.length + ' (already passing)</span>';
+                        }
+                        if (result.sonar_used) {
+                            detail += '<br><span style="color:#764ba2">Powered by Perplexity Sonar</span>';
+                        }
+                        detailEl.innerHTML = detail;
+
+                        // Update draft
+                        draft.markdown = result.markdown || draft.markdown;
+                        draft.content = result.content;
+                        draft.checks = result.checks || draft.checks;
+                        draft.geo_score = result.geo_score;
+                        draft.grade = result.grade;
+
+                        // Mark all inject fixes as applied
+                        window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
+                        ['citations','quotes','statistics','table','freshness','readability','keyword'].forEach(function(id) {
+                            window._seobetterAppliedFixes[id] = {applied_at:Date.now(), message:'Applied via Optimize All'};
+                        });
+
+                        window._seobetterLastFixMessage = result.added || 'All optimizations applied';
+
+                        var prev = window._seobetterLastResult || {};
+                        var updatedRes = Object.assign({}, prev, {
+                            content: result.content,
+                            markdown: result.markdown,
+                            geo_score: result.geo_score,
+                            grade: result.grade,
+                            word_count: result.word_count || prev.word_count || 0,
+                            checks: result.checks || prev.checks,
+                            suggestions: result.suggestions || prev.suggestions || []
+                        });
+                        window._seobetterLastResult = updatedRes;
+
+                        // Re-render after a brief delay so user sees the success state
+                        setTimeout(function() {
+                            renderResult(updatedRes, true);
+                        }, 2000);
+                    } else {
+                        barEl.style.width = '100%';
+                        barEl.style.background = '#ef4444';
+                        stepLabel.textContent = 'Optimization failed';
+                        stepLabel.style.color = '#991b1b';
+                        detailEl.innerHTML = '<span style="color:#991b1b">' + esc(result.error || 'Unknown error') + '</span>';
+                        self.disabled = false;
+                        self.style.opacity = '1';
+                    }
+                }).catch(function(err) {
+                    clearInterval(stepInterval);
+                    barEl.style.background = '#ef4444';
+                    stepLabel.textContent = 'Request failed';
+                    stepLabel.style.color = '#991b1b';
+                    self.disabled = false;
+                    self.style.opacity = '1';
+                });
+            });
+        }
     }
 
     btn.addEventListener('click', function(e) {

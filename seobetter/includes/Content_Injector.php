@@ -1193,4 +1193,367 @@ Return ONLY the Markdown table, nothing else.";
         $grade = 0.39 * ( $words / $sentence_count ) + 11.8 * ( $syllables / $words ) - 15.59;
         return max( 0, round( $grade, 1 ) );
     }
+
+    // ================================================================
+    // v1.5.78 — OPTIMIZE ALL (single Sonar call + sequential fixes)
+    // ================================================================
+
+    /**
+     * Make a single Perplexity Sonar call to get all research data:
+     * citations (URLs), quotes, statistics, and table data.
+     *
+     * Returns structured array or null on failure.
+     */
+    private static function call_sonar_research( string $keyword ): ?array {
+        $openrouter_key = AI_Provider_Manager::get_provider_key( 'openrouter' );
+        if ( empty( $openrouter_key ) ) {
+            // Try legacy settings field
+            $settings = get_option( 'seobetter_settings', [] );
+            $openrouter_key = $settings['openrouter_api_key'] ?? '';
+        }
+        if ( empty( $openrouter_key ) ) {
+            return null; // No key — caller falls back to existing methods
+        }
+
+        $settings = get_option( 'seobetter_settings', [] );
+        $model = $settings['sonar_model'] ?? 'perplexity/sonar';
+
+        $prompt = "For an article about \"{$keyword}\", find REAL current data from the web.\n\n"
+            . "Return a JSON object with exactly these 4 keys:\n"
+            . "{\n"
+            . "  \"citations\": [\n"
+            . "    {\"url\": \"https://real-article-url\", \"title\": \"Actual Page Title\", \"source_name\": \"domain.com\"},\n"
+            . "    ... (5-8 entries. REAL URLs to article pages, NOT homepages)\n"
+            . "  ],\n"
+            . "  \"quotes\": [\n"
+            . "    {\"text\": \"The actual quote or finding\", \"source\": \"Person or Organization Name\", \"url\": \"https://source-page\"},\n"
+            . "    ... (2-3 entries. Real statements from real sources)\n"
+            . "  ],\n"
+            . "  \"statistics\": [\n"
+            . "    \"65% of dog owners prefer grain-free options (Pet Food Industry Association, 2025)\",\n"
+            . "    ... (3-5 entries. Real numbers with real source names and years)\n"
+            . "  ],\n"
+            . "  \"table_data\": {\n"
+            . "    \"columns\": [\"Name\", \"Key Feature\", \"Best For\"],\n"
+            . "    \"rows\": [\n"
+            . "      [\"Real Product 1\", \"Real feature\", \"Real use case\"],\n"
+            . "      ... (3-5 rows with REAL data. Only include columns where you have real data for every row)\n"
+            . "    ]\n"
+            . "  }\n"
+            . "}\n\n"
+            . "CRITICAL RULES:\n"
+            . "- Every URL must be a REAL, currently live web page. NEVER invent URLs.\n"
+            . "- Every statistic must include a REAL source name and year.\n"
+            . "- Table data must contain REAL product/item information, not invented specs.\n"
+            . "- Only include a price column if you found actual prices.\n"
+            . "- Return ONLY the JSON object. No markdown fences. No explanation.";
+
+        $response = wp_remote_post( 'https://openrouter.ai/api/v1/chat/completions', [
+            'timeout' => 30,
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $openrouter_key,
+            ],
+            'body'    => wp_json_encode( [
+                'model'       => $model,
+                'messages'    => [
+                    [ 'role' => 'system', 'content' => 'You are a factual research assistant. Return structured JSON with real, verifiable web data. Never fabricate URLs, statistics, or quotes.' ],
+                    [ 'role' => 'user', 'content' => $prompt ],
+                ],
+                'max_tokens'  => 3000,
+                'temperature' => 0.1,
+            ] ),
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            return null;
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+        $content = $data['choices'][0]['message']['content'] ?? '';
+        if ( empty( $content ) ) {
+            return null;
+        }
+
+        // Strip markdown code fences if present
+        $content = preg_replace( '/^```(?:json)?\s*\n?/m', '', $content );
+        $content = preg_replace( '/\n?```\s*$/m', '', $content );
+        $content = trim( $content );
+
+        $parsed = json_decode( $content, true );
+        if ( ! is_array( $parsed ) ) {
+            return null;
+        }
+
+        // Validate structure — each key should be present
+        return [
+            'citations'  => is_array( $parsed['citations'] ?? null ) ? $parsed['citations'] : [],
+            'quotes'     => is_array( $parsed['quotes'] ?? null ) ? $parsed['quotes'] : [],
+            'statistics' => is_array( $parsed['statistics'] ?? null ) ? $parsed['statistics'] : [],
+            'table_data' => is_array( $parsed['table_data'] ?? null ) ? $parsed['table_data'] : [],
+        ];
+    }
+
+    /**
+     * v1.5.78 — Run ALL inject fixes in one pass.
+     *
+     * 1. Makes ONE Perplexity Sonar call for research data
+     * 2. Injects citations, quotes, statistics, table from Sonar data
+     * 3. Runs readability simplification (AI rewrite)
+     * 4. Runs keyword density optimization (AI rewrite)
+     * 5. Returns the fully optimized markdown
+     *
+     * Each step checks the score threshold and skips if already passing.
+     * Each step has a fallback if Sonar data is missing for that category.
+     * A step failure does NOT abort the pipeline — remaining steps still run.
+     */
+    public static function optimize_all(
+        string $markdown,
+        string $keyword,
+        array  $existing_pool = [],
+        array  $scores = []
+    ): array {
+        @set_time_limit( 120 );
+
+        $steps_run     = [];
+        $steps_skipped = [];
+        $sonar_used    = false;
+
+        // ---- Step 0: Sonar research call ----
+        $sonar = self::call_sonar_research( $keyword );
+        if ( $sonar !== null ) {
+            $sonar_used = true;
+        }
+
+        // ---- Step 1: Citations ----
+        $cit_score = $scores['citations']['score'] ?? 0;
+        if ( $cit_score < 80 ) {
+            try {
+                // Merge Sonar URLs into the existing pool
+                $merged_pool = $existing_pool;
+                if ( $sonar && ! empty( $sonar['citations'] ) ) {
+                    foreach ( $sonar['citations'] as $sc ) {
+                        if ( empty( $sc['url'] ) ) continue;
+                        // Run hygiene check before adding to pool
+                        if ( ! Citation_Pool::passes_hygiene_public( $sc['url'] ) ) continue;
+                        $merged_pool[] = [
+                            'url'         => $sc['url'],
+                            'title'       => $sc['title'] ?? '',
+                            'source_name' => $sc['source_name'] ?? wp_parse_url( $sc['url'], PHP_URL_HOST ),
+                            'verified_at' => time(),
+                        ];
+                    }
+                }
+                $result = self::inject_citations( $markdown, $keyword, $merged_pool );
+                if ( $result['success'] ) {
+                    $markdown = $result['content'];
+                    $steps_run[] = 'citations';
+                } else {
+                    $steps_skipped[] = 'citations: ' . ( $result['error'] ?? 'failed' );
+                }
+            } catch ( \Throwable $e ) {
+                $steps_skipped[] = 'citations: ' . $e->getMessage();
+            }
+        } else {
+            $steps_skipped[] = 'citations: score already ' . $cit_score;
+        }
+
+        // ---- Step 2: Expert Quotes ----
+        $quote_score = $scores['expert_quotes']['score'] ?? 0;
+        if ( $quote_score < 100 ) {
+            try {
+                if ( $sonar && ! empty( $sonar['quotes'] ) ) {
+                    // Use Sonar quotes directly — real sourced quotes
+                    $quotes = [];
+                    foreach ( $sonar['quotes'] as $q ) {
+                        if ( empty( $q['text'] ) ) continue;
+                        $text = trim( $q['text'] );
+                        if ( strlen( $text ) > 200 ) $text = substr( $text, 0, 197 ) . '...';
+                        $source = $q['source'] ?? 'Industry source';
+                        $url = $q['url'] ?? '';
+                        $formatted = "\"{$text}\" — {$source}";
+                        if ( $url ) $formatted .= " ([source]({$url}))";
+                        $quotes[] = $formatted;
+                        if ( count( $quotes ) >= 3 ) break;
+                    }
+                    if ( ! empty( $quotes ) ) {
+                        $injected = $markdown;
+                        $qi = 0;
+                        $injected = preg_replace_callback(
+                            '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]*\n){2,3})/',
+                            function( $m ) use ( &$qi, $quotes ) {
+                                if ( $qi >= count( $quotes ) ) return $m[0];
+                                $q = $quotes[ $qi++ ];
+                                return $m[0] . "\n> " . $q . "\n\n";
+                            },
+                            $injected
+                        );
+                        $markdown = $injected;
+                        $steps_run[] = 'quotes';
+                    } else {
+                        $steps_skipped[] = 'quotes: Sonar returned empty quotes';
+                    }
+                } else {
+                    // Fallback to existing method
+                    $result = self::inject_quotes( $markdown, $keyword );
+                    if ( $result['success'] ) {
+                        $markdown = $result['content'];
+                        $steps_run[] = 'quotes';
+                    } else {
+                        $steps_skipped[] = 'quotes: ' . ( $result['error'] ?? 'failed' );
+                    }
+                }
+            } catch ( \Throwable $e ) {
+                $steps_skipped[] = 'quotes: ' . $e->getMessage();
+            }
+        } else {
+            $steps_skipped[] = 'quotes: score already ' . $quote_score;
+        }
+
+        // ---- Step 3: Statistics ----
+        $stat_score = $scores['factual_density']['score'] ?? 0;
+        if ( $stat_score < 70 ) {
+            try {
+                if ( $sonar && ! empty( $sonar['statistics'] ) ) {
+                    $stat_block = "\n\n**Key Statistics:**\n";
+                    foreach ( array_slice( $sonar['statistics'], 0, 4 ) as $stat ) {
+                        $stat_block .= "- " . trim( (string) $stat ) . "\n";
+                    }
+                    $stat_block .= "\n";
+                    $injected = preg_replace(
+                        '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,2})/',
+                        '$1' . $stat_block,
+                        $markdown,
+                        1
+                    );
+                    if ( $injected !== $markdown ) {
+                        $markdown = $injected;
+                        $steps_run[] = 'statistics';
+                    } else {
+                        $steps_skipped[] = 'statistics: could not find insertion point';
+                    }
+                } else {
+                    $result = self::inject_statistics( $markdown, $keyword );
+                    if ( $result['success'] ) {
+                        $markdown = $result['content'];
+                        $steps_run[] = 'statistics';
+                    } else {
+                        $steps_skipped[] = 'statistics: ' . ( $result['error'] ?? 'failed' );
+                    }
+                }
+            } catch ( \Throwable $e ) {
+                $steps_skipped[] = 'statistics: ' . $e->getMessage();
+            }
+        } else {
+            $steps_skipped[] = 'statistics: score already ' . $stat_score;
+        }
+
+        // ---- Step 4: Comparison Table ----
+        $table_score = $scores['tables']['score'] ?? 0;
+        if ( $table_score < 50 ) {
+            try {
+                if ( $sonar && ! empty( $sonar['table_data']['columns'] ) && ! empty( $sonar['table_data']['rows'] ) ) {
+                    // Build markdown table from Sonar data
+                    $cols = $sonar['table_data']['columns'];
+                    $rows = $sonar['table_data']['rows'];
+                    $table = '| ' . implode( ' | ', $cols ) . " |\n";
+                    $table .= '|' . str_repeat( '---|', count( $cols ) ) . "\n";
+                    foreach ( array_slice( $rows, 0, 6 ) as $row ) {
+                        // Pad row to match column count
+                        while ( count( $row ) < count( $cols ) ) $row[] = '';
+                        $table .= '| ' . implode( ' | ', array_slice( $row, 0, count( $cols ) ) ) . " |\n";
+                    }
+                    // Insert before FAQ/References
+                    if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $markdown, $m, PREG_OFFSET_MATCH ) ) {
+                        $markdown = substr( $markdown, 0, $m[1][1] ) . "\n" . $table . "\n" . substr( $markdown, $m[1][1] );
+                        $steps_run[] = 'table';
+                    } else {
+                        // Fallback: insert after first content H2
+                        $injected = preg_replace(
+                            '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,3})/',
+                            '$1' . "\n" . $table . "\n\n",
+                            $markdown,
+                            1
+                        );
+                        if ( $injected !== $markdown ) {
+                            $markdown = $injected;
+                            $steps_run[] = 'table';
+                        } else {
+                            $steps_skipped[] = 'table: no insertion point';
+                        }
+                    }
+                } else {
+                    // Fallback to AI-generated table
+                    $result = self::inject_table( $markdown, $keyword );
+                    if ( $result['success'] ) {
+                        $markdown = $result['content'];
+                        $steps_run[] = 'table';
+                    } else {
+                        $steps_skipped[] = 'table: ' . ( $result['error'] ?? 'failed' );
+                    }
+                }
+            } catch ( \Throwable $e ) {
+                $steps_skipped[] = 'table: ' . $e->getMessage();
+            }
+        } else {
+            $steps_skipped[] = 'table: score already ' . $table_score;
+        }
+
+        // ---- Step 5: Simplify Readability (AI rewrite) ----
+        $read_score = $scores['readability']['score'] ?? 0;
+        if ( $read_score < 70 ) {
+            try {
+                $result = self::simplify_readability( $markdown );
+                if ( $result['success'] ) {
+                    $markdown = $result['content'];
+                    $steps_run[] = 'readability';
+                } else {
+                    $steps_skipped[] = 'readability: ' . ( $result['error'] ?? 'not needed' );
+                }
+            } catch ( \Throwable $e ) {
+                $steps_skipped[] = 'readability: ' . $e->getMessage();
+            }
+        } else {
+            $steps_skipped[] = 'readability: score already ' . $read_score;
+        }
+
+        // ---- Step 6: Keyword Density (AI rewrite — LAST) ----
+        $kw_score = $scores['keyword_density']['score'] ?? 0;
+        if ( $kw_score < 60 ) {
+            try {
+                $result = self::optimize_keyword_placement( $markdown, $keyword );
+                if ( $result['success'] ) {
+                    $markdown = $result['content'];
+                    $steps_run[] = 'keyword';
+                } else {
+                    $steps_skipped[] = 'keyword: ' . ( $result['error'] ?? 'not needed' );
+                }
+            } catch ( \Throwable $e ) {
+                $steps_skipped[] = 'keyword: ' . $e->getMessage();
+            }
+        } else {
+            $steps_skipped[] = 'keyword: score already ' . $kw_score;
+        }
+
+        if ( empty( $steps_run ) ) {
+            return [
+                'success'       => true,
+                'content'       => $markdown,
+                'steps_run'     => [],
+                'steps_skipped' => $steps_skipped,
+                'sonar_used'    => $sonar_used,
+                'added'         => 'All scores already passing — no optimization needed.',
+            ];
+        }
+
+        return [
+            'success'       => true,
+            'content'       => $markdown,
+            'steps_run'     => $steps_run,
+            'steps_skipped' => $steps_skipped,
+            'sonar_used'    => $sonar_used,
+            'added'         => count( $steps_run ) . ' fixes applied: ' . implode( ', ', $steps_run )
+                . ( $sonar_used ? ' (powered by Perplexity Sonar)' : '' ),
+        ];
+    }
 }

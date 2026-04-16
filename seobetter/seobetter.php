@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.77
+ * Version: 1.5.78
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.77' );
+define( 'SEOBETTER_VERSION', '1.5.78' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -493,6 +493,14 @@ final class SEOBetter {
         register_rest_route( 'seobetter/v1', '/inject-fix', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_inject_fix' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        // v1.5.78 — Optimize All: single Sonar call + sequential fixes
+        register_rest_route( 'seobetter/v1', '/optimize-all', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_optimize_all' ],
             'permission_callback' => function () {
                 return current_user_can( 'edit_posts' );
             },
@@ -1486,6 +1494,55 @@ final class SEOBetter {
         $md = preg_replace( '/\n{3,}/', "\n\n", $md );
 
         return $md;
+    }
+
+    /**
+     * v1.5.78 — Optimize All endpoint. Single Sonar call + sequential fixes.
+     * Replaces clicking 6 individual inject-fix buttons.
+     */
+    public function rest_optimize_all( \WP_REST_Request $request ): \WP_REST_Response {
+        $markdown      = $request->get_param( 'markdown' ) ?? '';
+        $keyword       = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
+        $accent        = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
+        $existing_pool = $request->get_param( 'citation_pool' );
+        $scores        = $request->get_param( 'scores' );
+
+        if ( empty( $markdown ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'No content.' ], 400 );
+        }
+        if ( ! is_array( $existing_pool ) ) $existing_pool = [];
+        if ( ! is_array( $scores ) ) $scores = [];
+
+        $result = SEOBetter\Content_Injector::optimize_all( $markdown, $keyword, $existing_pool, $scores );
+
+        if ( ! $result['success'] ) {
+            return new \WP_REST_Response( $result, 400 );
+        }
+
+        $updated_markdown = $result['content'];
+
+        // Run the same validation + cleanup + format + score pipeline as inject-fix
+        $updated_markdown = $this->validate_outbound_links( $updated_markdown );
+        $updated_markdown = self::cleanup_ai_markdown( $updated_markdown );
+
+        $formatter = new SEOBetter\Content_Formatter();
+        $html = $formatter->format( $updated_markdown, 'classic', [ 'accent_color' => $accent ] );
+
+        $analyzer = new SEOBetter\GEO_Analyzer();
+        $score = $analyzer->analyze( $html, $keyword );
+
+        return new \WP_REST_Response( [
+            'success'       => true,
+            'content'       => $html,
+            'markdown'      => $updated_markdown,
+            'geo_score'     => $score['geo_score'],
+            'grade'         => $score['grade'],
+            'checks'        => $score['checks'],
+            'steps_run'     => $result['steps_run'] ?? [],
+            'steps_skipped' => $result['steps_skipped'] ?? [],
+            'sonar_used'    => $result['sonar_used'] ?? false,
+            'added'         => $result['added'] ?? '',
+        ] );
     }
 
     public function rest_improve_content( \WP_REST_Request $request ): \WP_REST_Response {

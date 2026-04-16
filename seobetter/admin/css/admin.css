@@ -235,6 +235,27 @@
     transition: width 0.3s ease;
 }
 
+/* v1.5.78 — Optimize All button + shimmer progress bar */
+@keyframes sb-opt-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+#sb-opt-bar {
+    background: linear-gradient(90deg, #764ba2, #667eea, #9f7aea, #764ba2) !important;
+    background-size: 200% 100%;
+    animation: sb-opt-shimmer 1.5s linear infinite;
+}
+#sb-optimize-all:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(118,75,162,0.35);
+}
+#sb-optimize-all:active:not(:disabled) {
+    transform: translateY(0);
+}
+#sb-optimize-all:disabled {
+    cursor: not-allowed;
+}
+
 .seobetter-dashboard .button.sb-btn-secondary,
 .seobetter-dashboard .sb-btn-secondary {
     background: transparent !important;

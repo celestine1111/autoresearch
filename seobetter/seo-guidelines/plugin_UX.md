@@ -126,8 +126,22 @@ Both ring variants (SVG-based in content-generator, div-bordered in CSS class fo
 - **Medium priority** — amber left border, collapsible `<details>` with count
 
 ### 3.4 Analyze & Improve Panel (REQUIRED) — INJECT-ONLY SYSTEM
-- Header: "Analyze & Improve" with improvement count
+- Header: "Analyze & Improve" with improvement count + **"⚡ Optimize All" button** (v1.5.78+)
 - All buttons currently free (will be gated to Pro after testing)
+
+#### "⚡ Optimize All" Button (v1.5.78+ — PRIMARY ACTION)
+- **Position:** right side of the panel header, next to "Analyze & Improve" title
+- **Style:** gradient purple button (`#764ba2` → `#667eea`), white text, 8px border-radius, hover lift
+- **Behavior:** single click runs ALL inject fixes via `POST /seobetter/v1/optimize-all`:
+  1. ONE Perplexity Sonar call for research data (citations, quotes, stats, table)
+  2. Sequential injection of all 4 research categories
+  3. AI readability simplification
+  4. AI keyword density optimization
+  5. Single format/score pass at the end
+- **Progress bar:** 6px shimmer bar fills through 7 steps with labels ("Step 1/7: Researching via Perplexity Sonar..."), elapsed timer, step details on completion
+- **Fallback:** if no OpenRouter key configured, each step falls back to its existing method (DDG pool, Vercel research, AI generation)
+- **Cost:** ~$0.07-0.20 per click (1 Sonar + 1-2 AI rewrites)
+- **On success:** green bar at 100%, shows steps applied + "Powered by Perplexity Sonar", marks all fix IDs as applied, re-renders panel after 2s
 
 ### 3.4B Places Validator Debug Panel (v1.5.27, REQUIRED for local-intent keywords)
 Color-coded banner rendered above the content preview in the result view when `res.places_validator.is_local_intent === true`. Three states:
