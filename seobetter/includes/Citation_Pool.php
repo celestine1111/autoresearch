@@ -42,7 +42,13 @@ class Citation_Pool {
      *   4. Return 200-399 on a HEAD check
      *   5. Contain the keyword in their title or body prefix (content verification)
      */
-    public static function build( string $keyword, string $country = '', string $domain = 'general' ): array {
+    /**
+     * v1.5.81 — accepts optional $sonar_citations from the Vercel backend's
+     * server-side Sonar call. These are high-quality URLs from Perplexity's
+     * live web search and get merged as pool candidates alongside DDG/Reddit/
+     * HN/Wikipedia sources. They still go through hygiene + topical filter.
+     */
+    public static function build( string $keyword, string $country = '', string $domain = 'general', array $sonar_citations = [] ): array {
         if ( empty( $keyword ) ) {
             return [];
         }
@@ -54,8 +60,6 @@ class Citation_Pool {
         }
 
         // Collect candidate URLs from keyword-targeted sources only.
-        // Data APIs (NASA, CoinGecko, Nager.Date, etc.) are NOT part of the pool —
-        // their stats inform the article content but can't be cited.
         $candidates = [];
 
         $research = Trend_Researcher::research( $keyword, $domain, $country );
@@ -75,6 +79,18 @@ class Citation_Pool {
                     ];
                 }
             }
+        }
+
+        // v1.5.81 — merge Sonar citations from the Vercel backend.
+        // These are high-quality URLs from Perplexity's live web search,
+        // available for ALL users regardless of their AI provider.
+        foreach ( $sonar_citations as $sc ) {
+            if ( ! is_array( $sc ) || empty( $sc['url'] ) ) continue;
+            $candidates[] = [
+                'url'         => $sc['url'],
+                'title'       => $sc['title'] ?? '',
+                'source_name' => $sc['source_name'] ?? wp_parse_url( $sc['url'], PHP_URL_HOST ),
+            ];
         }
 
         // v1.5.61 — pool filter relaxed. Previously passes_live_check (4s

@@ -16,6 +16,71 @@
 
 ---
 
+## v1.5.81 — Server-side Sonar: works for ALL users on ANY AI model
+
+**Date:** 2026-04-17
+**Commit:** `[pending]`
+
+### Added
+
+- **Server-side `fetchSonarResearch()` in Vercel endpoint** — `cloud-api/api/research.js` line **~3048**
+  - Runs IN PARALLEL with DDG/Reddit/HN/Wikipedia — no extra latency
+  - Uses `process.env.OPENROUTER_KEY` (Ben's server-side key, NOT user's key)
+  - Uses `process.env.SONAR_MODEL` (default `perplexity/sonar`)
+  - Returns `{citations, quotes, statistics, table_data}` from Perplexity's live web search
+  - Results MERGED into existing `sources[]`, `quotes[]`, `stats[]` arrays in `buildResearchResult()`
+  - Dedicated return fields: `sonar_citations`, `sonar_quotes`, `sonar_statistics`, `sonar_table_data`, `sonar_available`
+  - If no env key or Sonar fails: returns null gracefully, other 10 fetchers still provide data
+  - Verify: `grep -n 'fetchSonarResearch' seobetter/cloud-api/api/research.js`
+
+### Changed
+
+- **Citation Pool accepts Sonar citations** — `includes/Citation_Pool.php::build()` line **~45**
+  - New `$sonar_citations` parameter — Sonar URLs merged as pool candidates
+  - Still go through hygiene check + topical relevance filter like all other candidates
+  - Verify: `grep -n 'sonar_citations' seobetter/includes/Citation_Pool.php`
+
+- **Async_Generator threads Sonar data** — `includes/Async_Generator.php` trends step
+  - Stashes `sonar_data` in `$job['results']`, passes `sonar_citations` to Citation Pool build
+  - Threads to `assemble_final()` response for frontend
+  - Verify: `grep -n 'sonar_data' seobetter/includes/Async_Generator.php`
+
+- **All inject methods accept `$sonar_data` param** — `includes/Content_Injector.php`
+  - `inject_citations()`, `inject_quotes()`, `inject_table()`, `optimize_all()` — each uses `$sonar_data ?? self::call_sonar_research($keyword)` (Vercel data preferred, PHP fallback)
+  - Verify: `grep -n 'sonar_data' seobetter/includes/Content_Injector.php | head -10`
+
+- **REST endpoints forward `sonar_data`** — `seobetter.php`
+  - `rest_inject_fix()` and `rest_optimize_all()` receive and pass `sonar_data` from frontend
+  - Verify: `grep -n 'sonar_data' seobetter/seobetter.php | head -5`
+
+- **Frontend stores + passes `sonar_data`** — `admin/views/content-generator.php`
+  - `window._seobetterDraft.sonar_data` stores Vercel Sonar data from generation
+  - Both inject-fix and optimize-all AJAX calls pass it through
+  - Verify: `grep -n 'sonar_data' seobetter/admin/views/content-generator.php | head -5`
+
+### Architecture (WHY this matters)
+
+```
+BEFORE: WordPress PHP → User's OpenRouter key → Sonar
+        (users without OpenRouter get broken features)
+
+AFTER:  WordPress PHP → Vercel endpoint → Ben's OPENROUTER_KEY → Sonar
+        (ALL users get real research data regardless of AI provider)
+        (user's AI key ONLY used for writing, never for research)
+```
+
+### Deployment requirement
+
+Set these Vercel environment variables BEFORE testing:
+- `OPENROUTER_KEY` — Ben's OpenRouter API key
+- `SONAR_MODEL` — `perplexity/sonar` (default) or `perplexity/sonar-pro`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.80 — All individual buttons now use Perplexity Sonar + openers converted to inject
 
 **Date:** 2026-04-17

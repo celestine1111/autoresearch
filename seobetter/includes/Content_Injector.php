@@ -42,14 +42,14 @@ class Content_Injector {
      *      a strong factual claim. Each [N] is a clickable anchor link to
      *      the matching #ref-N entry in the References section.
      */
-    public static function inject_citations( string $content, string $keyword, array $existing_pool = [] ): array {
+    public static function inject_citations( string $content, string $keyword, array $existing_pool = [], ?array $sonar_data = null ): array {
         // v1.5.80 — Sonar-first citation sourcing. Perplexity Sonar does
         // a live web search and returns real article URLs with titles.
         // This replaces the fragile DDG scraping + topical filter pipeline.
         $pool = $existing_pool;
 
-        // Try Sonar first — best source of real, current URLs
-        $sonar = self::call_sonar_research( $keyword );
+        // v1.5.81 — prefer pre-fetched Sonar data from Vercel backend
+        $sonar = $sonar_data ?? self::call_sonar_research( $keyword );
         if ( $sonar && ! empty( $sonar['citations'] ) ) {
             foreach ( $sonar['citations'] as $sc ) {
                 if ( empty( $sc['url'] ) ) continue;
@@ -252,14 +252,14 @@ class Content_Injector {
      * Falls back to a clearly-labelled "industry perspective" summary
      * (not a fake quote) only when zero real quotes exist.
      */
-    public static function inject_quotes( string $content, string $keyword ): array {
+    public static function inject_quotes( string $content, string $keyword, ?array $sonar_data = null ): array {
         // v1.5.80 — Sonar-first expert quotes. Perplexity Sonar returns
         // real professional quotes from live web search — no more DEV.to
         // April Fools or random Reddit noise. Sonar searches for actual
         // expert commentary on the topic.
         $quotes = [];
 
-        $sonar = self::call_sonar_research( $keyword );
+        $sonar = $sonar_data ?? self::call_sonar_research( $keyword );
         if ( $sonar && ! empty( $sonar['quotes'] ) ) {
             foreach ( $sonar['quotes'] as $q ) {
                 if ( ! is_array( $q ) || empty( $q['text'] ) ) continue;
@@ -325,9 +325,9 @@ class Content_Injector {
      * real product data first. Falls back to AI generation if Sonar has
      * no table data or no OpenRouter key.
      */
-    public static function inject_table( string $content, string $keyword ): array {
-        // Try Sonar for real product data first
-        $sonar = self::call_sonar_research( $keyword );
+    public static function inject_table( string $content, string $keyword, ?array $sonar_data = null ): array {
+        // v1.5.81 — prefer pre-fetched Sonar data from Vercel backend
+        $sonar = $sonar_data ?? self::call_sonar_research( $keyword );
         if ( $sonar && ! empty( $sonar['table_data']['columns'] ) && ! empty( $sonar['table_data']['rows'] ) ) {
             $cols = $sonar['table_data']['columns'];
             $rows = $sonar['table_data']['rows'];
@@ -1489,7 +1489,8 @@ Return ONLY the Markdown table, nothing else.";
         string $markdown,
         string $keyword,
         array  $existing_pool = [],
-        array  $scores = []
+        array  $scores = [],
+        ?array $sonar_data = null
     ): array {
         @set_time_limit( 120 );
 
@@ -1497,8 +1498,14 @@ Return ONLY the Markdown table, nothing else.";
         $steps_skipped = [];
         $sonar_used    = false;
 
-        // ---- Step 0: Sonar research call ----
-        $sonar = self::call_sonar_research( $keyword );
+        // ---- Step 0: Sonar research data ----
+        // v1.5.81 — prefer pre-fetched Sonar data from the Vercel backend
+        // (server-side, available for all users). Fall back to PHP-side
+        // call_sonar_research() only if Vercel didn't provide it.
+        $sonar = $sonar_data;
+        if ( $sonar === null ) {
+            $sonar = self::call_sonar_research( $keyword );
+        }
         if ( $sonar !== null ) {
             $sonar_used = true;
         }

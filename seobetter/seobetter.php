@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.80
+ * Version: 1.5.81
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.80' );
+define( 'SEOBETTER_VERSION', '1.5.81' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1302,9 +1302,11 @@ final class SEOBetter {
         $keyword  = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
         $accent   = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
         // v1.5.76 — receive the citation pool from the original generation
-        // so inject_citations can reuse it instead of rebuilding from scratch.
         $existing_pool = $request->get_param( 'citation_pool' );
         if ( ! is_array( $existing_pool ) ) $existing_pool = [];
+        // v1.5.81 — receive Sonar data from the Vercel backend (server-side)
+        $sonar_data = $request->get_param( 'sonar_data' );
+        if ( ! is_array( $sonar_data ) ) $sonar_data = null;
 
         if ( empty( $markdown ) || empty( $fix_type ) ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => 'Missing markdown or fix_type.' ], 400 );
@@ -1313,13 +1315,13 @@ final class SEOBetter {
         // Run the appropriate fix
         switch ( $fix_type ) {
             case 'citations':
-                $result = SEOBetter\Content_Injector::inject_citations( $markdown, $keyword, $existing_pool );
+                $result = SEOBetter\Content_Injector::inject_citations( $markdown, $keyword, $existing_pool, $sonar_data );
                 break;
             case 'quotes':
-                $result = SEOBetter\Content_Injector::inject_quotes( $markdown, $keyword );
+                $result = SEOBetter\Content_Injector::inject_quotes( $markdown, $keyword, $sonar_data );
                 break;
             case 'table':
-                $result = SEOBetter\Content_Injector::inject_table( $markdown, $keyword );
+                $result = SEOBetter\Content_Injector::inject_table( $markdown, $keyword, $sonar_data );
                 break;
             case 'freshness':
                 $result = SEOBetter\Content_Injector::inject_freshness( $markdown );
@@ -1512,14 +1514,16 @@ final class SEOBetter {
         $accent        = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
         $existing_pool = $request->get_param( 'citation_pool' );
         $scores        = $request->get_param( 'scores' );
+        $sonar_data    = $request->get_param( 'sonar_data' );
 
         if ( empty( $markdown ) ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => 'No content.' ], 400 );
         }
         if ( ! is_array( $existing_pool ) ) $existing_pool = [];
         if ( ! is_array( $scores ) ) $scores = [];
+        if ( ! is_array( $sonar_data ) ) $sonar_data = null;
 
-        $result = SEOBetter\Content_Injector::optimize_all( $markdown, $keyword, $existing_pool, $scores );
+        $result = SEOBetter\Content_Injector::optimize_all( $markdown, $keyword, $existing_pool, $scores, $sonar_data );
 
         if ( ! $result['success'] ) {
             return new \WP_REST_Response( $result, 400 );

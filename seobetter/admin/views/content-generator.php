@@ -1222,6 +1222,10 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             // Without this, the preview shows the meta lines but the saved
             // draft loses them.
             places: res.places || [],
+            // v1.5.81 — Sonar research data from Vercel backend (server-side,
+            // available for all users). Passed to inject-fix + optimize-all
+            // so they use cached Sonar data instead of making new API calls.
+            sonar_data: res.sonar_data || null,
             // 5-Part Framework phase report (§28) — persisted to post meta
             // so future audits can see which phases passed/failed.
             framework: res.framework || {}
@@ -1329,7 +1333,8 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     markdown: draft.markdown,
                     keyword: draft.keyword,
                     accent_color: draft.accent_color,
-                    citation_pool: draft.citation_pool || []
+                    citation_pool: draft.citation_pool || [],
+                    sonar_data: draft.sonar_data || null
                 }).then(function(result) {
                     clearInterval(timerInterval);
                     if (result.type === 'flag') {
@@ -1505,7 +1510,8 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     keyword: draft.keyword,
                     accent_color: draft.accent_color,
                     citation_pool: draft.citation_pool || [],
-                    scores: checksForApi
+                    scores: checksForApi,
+                    sonar_data: draft.sonar_data || null
                 }).then(function(result) {
                     clearInterval(stepInterval);
                     var elapsed = Math.round((Date.now() - startTime) / 1000);

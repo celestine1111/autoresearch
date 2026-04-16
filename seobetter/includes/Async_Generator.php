@@ -200,12 +200,26 @@ class Async_Generator {
                     $job['options']['places_pool_for_outline'] = $research['places'] ?? [];
                 }
 
+                // v1.5.81 — stash Sonar research data from the Vercel backend.
+                // This data is server-side (Ben's key) so it's available for
+                // ALL users regardless of their AI provider. Used by Citation
+                // Pool (URLs), inject-fix buttons (quotes, stats, table), and
+                // threaded to the frontend for the Optimize All button.
+                $job['results']['sonar_data'] = [
+                    'citations'  => $research['sonar_citations'] ?? [],
+                    'quotes'     => $research['sonar_quotes'] ?? [],
+                    'statistics' => $research['sonar_statistics'] ?? [],
+                    'table_data' => $research['sonar_table_data'] ?? null,
+                    'available'  => ! empty( $research['sonar_available'] ),
+                ];
+
                 // Build the verified citation pool (real keyword-relevant URLs)
-                // This drives both the AI prompt grounding and the post-save validator.
+                // v1.5.81 — pass Sonar citations as additional pool candidates
                 $pool = Citation_Pool::build(
                     $keyword,
                     $options['country'] ?? '',
-                    $options['domain'] ?? 'general'
+                    $options['domain'] ?? 'general',
+                    $research['sonar_citations'] ?? []
                 );
                 $job['results']['citation_pool'] = $pool;
                 $job['results']['citation_pool_prompt'] = Citation_Pool::format_for_prompt( $pool );
@@ -1109,6 +1123,9 @@ class Async_Generator {
             // validate_outbound_links() can use it as the primary allow-list
             // and build_references_section() can auto-generate References.
             'citation_pool' => $job['results']['citation_pool'] ?? [],
+            // v1.5.81 — thread Sonar research data to frontend so inject-fix
+            // buttons can reuse it without making additional API calls.
+            'sonar_data'    => $job['results']['sonar_data'] ?? null,
             // v1.5.46 — thread the verified Places pool through to the save
             // path so rest_save_draft() can run Places_Link_Injector on the
             // hybrid-formatted HTML. Without this, the preview shows 📍
