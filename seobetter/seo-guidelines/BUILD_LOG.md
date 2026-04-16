@@ -19,7 +19,7 @@
 ## v1.5.81 — Server-side Sonar: works for ALL users on ANY AI model
 
 **Date:** 2026-04-17
-**Commit:** `[pending]`
+**Commit:** `f90bc71`
 
 ### Added
 
