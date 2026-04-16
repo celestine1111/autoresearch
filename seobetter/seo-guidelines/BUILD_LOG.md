@@ -19,7 +19,7 @@
 ## v1.5.69 — Inject-fix bug sweep: silent failures, scroll UX, density warnings
 
 **Date:** 2026-04-16
-**Commit:** `[pending]`
+**Commit:** `7cee1d6`
 
 ### Fixed
 
