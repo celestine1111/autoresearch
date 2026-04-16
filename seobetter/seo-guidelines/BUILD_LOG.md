@@ -19,7 +19,7 @@
 ## v1.5.77 — CRITICAL: inject_quotes now uses REAL research data, not hallucinated
 
 **Date:** 2026-04-17
-**Commit:** `[pending]`
+**Commit:** `c7590df`
 
 ### Fixed
 
