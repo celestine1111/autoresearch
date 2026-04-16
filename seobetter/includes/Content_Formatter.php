@@ -58,6 +58,16 @@ class Content_Formatter {
      * Parse markdown into structured sections for formatting.
      */
     private function parse_markdown( string $markdown ): array {
+        // v1.5.82 — pre-process: split inline Unicode bullets into separate lines
+        // and convert to standard markdown markers. AI models output:
+        //   "• item1 • item2 • item3" (all on one line)
+        //   "• item1\n• item2" (line-starting Unicode bullets)
+        // Both need to become "- item1\n- item2\n- item3"
+        $markdown = preg_replace( '/([^\n])[ \t]+[•●◦▪▸►][ \t]+/u', "$1\n- ", $markdown );
+        $markdown = preg_replace( '/^[ \t]*[•●◦▪▸►][ \t]*/mu', '- ', $markdown );
+        // Also convert 4-space indented text to list items (AI rewrite artefact)
+        $markdown = preg_replace( '/^[ \t]{4,}(?!```)([\w"\'(].+)$/m', '- $1', $markdown );
+
         $lines = explode( "\n", $markdown );
         $sections = [];
         $current = [ 'type' => 'paragraph', 'content' => [], 'level' => 0 ];
@@ -154,8 +164,9 @@ class Content_Formatter {
                 continue;
             }
 
-            // Unordered list
-            if ( preg_match( '/^[-*]\s+(.+)$/', $trimmed, $m ) ) {
+            // Unordered list — v1.5.82: also recognise Unicode bullets (•●◦▪▸►)
+            // and + marker. AI models frequently output • instead of - for lists.
+            if ( preg_match( '/^[-*+•●◦▪▸►]\s+(.+)$/u', $trimmed, $m ) ) {
                 if ( ! empty( $current['content'] ) ) {
                     $sections[] = [ 'type' => 'paragraph', 'content' => implode( "\n", $current['content'] ) ];
                     $current['content'] = [];
