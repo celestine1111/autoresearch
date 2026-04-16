@@ -19,7 +19,7 @@
 ## v1.5.73 — Professional list styling, indented-text-to-list cleanup
 
 **Date:** 2026-04-16
-**Commit:** `[pending]`
+**Commit:** `22df77c`
 
 ### Changed
 
