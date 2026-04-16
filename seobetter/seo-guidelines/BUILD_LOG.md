@@ -16,6 +16,31 @@
 
 ---
 
+## v1.5.77 — CRITICAL: inject_quotes now uses REAL research data, not hallucinated
+
+**Date:** 2026-04-17
+**Commit:** `[pending]`
+
+### Fixed
+
+- **inject_quotes: real quotes from research, zero hallucination** — `includes/Content_Injector.php::inject_quotes()` line **~228**
+  - Previous: asked AI to "generate 2 expert quotes with realistic names and organizations" at temperature 0.7. Produced 100% hallucinated quotes — fake people, fake titles, fake orgs. Destroyed E-E-A-T trust for YMYL topics.
+  - New: pulls REAL quotes from Vercel research data (Reddit discussions, Wikipedia definitions, Bluesky/Mastodon posts, HN comments). Each quote has real text from a real person with a real source URL. Falls back to trending discussion snippets when direct quotes unavailable. Returns error if zero real quotes found (no fabrication fallback).
+  - Formatted as attributed blockquotes: `"quote text" — Source (source URL)`
+  - User asked: "are these hallucinated? if so will they affect seo negatively" — answer was yes, now fixed
+  - Verify: `grep -n 'Trend_Researcher::research' seobetter/includes/Content_Injector.php | head -3`
+
+### Guideline updates (same commit)
+
+- **plugin_functionality_wordpress.md** §6.1 — inject_quotes description updated
+- **plugin_UX.md** §3.4 — Add Expert Quotes description updated
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.76b — Table error handling, Tympanus-style progress bar
 
 **Date:** 2026-04-17

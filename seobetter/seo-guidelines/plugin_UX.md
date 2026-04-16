@@ -142,7 +142,7 @@ Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validat
 
 #### INJECT FIXES (5 buttons — safe, never edit existing text)
 1. **Add Citations & References** (+12 pts) — Fetches real URLs from Vercel research API (Reddit, HN, Wikipedia, DuckDuckGo) and appends a References section. Zero hallucinated links. **Hidden when article already has citations** (v1.5.74+): JS checks both the score AND whether the markdown already contains a `## References` section with `[text](url)` links, OR the HTML contains `<a href>` tags. Both must be absent for the button to appear.
-2. **Add Expert Quotes** (+8 pts) — Generates 2 expert quotes via AI and inserts them as blockquotes after H2 sections. Skips Key Takeaways/FAQ/References sections.
+2. **Add Expert Quotes** (+8 pts) — v1.5.77: pulls REAL quotes from Vercel research data (Reddit discussions, Wikipedia definitions, social media posts). Zero hallucinated names/orgs. Each quote has a real source attribution and URL. Inserts as blockquotes after H2 sections. Skips Key Takeaways/FAQ/References.
 3. **Add Statistics** (+12 pts) — Pulls real stats from Vercel research API or generates via AI as fallback. Inserts as `**Key Statistics:**` callout block.
 4. **Add Comparison Table** (+6 pts) — AI generates a 4-column markdown table (Name, Feature, Price, Best For). Inserts after first content H2.
 5. **Add Freshness Signal** (+7 pts) — Prepends "Last Updated: [Month Year]" to top of article. Skips if already present.

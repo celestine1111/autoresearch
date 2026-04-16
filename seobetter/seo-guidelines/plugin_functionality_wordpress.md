@@ -721,7 +721,7 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 **5 Inject Methods (additive — append/insert new content):**
 1. `inject_citations()` — fetches real URLs from Vercel research API, appends `## References` section
-2. `inject_quotes()` — AI generates 2 quotes, inserts as blockquotes after H2 headings (skips Key Takeaways/FAQ/References)
+2. `inject_quotes()` — v1.5.77: pulls REAL quotes from Vercel research data (Reddit discussions, Wikipedia definitions, Bluesky/Mastodon posts). Zero hallucinated quotes. Inserts as attributed blockquotes after H2 headings (skips Key Takeaways/FAQ/References). Falls back to trending discussion snippets when direct quotes are unavailable.
 3. `inject_table()` — AI generates 4-column markdown table, inserts after first content H2
 4. `inject_freshness()` — Prepends `Last Updated: [Month Year]` to article top
 5. `inject_statistics()` — Pulls real stats from research API or AI fallback, inserts `**Key Statistics:**` callout
