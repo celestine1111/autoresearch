@@ -16,6 +16,39 @@
 
 ---
 
+## v1.5.68 — Real-link citation scoring, applied-fix threshold-crossing persistence
+
+**Date:** 2026-04-16
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Citation scoring honesty — only real clickable links count** — `includes/GEO_Analyzer.php::check_citations()` line **381**
+  - Previous: counted plain-text patterns like `(Source, 2024)` and `[1]` as citations — articles with zero clickable links scored Citations = 100
+  - New: counts only real markdown links `[text](url)` and HTML `<a href>` tags toward the score
+  - Plain-text attributions are detected separately and shown in the detail string for transparency but DO NOT contribute to the score
+  - Returns new `plain_text_count` diagnostic field alongside the existing `count` (which now means real links only)
+  - User report: "There are still no citations anywhere... it is hallucinating as there are no citations at all in article or at the footer."
+  - Verify: `grep -n 'real_link_count' seobetter/includes/GEO_Analyzer.php`
+
+- **Applied-fix cards persist after threshold crossing** — `admin/views/content-generator.php` inline JS, `renderResult()` fixes panel, line **~1011**
+  - Previous: after clicking an inject fix (e.g. Add Citations) → success → score passes threshold → fix drops out of the `fixes[]` array → card disappears entirely on next re-render
+  - New: `appliedLabels` lookup map re-injects completed fixes that passed their threshold back into the panel as green "Done" cards so the user sees confirmation
+  - Covers all 7 inject fix types: citations, quotes, statistics, table, freshness, readability, keyword
+  - User report: "i applied the first one it went grey then went green but when i scrolled it disappeared"
+  - Verify: `grep -n 'appliedLabels' seobetter/admin/views/content-generator.php`
+
+### Guideline updates (same commit)
+
+- **SEO-GEO-AI-GUIDELINES.md** §6 — Citations row updated to specify "real clickable links" scoring, not plain-text patterns
+- **plugin_UX.md** §3.4 — Added threshold-crossing persistence note for Analyze & Improve panel
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.67 — Citation count honesty, applied-fix persistence, readability threshold drop, Optimize Keyword Density inject mode
 
 **Date:** 2026-04-16

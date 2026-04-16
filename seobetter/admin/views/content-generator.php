@@ -1008,15 +1008,43 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             h += '</div>';
 
             // v1.5.67 — track applied fixes across panel re-renders.
-            // Previously, after clicking Add Citations → success → re-render,
-            // the citations check might still score below 80, so the fix
-            // appeared again as a fresh "Add now" button — the user
-            // reported "its not greyed out which it should be as it is
-            // already done". Now we persist a window._seobetterAppliedFixes
-            // Set across re-renders and render completed fixes as a grey
-            // disabled "✓ Done" card instead of a clickable button.
+            // v1.5.68 — also include applied fixes that have CROSSED
+            // their score threshold (i.e. no longer in the `fixes` array)
+            // so the user still sees them as "✓ Done". Previously these
+            // fixes disappeared entirely after a successful inject,
+            // which felt like the click had no effect. User reported:
+            // "i applied the first one it went grey then went green but
+            // when i scrolled it disappeared".
             window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
             var appliedSet = window._seobetterAppliedFixes;
+
+            // Re-add any applied fixes that are no longer in the fixes[] array
+            // because their score now passes the threshold. We use a complete
+            // label map so the "Done" card shows the right title.
+            var appliedLabels = {
+                citations: { label:'Add Citations & References', icon:'admin-links', impact:'+10 pts' },
+                quotes:    { label:'Add Expert Quotes',           icon:'format-quote', impact:'+6 pts' },
+                statistics:{ label:'Add Statistics',              icon:'chart-bar',    impact:'+10 pts' },
+                table:     { label:'Add Comparison Table',        icon:'editor-table', impact:'+5 pts' },
+                freshness: { label:'Add Freshness Signal',        icon:'calendar-alt', impact:'+6 pts' },
+                readability:{ label:'Simplify Readability',       icon:'editor-spellcheck', impact:'+10 pts' },
+                keyword:   { label:'Optimize Keyword Density',    icon:'search',       impact:'+10 pts' }
+            };
+            var seenIds = {};
+            fixes.forEach(function(f) { seenIds[f.id] = true; });
+            Object.keys(appliedSet).forEach(function(appliedId) {
+                if (seenIds[appliedId]) return; // already in the fixes list
+                var meta = appliedLabels[appliedId];
+                if (!meta) return; // unknown fix id, skip
+                fixes.push({
+                    id: appliedId,
+                    label: meta.label,
+                    desc: appliedSet[appliedId].message || 'Applied',
+                    icon: meta.icon,
+                    impact: meta.impact,
+                    mode: 'inject'
+                });
+            });
 
             fixes.forEach(function(fix, idx) {
                 var isApplied = !!appliedSet[fix.id];

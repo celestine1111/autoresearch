@@ -356,19 +356,59 @@ class GEO_Analyzer {
     }
 
     /**
-     * Check for inline citations / references.
+     * v1.5.68 — Check for REAL clickable citations (not plain-text
+     * attribution patterns).
+     *
+     * Previous behavior counted patterns like `(Source, 2024)` and `[1]`
+     * as citations which technically satisfied the GEO rubric but
+     * HALLUCINATED the score. AIOSEO / Yoast / Google only count actual
+     * `<a href>` elements. A 2000-word article with 11 plain-text
+     * attributions and zero real links was showing Citations = 100
+     * even though no user could click anything. User reported: "There
+     * are still no citations anywhere... it is hallucinating as there
+     * are no citations at all in article or at the footer."
+     *
+     * New counting:
+     *   1. Real markdown links `[text](url)` — counted as citations (primary)
+     *   2. Real HTML `<a href>` tags — counted as citations (primary)
+     *   3. Plain-text attribution patterns `(Source, 2024)` — counted
+     *      SEPARATELY and shown in the detail text for transparency but
+     *      DO NOT contribute to the score
+     *
+     * Score is based ONLY on real links so the Analyze & Improve panel
+     * correctly flags articles with no clickable sources.
      */
     private function check_citations( string $text ): array {
-        // Match patterns like [1], [Source, 2024], (Research, 2025), etc.
-        preg_match_all( '/\[\d+\]|\([A-Z][^)]*\d{4}\)|\[[A-Z][^\]]*\d{4}\]/', $text, $matches );
-        $count = count( $matches[0] );
+        // v1.5.68 — count real links first.
+        // Works on both markdown source and rendered HTML because we get
+        // both patterns through the same check_citations() call.
+        preg_match_all( '/(?<!!)\[[^\]]+\]\(https?:\/\/[^)]+\)/', $text, $md_links );
+        $md_count = count( $md_links[0] );
+        preg_match_all( '/<a\s+[^>]*href=["\']https?:\/\/[^"\']+["\'][^>]*>/i', $text, $html_links );
+        $html_count = count( $html_links[0] );
+        // Dedupe: if both run on the same HTML containing both formats,
+        // md_count may be 0 because the rendered HTML doesn't contain
+        // raw markdown links. The real link count is max of the two.
+        $real_link_count = max( $md_count, $html_count );
 
-        $score = min( 100, $count * 20 ); // 5+ citations = 100
+        // Plain-text attribution patterns — diagnostic only, not scored.
+        preg_match_all( '/\[\d+\]|\([A-Z][^)]*\d{4}\)|\[[A-Z][^\]]*\d{4}\]/', $text, $plain_matches );
+        $plain_count = count( $plain_matches[0] );
+
+        $score = min( 100, $real_link_count * 20 ); // 5+ real links = 100
+
+        $detail_parts = [];
+        $detail_parts[] = sprintf( '%d clickable link%s', $real_link_count, $real_link_count === 1 ? '' : 's' );
+        if ( $plain_count > 0 ) {
+            $detail_parts[] = sprintf( '%d plain-text attribution%s (not counted — AIOSEO/Yoast need real <a href>)', $plain_count, $plain_count === 1 ? '' : 's' );
+        }
+        $detail_parts[] = 'target 5+';
 
         return [
-            'score'  => $score,
-            'count'  => $count,
-            'detail' => sprintf( '%d citations found (recommend 5+ per article)', $count ),
+            'score'           => $score,
+            'count'           => $real_link_count, // UI reads this — only real links
+            'plain_text_count' => $plain_count,     // diagnostic field
+            'detail'          => implode( ', ', $detail_parts ),
         ];
     }
 
