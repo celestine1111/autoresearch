@@ -16,6 +16,29 @@
 
 ---
 
+## v1.5.74b — Hide Add Citations when article already has links
+
+**Date:** 2026-04-17
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Add Citations button hidden when article already has citations** — `admin/views/content-generator.php` line **~973**
+  - Previous: button showed based only on `citations.score < 80` — but scorer was returning 0 even when article had real links (v1.5.68-71 bug). Even after v1.5.72 scorer fix, the button appeared when it shouldn't.
+  - New: JS checks BOTH `score < 80` AND that neither the markdown has a `## References` section with `[text](url)` links NOR the HTML has any `<a href="https://...">` tags. All three must be absent for the button to appear.
+  - User report: "the previous build it added the external links and references and i said it shouldnt have the button to add citations if they are already there"
+  - Verify: `grep -n 'mdHasRefs' seobetter/admin/views/content-generator.php`
+
+### Guideline updates (same commit)
+
+- **plugin_UX.md** §3.4 — Updated Add Citations entry with hidden-when-exists rule
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.74 — Loading spinner on inject-fix buttons, error messages shown
 
 **Date:** 2026-04-16

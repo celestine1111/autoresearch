@@ -970,7 +970,14 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         if (res.checks) {
             var c = res.checks;
             // INJECT fixes (add content without editing existing text)
-            if (c.citations && c.citations.score < 80) fixes.push({id:'citations', label:'Add Citations & References', desc:c.citations.count+' citations found. Top content has 5+. Uses real web sources (no hallucinated links).', icon:'admin-links', impact:'+10 pts', mode:'inject'});
+            // v1.5.74 — also check if the article already has a References
+            // section with real links. User reported the button appearing even
+            // when the article had citations from initial generation. Belt-and-
+            // braces: score check + content check. The content check catches
+            // cases where the scorer is wrong (v1.5.68-71 bug scored 0 always).
+            var mdHasRefs = (res.markdown || '').match(/## References[\s\S]*?\[.+?\]\(https?:\/\//);
+            var htmlHasLinks = (res.content || '').match(/<a\s+[^>]*href=["']https?:\/\//i);
+            if (c.citations && c.citations.score < 80 && !mdHasRefs && !htmlHasLinks) fixes.push({id:'citations', label:'Add Citations & References', desc:c.citations.count+' citations found. Top content has 5+. Uses real web sources (no hallucinated links).', icon:'admin-links', impact:'+10 pts', mode:'inject'});
             if (c.expert_quotes && c.expert_quotes.score < 100) fixes.push({id:'quotes', label:'Add Expert Quotes', desc:c.expert_quotes.count+' quotes found. Expert quotes boost GEO visibility by 41%. Inserts 2 quotes without editing existing text.', icon:'format-quote', impact:'+6 pts', mode:'inject'});
             if (c.factual_density && c.factual_density.score < 70) fixes.push({id:'statistics', label:'Add Statistics', desc:'Not enough numbers. Uses real research data from web search. Inserts stats without editing existing text.', icon:'chart-bar', impact:'+10 pts', mode:'inject'});
             if (c.tables && c.tables.score < 50) fixes.push({id:'table', label:'Add Comparison Table', desc:'No tables found. Tables get cited 30-40% more by AI. Inserts a table without editing existing text.', icon:'editor-table', impact:'+5 pts', mode:'inject'});
