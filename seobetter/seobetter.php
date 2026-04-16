@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.70
+ * Version: 1.5.71
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.70' );
+define( 'SEOBETTER_VERSION', '1.5.71' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1405,6 +1405,14 @@ final class SEOBetter {
             }
         }
 
+        // v1.5.71 — Centralized markdown cleanup for ALL inject-fix methods.
+        // AI rewriters frequently introduce Unicode bullets (•), HTML list
+        // tags (<ul>/<li>), or inline bullets (• item1 • item2 on one line).
+        // Content_Formatter only recognises -, *, + as list markers.
+        // Running cleanup HERE means every inject method benefits without
+        // needing per-method post-processing that can be missed.
+        $updated_markdown = self::cleanup_ai_markdown( $updated_markdown );
+
         $formatter = new SEOBetter\Content_Formatter();
         // v1.5.67 — REVERTED v1.5.62/63's switch back to 'classic' mode.
         // Earlier misdiagnosis: I assumed classic mode was producing raw
@@ -1432,6 +1440,37 @@ final class SEOBetter {
             'added'     => $result['added'] ?? '',
             'type'      => $result['type'] ?? $fix_type,
         ] );
+    }
+
+    /**
+     * v1.5.71 — Centralized markdown cleanup for AI-rewritten content.
+     *
+     * AI models produce non-standard markdown that Content_Formatter can't
+     * parse. This runs ONCE on the final markdown before formatting, so
+     * every inject-fix method benefits without per-method post-processing.
+     *
+     * Fixes:
+     * - Unicode bullet chars (•●◦▪▸►) → markdown `- `
+     * - Inline bullets (• item1 • item2 on one line) → separate list items
+     * - Stray HTML list/paragraph tags → stripped
+     * - Trailing whitespace on list items
+     */
+    private static function cleanup_ai_markdown( string $md ): string {
+        // 1. Split inline bullets into separate lines FIRST.
+        //    "• item1 • item2 • item3" → "\n- item1\n- item2\n- item3"
+        //    Must run before the per-line regex below.
+        $md = preg_replace( '/([^\n])[ \t]+[•●◦▪▸►][ \t]+/', "$1\n- ", $md );
+
+        // 2. Convert line-starting Unicode bullets to markdown list markers
+        $md = preg_replace( '/^[ \t]*[•●◦▪▸►][ \t]*/m', '- ', $md );
+
+        // 3. Strip stray HTML list/paragraph tags the AI may have introduced
+        $md = preg_replace( '/<\/?(ul|ol|li|p|br|div)[^>]*>/i', '', $md );
+
+        // 4. Collapse any resulting blank-line runs to max 2 newlines
+        $md = preg_replace( '/\n{3,}/', "\n\n", $md );
+
+        return $md;
     }
 
     public function rest_improve_content( \WP_REST_Request $request ): \WP_REST_Response {

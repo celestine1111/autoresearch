@@ -987,7 +987,7 @@ Return ONLY the Markdown table, nothing else. Example format:
      * exact-phrase keyword occurrences with pronouns, variations, or
      * synonyms. Target: drop density from >2% → 0.8-1.2%.
      */
-    public static function optimize_keyword_placement( string $markdown, string $keyword ): array {
+    public static function optimize_keyword_placement( string $markdown, string $keyword, int $depth = 0 ): array {
         $keyword = trim( (string) $keyword );
         if ( $keyword === '' ) {
             return [ 'success' => false, 'error' => 'No focus keyword configured.' ];
@@ -1087,23 +1087,24 @@ Return ONLY the Markdown table, nothing else. Example format:
         $kw_count_after = substr_count( $lower_new, strtolower( $keyword ) );
         $density_after = round( ( $kw_count_after * $kw_word_count / $new_word_count ) * 100, 2 );
 
-        // v1.5.70 — auto-retry if density is still above 2%. The first pass
-        // often only gets halfway (7% → 4%) because the AI is conservative.
-        // A second pass with the partially-reduced text usually finishes the job.
-        if ( $density_after > 2.0 ) {
-            $retry = self::optimize_keyword_placement( $new_markdown, $keyword );
+        // v1.5.71 — auto-retry with depth guard (max 2 passes total).
+        // First pass often only gets halfway (8% → 5%) because the AI is
+        // conservative. Second pass with partially-reduced text finishes the
+        // job. Depth guard prevents infinite recursion.
+        if ( $density_after > 1.5 && $depth < 1 ) {
+            $retry = self::optimize_keyword_placement( $new_markdown, $keyword, $depth + 1 );
             if ( $retry['success'] ) {
-                // Use the retry result but report the full journey
                 $retry_density = $retry['density_after'] ?? $density_after;
+                $passes = $depth + 2; // depth 0 = pass 1, retry = pass 2
                 $retry['added'] = sprintf(
-                    'Keyword density %s%% → %s%% → %s%% (2 passes, rewrote %d total mentions)',
+                    'Keyword density %s%% → %s%% → %s%% (%d passes)',
                     $density_before,
                     $density_after,
                     $retry_density,
-                    max( 0, $kw_count_before - (int) ( $retry_density * $new_word_count / ( 100 * $kw_word_count ) ) )
+                    $passes
                 );
                 if ( $retry_density > 1.5 ) {
-                    $retry['added'] .= '. ⚠️ Still above 1.5% — try one more click or manual edits.';
+                    $retry['added'] .= '. ⚠️ Still above 1.5% — manual edits needed.';
                 }
                 $retry['density_before'] = $density_before;
                 return $retry;

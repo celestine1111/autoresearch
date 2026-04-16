@@ -16,6 +16,30 @@
 
 ---
 
+## v1.5.71 — Centralized bullet cleanup, keyword density 2-pass with depth guard
+
+**Date:** 2026-04-16
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Centralized markdown cleanup in rest_inject_fix** — `seobetter.php::cleanup_ai_markdown()` line **~1447**
+  - Previous: per-method `•` → `- ` regexes in Content_Injector were inconsistent and missed inline bullets (`• item1 • item2` on one line)
+  - New: single `cleanup_ai_markdown()` method runs on ALL inject-fix output BEFORE Content_Formatter. Handles: inline bullet splitting, line-start bullet conversion, stray HTML tag stripping, blank line collapsing
+  - Called from `rest_inject_fix()` at line ~1408
+  - Verify: `grep -n 'cleanup_ai_markdown' seobetter/seobetter.php`
+
+- **Keyword density: auto-retry with depth guard** — `includes/Content_Injector.php::optimize_keyword_placement()` line **~990**
+  - Previous: auto-retry had no recursion depth limit (could loop infinitely if AI kept landing at 3-4%), and threshold was > 2.0% (missed 1.5-2.0% range)
+  - New: `$depth` parameter (max 1 = 2 passes total), triggers whenever `density_after > 1.5%` (not > 2.0%), reports full journey "8% → 5% → 1.2% (2 passes)"
+  - Verify: `grep -n 'depth' seobetter/includes/Content_Injector.php | head -5`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.70 — Readability list fix, keyword density auto-retry, "changes applied" banner
 
 **Date:** 2026-04-16
