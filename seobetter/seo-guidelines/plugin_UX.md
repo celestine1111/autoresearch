@@ -165,9 +165,11 @@ Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validat
 6. **Simplify Readability** (+10 pts) — AI rewrites sections with Flesch-Kincaid grade > 8 to grade 7. Breaks long sentences, swaps complex words ("use" not "utilize"), converts to active voice. Preserves all facts, citations, links. Per SEO-GEO-AI-GUIDELINES §5: targets grade 6-8.
 7. **Optimize Keyword Density** (+10 pts) — AI replaces excess keyword mentions with pronouns/variations. Target: reduce from >1.5% to ~1.0%. Keeps first-paragraph keyword + H2 heading keywords. Auto-retries once if still above 1.5%. Per SEO-GEO-AI-GUIDELINES §5A.
 
-#### FLAG FIXES (3 buttons — show issues, user edits manually)
-8. **Check Pronoun Starts** (+8 pts) — Lists each paragraph starting with It/This/They/These/Those/He/She/We with the violating word
-9. **Check Section Openings** (+8 pts) — Lists H2 headings whose first paragraph isn't 30-70 words
+#### REWRITE FIXES (continued)
+8. **Fix Section Openings** (+8 pts) — v1.5.80+: converted from flag-mode to inject-mode. AI rewrites short section openers (< 30 words) to 40-60 words that directly answer the heading question. Per SEO-GEO-AI-GUIDELINES §3.2b. Caps at 4 rewrites per click to stay within timeout.
+
+#### FLAG FIXES (2 buttons — show issues, user edits manually)
+9. **Check Pronoun Starts** (+8 pts) — Lists each paragraph starting with It/This/They/These/Those/He/She/We with the violating word
 10. **Check AI Patterns** (+4 pts) — Lists Tier-1/Tier-2 AI red-flag words found in the article
 
 - Each card: icon + label + description + impact badge + button

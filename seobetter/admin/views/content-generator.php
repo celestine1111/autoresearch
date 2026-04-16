@@ -985,7 +985,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             // FLAG fixes (show issues, user edits manually)
             if (c.readability && c.readability.score < 70) fixes.push({id:'readability', label:'Simplify Readability', desc:'Grade '+((c.readability.flesch_grade||'?'))+' is too complex. Runs an AI pass to rewrite over-complex sections to grade 7 while preserving every fact and citation.', icon:'editor-spellcheck', impact:'+10 pts', mode:'inject'});
             if (c.island_test && c.island_test.score < 80) fixes.push({id:'island', label:'Check Pronoun Starts', desc:c.island_test.detail+'. Shows which paragraphs to fix manually.', icon:'editor-removeformatting', impact:'+8 pts', mode:'flag'});
-            if (c.section_openings && c.section_openings.score < 70) fixes.push({id:'openers', label:'Check Section Openings', desc:c.section_openings.detail+'. Shows which sections need better openers.', icon:'editor-paragraph', impact:'+8 pts', mode:'flag'});
+            if (c.section_openings && c.section_openings.score < 70) fixes.push({id:'openers', label:'Fix Section Openings', desc:c.section_openings.detail+'. Rewrites short openers to 40-60 words via AI.', icon:'editor-paragraph', impact:'+8 pts', mode:'inject'});
             // v1.5.11 NEW — flag-mode checks for the three new scoring dimensions
             if (c.keyword_density && c.keyword_density.score < 60) {
                 var kdDesc = (c.keyword_density.density ? 'Density '+c.keyword_density.density+'%. Target 0.5-1.5%. ' : '') + (c.keyword_density.h2_coverage ? c.keyword_density.h2_coverage+'% of H2s contain the keyword.' : 'Keyword placement needs work.');

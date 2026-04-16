@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.79
+ * Version: 1.5.80
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.79' );
+define( 'SEOBETTER_VERSION', '1.5.80' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1342,6 +1342,12 @@ final class SEOBetter {
                 $result = SEOBetter\Content_Injector::flag_pronouns( $markdown );
                 return new \WP_REST_Response( $result );
             case 'openers':
+                // v1.5.80 — converted from flag-mode to inject-mode.
+                // Now rewrites short section openers to 40-60 words via AI.
+                $result = SEOBetter\Content_Injector::fix_openers( $markdown, $keyword );
+                break;
+            case 'openers_flag':
+                // Legacy flag-mode still available if explicitly requested
                 $result = SEOBetter\Content_Injector::flag_openers( $markdown );
                 return new \WP_REST_Response( $result );
             // v1.5.67 — three missing flag handlers that were wired in the UI

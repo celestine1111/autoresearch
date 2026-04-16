@@ -16,6 +16,53 @@
 
 ---
 
+## v1.5.80 — All individual buttons now use Perplexity Sonar + openers converted to inject
+
+**Date:** 2026-04-17
+**Commit:** `[pending]`
+
+### Changed
+
+- **call_sonar_research() made public + cached** — `includes/Content_Injector.php` line **~1207**
+  - Made public so every inject button can call it (not just optimize_all)
+  - 5-minute WordPress transient cache — first button click hits Sonar, subsequent reuse cache
+  - Verify: `grep -n 'seobetter_sonar_' seobetter/includes/Content_Injector.php`
+
+- **inject_citations: Sonar-first** — `includes/Content_Injector.php::inject_citations()` line **~45**
+  - Calls Sonar first for real article URLs, merges with existing pool
+  - Falls back to Citation_Pool::build() only if Sonar returns nothing
+  - Verify: `grep -n 'call_sonar_research' seobetter/includes/Content_Injector.php | head -5`
+
+- **inject_quotes: Sonar-first, no more DEV.to junk** — `includes/Content_Injector.php::inject_quotes()` line **~255**
+  - Sonar returns real professional quotes from live web search
+  - Fallback filters out April Fools, challenges, giveaways, contests
+  - User report: "pulls crap not related — April Fools Challenge TEA-RRIFIC prizes"
+  - Verify: `grep -n 'april fool' seobetter/includes/Content_Injector.php`
+
+- **inject_table: Sonar-first for real product data** — `includes/Content_Injector.php::inject_table()` line **~326**
+  - Tries Sonar table_data first (real products, real specs)
+  - Falls back to AI generation only if Sonar has no table data
+  - Verify: `grep -n 'Sonar — real product data' seobetter/includes/Content_Injector.php`
+
+### Added
+
+- **fix_openers: inject-mode section opener fix** — `includes/Content_Injector.php::fix_openers()` line **~675**
+  - Previous: flag-only mode just showed which openers were short — didn't fix anything
+  - New: AI rewrites short openers (< 30 words) to 40-60 words that answer the heading
+  - Caps at 4 rewrites per click to stay within PHP timeout
+  - Button label changed from "Check Section Openings" to "Fix Section Openings" with inject mode
+  - Verify: `grep -n 'fix_openers' seobetter/includes/Content_Injector.php`
+
+### Guideline updates (same commit)
+
+- **plugin_UX.md** §3.4 — Openers moved from flag to rewrite, flag section reduced to 2 buttons
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.78 — Optimize All: single Sonar call + sequential fixes + progress bar
 
 **Date:** 2026-04-17

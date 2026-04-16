@@ -43,16 +43,28 @@ class Content_Injector {
      *      the matching #ref-N entry in the References section.
      */
     public static function inject_citations( string $content, string $keyword, array $existing_pool = [] ): array {
-        // v1.5.76 — use existing pool from original generation if available.
-        // The original generation builds the pool during the trends step with
-        // full context (keyword + category + country + Vercel research). The
-        // inject button only has the keyword, so its fresh pool is weaker.
-        // User reported "it worked during generation but Add Citations says
-        // 0 sources" — because the button rebuilt from scratch.
-        if ( ! empty( $existing_pool ) ) {
-            $pool = $existing_pool;
-        } else {
-            // Fallback: build fresh pool (less context, may be weaker)
+        // v1.5.80 — Sonar-first citation sourcing. Perplexity Sonar does
+        // a live web search and returns real article URLs with titles.
+        // This replaces the fragile DDG scraping + topical filter pipeline.
+        $pool = $existing_pool;
+
+        // Try Sonar first — best source of real, current URLs
+        $sonar = self::call_sonar_research( $keyword );
+        if ( $sonar && ! empty( $sonar['citations'] ) ) {
+            foreach ( $sonar['citations'] as $sc ) {
+                if ( empty( $sc['url'] ) ) continue;
+                if ( ! Citation_Pool::passes_hygiene_public( $sc['url'] ) ) continue;
+                $pool[] = [
+                    'url'         => $sc['url'],
+                    'title'       => $sc['title'] ?? '',
+                    'source_name' => $sc['source_name'] ?? wp_parse_url( $sc['url'], PHP_URL_HOST ),
+                    'verified_at' => time(),
+                ];
+            }
+        }
+
+        // Fallback: try existing pool or fresh Citation_Pool build
+        if ( empty( $pool ) ) {
             $pool = Citation_Pool::build( $keyword );
         }
 
@@ -241,45 +253,49 @@ class Content_Injector {
      * (not a fake quote) only when zero real quotes exist.
      */
     public static function inject_quotes( string $content, string $keyword ): array {
-        // Pull real quotes from Vercel research data
-        $research = Trend_Researcher::research( $keyword );
-        $real_quotes = $research['quotes'] ?? [];
-
-        // Also check for Reddit discussions in trending data
-        $trending = $research['trends'] ?? [];
-
+        // v1.5.80 — Sonar-first expert quotes. Perplexity Sonar returns
+        // real professional quotes from live web search — no more DEV.to
+        // April Fools or random Reddit noise. Sonar searches for actual
+        // expert commentary on the topic.
         $quotes = [];
-        foreach ( $real_quotes as $q ) {
-            if ( ! is_array( $q ) || empty( $q['text'] ) ) continue;
-            $text = trim( $q['text'] );
-            if ( strlen( $text ) < 20 ) continue;
-            // Cap at 200 chars for readability
-            if ( strlen( $text ) > 200 ) $text = substr( $text, 0, 197 ) . '...';
-            $source = $q['source'] ?? 'Online discussion';
-            $url = $q['url'] ?? '';
-            // Format as attributed quote with source
-            $formatted = "\"{$text}\" — {$source}";
-            if ( $url ) {
-                $formatted .= " ([source]({$url}))";
+
+        $sonar = self::call_sonar_research( $keyword );
+        if ( $sonar && ! empty( $sonar['quotes'] ) ) {
+            foreach ( $sonar['quotes'] as $q ) {
+                if ( ! is_array( $q ) || empty( $q['text'] ) ) continue;
+                $text = trim( $q['text'] );
+                if ( strlen( $text ) < 20 || strlen( $text ) > 300 ) continue;
+                $source = $q['source'] ?? 'Industry expert';
+                $url = $q['url'] ?? '';
+                $formatted = "\"{$text}\" — {$source}";
+                if ( $url ) $formatted .= " ([source]({$url}))";
+                $quotes[] = $formatted;
+                if ( count( $quotes ) >= 3 ) break;
             }
-            $quotes[] = $formatted;
-            if ( count( $quotes ) >= 3 ) break;
         }
 
-        // Fallback: extract quotable snippets from trending discussions
-        if ( count( $quotes ) < 2 ) {
-            foreach ( $trending as $t ) {
-                if ( ! is_string( $t ) ) continue;
-                // Trending items look like: "Title text" — 45 upvotes in r/dogs
-                if ( preg_match( '/^"(.{20,150})".*?—\s*(.+)$/u', $t, $m ) ) {
-                    $quotes[] = "\"{$m[1]}\" — {$m[2]}";
-                    if ( count( $quotes ) >= 3 ) break;
-                }
+        // Fallback: Vercel research (Reddit, Wikipedia, social)
+        if ( empty( $quotes ) ) {
+            $research = Trend_Researcher::research( $keyword );
+            $real_quotes = $research['quotes'] ?? [];
+            foreach ( $real_quotes as $q ) {
+                if ( ! is_array( $q ) || empty( $q['text'] ) ) continue;
+                $text = trim( $q['text'] );
+                if ( strlen( $text ) < 20 ) continue;
+                if ( strlen( $text ) > 200 ) $text = substr( $text, 0, 197 ) . '...';
+                $source = $q['source'] ?? 'Online discussion';
+                $url = $q['url'] ?? '';
+                // Skip obvious junk: April Fools, challenges, giveaways, unrelated
+                if ( preg_match( '/april fool|challenge|giveaway|prize|contest/i', $text ) ) continue;
+                $formatted = "\"{$text}\" — {$source}";
+                if ( $url ) $formatted .= " ([source]({$url}))";
+                $quotes[] = $formatted;
+                if ( count( $quotes ) >= 3 ) break;
             }
         }
 
         if ( empty( $quotes ) ) {
-            return [ 'success' => false, 'error' => 'No real quotes found in research data for this keyword. The research endpoint returned zero quotable content from Reddit, Wikipedia, Bluesky, Mastodon, or HN.' ];
+            return [ 'success' => false, 'error' => 'No relevant expert quotes found for this keyword. Neither Perplexity Sonar nor the research endpoint returned usable quotes.' ];
         }
 
         // Insert quotes after H2 headings (skip Key Takeaways and FAQ)
@@ -305,12 +321,49 @@ class Content_Injector {
     }
 
     /**
-     * Add a comparison table — inserts after the first content H2.
+     * v1.5.80 — Sonar-first comparison table. Tries Perplexity Sonar for
+     * real product data first. Falls back to AI generation if Sonar has
+     * no table data or no OpenRouter key.
      */
     public static function inject_table( string $content, string $keyword ): array {
+        // Try Sonar for real product data first
+        $sonar = self::call_sonar_research( $keyword );
+        if ( $sonar && ! empty( $sonar['table_data']['columns'] ) && ! empty( $sonar['table_data']['rows'] ) ) {
+            $cols = $sonar['table_data']['columns'];
+            $rows = $sonar['table_data']['rows'];
+            $table = '| ' . implode( ' | ', $cols ) . " |\n";
+            $table .= '|' . str_repeat( '---|', count( $cols ) ) . "\n";
+            foreach ( array_slice( $rows, 0, 6 ) as $row ) {
+                while ( count( $row ) < count( $cols ) ) $row[] = '';
+                $table .= '| ' . implode( ' | ', array_slice( $row, 0, count( $cols ) ) ) . " |\n";
+            }
+
+            // Insert the Sonar table
+            $injected = $content;
+            if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $content, $m, PREG_OFFSET_MATCH ) ) {
+                $injected = substr( $content, 0, $m[1][1] ) . "\n" . $table . "\n" . substr( $content, $m[1][1] );
+            } else {
+                $injected = preg_replace(
+                    '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,3})/',
+                    '$1' . "\n" . $table . "\n\n",
+                    $content,
+                    1
+                );
+            }
+            if ( $injected !== $content ) {
+                return [
+                    'success' => true,
+                    'content' => $injected,
+                    'added'   => 'Comparison table inserted (powered by Perplexity Sonar — real product data)',
+                    'type'    => 'table',
+                ];
+            }
+        }
+
+        // Fallback: AI-generated table
         $provider = AI_Provider_Manager::get_active_provider();
         if ( ! $provider ) {
-            return [ 'success' => false, 'error' => 'No AI provider configured.' ];
+            return [ 'success' => false, 'error' => 'No AI provider configured and Sonar returned no table data.' ];
         }
 
         // v1.5.75 — dynamic columns. Previous hard-coded "Price Range" column
@@ -616,6 +669,114 @@ Return ONLY the Markdown table, nothing else.";
             'fix_type' => 'openers',
             'sections' => $sections,
             'message'  => count( $sections ) . ' sections have opening paragraphs outside the 40-60 word target.',
+        ];
+    }
+
+    /**
+     * v1.5.80 — Inject-mode section opener fix. Rewrites short opening
+     * paragraphs (< 30 words) to 40-60 words using AI. Per SEO-GEO-AI-
+     * GUIDELINES §3.2b: "Every H2/H3 section MUST begin with a paragraph
+     * that directly answers the heading question."
+     */
+    public static function fix_openers( string $markdown, string $keyword ): array {
+        $provider = AI_Provider_Manager::get_active_provider();
+        if ( ! $provider ) {
+            return [ 'success' => false, 'error' => 'No AI provider configured.' ];
+        }
+
+        // Split at H2 boundaries
+        $parts = preg_split( '/(^## [^\n]+$)/m', $markdown, -1, PREG_SPLIT_DELIM_CAPTURE );
+        if ( count( $parts ) < 3 ) {
+            return [ 'success' => false, 'error' => 'No sections found.' ];
+        }
+
+        $fixed_count = 0;
+        $preamble = $parts[0];
+        $sections = [];
+        for ( $i = 1; $i < count( $parts ); $i += 2 ) {
+            $sections[] = [
+                'heading' => $parts[ $i ],
+                'body'    => $parts[ $i + 1 ] ?? '',
+            ];
+        }
+
+        // Skip structural sections
+        $skip = '/key\s*takeaway|faq|frequently|reference|quick\s*comparison/i';
+
+        foreach ( $sections as $idx => $section ) {
+            if ( preg_match( $skip, $section['heading'] ) ) continue;
+
+            // Get first paragraph (non-empty line after heading)
+            $lines = explode( "\n", ltrim( $section['body'] ) );
+            $first_para = '';
+            $first_para_line = -1;
+            foreach ( $lines as $li => $line ) {
+                $trimmed = trim( $line );
+                if ( $trimmed === '' ) continue;
+                if ( str_starts_with( $trimmed, '#' ) ) continue;
+                if ( str_starts_with( $trimmed, '!' ) ) continue; // images
+                $first_para = $trimmed;
+                $first_para_line = $li;
+                break;
+            }
+
+            if ( $first_para_line < 0 ) continue;
+            $wc = str_word_count( $first_para );
+            if ( $wc >= 30 ) continue; // Already adequate
+
+            // Rewrite this opener to 40-60 words
+            $heading_text = trim( str_replace( '##', '', $section['heading'] ) );
+            $prompt = "Rewrite this section opener to be 40-60 words. It must directly answer the heading question.\n\n"
+                . "HEADING: {$heading_text}\n"
+                . "KEYWORD: {$keyword}\n"
+                . "CURRENT OPENER ({$wc} words): {$first_para}\n\n"
+                . "RULES:\n"
+                . "- 40-60 words, directly answering the heading\n"
+                . "- Include the keyword \"{$keyword}\" naturally\n"
+                . "- Start with a specific fact or claim, NOT with the heading restated\n"
+                . "- Do NOT start with a pronoun (It, This, They, These)\n"
+                . "- Keep any existing facts, numbers, or citations from the original\n\n"
+                . "Return ONLY the rewritten paragraph. No heading, no explanation.";
+
+            $result = AI_Provider_Manager::send_request(
+                $provider['provider_id'],
+                $prompt,
+                'You are a concise SEO editor. Rewrite section openers to 40-60 words that directly answer the heading.',
+                [ 'max_tokens' => 200, 'temperature' => 0.4 ]
+            );
+
+            if ( $result['success'] && ! empty( $result['content'] ) ) {
+                $new_opener = trim( $result['content'] );
+                // Strip any accidental heading or markdown the AI added
+                $new_opener = preg_replace( '/^##?\s+[^\n]+\n/', '', $new_opener );
+                $new_opener = trim( $new_opener );
+                $new_wc = str_word_count( $new_opener );
+                if ( $new_wc >= 25 && $new_wc <= 80 ) {
+                    $lines[ $first_para_line ] = $new_opener;
+                    $sections[ $idx ]['body'] = "\n" . implode( "\n", $lines );
+                    $fixed_count++;
+                }
+            }
+
+            // Limit to 4 rewrites to stay within timeout
+            if ( $fixed_count >= 4 ) break;
+        }
+
+        if ( $fixed_count === 0 ) {
+            return [ 'success' => false, 'error' => 'No short section openers found or AI rewrite failed.' ];
+        }
+
+        // Rebuild markdown
+        $new_markdown = $preamble;
+        foreach ( $sections as $s ) {
+            $new_markdown .= $s['heading'] . $s['body'];
+        }
+
+        return [
+            'success' => true,
+            'content' => $new_markdown,
+            'added'   => $fixed_count . ' section openers expanded to 40-60 words',
+            'type'    => 'openers',
         ];
     }
 
@@ -1204,7 +1365,19 @@ Return ONLY the Markdown table, nothing else.";
      *
      * Returns structured array or null on failure.
      */
-    private static function call_sonar_research( string $keyword ): ?array {
+    /**
+     * v1.5.80 — made public + cached. Every inject button calls this,
+     * not just optimize_all. 5-minute transient cache means the first
+     * button click hits Sonar, subsequent clicks reuse the result.
+     */
+    public static function call_sonar_research( string $keyword ): ?array {
+        // Check cache first (5 min TTL — covers multiple button clicks)
+        $cache_key = 'seobetter_sonar_' . md5( strtolower( trim( $keyword ) ) );
+        $cached = get_transient( $cache_key );
+        if ( is_array( $cached ) ) {
+            return $cached;
+        }
+
         $openrouter_key = AI_Provider_Manager::get_provider_key( 'openrouter' );
         if ( empty( $openrouter_key ) ) {
             // Try legacy settings field
@@ -1286,12 +1459,17 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // Validate structure — each key should be present
-        return [
+        $result = [
             'citations'  => is_array( $parsed['citations'] ?? null ) ? $parsed['citations'] : [],
             'quotes'     => is_array( $parsed['quotes'] ?? null ) ? $parsed['quotes'] : [],
             'statistics' => is_array( $parsed['statistics'] ?? null ) ? $parsed['statistics'] : [],
             'table_data' => is_array( $parsed['table_data'] ?? null ) ? $parsed['table_data'] : [],
         ];
+
+        // Cache for 5 minutes — covers multiple button clicks on the same article
+        set_transient( $cache_key, $result, 300 );
+
+        return $result;
     }
 
     /**
