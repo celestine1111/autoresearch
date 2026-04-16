@@ -19,7 +19,7 @@
 ## v1.5.68 — Real-link citation scoring, applied-fix threshold-crossing persistence
 
 **Date:** 2026-04-16
-**Commit:** `[pending]`
+**Commit:** `dafeff8`
 
 ### Fixed
 
