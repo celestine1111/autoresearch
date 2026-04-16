@@ -1384,8 +1384,9 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                             message: result.added || 'Applied successfully'
                         };
 
-                        // Flash the ✓ briefly so the user sees the success
-                        self.textContent = '✓ ' + (result.added || 'Done');
+                        // Flash the progress bar to 100% + show ✓
+                        self.classList.add('sb-btn-done');
+                        self.innerHTML = '✓ ' + esc(result.added || 'Done');
                         self.style.background = '#22c55e';
 
                         // Build a synthetic res object preserving headlines,

@@ -314,12 +314,12 @@ Return ONLY the Markdown table, nothing else.";
         $result = AI_Provider_Manager::send_request(
             $provider['provider_id'],
             $prompt,
-            'Create a comparison table. Return ONLY the Markdown table.',
-            [ 'max_tokens' => 600, 'temperature' => 0.5 ]
+            'You are a data table generator. Return ONLY a markdown table with | separators and --- header row. No explanation, no prose.',
+            [ 'max_tokens' => 800, 'temperature' => 0.5 ]
         );
 
         if ( ! $result['success'] ) {
-            return [ 'success' => false, 'error' => $result['error'] ?? 'Failed.' ];
+            return [ 'success' => false, 'error' => 'Table generation failed: ' . ( $result['error'] ?? 'AI provider returned an error. Check your API key in Settings.' ) ];
         }
 
         $table = trim( $result['content'] );

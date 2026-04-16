@@ -16,6 +16,37 @@
 
 ---
 
+## v1.5.76b — Table error handling, Tympanus-style progress bar
+
+**Date:** 2026-04-17
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Table inject: better error message + higher token limit** — `includes/Content_Injector.php::inject_table()` line **~314**
+  - Increased max_tokens from 600 to 800 (some models truncated)
+  - Better system prompt explicitly requesting markdown table format
+  - Error message now says "Table generation failed: [reason]" instead of just "Failed"
+  - Verify: `grep -n 'Table generation failed' seobetter/includes/Content_Injector.php`
+
+### Changed
+
+- **Progress bar: Tympanus-style horizontal fill** — `admin/css/admin.css`
+  - Gradient bar fills from left to right with eased cubic-bezier timing over 25s
+  - On success: bar snaps to 100% with green tint via `.sb-btn-done` class
+  - Elapsed time counter shows "Working 5s... 10s..." so user knows duration
+  - Verify: `grep -n 'sb-btn-done' seobetter/admin/css/admin.css`
+
+### Guideline updates (same commit)
+
+- **plugin_UX.md** §3.4 — Updated progress bar spec
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.76 — Citation pool passthrough from generation to inject-fix
 
 **Date:** 2026-04-17

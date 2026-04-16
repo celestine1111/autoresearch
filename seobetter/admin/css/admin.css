@@ -188,21 +188,23 @@
     background: var(--sb-primary-hover) !important;
 }
 
-/* v1.5.75 — Loading animation for inject-fix buttons during AI processing */
+/* v1.5.76 — Progress bar loading for inject-fix buttons (Tympanus-style)
+   A colored bar slides across the button from left to right, giving the
+   user a visual sense of progress. Combined with an elapsed-time counter
+   so they know exactly how long it's been running. */
 @keyframes sb-spin {
     to { transform: rotate(360deg); }
 }
 @keyframes sb-progress-fill {
-    0% { width: 5%; }
-    15% { width: 25%; }
-    40% { width: 50%; }
-    65% { width: 70%; }
-    85% { width: 85%; }
+    0%   { width: 0%; }
+    5%   { width: 8%; }
+    15%  { width: 22%; }
+    30%  { width: 40%; }
+    50%  { width: 58%; }
+    70%  { width: 72%; }
+    85%  { width: 82%; }
+    95%  { width: 88%; }
     100% { width: 92%; }
-}
-@keyframes sb-progress-pulse {
-    0%, 100% { opacity: 0.6; }
-    50% { opacity: 1; }
 }
 .sb-spinner {
     display: inline-block;
@@ -212,15 +214,25 @@
     border-top-color: #fff;
     border-radius: 50%;
     animation: sb-spin 0.7s linear infinite;
+    flex-shrink: 0;
 }
 .sb-btn-progress-bar {
     position: absolute;
     left: 0;
     top: 0;
     height: 100%;
-    background: rgba(255,255,255,0.2);
+    background: linear-gradient(90deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.35) 100%);
     border-radius: inherit;
-    animation: sb-progress-fill 30s ease-out forwards, sb-progress-pulse 2s ease-in-out infinite;
+    animation: sb-progress-fill 25s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+    /* Subtle shine sweep effect */
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+/* When the button is done (success), fill to 100% instantly */
+.sb-btn-done .sb-btn-progress-bar {
+    width: 100% !important;
+    background: rgba(34, 197, 94, 0.3);
+    animation: none;
+    transition: width 0.3s ease;
 }
 
 .seobetter-dashboard .button.sb-btn-secondary,
