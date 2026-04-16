@@ -16,6 +16,33 @@
 
 ---
 
+## v1.5.73 — Professional list styling, indented-text-to-list cleanup
+
+**Date:** 2026-04-16
+**Commit:** `[pending]`
+
+### Changed
+
+- **Standard list CSS upgrade** — `includes/Content_Formatter.php::format_classic()` line **~800**
+  - Previous: plain `padding-left:1.5em` with no background — lists looked raw and unstyled
+  - New: light gray card background (`#f8fafc`), 3px accent left border, rounded corners, accent-colored markers with bold weight. Matches the visual weight of the styled boxes (takeaways, pros/cons)
+  - Verify: `grep -n 'f8fafc' seobetter/includes/Content_Formatter.php`
+
+- **Indented-text-to-list conversion in cleanup_ai_markdown** — `seobetter.php::cleanup_ai_markdown()` line **~1472**
+  - AI rewrites output 4-space indented text instead of `- item` lists. Markdown treats these as code blocks, losing all list styling
+  - New: regex converts `    text` (4+ spaces + text) to `- text` (markdown list item)
+  - Verify: `grep -n 'indented text' seobetter/seobetter.php`
+
+### Guideline updates (same commit)
+
+- **article_design.md** §5.6b — New section documenting standard list styling spec
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.72 — CRITICAL: Citations/Quotes scoring fix, list cleanup
 
 **Date:** 2026-04-16

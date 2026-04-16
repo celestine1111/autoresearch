@@ -215,6 +215,19 @@ Detected from paragraph text starting with "Tip:", "Pro Tip:", "Note:", "Importa
 - Font style: italic
 - Used for expert quotes and pull quotes
 
+### 5.6b Standard Lists (v1.5.73+)
+Standard `<ul>` and `<ol>` lists (not classified as Takeaways/Pros/Cons/Ingredients/References) now render with a card-style background in both preview (classic) and saved (hybrid) formats:
+
+- **Background:** `#f8fafc` (light surface gray)
+- **Left border:** 3px solid accent color — matches the visual language of blockquotes and callout boxes
+- **Border radius:** `0 8px 8px 0` (rounded right side, flat left where the border is)
+- **Padding:** `0.75em 1em 0.75em 2em` — comfortable internal spacing
+- **`li` padding-left:** `0.3em` — slight offset for readability
+- **`ul li::marker`:** accent color, `font-weight: 700`, `font-size: 1.1em` — visually prominent
+- **`ol li::marker`:** accent color, `font-weight: 700`
+
+This ensures standard lists (product variants, feeding guidelines, size options) look designed rather than raw HTML. The styling is applied via the scoped `.sb-{uid}` CSS in classic mode and inline styles in hybrid mode.
+
 ### 5.7 Tables
 - Full width, border-collapse
 - Header: accent background, white text, small caps

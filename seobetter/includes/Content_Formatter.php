@@ -797,9 +797,15 @@ class Content_Formatter {
         $css .= ".{$uid} h2{font-size:clamp(1.3em,3vw,1.6em);font-weight:700;line-height:1.3;margin:2em 0 0.75em;padding-bottom:0.4em;border-bottom:2px solid {$accent}22;color:{$accent} !important}";
         $css .= ".{$uid} h3{font-size:1.15em;font-weight:600;line-height:1.4;margin:1.5em 0 0.5em;color:#374151 !important}";
         $css .= ".{$uid} p{line-height:1.75;margin:0 0 1.25em;font-size:1.05em;color:#374151 !important;text-wrap:pretty;max-width:65ch}";
-        $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding-left:1.5em;margin:1em 0;color:#374151 !important}";
-        $css .= ".{$uid} li{margin-bottom:0.4em;color:#374151 !important}";
-        $css .= ".{$uid} ul li::marker{color:{$accent} !important;font-weight:700}";
+        // v1.5.72 — upgraded list styling. Previous basic padding-left looked
+        // unstyled in the preview. New design: rounded background card,
+        // accent left border, accent-colored bullet markers, comfortable
+        // padding. Matches the visual weight of the styled boxes (takeaways,
+        // pros/cons) without being context-specific.
+        $css .= ".{$uid} ul,.{$uid} ol{line-height:1.8;padding:0.75em 1em 0.75em 2em;margin:1em 0;color:#374151 !important;background:#f8fafc;border-left:3px solid {$accent};border-radius:0 8px 8px 0}";
+        $css .= ".{$uid} li{margin-bottom:0.5em;padding-left:0.3em;color:#374151 !important}";
+        $css .= ".{$uid} ul li::marker{color:{$accent} !important;font-weight:700;font-size:1.1em}";
+        $css .= ".{$uid} ol li::marker{color:{$accent} !important;font-weight:700}";
         $css .= ".{$uid} a{color:{$accent} !important;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}";
         $css .= ".{$uid} a:hover{text-decoration-thickness:2px}";
         $css .= ".{$uid} hr{border:none;border-top:2px solid #e5e7eb;margin:2.5em 0}";
