@@ -19,7 +19,7 @@
 ## v1.5.78 — Optimize All: single Sonar call + sequential fixes + progress bar
 
 **Date:** 2026-04-17
-**Commit:** `[pending]`
+**Commit:** `c7bd1bf`
 
 ### Added
 
