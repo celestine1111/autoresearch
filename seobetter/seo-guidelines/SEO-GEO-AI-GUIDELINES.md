@@ -468,7 +468,7 @@ This is the scoring system used by `GEO_Analyzer.php`. Each check is weighted. *
 | Section Openings | 8% | All sections have 40-60 word openers | None do |
 | Island Test | 8% | No pronoun starts | 20%+ violate |
 | Factual Density | 10% | 3+ stats per 1000 words | 0 stats |
-| Citations | 10% | 5+ real clickable links (`<a href>` or markdown `[text](url)`) — plain-text attributions shown diagnostically but NOT scored (v1.5.68) | 0 real links |
+| Citations | 10% | 5+ real `<a href>` links in the rendered HTML (v1.5.72 — now receives raw HTML, not stripped text; v1.5.68-71 were broken: always scored 0) | 0 real links |
 | Expert Quotes | 6% | 2+ attributed quotes | 0 quotes |
 | Tables | 5% | 2+ comparison tables | 0 tables |
 | Lists | 4% | 4+ lists | 0 lists |

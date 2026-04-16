@@ -66,8 +66,13 @@ class GEO_Analyzer {
             'section_openings' => $skip_openers ? [ 'score' => 80, 'detail' => 'Section opener check adjusted for ' . $content_type . ' content type' ] : $this->check_section_openings( $sections ),
             'island_test'      => $this->check_island_test( $text ),
             'factual_density'  => $this->check_factual_density( $text, $word_count ),
-            'citations'        => $this->check_citations( $text ),
-            'expert_quotes'    => $this->check_expert_quotes( $text ),
+            // v1.5.72 — pass raw HTML ($content) not stripped text ($text).
+            // v1.5.68 changed check_citations to count only real <a href> links,
+            // but it was still receiving wp_strip_all_tags output which has NO
+            // HTML tags. Citations was scoring 0 on every article. Same fix for
+            // expert_quotes — needs HTML to find <blockquote> and styled quotes.
+            'citations'        => $this->check_citations( $content ),
+            'expert_quotes'    => $this->check_expert_quotes( $content ),
             'tables'           => $this->check_tables( $content ),
             'lists'            => $this->check_lists( $content ),
             'freshness'        => $this->check_freshness_signal( $content ),
@@ -413,12 +418,30 @@ class GEO_Analyzer {
     }
 
     /**
-     * Check for expert quotes.
+     * v1.5.72 — Check for expert quotes in HTML content.
+     *
+     * Now receives raw HTML (not stripped text) so it can detect:
+     * 1. <blockquote> tags (injected by Content_Formatter for quotes)
+     * 2. Smart-quoted text "..." (U+201C/U+201D — what AI models output)
+     * 3. Straight-quoted text "..." (legacy)
+     * 4. Attribution patterns: — Name, Title (em dash + proper noun)
      */
-    private function check_expert_quotes( string $text ): array {
-        // Match quoted text
-        preg_match_all( '/"[^"]{20,}"/', $text, $matches );
-        $count = count( $matches[0] );
+    private function check_expert_quotes( string $content ): array {
+        $count = 0;
+
+        // Count <blockquote> tags — Content_Formatter wraps expert quotes in these
+        preg_match_all( '/<blockquote[\s>]/i', $content, $bq_matches );
+        $count += count( $bq_matches[0] );
+
+        // Count smart-quoted text (20+ chars) — what AI models actually output
+        $text = wp_strip_all_tags( $content );
+        preg_match_all( '/[\x{201C}"][^\x{201D}"]{20,}[\x{201D}"]/u', $text, $quote_matches );
+        $count += count( $quote_matches[0] );
+
+        // Dedupe: if blockquotes also have quoted text inside, cap the double-count
+        $count = min( $count, max( count( $bq_matches[0] ), count( $quote_matches[0] ) ) * 2 );
+        // But at minimum count the larger of the two
+        $count = max( $count, count( $bq_matches[0] ), count( $quote_matches[0] ) );
 
         $score = min( 100, $count * 50 ); // 2+ quotes = 100
 

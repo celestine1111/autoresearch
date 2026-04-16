@@ -16,6 +16,41 @@
 
 ---
 
+## v1.5.72 — CRITICAL: Citations/Quotes scoring fix, list cleanup
+
+**Date:** 2026-04-16
+**Commit:** `[pending]`
+
+### Fixed
+
+- **CRITICAL: check_citations always scored 0** — `includes/GEO_Analyzer.php::analyze()` line **~69**
+  - Root cause: v1.5.68 changed check_citations to count `<a href>` tags, but analyze() was passing `wp_strip_all_tags($content)` which has NO HTML tags. Both regexes (HTML and markdown) returned 0 on every article since v1.5.68.
+  - Fix: pass raw `$content` (HTML) to check_citations and check_expert_quotes instead of `$text` (stripped)
+  - Impact: Citations (10% weight) was stuck at 0 for 4 versions. This alone cost ~10 points on every score.
+  - Verify: `grep -n "check_citations.*content" seobetter/includes/GEO_Analyzer.php`
+
+- **check_expert_quotes: smart quote support** — `includes/GEO_Analyzer.php::check_expert_quotes()` line **~423**
+  - Previous: regex only matched straight quotes `"text"` — AI models output smart quotes `\u201Ctext\u201D` which never matched
+  - New: counts `<blockquote>` tags (Content_Formatter wraps quotes in these) + smart-quoted text (U+201C/U+201D)
+  - Impact: Expert Quotes (6% weight) was stuck at 0 for most articles. Another ~6 points recovered.
+  - Verify: `grep -n 'blockquote' seobetter/includes/GEO_Analyzer.php | head -3`
+
+- **cleanup_ai_markdown: preserve list structure** — `seobetter.php::cleanup_ai_markdown()` line **~1467**
+  - Previous: `<li>` tags were stripped to empty string, losing list structure
+  - New: `<li>` → `\n- ` (markdown list item), `<br>` → `\n`, then strip remaining wrapper tags
+  - User report: "has removed styling after button presses" — lists appeared as unstyled inline text
+  - Verify: `grep -n '<li' seobetter/seobetter.php | head -3`
+
+### Guideline updates (same commit)
+
+- **SEO-GEO-AI-GUIDELINES.md** §6 — Citations row updated to note v1.5.68-71 were broken, v1.5.72 fixed
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.71 — Centralized bullet cleanup, keyword density 2-pass with depth guard
 
 **Date:** 2026-04-16

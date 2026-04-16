@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.71
+ * Version: 1.5.72
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.71' );
+define( 'SEOBETTER_VERSION', '1.5.72' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1464,8 +1464,13 @@ final class SEOBetter {
         // 2. Convert line-starting Unicode bullets to markdown list markers
         $md = preg_replace( '/^[ \t]*[•●◦▪▸►][ \t]*/m', '- ', $md );
 
-        // 3. Strip stray HTML list/paragraph tags the AI may have introduced
-        $md = preg_replace( '/<\/?(ul|ol|li|p|br|div)[^>]*>/i', '', $md );
+        // 3. Convert HTML list items to markdown BEFORE stripping tags.
+        //    <li>text</li> → \n- text  (preserves list structure)
+        //    <br> → \n  (preserves line breaks)
+        $md = preg_replace( '/<li[^>]*>/i', "\n- ", $md );
+        $md = preg_replace( '/<br\s*\/?>/i', "\n", $md );
+        // Now strip the remaining wrapper tags (ul, ol, /li, p, div)
+        $md = preg_replace( '/<\/?(ul|ol|li|p|div)[^>]*>/i', '', $md );
 
         // 4. Collapse any resulting blank-line runs to max 2 newlines
         $md = preg_replace( '/\n{3,}/', "\n\n", $md );
