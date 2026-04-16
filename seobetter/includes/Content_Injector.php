@@ -1532,7 +1532,7 @@ Return ONLY the Markdown table, nothing else.";
                 $result = self::inject_citations( $markdown, $keyword, $merged_pool );
                 if ( $result['success'] ) {
                     $markdown = $result['content'];
-                    $steps_run[] = 'citations';
+                    $steps_run[] = 'Citations: ' . ( $result['added'] ?? 'added' );
                 } else {
                     $steps_skipped[] = 'citations: ' . ( $result['error'] ?? 'failed' );
                 }
@@ -1574,7 +1574,7 @@ Return ONLY the Markdown table, nothing else.";
                             $injected
                         );
                         $markdown = $injected;
-                        $steps_run[] = 'quotes';
+                        $steps_run[] = 'Expert Quotes: ' . count( $quotes ) . ' real quotes inserted from Sonar';
                     } else {
                         $steps_skipped[] = 'quotes: Sonar returned empty quotes';
                     }
@@ -1583,7 +1583,7 @@ Return ONLY the Markdown table, nothing else.";
                     $result = self::inject_quotes( $markdown, $keyword );
                     if ( $result['success'] ) {
                         $markdown = $result['content'];
-                        $steps_run[] = 'quotes';
+                        $steps_run[] = 'Expert Quotes: ' . ( $result['added'] ?? 'added' );
                     } else {
                         $steps_skipped[] = 'quotes: ' . ( $result['error'] ?? 'failed' );
                     }
@@ -1613,7 +1613,7 @@ Return ONLY the Markdown table, nothing else.";
                     );
                     if ( $injected !== $markdown ) {
                         $markdown = $injected;
-                        $steps_run[] = 'statistics';
+                        $steps_run[] = 'Statistics: ' . count( array_slice( $sonar['statistics'], 0, 4 ) ) . ' real stats added from Sonar';
                     } else {
                         $steps_skipped[] = 'statistics: could not find insertion point';
                     }
@@ -1621,7 +1621,7 @@ Return ONLY the Markdown table, nothing else.";
                     $result = self::inject_statistics( $markdown, $keyword );
                     if ( $result['success'] ) {
                         $markdown = $result['content'];
-                        $steps_run[] = 'statistics';
+                        $steps_run[] = 'Statistics: ' . ( $result['added'] ?? 'added' );
                     } else {
                         $steps_skipped[] = 'statistics: ' . ( $result['error'] ?? 'failed' );
                     }
@@ -1649,11 +1649,12 @@ Return ONLY the Markdown table, nothing else.";
                         $table .= '| ' . implode( ' | ', array_slice( $row, 0, count( $cols ) ) ) . " |\n";
                     }
                     // Insert before FAQ/References
+                    $table_cols = count( $cols );
+                    $table_rows_count = count( array_slice( $rows, 0, 6 ) );
                     if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $markdown, $m, PREG_OFFSET_MATCH ) ) {
                         $markdown = substr( $markdown, 0, $m[1][1] ) . "\n" . $table . "\n" . substr( $markdown, $m[1][1] );
-                        $steps_run[] = 'table';
+                        $steps_run[] = 'Comparison Table: ' . $table_rows_count . ' rows × ' . $table_cols . ' columns (real data from Sonar)';
                     } else {
-                        // Fallback: insert after first content H2
                         $injected = preg_replace(
                             '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,3})/',
                             '$1' . "\n" . $table . "\n\n",
@@ -1662,17 +1663,16 @@ Return ONLY the Markdown table, nothing else.";
                         );
                         if ( $injected !== $markdown ) {
                             $markdown = $injected;
-                            $steps_run[] = 'table';
+                            $steps_run[] = 'Comparison Table: ' . $table_rows_count . ' rows × ' . $table_cols . ' columns (real data from Sonar)';
                         } else {
                             $steps_skipped[] = 'table: no insertion point';
                         }
                     }
                 } else {
-                    // Fallback to AI-generated table
                     $result = self::inject_table( $markdown, $keyword );
                     if ( $result['success'] ) {
                         $markdown = $result['content'];
-                        $steps_run[] = 'table';
+                        $steps_run[] = 'Comparison Table: ' . ( $result['added'] ?? 'inserted' );
                     } else {
                         $steps_skipped[] = 'table: ' . ( $result['error'] ?? 'failed' );
                     }
@@ -1691,7 +1691,7 @@ Return ONLY the Markdown table, nothing else.";
                 $result = self::simplify_readability( $markdown );
                 if ( $result['success'] ) {
                     $markdown = $result['content'];
-                    $steps_run[] = 'readability';
+                    $steps_run[] = 'Readability: ' . ( $result['added'] ?? 'simplified' );
                 } else {
                     $steps_skipped[] = 'readability: ' . ( $result['error'] ?? 'not needed' );
                 }
@@ -1721,7 +1721,7 @@ Return ONLY the Markdown table, nothing else.";
                 $result = self::optimize_keyword_placement( $markdown, $keyword, 1 );
                 if ( $result['success'] ) {
                     $markdown = $result['content'];
-                    $steps_run[] = 'keyword (' . $current_density . '% → ' . ( $result['density_after'] ?? '?' ) . '%)';
+                    $steps_run[] = 'Keyword Density: ' . $current_density . '% → ' . ( $result['density_after'] ?? '?' ) . '%';
                 } else {
                     $steps_skipped[] = 'keyword: ' . ( $result['error'] ?? 'not needed' );
                 }

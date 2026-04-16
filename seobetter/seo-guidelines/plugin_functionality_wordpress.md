@@ -715,7 +715,7 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 **Score badge** in top-right of metabox header — color-coded green/amber/red.
 
-### 11.6 Analyze & Improve Fix System (v1.5.0, rewritten v1.5.78)
+### 11.6 Analyze & Improve — Single "Optimize All" Button (v1.5.83+)
 
 `includes/Content_Injector.php` provides 11 methods: 5 inject (add content), 2 rewrite (modify content), 3 flag (advisory), plus 1 orchestrator.
 

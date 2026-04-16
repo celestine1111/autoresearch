@@ -1005,88 +1005,62 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             }
         }
 
+        // v1.5.83 — Single "Optimize All" button replaces individual fix buttons.
+        // Shows a summary of what needs fixing + one button to fix everything.
         if (fixes.length > 0) {
-            h += '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">';
-            h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
-            h += '<div><h3 style="margin:0;font-size:16px;font-weight:700">Analyze &amp; Improve</h3>';
-            h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'+fixes.length+' improvements found</p></div>';
-            // v1.5.78 — Optimize All button: single click runs all fixes
-            h += '<button type="button" id="sb-optimize-all" class="button" style="height:36px;font-size:12px;padding:0 20px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;letter-spacing:0.02em;transition:all 0.2s ease">&#9889; Optimize All</button>';
-            h += '</div>';
-            // v1.5.78 — Progress panel (hidden until Optimize All is clicked)
-            h += '<div id="sb-optimize-progress" style="display:none;margin-bottom:16px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">';
-            h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-            h += '<span id="sb-opt-step-label" style="font-size:13px;font-weight:600;color:#1e293b">Starting optimization...</span>';
-            h += '<span id="sb-opt-timer" style="font-size:12px;color:#6b7280;font-variant-numeric:tabular-nums">0s</span>';
-            h += '</div>';
-            h += '<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">';
-            h += '<div id="sb-opt-bar" style="height:100%;width:0%;border-radius:3px;transition:width 0.5s cubic-bezier(0.4,0,0.2,1)"></div>';
-            h += '</div>';
-            h += '<div id="sb-opt-steps-detail" style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.6"></div>';
-            h += '</div>';
-
-            // v1.5.67 — track applied fixes across panel re-renders.
-            // v1.5.68 — also include applied fixes that have CROSSED
-            // their score threshold (i.e. no longer in the `fixes` array)
-            // so the user still sees them as "✓ Done". Previously these
-            // fixes disappeared entirely after a successful inject,
-            // which felt like the click had no effect. User reported:
-            // "i applied the first one it went grey then went green but
-            // when i scrolled it disappeared".
             window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
-            var appliedSet = window._seobetterAppliedFixes;
-
-            // Re-add any applied fixes that are no longer in the fixes[] array
-            // because their score now passes the threshold. We use a complete
-            // label map so the "Done" card shows the right title.
-            var appliedLabels = {
-                citations: { label:'Add Citations & References', icon:'admin-links', impact:'+10 pts' },
-                quotes:    { label:'Add Expert Quotes',           icon:'format-quote', impact:'+6 pts' },
-                statistics:{ label:'Add Statistics',              icon:'chart-bar',    impact:'+10 pts' },
-                table:     { label:'Add Comparison Table',        icon:'editor-table', impact:'+5 pts' },
-                freshness: { label:'Add Freshness Signal',        icon:'calendar-alt', impact:'+6 pts' },
-                readability:{ label:'Simplify Readability',       icon:'editor-spellcheck', impact:'+10 pts' },
-                keyword:   { label:'Optimize Keyword Density',    icon:'search',       impact:'+10 pts' }
-            };
-            var seenIds = {};
-            fixes.forEach(function(f) { seenIds[f.id] = true; });
-            Object.keys(appliedSet).forEach(function(appliedId) {
-                if (seenIds[appliedId]) return; // already in the fixes list
-                var meta = appliedLabels[appliedId];
-                if (!meta) return; // unknown fix id, skip
-                fixes.push({
-                    id: appliedId,
-                    label: meta.label,
-                    desc: appliedSet[appliedId].message || 'Applied',
-                    icon: meta.icon,
-                    impact: meta.impact,
-                    mode: 'inject'
-                });
-            });
-
-            fixes.forEach(function(fix, idx) {
-                var isApplied = !!appliedSet[fix.id];
-                var bgColor = isApplied ? '#f0fdf4' : '#f8fafc';
-                h += '<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:'+bgColor+';border-radius:8px;margin-bottom:8px;transition:background 0.3s ease'+(isApplied?';opacity:0.75':'')+'">';
-                h += '<span class="dashicons dashicons-'+(isApplied?'yes-alt':fix.icon)+'" style="color:'+(isApplied?'#22c55e':'#764ba2')+';font-size:20px;width:20px;height:20px;flex-shrink:0"></span>';
-                h += '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1e293b">'+fix.label+(isApplied?' <span style="color:#22c55e;font-weight:500">• Applied</span>':'')+'</div>';
-                var desc = isApplied
-                    ? (appliedSet[fix.id].message || 'Already applied to this article. Re-generate to run again.')
-                    : fix.desc;
-                h += '<div style="font-size:11px;color:#64748b;margin-top:2px">'+desc+'</div></div>';
-                h += '<span style="font-size:11px;font-weight:600;color:'+(isApplied?'#94a3b8':'#22c55e')+';white-space:nowrap;margin-right:8px">'+fix.impact+'</span>';
-                var btnLabel = isApplied ? '✓ Done' : (fix.mode === 'inject' ? 'Add now' : 'Check');
-                var btnColor = isApplied ? '#d1d5db' : (fix.mode === 'inject' ? '#764ba2' : '#6b7280');
-                var disabledAttr = isApplied ? ' disabled' : '';
-                var cursor = isApplied ? 'not-allowed' : 'pointer';
-                h += '<button type="button"'+disabledAttr+' class="button sb-improve-btn" data-fix-id="'+fix.id+'" style="height:32px;font-size:12px;padding:0 14px;background:'+btnColor+';color:#fff;border:none;border-radius:6px;cursor:'+cursor+';white-space:nowrap">'+btnLabel+'</button>';
-                h += '</div>';
-            });
-
+            var optimizeAllDone = window._seobetterAppliedFixes._optimize_all;
             var totalImpact = fixes.reduce(function(sum, f) { return sum + parseInt(f.impact) }, 0);
-            h += '<div style="margin-top:12px;padding:10px 16px;background:#f0fdf4;border-radius:8px;text-align:center">';
-            h += '<span style="font-size:12px;color:#166534">💡 Inject fixes add content without editing existing text. Check fixes show what to fix manually. Potential: <strong>+'+totalImpact+' points</strong></span>';
-            h += '</div>';
+
+            h += '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">';
+
+            if (optimizeAllDone) {
+                // Already optimized — show green summary
+                h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
+                h += '<span class="dashicons dashicons-yes-alt" style="color:#22c55e;font-size:24px;width:24px;height:24px"></span>';
+                h += '<div><h3 style="margin:0;font-size:16px;font-weight:700;color:#166534">Article Optimized</h3>';
+                h += '<p style="margin:4px 0 0;font-size:12px;color:#166534">' + esc(optimizeAllDone.message || 'All fixes applied') + '</p></div>';
+                h += '</div>';
+                // Show what was done
+                if (optimizeAllDone.steps_run && optimizeAllDone.steps_run.length) {
+                    h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
+                    optimizeAllDone.steps_run.forEach(function(step) {
+                        h += '<span style="font-size:11px;padding:3px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;color:#166534">✓ ' + esc(step) + '</span>';
+                    });
+                    h += '</div>';
+                }
+                if (optimizeAllDone.sonar_used) {
+                    h += '<div style="font-size:11px;color:#764ba2;margin-top:4px">Powered by Perplexity Sonar — real research data</div>';
+                }
+            } else {
+                // Not yet optimized — show button + what will be fixed
+                h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
+                h += '<div><h3 style="margin:0;font-size:16px;font-weight:700">Analyze &amp; Improve</h3>';
+                h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">' + fixes.length + ' improvements found — potential <strong>+' + totalImpact + ' points</strong></p></div>';
+                h += '<button type="button" id="sb-optimize-all" class="button" style="height:40px;font-size:13px;padding:0 24px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;letter-spacing:0.02em;transition:all 0.2s ease">&#9889; Optimize All</button>';
+                h += '</div>';
+
+                // Progress panel (hidden until clicked)
+                h += '<div id="sb-optimize-progress" style="display:none;margin-bottom:16px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">';
+                h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+                h += '<span id="sb-opt-step-label" style="font-size:13px;font-weight:600;color:#1e293b">Starting optimization...</span>';
+                h += '<span id="sb-opt-timer" style="font-size:12px;color:#6b7280;font-variant-numeric:tabular-nums">0s</span>';
+                h += '</div>';
+                h += '<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">';
+                h += '<div id="sb-opt-bar" style="height:100%;width:0%;border-radius:3px;transition:width 0.5s cubic-bezier(0.4,0,0.2,1)"></div>';
+                h += '</div>';
+                h += '<div id="sb-opt-steps-detail" style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.6"></div>';
+                h += '</div>';
+
+                // Summary of what will be fixed (compact pills, not individual buttons)
+                h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+                fixes.forEach(function(fix) {
+                    h += '<span style="font-size:11px;padding:4px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;color:#64748b">';
+                    h += '<span class="dashicons dashicons-' + fix.icon + '" style="font-size:13px;width:13px;height:13px;vertical-align:-2px;margin-right:3px;color:#764ba2"></span>';
+                    h += fix.label + ' <span style="color:#22c55e;font-weight:600">' + fix.impact + '</span></span>';
+                });
+                h += '</div>';
+            }
             h += '</div>';
         }
 
@@ -1543,11 +1517,15 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                         draft.geo_score = result.geo_score;
                         draft.grade = result.grade;
 
-                        // Mark all inject fixes as applied
+                        // v1.5.83 — store optimization summary for the green panel
                         window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
-                        ['citations','quotes','statistics','table','freshness','readability','keyword'].forEach(function(id) {
-                            window._seobetterAppliedFixes[id] = {applied_at:Date.now(), message:'Applied via Optimize All'};
-                        });
+                        window._seobetterAppliedFixes._optimize_all = {
+                            applied_at: Date.now(),
+                            message: result.added || 'All fixes applied',
+                            steps_run: result.steps_run || [],
+                            steps_skipped: result.steps_skipped || [],
+                            sonar_used: result.sonar_used || false
+                        };
 
                         window._seobetterLastFixMessage = result.added || 'All optimizations applied';
 
