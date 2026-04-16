@@ -44,7 +44,7 @@ Selected by the user's **Category** dropdown. All run in parallel with 6s timeou
 
 | Category (dropdown value) | APIs Called | API Count |
 |---|---|---|
-| **Animals & Pets (Trivia)** (`animals`) | FishWatch, Zoo Animals, Dog Facts, Cat Facts, MeowFacts | 5 |
+| **Animals & Pets (General)** (`animals`) | FishWatch, Zoo Animals, Dog Facts, Cat Facts, MeowFacts | 5 |
 | **Art & Design** (`art_design`) | Art Institute of Chicago, Metropolitan Museum | 2 |
 | **Blockchain** (`blockchain`) | CoinGecko, CoinCap, Mempool, Coinpaprika | 4 |
 | **Books & Literature** (`books`) | Open Library, PoetryDB, Crossref, Quotable | 4 |
@@ -67,7 +67,7 @@ Selected by the user's **Category** dropdown. All run in parallel with 6s timeou
 | **Sports & Fitness** (`sports`) | balldontlie (NBA), Ergast F1, NHL Stats, CityBikes | 4 |
 | **Technology** (`technology`) | HN Top Stories, Crossref | 2 |
 | **Transportation & Travel** (`transportation`) | OpenSky, Open Charge Map, ADS-B Exchange, CityBikes, NHTSA | 5 |
-| **Veterinary & Pet Health** (`veterinary`) — **NEW v1.5.15** | Crossref (veterinary filtered), EuropePMC, OpenAlex (vet concept), openFDA (vet scoped), Dog Facts | 5 |
+| **Veterinary & Pet Health (Research)** (`veterinary`) — **NEW v1.5.15** | Crossref (veterinary filtered), EuropePMC, OpenAlex (vet concept), openFDA (vet scoped), Dog Facts | 5 |
 | **Weather & Climate** (`weather`) | Open-Meteo, US NWS, Sunrise/Sunset, OpenAQ | 4 |
 
 #### v1.5.15 changes
@@ -75,7 +75,7 @@ Selected by the user's **Category** dropdown. All run in parallel with 6s timeou
 - **Added `veterinary` category** with 3 new academic API fetchers: `fetchCrossrefFiltered()`, `fetchEuropePMC()`, `fetchOpenAlex()` — see [cloud-api/api/research.js](../cloud-api/api/research.js) lines ~1689-1735. These return real peer-reviewed veterinary literature (Crossref subject-filtered, EuropePMC biomedical, OpenAlex topic-concept-filtered) so dog/cat/equine articles get vet-grade citations instead of cat-fact trivia.
 - **Merged `government` + `law_government`** into a single `government` entry with backwards-compat alias. The old `law_government` value still resolves to `government` for legacy clients.
 - **Relabeled `health`** to "Health & Medical (Human)" so users don't accidentally pick it for vet topics.
-- **Relabeled `animals`** to "Animals & Pets (Trivia)" so users know it's the trivia bucket, not the research bucket.
+- **Relabeled `animals`** to "Animals & Pets (General)" so users know it's the trivia bucket, not the research bucket.
 - **All 3 dropdown forms now share the same 25-category list** (was: 25 in main form, 8 in bulk + brief).
 
 ### 1.4 Country-Specific APIs (80+ countries)

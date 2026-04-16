@@ -134,7 +134,7 @@ if ( $batch_id && ! $batch ) {
                         <select name="domain">
                             <?php // v1.5.15 — keep this list IDENTICAL to content-generator.php and content-brief.php. See plugin_UX.md §9. ?>
                             <option value="general">General</option>
-                            <option value="animals">Animals &amp; Pets (Trivia)</option>
+                            <option value="animals">Animals &amp; Pets (General)</option>
                             <option value="art_design">Art &amp; Design</option>
                             <option value="blockchain">Blockchain</option>
                             <option value="books">Books &amp; Literature</option>
@@ -157,7 +157,7 @@ if ( $batch_id && ! $batch ) {
                             <option value="technology">Technology</option>
                             <option value="transportation">Transportation &amp; Logistics</option>
                             <option value="travel">Travel &amp; Tourism</option>
-                            <option value="veterinary">Veterinary &amp; Pet Health</option>
+                            <option value="veterinary">Veterinary &amp; Pet Health (Research)</option>
                             <option value="weather">Weather &amp; Climate</option>
                         </select>
                     </div>
