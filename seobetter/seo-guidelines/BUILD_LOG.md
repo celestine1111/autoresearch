@@ -19,7 +19,7 @@
 ## v1.5.80 — All individual buttons now use Perplexity Sonar + openers converted to inject
 
 **Date:** 2026-04-17
-**Commit:** `[pending]`
+**Commit:** `463a1e8`
 
 ### Changed
 
