@@ -188,9 +188,21 @@
     background: var(--sb-primary-hover) !important;
 }
 
-/* v1.5.74 — Spinner for inject-fix buttons during AI processing */
+/* v1.5.75 — Loading animation for inject-fix buttons during AI processing */
 @keyframes sb-spin {
     to { transform: rotate(360deg); }
+}
+@keyframes sb-progress-fill {
+    0% { width: 5%; }
+    15% { width: 25%; }
+    40% { width: 50%; }
+    65% { width: 70%; }
+    85% { width: 85%; }
+    100% { width: 92%; }
+}
+@keyframes sb-progress-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
 }
 .sb-spinner {
     display: inline-block;
@@ -200,6 +212,15 @@
     border-top-color: #fff;
     border-radius: 50%;
     animation: sb-spin 0.7s linear infinite;
+}
+.sb-btn-progress-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: rgba(255,255,255,0.2);
+    border-radius: inherit;
+    animation: sb-progress-fill 30s ease-out forwards, sb-progress-pulse 2s ease-in-out infinite;
 }
 
 .seobetter-dashboard .button.sb-btn-secondary,

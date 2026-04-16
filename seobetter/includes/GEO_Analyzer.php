@@ -383,20 +383,24 @@ class GEO_Analyzer {
      * Score is based ONLY on real links so the Analyze & Improve panel
      * correctly flags articles with no clickable sources.
      */
-    private function check_citations( string $text ): array {
-        // v1.5.68 — count real links first.
-        // Works on both markdown source and rendered HTML because we get
-        // both patterns through the same check_citations() call.
-        preg_match_all( '/(?<!!)\[[^\]]+\]\(https?:\/\/[^)]+\)/', $text, $md_links );
-        $md_count = count( $md_links[0] );
-        preg_match_all( '/<a\s+[^>]*href=["\']https?:\/\/[^"\']+["\'][^>]*>/i', $text, $html_links );
+    private function check_citations( string $content ): array {
+        // v1.5.72 — receives raw HTML ($content), not stripped text.
+        // v1.5.75 — simplified and more robust detection. Counts any
+        // <a href="http..."> in the HTML. Previous regex was too strict
+        // with quote matching and failed on some esc_url() outputs.
+
+        // Count HTML links — the primary signal. Match any <a with href containing http
+        preg_match_all( '/href\s*=\s*["\']https?:\/\//i', $content, $html_links );
         $html_count = count( $html_links[0] );
-        // Dedupe: if both run on the same HTML containing both formats,
-        // md_count may be 0 because the rendered HTML doesn't contain
-        // raw markdown links. The real link count is max of the two.
+
+        // Also count markdown links in case content is raw markdown
+        preg_match_all( '/(?<!!)\[[^\]]+\]\(https?:\/\/[^)]+\)/', $content, $md_links );
+        $md_count = count( $md_links[0] );
+
         $real_link_count = max( $md_count, $html_count );
 
         // Plain-text attribution patterns — diagnostic only, not scored.
+        $text = wp_strip_all_tags( $content );
         preg_match_all( '/\[\d+\]|\([A-Z][^)]*\d{4}\)|\[[A-Z][^\]]*\d{4}\]/', $text, $plain_matches );
         $plain_count = count( $plain_matches[0] );
 

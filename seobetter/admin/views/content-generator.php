@@ -1294,13 +1294,22 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                 if (!draft || !draft.markdown) { alert('No content to improve.'); return; }
 
                 this.disabled = true;
-                // v1.5.74 — CSS spinner + "Working..." on slow AI calls.
-                // User reported Simplify Readability and Optimize Keyword
-                // Density take a while and "people might think its not working".
-                var origWidth = this.offsetWidth;
+                // v1.5.75 — Animated progress bar inside the button.
+                // Shows a filling bar that pulses, plus elapsed time.
+                // User reported slow AI calls and "people might think
+                // its not working" with just "Working..." text.
+                var origWidth = Math.max(this.offsetWidth, 140);
                 this.style.minWidth = origWidth + 'px';
-                this.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px"><span class="sb-spinner"></span>Working...</span>';
+                this.style.position = 'relative';
+                this.style.overflow = 'hidden';
+                this.innerHTML = '<span class="sb-btn-progress-bar"></span><span style="position:relative;z-index:1;display:inline-flex;align-items:center;gap:6px"><span class="sb-spinner"></span><span class="sb-btn-timer">Working 0s</span></span>';
                 var self = this;
+                var startTime = Date.now();
+                var timerEl = this.querySelector('.sb-btn-timer');
+                var timerInterval = setInterval(function() {
+                    var elapsed = Math.round((Date.now() - startTime) / 1000);
+                    if (timerEl) timerEl.textContent = 'Working ' + elapsed + 's';
+                }, 1000);
 
                 // Use inject-fix endpoint (inject-only, never rewrites)
                 api('inject-fix', 'POST', {
@@ -1309,6 +1318,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     keyword: draft.keyword,
                     accent_color: draft.accent_color
                 }).then(function(result) {
+                    clearInterval(timerInterval);
                     if (result.type === 'flag') {
                         // Flag-only fix — show suggestions, don't edit content
                         self.textContent = 'See below';
@@ -1420,6 +1430,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                         }
                     }
                 }).catch(function(err) {
+                    clearInterval(timerInterval);
                     self.disabled = false;
                     self.textContent = 'Error';
                     self.style.background = '#ef4444';

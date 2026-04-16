@@ -289,18 +289,20 @@ Rules:
             return [ 'success' => false, 'error' => 'No AI provider configured.' ];
         }
 
+        // v1.5.75 — dynamic columns. Previous hard-coded "Price Range" column
+        // was empty when the AI didn't know the pricing (e.g. Black Hawk puppy
+        // food had "-0" in the price column). Now: AI decides which columns
+        // are relevant. Only include columns where every row has real data.
         $prompt = "Create a Markdown comparison table for an article about \"{$keyword}\".
 
 The table should:
 - Compare 3-5 relevant items/options related to {$keyword}
-- Have 4 columns: Name/Product, Key Feature, Price Range, Best For
-- Include specific, realistic data
+- Choose 3-4 columns that make sense for this topic (e.g. Name, Key Feature, Best For, Size, Rating)
+- ONLY include a Price column if you know the actual prices. If prices are unknown, use a different useful column instead.
+- Include specific, realistic data in EVERY cell. No empty cells, no dashes, no 'N/A'.
 - Use proper Markdown table format
 
-Return ONLY the Markdown table, nothing else. Example format:
-| Name | Key Feature | Price Range | Best For |
-|------|-------------|-------------|----------|
-| Item 1 | Feature | \$XX-\$XX | Use case |";
+Return ONLY the Markdown table, nothing else.";
 
         $result = AI_Provider_Manager::send_request(
             $provider['provider_id'],

@@ -16,6 +16,42 @@
 
 ---
 
+## v1.5.75 — Robust citation scoring, dynamic table columns, progress bar buttons
+
+**Date:** 2026-04-17
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Citation scoring: simplified robust regex** — `includes/GEO_Analyzer.php::check_citations()` line **~386**
+  - Previous strict regex `/<a\s+[^>]*href=...>` was failing on some esc_url() outputs. Simplified to `/href\s*=\s*["']https?:\/\//i` which matches any href with an http URL — much more robust
+  - This is the THIRD attempt at fixing Citations scoring (v1.5.68 broke it, v1.5.72 fixed the input, v1.5.75 fixes the regex)
+  - Verify: `grep -n 'href.*https' seobetter/includes/GEO_Analyzer.php | head -3`
+
+- **Table inject: dynamic columns, no empty cells** — `includes/Content_Injector.php::inject_table()` line **~292**
+  - Previous: hard-coded "Price Range" column was empty when AI didn't know prices (showed "-0")
+  - New: AI chooses 3-4 relevant columns for the topic. Explicit instruction: "ONLY include a Price column if you know actual prices"
+  - Verify: `grep -n 'Price column' seobetter/includes/Content_Injector.php`
+
+### Added
+
+- **Progress bar + timer on inject-fix buttons** — `admin/views/content-generator.php` line **~1289**, `admin/css/admin.css`
+  - Translucent progress bar fills from left over 30s via `@keyframes sb-progress-fill` + pulse
+  - Elapsed time counter: "Working 0s... 5s... 10s..." updates every second
+  - Timer cleared on success/failure via `clearInterval`
+  - Verify: `grep -n 'sb-btn-timer' seobetter/admin/views/content-generator.php`
+
+### Guideline updates (same commit)
+
+- **plugin_UX.md** §3.4 — Updated button loading spec with progress bar + timer
+- **SEO-GEO-AI-GUIDELINES.md** §6 — Citations row updated for v1.5.75 robust regex
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.74b — Hide Add Citations when article already has links
 
 **Date:** 2026-04-17
