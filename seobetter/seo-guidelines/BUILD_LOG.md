@@ -19,7 +19,7 @@
 ## v1.5.75 — Robust citation scoring, dynamic table columns, progress bar buttons
 
 **Date:** 2026-04-17
-**Commit:** `[pending]`
+**Commit:** `16f622e`
 
 ### Fixed
 
