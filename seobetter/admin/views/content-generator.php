@@ -1311,12 +1311,17 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     if (timerEl) timerEl.textContent = 'Working ' + elapsed + 's';
                 }, 1000);
 
-                // Use inject-fix endpoint (inject-only, never rewrites)
+                // v1.5.76 — pass citation_pool from the original generation
+                // so inject_citations can reuse it instead of rebuilding.
+                // User reported "it worked during generation but Add Citations
+                // says 0 sources" — because the button rebuilt the pool from
+                // scratch without category/country context.
                 api('inject-fix', 'POST', {
                     fix_type: fixId,
                     markdown: draft.markdown,
                     keyword: draft.keyword,
-                    accent_color: draft.accent_color
+                    accent_color: draft.accent_color,
+                    citation_pool: draft.citation_pool || []
                 }).then(function(result) {
                     clearInterval(timerInterval);
                     if (result.type === 'flag') {

@@ -42,12 +42,19 @@ class Content_Injector {
      *      a strong factual claim. Each [N] is a clickable anchor link to
      *      the matching #ref-N entry in the References section.
      */
-    public static function inject_citations( string $content, string $keyword ): array {
-        // v1.5.65 — use Citation_Pool::build() which has:
-        //   - v1.5.62 topical relevance filter (title must contain keyword token)
-        //   - v1.5.63 CACHE_VERSION bump to invalidate stale pools
-        //   - hygiene check + dedupe + length cap
-        $pool = Citation_Pool::build( $keyword );
+    public static function inject_citations( string $content, string $keyword, array $existing_pool = [] ): array {
+        // v1.5.76 — use existing pool from original generation if available.
+        // The original generation builds the pool during the trends step with
+        // full context (keyword + category + country + Vercel research). The
+        // inject button only has the keyword, so its fresh pool is weaker.
+        // User reported "it worked during generation but Add Citations says
+        // 0 sources" — because the button rebuilt from scratch.
+        if ( ! empty( $existing_pool ) ) {
+            $pool = $existing_pool;
+        } else {
+            // Fallback: build fresh pool (less context, may be weaker)
+            $pool = Citation_Pool::build( $keyword );
+        }
 
         // v1.5.66 — fallback. If the topical filter returns empty, fall back
         // to direct research sources + a lenient keyword-in-title check so

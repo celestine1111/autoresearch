@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.75
+ * Version: 1.5.76
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.75' );
+define( 'SEOBETTER_VERSION', '1.5.76' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1293,6 +1293,10 @@ final class SEOBetter {
         $markdown = $request->get_param( 'markdown' ) ?? '';
         $keyword  = sanitize_text_field( $request->get_param( 'keyword' ) ?? '' );
         $accent   = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
+        // v1.5.76 — receive the citation pool from the original generation
+        // so inject_citations can reuse it instead of rebuilding from scratch.
+        $existing_pool = $request->get_param( 'citation_pool' );
+        if ( ! is_array( $existing_pool ) ) $existing_pool = [];
 
         if ( empty( $markdown ) || empty( $fix_type ) ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => 'Missing markdown or fix_type.' ], 400 );
@@ -1301,7 +1305,7 @@ final class SEOBetter {
         // Run the appropriate fix
         switch ( $fix_type ) {
             case 'citations':
-                $result = SEOBetter\Content_Injector::inject_citations( $markdown, $keyword );
+                $result = SEOBetter\Content_Injector::inject_citations( $markdown, $keyword, $existing_pool );
                 break;
             case 'quotes':
                 $result = SEOBetter\Content_Injector::inject_quotes( $markdown, $keyword );

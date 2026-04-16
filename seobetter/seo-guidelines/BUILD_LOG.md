@@ -16,6 +16,24 @@
 
 ---
 
+## v1.5.76 — Citation pool passthrough from generation to inject-fix
+
+**Date:** 2026-04-17
+**Commit:** `[pending]`
+
+### Fixed
+
+- **inject_citations reuses original generation pool** — `includes/Content_Injector.php::inject_citations()` line **~45**, `seobetter.php::rest_inject_fix()` line **~1291**, `admin/views/content-generator.php` AJAX call
+  - Root cause: initial generation builds pool with full context (keyword + category + country + Vercel research) → finds 4+ URLs. But "Add Citations" button rebuilt pool from scratch with just keyword → got 0 results.
+  - Fix: JS now passes `draft.citation_pool` through the AJAX call. REST endpoint receives it and passes to inject_citations. inject_citations uses existing pool when available, falls back to fresh build only when empty.
+  - Verify: `grep -n 'existing_pool' seobetter/includes/Content_Injector.php`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.75 — Robust citation scoring, dynamic table columns, progress bar buttons
 
 **Date:** 2026-04-17
