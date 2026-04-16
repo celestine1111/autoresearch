@@ -715,21 +715,42 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 **Score badge** in top-right of metabox header — color-coded green/amber/red.
 
-### 11.6 Inject-Only Fix System (v1.5.0)
+### 11.6 Analyze & Improve Fix System (v1.5.0, rewritten v1.5.78)
 
-`includes/Content_Injector.php` provides 8 fix methods that NEVER edit existing content.
+`includes/Content_Injector.php` provides 11 methods: 5 inject (add content), 2 rewrite (modify content), 3 flag (advisory), plus 1 orchestrator.
+
+**"⚡ Optimize All" — single-click orchestrator (v1.5.78):**
+- `optimize_all($markdown, $keyword, $existing_pool, $scores)` — runs all 6 fixes below in one pass
+- Step 0: ONE Perplexity Sonar call via `call_sonar_research()` → returns `{citations, quotes, statistics, table_data}` as structured JSON from live web search
+- Steps 1-4: injects research data from Sonar (or falls back to existing methods if no OpenRouter key)
+- Steps 5-6: AI rewrites (readability, keyword density) via user's configured AI provider
+- Checks score thresholds — skips fixes already passing
+- Each step has try/catch — failures don't abort the pipeline
+- Format/score runs ONCE at the end (not per-step)
 
 **5 Inject Methods (additive — append/insert new content):**
-1. `inject_citations()` — fetches real URLs from Vercel research API, appends `## References` section
-2. `inject_quotes()` — v1.5.77: pulls REAL quotes from Vercel research data (Reddit discussions, Wikipedia definitions, Bluesky/Mastodon posts). Zero hallucinated quotes. Inserts as attributed blockquotes after H2 headings (skips Key Takeaways/FAQ/References). Falls back to trending discussion snippets when direct quotes are unavailable.
-3. `inject_table()` — AI generates 4-column markdown table, inserts after first content H2
-4. `inject_freshness()` — Prepends `Last Updated: [Month Year]` to article top
-5. `inject_statistics()` — Pulls real stats from research API or AI fallback, inserts `**Key Statistics:**` callout
+1. `inject_citations($content, $keyword, $existing_pool)` — uses Citation Pool (DDG/Brave/Reddit/HN/Wikipedia) or Sonar-provided URLs. Appends `## References` section + inline `[N]` anchor links. Zero hallucinated URLs — every link traces to a real web search result.
+2. `inject_quotes($content, $keyword)` — v1.5.77+: pulls REAL quotes from Vercel research data (Reddit discussions, Wikipedia definitions, Bluesky/Mastodon posts). Zero hallucinated names/orgs. Each quote has real source attribution + URL. When used via `optimize_all()`, quotes come from the Sonar call instead.
+3. `inject_table($content, $keyword)` — AI generates markdown comparison table with dynamic columns (v1.5.75: no longer hardcodes Price Range). When used via `optimize_all()`, table data comes from Sonar with real product specs.
+4. `inject_freshness($content)` — Prepends `Last Updated: [Month Year]` to article top. Skips if already present.
+5. `inject_statistics($content, $keyword)` — Pulls real stats from Vercel research API or AI fallback. When used via `optimize_all()`, stats come from Sonar with real source attributions.
+
+**2 Rewrite Methods (modify existing content via AI):**
+6. `simplify_readability($markdown)` — AI rewrites sections with Flesch-Kincaid grade > 8 to grade 7. Breaks long sentences, swaps complex words for simpler ones ("use" not "utilize"), converts to active voice. Preserves all facts, citations, links, structural elements. Per SEO-GEO-AI-GUIDELINES §5: targets grade 6-8 for maximum GEO visibility.
+7. `optimize_keyword_placement($markdown, $keyword, $depth)` — AI replaces excess keyword mentions with pronouns/variations to reduce density from >1.5% to ~1.0%. Keeps first-paragraph keyword (AIOSEO/Yoast check this) and H2 heading keywords (30%+ rule). Auto-retries once if density > 1.5% after first pass (`$depth` parameter, max 2 passes). Per SEO-GEO-AI-GUIDELINES §5A: prevents -9% AI visibility penalty from keyword stuffing.
 
 **3 Flag Methods (read-only — show issues, never edit):**
-6. `flag_readability()` — returns long sentences (>25 words) + complex words with simpler replacements
-7. `flag_pronouns()` — returns paragraphs starting with It/This/They/These/Those/He/She/We
-8. `flag_openers()` — returns H2 headings whose first paragraph isn't 30-70 words
+8. `flag_readability()` — returns long sentences (>25 words) + complex words with simpler replacements
+9. `flag_pronouns()` — returns paragraphs starting with It/This/They/These/Those/He/She/We
+10. `flag_openers()` — returns H2 headings whose first paragraph isn't 30-70 words
+
+**Perplexity Sonar integration (v1.5.78):**
+- `call_sonar_research($keyword)` — private method, one call to OpenRouter with `perplexity/sonar` model
+- Prompt requests structured JSON with 4 categories: citations (real URLs), quotes (real attributed quotes), statistics (real numbers with sources), table_data (real product comparisons)
+- Auto-discovers OpenRouter key from `AI_Provider_Manager::get_provider_key('openrouter')` or `seobetter_settings['openrouter_api_key']`
+- Returns null if no key configured → each step in `optimize_all()` falls back to its existing method
+- Cost: ~$0.01-0.06 per call depending on model (`perplexity/sonar` vs `perplexity/sonar-pro`)
+- Sonar URLs pass through `Citation_Pool::passes_hygiene_public()` before entering the pool
 
 **REST endpoint (individual):** `POST /seobetter/v1/inject-fix`
 - Params: `fix_type`, `markdown`, `keyword`, `accent_color`, `citation_pool`

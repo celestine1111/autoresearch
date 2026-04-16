@@ -154,17 +154,21 @@ Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validat
   - **"Add now" (purple)** — INJECT mode: adds new content WITHOUT editing existing text
   - **"Check" (gray)** — FLAG mode: shows what to fix manually, doesn't touch content
 
-#### INJECT FIXES (5 buttons — safe, never edit existing text)
-1. **Add Citations & References** (+12 pts) — Fetches real URLs from Vercel research API (Reddit, HN, Wikipedia, DuckDuckGo) and appends a References section. Zero hallucinated links. **Hidden when article already has citations** (v1.5.74+): JS checks both the score AND whether the markdown already contains a `## References` section with `[text](url)` links, OR the HTML contains `<a href>` tags. Both must be absent for the button to appear.
-2. **Add Expert Quotes** (+8 pts) — v1.5.77: pulls REAL quotes from Vercel research data (Reddit discussions, Wikipedia definitions, social media posts). Zero hallucinated names/orgs. Each quote has a real source attribution and URL. Inserts as blockquotes after H2 sections. Skips Key Takeaways/FAQ/References.
-3. **Add Statistics** (+12 pts) — Pulls real stats from Vercel research API or generates via AI as fallback. Inserts as `**Key Statistics:**` callout block.
-4. **Add Comparison Table** (+6 pts) — AI generates a 4-column markdown table (Name, Feature, Price, Best For). Inserts after first content H2.
-5. **Add Freshness Signal** (+7 pts) — Prepends "Last Updated: [Month Year]" to top of article. Skips if already present.
+#### INJECT FIXES (5 buttons — add new content)
+1. **Add Citations & References** (+10 pts) — Uses Citation Pool (DDG/Brave/Reddit/HN/Wikipedia) or Sonar-provided URLs via `optimize_all()`. Appends `## References` section + inline `[N]` anchor links. Zero hallucinated URLs. **Hidden when article already has citations** (v1.5.74b+): JS checks both the score AND whether the markdown already has a `## References` section with links OR the HTML has `<a href>` tags.
+2. **Add Expert Quotes** (+6 pts) — v1.5.77+: pulls REAL quotes from Vercel research data (Reddit, Wikipedia, Bluesky/Mastodon). Zero hallucinated names/orgs. Each quote has real source attribution + URL. Via `optimize_all()`, quotes come from Perplexity Sonar.
+3. **Add Statistics** (+10 pts) — Pulls real stats from Vercel research API or AI fallback. Via `optimize_all()`, stats come from Sonar with real source names.
+4. **Add Comparison Table** (+5 pts) — v1.5.75+: AI generates markdown table with DYNAMIC columns (no longer hardcodes "Price Range"). Via `optimize_all()`, table data comes from Sonar with real product specs.
+5. **Add Freshness Signal** (+6 pts) — Prepends "Last Updated: [Month Year]" to top of article. Skips if already present.
+
+#### REWRITE FIXES (2 buttons — modify existing text via AI)
+6. **Simplify Readability** (+10 pts) — AI rewrites sections with Flesch-Kincaid grade > 8 to grade 7. Breaks long sentences, swaps complex words ("use" not "utilize"), converts to active voice. Preserves all facts, citations, links. Per SEO-GEO-AI-GUIDELINES §5: targets grade 6-8.
+7. **Optimize Keyword Density** (+10 pts) — AI replaces excess keyword mentions with pronouns/variations. Target: reduce from >1.5% to ~1.0%. Keeps first-paragraph keyword + H2 heading keywords. Auto-retries once if still above 1.5%. Per SEO-GEO-AI-GUIDELINES §5A.
 
 #### FLAG FIXES (3 buttons — show issues, user edits manually)
-6. **Check Readability** (+12 pts) — Lists sentences over 25 words + complex words with simpler replacements (utilize→use, facilitate→help, etc.)
-7. **Check Pronoun Starts** (+10 pts) — Lists each paragraph starting with It/This/They/These/Those/He/She/We with the violating word
-8. **Check Section Openings** (+10 pts) — Lists H2 headings whose first paragraph isn't 30-70 words
+8. **Check Pronoun Starts** (+8 pts) — Lists each paragraph starting with It/This/They/These/Those/He/She/We with the violating word
+9. **Check Section Openings** (+8 pts) — Lists H2 headings whose first paragraph isn't 30-70 words
+10. **Check AI Patterns** (+4 pts) — Lists Tier-1/Tier-2 AI red-flag words found in the article
 
 - Each card: icon + label + description + impact badge + button
 - After successful inject: button turns green "✓ [count] added", card background turns `#f0fdf4`, GEO score updates
