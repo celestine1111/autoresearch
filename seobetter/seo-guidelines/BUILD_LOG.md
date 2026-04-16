@@ -16,6 +16,33 @@
 
 ---
 
+## v1.5.74 — Loading spinner on inject-fix buttons, error messages shown
+
+**Date:** 2026-04-16
+**Commit:** `[pending]`
+
+### Added
+
+- **CSS spinner on inject-fix buttons** — `admin/views/content-generator.php` line **~1289**, `admin/css/admin.css`
+  - Previous: button said "Fixing..." as plain text during slow AI calls (Simplify Readability, Optimize Keyword Density can take 10-30s). Users thought it wasn't working.
+  - New: animated spinner + "Working..." text, button preserves its width via `minWidth` to prevent layout shift. Spinner defined as `@keyframes sb-spin` in admin.css.
+  - Verify: `grep -n 'sb-spinner' seobetter/admin/views/content-generator.php`
+
+- **Error reason shown on inject-fix failure** — `admin/views/content-generator.php` line **~1401**
+  - Previous: button just turned red "Retry" with no explanation — user had no idea why it failed
+  - New: red callout below the button shows `result.error` text (e.g. "Citation pool found 3 sources but all were stripped by the link validator")
+  - Verify: `grep -n 'result.error' seobetter/admin/views/content-generator.php`
+
+### Guideline updates (same commit)
+
+- **plugin_UX.md** §3.4 — Added loading spinner + error callout spec
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.73 — Professional list styling, indented-text-to-list cleanup
 
 **Date:** 2026-04-16

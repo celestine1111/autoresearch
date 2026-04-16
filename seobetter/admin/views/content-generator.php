@@ -1287,7 +1287,12 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                 if (!draft || !draft.markdown) { alert('No content to improve.'); return; }
 
                 this.disabled = true;
-                this.textContent = 'Fixing...';
+                // v1.5.74 — CSS spinner + "Working..." on slow AI calls.
+                // User reported Simplify Readability and Optimize Keyword
+                // Density take a while and "people might think its not working".
+                var origWidth = this.offsetWidth;
+                this.style.minWidth = origWidth + 'px';
+                this.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px"><span class="sb-spinner"></span>Working...</span>';
                 var self = this;
 
                 // Use inject-fix endpoint (inject-only, never rewrites)
@@ -1396,14 +1401,22 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                             }
                         }, 800);
                     } else {
+                        // v1.5.74 — show error reason so user knows WHY
+                        // it failed (e.g. "no pool sources" for citations)
                         self.disabled = false;
                         self.textContent = 'Retry';
                         self.style.background = '#ef4444';
+                        self.style.minWidth = '';
+                        if (result.error) {
+                            var errHtml = '<div style="margin-top:6px;padding:8px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;color:#991b1b;line-height:1.4">' + esc(result.error) + '</div>';
+                            self.parentElement.insertAdjacentHTML('afterend', errHtml);
+                        }
                     }
-                }).catch(function() {
+                }).catch(function(err) {
                     self.disabled = false;
                     self.textContent = 'Error';
                     self.style.background = '#ef4444';
+                    self.style.minWidth = '';
                 });
             });
         });

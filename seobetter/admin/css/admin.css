@@ -188,6 +188,20 @@
     background: var(--sb-primary-hover) !important;
 }
 
+/* v1.5.74 — Spinner for inject-fix buttons during AI processing */
+@keyframes sb-spin {
+    to { transform: rotate(360deg); }
+}
+.sb-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: sb-spin 0.7s linear infinite;
+}
+
 .seobetter-dashboard .button.sb-btn-secondary,
 .seobetter-dashboard .sb-btn-secondary {
     background: transparent !important;
