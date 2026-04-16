@@ -16,6 +16,47 @@
 
 ---
 
+## v1.5.69 — Inject-fix bug sweep: silent failures, scroll UX, density warnings
+
+**Date:** 2026-04-16
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Citations inject: 0-added false success** — `seobetter.php::rest_inject_fix()` line **~1388**
+  - Previous: pool URLs stripped by `validate_outbound_links()` → response still returned `success: true` with "0 citations added"
+  - New: if `refs_after === 0`, returns error with explanation that all sources were stripped by the link validator
+  - User report: "click add citations — Add Citations & References Applied, 0 citations added"
+  - Verify: `grep -n 'refs_after === 0' seobetter/seobetter.php`
+
+- **Table inject: silent failure when regex doesn't match** — `includes/Content_Injector.php::inject_table()` line **~318**
+  - Previous: if no H2 had 1-3 body lines, regex didn't match → `$injected === $content` → reported "Comparison table inserted" with unchanged content
+  - New: (a) validates AI actually returned a markdown table (`|` + `---`), (b) if primary regex fails, falls back to inserting before FAQ/References section
+  - User report: "says Add Comparison Table Applied, Comparison table inserted" but Tables score = 0
+  - Verify: `grep -n 'injected === \$content' seobetter/includes/Content_Injector.php`
+
+- **Preview scroll after inject-fix** — `admin/views/content-generator.php::renderResult()` line **~840**
+  - Previous: every `renderResult()` call scrolled to top of results panel via `scrollIntoView` — after inject-fix the user was yanked to the score ring and couldn't see content changes
+  - New: `renderResult(res, skipScroll)` — inject-fix re-renders pass `skipScroll=true` so user stays at current position
+  - User report: "i cant tell if the changes have been made in the article preview how would you know? you can only see a score change"
+  - Verify: `grep -n 'skipScroll' seobetter/admin/views/content-generator.php`
+
+- **Keyword density: no warning when still above target** — `includes/Content_Injector.php::optimize_keyword_placement()` line **~1036**
+  - Previous: reported "7.14% → 4.23%" as success even though 4.23% is still keyword stuffing (target 0.5-1.5%)
+  - New: if `density_after > 1.5%`, appends warning with how many more mentions to replace and suggests clicking again
+  - User report: density optimizer ran but score dropped from 73 to 70
+  - Verify: `grep -n 'still_high' seobetter/includes/Content_Injector.php`
+
+### Guideline updates (same commit)
+
+- **plugin_UX.md** §3.4 — Added no-scroll re-render note
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.68 — Real-link citation scoring, applied-fix threshold-crossing persistence
 
 **Date:** 2026-04-16

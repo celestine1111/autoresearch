@@ -837,7 +837,10 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
 
     function esc(s) { var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
-    function renderResult(res) {
+    // v1.5.69 — optional second param: if true, skip the scrollIntoView
+    // after rendering. Used by inject-fix re-renders so the user stays
+    // where they are instead of being yanked to the score dashboard.
+    function renderResult(res, skipScroll) {
         var score = res.geo_score || 0;
         var sc = score >= 80 ? 'good' : (score >= 60 ? 'ok' : 'poor');
         var scoreColor = score >= 80 ? '#22c55e' : (score >= 60 ? '#f59e0b' : '#ef4444');
@@ -1214,7 +1217,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
 
         resultEl.innerHTML = h;
         resultEl.style.display = 'block';
-        resultEl.scrollIntoView({ behavior:'smooth', block:'start' });
+        if (!skipScroll) resultEl.scrollIntoView({ behavior:'smooth', block:'start' });
 
         // Wire up the save button — use preventDefault to stop form submit even though
         // the button is type="button" (belt-and-braces; some browsers still bubble)
@@ -1368,9 +1371,12 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
 
                         // 800ms delay so user perceives the ✓ flash, then
                         // rebuild the entire results panel from fresh data.
+                        // v1.5.69 — pass skipScroll=true so the user
+                        // stays at their current position instead of
+                        // being yanked to the score ring at the top.
                         setTimeout(function() {
                             if (typeof renderResult === 'function') {
-                                renderResult(updatedRes);
+                                renderResult(updatedRes, true);
                             }
                         }, 800);
                     } else {

@@ -315,6 +315,13 @@ Return ONLY the Markdown table, nothing else. Example format:
 
         $table = trim( $result['content'] );
 
+        // v1.5.69 — validate that the AI actually returned a markdown table.
+        // Previous behavior: if the AI returned prose instead of a table, we'd
+        // inject random text into the article and report "Comparison table inserted".
+        if ( ! str_contains( $table, '|' ) || ! str_contains( $table, '---' ) ) {
+            return [ 'success' => false, 'error' => 'AI did not return a valid markdown table. Try again.' ];
+        }
+
         // Find first content H2 (skip Key Takeaways) and insert table after its first paragraph
         $injected = preg_replace(
             '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,3})/',
@@ -322,6 +329,19 @@ Return ONLY the Markdown table, nothing else. Example format:
             $content,
             1 // Only first match
         );
+
+        // v1.5.69 — detect silent failure: if the regex didn't match any H2
+        // with body text, $injected === $content (unchanged). Report error
+        // instead of misleading "Comparison table inserted" success.
+        if ( $injected === $content ) {
+            // Fallback: insert before the FAQ or References section instead
+            if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $content, $faq_match, PREG_OFFSET_MATCH ) ) {
+                $injected = substr( $content, 0, $faq_match[1][1] ) . "\n" . $table . "\n" . substr( $content, $faq_match[1][1] );
+            } else {
+                // Last resort: append before end
+                $injected = $content . "\n\n" . $table . "\n";
+            }
+        }
 
         return [
             'success' => true,
@@ -1033,15 +1053,28 @@ Return ONLY the Markdown table, nothing else. Example format:
         $kw_count_after = substr_count( $lower_new, strtolower( $keyword ) );
         $density_after = round( ( $kw_count_after * $kw_word_count / $new_word_count ) * 100, 2 );
 
+        // v1.5.69 — warn if density is still above the 1.5% target after
+        // the AI pass. Previously reported "7.14% → 4.23%" as if that were
+        // a success, but 4.23% is still keyword stuffing. The user needs to
+        // know it didn't fully work and may need a second pass or manual edit.
+        $still_high = $density_after > 1.5;
+        $added_msg = sprintf(
+            'Keyword density %s%% → %s%% (rewrote %d mentions as variations)',
+            $density_before,
+            $density_after,
+            max( 0, $kw_count_before - $kw_count_after )
+        );
+        if ( $still_high ) {
+            $added_msg .= sprintf(
+                '. ⚠️ Still above the 1.5%% target — click again for another pass or manually replace %d more mentions with pronouns/variations.',
+                max( 1, $kw_count_after - $target_count )
+            );
+        }
+
         return [
             'success' => true,
             'content' => $new_markdown,
-            'added'   => sprintf(
-                'Keyword density %s%% → %s%% (rewrote %d mentions as variations)',
-                $density_before,
-                $density_after,
-                max( 0, $kw_count_before - $kw_count_after )
-            ),
+            'added'   => $added_msg,
             'type'    => 'keyword',
             'density_before' => $density_before,
             'density_after'  => $density_after,

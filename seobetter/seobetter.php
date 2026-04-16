@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.68
+ * Version: 1.5.69
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.68' );
+define( 'SEOBETTER_VERSION', '1.5.69' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1388,6 +1388,14 @@ final class SEOBetter {
         if ( $fix_type === 'citations' ) {
             preg_match_all( '/^\d+\.\s+\[[^\]]+\]\(https?:\/\//m', $updated_markdown, $after_matches );
             $refs_after = count( $after_matches[0] );
+            if ( $refs_after === 0 ) {
+                // v1.5.69 — all pool URLs were stripped by validation.
+                // Return error instead of misleading "0 citations added" success.
+                return new \WP_REST_Response( [
+                    'success' => false,
+                    'error'   => 'Citation pool found ' . $refs_before . ' source(s) but all were stripped by the link validator (not in whitelist or failed content verification). Try regenerating the article — the pool may find different sources.',
+                ], 200 );
+            }
             if ( $refs_after < $refs_before ) {
                 $stripped = $refs_before - $refs_after;
                 $result['added'] = $refs_after . ' citations added ('
