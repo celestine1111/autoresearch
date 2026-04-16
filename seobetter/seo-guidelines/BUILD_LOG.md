@@ -19,7 +19,7 @@
 ## v1.5.76 — Citation pool passthrough from generation to inject-fix
 
 **Date:** 2026-04-17
-**Commit:** `[pending]`
+**Commit:** `e7216f4`
 
 ### Fixed
 
