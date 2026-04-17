@@ -1830,6 +1830,16 @@ Return ONLY the Markdown table, nothing else.";
             $steps_skipped[] = 'table: score already ' . $table_score;
         }
 
+        // ---- Step 4b: Freshness Signal ----
+        $fresh_score = $scores['freshness']['score'] ?? 0;
+        if ( $fresh_score < 100 ) {
+            $result = self::inject_freshness( $markdown );
+            if ( $result['success'] && $result['content'] !== $markdown ) {
+                $markdown = $result['content'];
+                $steps_run[] = 'Freshness: Added "Last Updated" date';
+            }
+        }
+
         // ---- Step 5: Simplify Readability (AI rewrite) ----
         $read_score = $scores['readability']['score'] ?? 0;
         if ( $read_score < 70 ) {
