@@ -165,7 +165,7 @@ Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validat
 
 #### INJECT FIXES (5 buttons — add new content)
 1. **Add Citations & References** (+10 pts) — Uses Citation Pool (DDG/Brave/Reddit/HN/Wikipedia) or Sonar-provided URLs via `optimize_all()`. Appends `## References` section + inline `[N]` anchor links. Zero hallucinated URLs. **Hidden when article already has citations** (v1.5.74b+): JS checks both the score AND whether the markdown already has a `## References` section with links OR the HTML has `<a href>` tags.
-2. **Add Expert Quotes** (+6 pts) — v1.5.77+: pulls REAL quotes from Vercel research data (Reddit, Wikipedia, Bluesky/Mastodon). Zero hallucinated names/orgs. Each quote has real source attribution + URL. Via `optimize_all()`, quotes come from Perplexity Sonar.
+2. **Add Expert Quotes** (+6 pts) — v1.5.94: SCRAPED QUOTES ONLY. Real sentences extracted from real web pages by the Vercel scraper. Each quote has exact page text + verified source URL. NO LLM fallback — if the scraper found 0 quotes for this keyword, the step is skipped entirely. Zero hallucination guarantee.
 3. **Add Statistics** (+10 pts) — Pulls real stats from Vercel research API or AI fallback. Via `optimize_all()`, stats come from Sonar with real source names.
 4. **Add Comparison Table** (+5 pts) — v1.5.75+: AI generates markdown table with DYNAMIC columns (no longer hardcodes "Price Range"). Via `optimize_all()`, table data comes from Sonar with real product specs.
 5. **Add Freshness Signal** (+6 pts) — Prepends "Last Updated: [Month Year]" to top of article. Skips if already present.

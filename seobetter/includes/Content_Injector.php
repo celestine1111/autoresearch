@@ -253,67 +253,34 @@ class Content_Injector {
      * (not a fake quote) only when zero real quotes exist.
      */
     public static function inject_quotes( string $content, string $keyword, ?array $sonar_data = null ): array {
-        // v1.5.80 — Sonar-first expert quotes. Perplexity Sonar returns
-        // real professional quotes from live web search — no more DEV.to
-        // April Fools or random Reddit noise. Sonar searches for actual
-        // expert commentary on the topic.
+        // v1.5.94 — SCRAPED QUOTES ONLY. Zero hallucination. Zero fallbacks.
+        //
+        // The ONLY source of quotes is the `sonar_data['quotes']` array,
+        // which contains REAL sentences scraped from REAL web pages by
+        // scrapeAndExtractQuotes() in research.js. Each quote has:
+        //   - text: exact sentence from the page (copy-pasted, not AI-generated)
+        //   - url: the page we fetched it from (verified real)
+        //   - source: the domain hostname
+        //
+        // NO fallbacks to: call_sonar_research(), Trend_Researcher, AI generation.
+        // If the scraper found 0 quotes → this step is SKIPPED. An article
+        // without quotes is better than an article with hallucinated quotes.
+        //
+        // Per SEO-GEO-AI-GUIDELINES.md §15: "Trust is most important signal"
+        // Per external-links-policy.md §1: only URLs from real web search
+
         $quotes = [];
 
-        // v1.5.84 — source links use the source name as anchor text per
-        // external-links-policy.md FM-8 (no vague "source"/"here"/"learn more").
-        // Format: "quote text" — [Source Name](url)
-        // This produces a clickable link with descriptive anchor text that
-        // passes the RLFKV content-word overlap check.
-        // v1.5.86 — ABSOLUTE RULE: no quote is inserted into ANY article
-        // without a verifiable source URL. No fuzzy matching, no guessing,
-        // no keyword-specific workarounds. This works for all keywords,
-        // all content types, all languages. If Sonar/research can't provide
-        // a URL with the quote, the quote is skipped.
-        //
-        // Per SEO-GEO-AI-GUIDELINES.md:
-        //   §4.6: "Full attribution required (name, title, org)"
-        //   §1: "Cite sources = +30% visibility"
-        //   §15: "Trust is most important signal"
-        // Per external-links-policy.md:
-        //   §1: "The only hyperlinks that reach a published article are URLs
-        //        retrieved from a real keyword-targeted web search"
-        //
-        // A quote without a source link is worse than no quote — it looks
-        // like hallucinated authority, which destroys E-E-A-T trust.
-
-        $sonar = $sonar_data ?? self::call_sonar_research( $keyword );
-
-        // Source 1: Sonar quotes (only those with URLs)
-        if ( $sonar && ! empty( $sonar['quotes'] ) ) {
-            foreach ( $sonar['quotes'] as $q ) {
+        if ( ! empty( $sonar_data['quotes'] ) ) {
+            foreach ( $sonar_data['quotes'] as $q ) {
                 if ( ! is_array( $q ) || empty( $q['text'] ) || empty( $q['url'] ) ) continue;
                 $text = trim( $q['text'] );
                 $url = trim( $q['url'] );
                 $source = trim( $q['source'] ?? '' );
-                // Quality filters — applies to ALL keywords
-                if ( strlen( $text ) < 20 || strlen( $text ) > 300 ) continue;
+                if ( strlen( $text ) < 30 || strlen( $text ) > 300 ) continue;
                 if ( ! preg_match( '#^https?://#', $url ) ) continue;
                 if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
-                // Skip junk content
-                if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall/i', $text ) ) continue;
-
-                $quotes[] = "\"{$text}\" — [{$source}]({$url})";
-                if ( count( $quotes ) >= 3 ) break;
-            }
-        }
-
-        // Source 2: Vercel research quotes (only those with URLs)
-        if ( count( $quotes ) < 2 ) {
-            $research = Trend_Researcher::research( $keyword );
-            foreach ( ( $research['quotes'] ?? [] ) as $q ) {
-                if ( ! is_array( $q ) || empty( $q['text'] ) || empty( $q['url'] ) ) continue;
-                $text = trim( $q['text'] );
-                $url = trim( $q['url'] );
-                $source = trim( $q['source'] ?? '' );
-                if ( strlen( $text ) < 20 || strlen( $text ) > 200 ) continue;
-                if ( ! preg_match( '#^https?://#', $url ) ) continue;
-                if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
-                if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall/i', $text ) ) continue;
+                if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
 
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
@@ -321,7 +288,7 @@ class Content_Injector {
         }
 
         if ( empty( $quotes ) ) {
-            return [ 'success' => false, 'error' => 'No relevant expert quotes found for this keyword. Neither Perplexity Sonar nor the research endpoint returned usable quotes.' ];
+            return [ 'success' => false, 'error' => 'No verifiable quotes found. The page scraper could not extract relevant sentences with source URLs for this keyword. Quotes skipped to prevent hallucination.' ];
         }
 
         // Insert quotes after H2 headings (skip Key Takeaways and FAQ)
@@ -1633,61 +1600,20 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 2: Expert Quotes ----
-        // v1.5.90 — Strip ALL hallucinated attributed quotes using a
-        // line-by-line approach. The Unicode regex kept failing due to
-        // encoding mismatches between PHP source and AI output.
-        // Simple rule: any line containing a dash followed by a capitalized
-        // attribution name, where the line has NO markdown link [](url),
-        // gets stripped. No Unicode, no fancy regex. Just string matching.
+        // v1.5.94 — SCRAPED ONLY. Strip hallucinated quotes first, then
+        // insert ONLY real scraped quotes with verified URLs. No fallback
+        // to any LLM. If scraper found 0 quotes, step is skipped.
         $markdown = self::strip_unlinked_quotes( $markdown );
 
-        $quote_score = $scores['expert_quotes']['score'] ?? 0;
-        if ( $quote_score < 100 ) {
-            try {
-                if ( $sonar && ! empty( $sonar['quotes'] ) ) {
-                    // v1.5.86 — ABSOLUTE RULE: no quote without a URL.
-                    // No fuzzy matching. Works for ALL keywords.
-                    $quotes = [];
-                    foreach ( $sonar['quotes'] as $q ) {
-                        if ( empty( $q['text'] ) || empty( $q['url'] ) ) continue;
-                        $text = trim( $q['text'] );
-                        $url = trim( $q['url'] );
-                        $source = trim( $q['source'] ?? '' );
-                        if ( strlen( $text ) < 20 || strlen( $text ) > 300 ) continue;
-                        if ( ! preg_match( '#^https?://#', $url ) ) continue;
-                        if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
-                        if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall/i', $text ) ) continue;
-                        $quotes[] = "\"{$text}\" — [{$source}]({$url})";
-                        if ( count( $quotes ) >= 3 ) break;
-                    }
-                    if ( ! empty( $quotes ) ) {
-                        $injected = $markdown;
-                        $qi = 0;
-                        $injected = preg_replace_callback(
-                            '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]*\n){2,3})/',
-                            function( $m ) use ( &$qi, $quotes ) {
-                                if ( $qi >= count( $quotes ) ) return $m[0];
-                                $q = $quotes[ $qi++ ];
-                                return $m[0] . "\n> " . $q . "\n\n";
-                            },
-                            $injected
-                        );
-                        $markdown = $injected;
-                        $steps_run[] = 'Expert Quotes: ' . count( $quotes ) . ' real quotes inserted from Sonar';
-                    } else {
-                        $steps_skipped[] = 'quotes: Sonar returned empty quotes';
-                    }
-                } else {
-                    // v1.5.91 — pass $sonar_data so fallback uses scraped
-                    // quotes, not call_sonar_research() hallucinated ones
-                    $result = self::inject_quotes( $markdown, $keyword, $sonar );
-                    if ( $result['success'] ) {
-                        $markdown = $result['content'];
-                        $steps_run[] = 'Expert Quotes: ' . ( $result['added'] ?? 'added' );
-                    } else {
-                        $steps_skipped[] = 'quotes: ' . ( $result['error'] ?? 'failed' );
-                    }
-                }
+        {
+            // Use inject_quotes which now ONLY accepts scraped data
+            $result = self::inject_quotes( $markdown, $keyword, $sonar );
+            if ( $result['success'] ) {
+                $markdown = $result['content'];
+                $steps_run[] = 'Expert Quotes: ' . ( $result['added'] ?? 'added' );
+            } else {
+                $steps_skipped[] = 'quotes: ' . ( $result['error'] ?? 'no verifiable quotes found' );
+            }
             } catch ( \Throwable $e ) {
                 $steps_skipped[] = 'quotes: ' . $e->getMessage();
             }

@@ -730,7 +730,7 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 **5 Inject Methods (additive — append/insert new content):**
 1. `inject_citations($content, $keyword, $existing_pool)` — uses Citation Pool (DDG/Brave/Reddit/HN/Wikipedia) or Sonar-provided URLs. Appends `## References` section + inline `[N]` anchor links. Zero hallucinated URLs — every link traces to a real web search result.
-2. `inject_quotes($content, $keyword)` — v1.5.77+: pulls REAL quotes from Vercel research data (Reddit discussions, Wikipedia definitions, Bluesky/Mastodon posts). Zero hallucinated names/orgs. Each quote has real source attribution + URL. When used via `optimize_all()`, quotes come from the Sonar call instead.
+2. `inject_quotes($content, $keyword, $sonar_data)` — v1.5.94: SCRAPED QUOTES ONLY. Quotes are real sentences extracted from real web pages by `scrapeAndExtractQuotes()` in research.js. Each quote has the exact text from the page + the page URL + the domain as source name. NO fallback to any LLM (Sonar, Trend_Researcher, AI generation). If the scraper found 0 quotes with URLs for this keyword, the step is SKIPPED — no quotes inserted. Zero hallucination guarantee.
 3. `inject_table($content, $keyword)` — AI generates markdown comparison table with dynamic columns (v1.5.75: no longer hardcodes Price Range). When used via `optimize_all()`, table data comes from Sonar with real product specs.
 4. `inject_freshness($content)` — Prepends `Last Updated: [Month Year]` to article top. Skips if already present.
 5. `inject_statistics($content, $keyword)` — Pulls real stats from Vercel research API or AI fallback. When used via `optimize_all()`, stats come from Sonar with real source attributions.
