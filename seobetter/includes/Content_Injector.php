@@ -1570,12 +1570,16 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 2: Expert Quotes ----
-        // v1.5.87 — FIRST remove any hallucinated quotes the AI wrote
-        // during generation. These are blockquotes with "— Name" attribution
-        // but no URL. They look authoritative but are fabricated.
-        // Pattern: > "quote text" — Some Name (no markdown link in the line)
+        // v1.5.89 — Strip ALL hallucinated attributed quotes the AI wrote.
+        // Catches BOTH formats:
+        //   > "quote text" — Name  (blockquote format)
+        //   "quote text" — Name    (paragraph format)
+        //   "quote text" — Name    (smart quotes)
+        // Only strips if the attribution has NO markdown link [Name](url).
+        // A quote with [Name](url) is verified and kept.
+        // Works for ALL keywords, ALL content types, ALL AI models.
         $markdown = preg_replace(
-            '/\n>\s*"[^"]{15,}"\s*—\s*(?!\[)[^\n]+\n\n?/',
+            '/\n>?\s*[\x{201C}""][^\x{201D}""]{15,}[\x{201D}""]\s*[\x{2014}\x{2013}—–-]\s*(?!\[)[^\n]+\n\n?/u',
             "\n",
             $markdown
         );
