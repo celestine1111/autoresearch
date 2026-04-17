@@ -1352,6 +1352,69 @@ Return ONLY the Markdown table, nothing else.";
      * v1.5.63 — Fast Flesch-Kincaid grade calculation for a text chunk.
      * Mirrors GEO_Analyzer's formula: 0.39 × (words/sentences) + 11.8 × (syllables/words) - 15.59
      */
+    /**
+     * v1.5.90 — Strip unlinked attributed quotes from markdown.
+     *
+     * Removes any paragraph that looks like an attributed quote but has
+     * no markdown link. Works line-by-line — no Unicode regex issues.
+     *
+     * Detects: "quote text" — Attribution Name
+     * Keeps:  "quote text" — [Attribution Name](https://url)
+     *
+     * Works for ALL keywords, ALL content types, ALL AI models.
+     */
+    public static function strip_unlinked_quotes( string $markdown ): string {
+        $lines = explode( "\n", $markdown );
+        $cleaned = [];
+        $skip_next_empty = false;
+
+        foreach ( $lines as $line ) {
+            $trimmed = trim( $line );
+
+            // Skip empty lines after a removed quote
+            if ( $skip_next_empty && $trimmed === '' ) {
+                $skip_next_empty = false;
+                continue;
+            }
+            $skip_next_empty = false;
+
+            // Check if this line is an attributed quote without a link:
+            // Must contain a dash character followed by a capitalized word
+            // Must NOT contain ]( which indicates a markdown link
+            $has_dash_attribution = false;
+            foreach ( [ ' — ', ' – ', ' - ' ] as $dash ) {
+                if ( strpos( $trimmed, $dash ) !== false ) {
+                    $parts = explode( $dash, $trimmed, 2 );
+                    $before = trim( $parts[0] );
+                    $after = trim( $parts[1] ?? '' );
+                    // The part before the dash should end with a quote character
+                    // and the part after should be a capitalized name (2+ words or known source)
+                    $ends_with_quote = preg_match( '/["\x{201D}\x{201C}\'\.!?]$/u', $before );
+                    $starts_with_cap = preg_match( '/^[A-Z]/', $after );
+                    if ( $ends_with_quote && $starts_with_cap && strlen( $before ) > 20 ) {
+                        $has_dash_attribution = true;
+                        break;
+                    }
+                }
+            }
+
+            if ( $has_dash_attribution ) {
+                // Check if it has a markdown link — if so, it's verified, keep it
+                if ( strpos( $trimmed, '](' ) !== false ) {
+                    $cleaned[] = $line; // Has a link — verified quote, keep
+                } else {
+                    // No link — hallucinated attribution, strip it
+                    $skip_next_empty = true; // Also skip the blank line after
+                    continue;
+                }
+            } else {
+                $cleaned[] = $line;
+            }
+        }
+
+        return implode( "\n", $cleaned );
+    }
+
     private static function calc_flesch_kincaid_grade( string $text ): float {
         // Strip markdown that isn't prose
         $text = preg_replace( '/^[#>|]+/m', '', $text );
@@ -1570,19 +1633,13 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 2: Expert Quotes ----
-        // v1.5.89 — Strip ALL hallucinated attributed quotes the AI wrote.
-        // Catches BOTH formats:
-        //   > "quote text" — Name  (blockquote format)
-        //   "quote text" — Name    (paragraph format)
-        //   "quote text" — Name    (smart quotes)
-        // Only strips if the attribution has NO markdown link [Name](url).
-        // A quote with [Name](url) is verified and kept.
-        // Works for ALL keywords, ALL content types, ALL AI models.
-        $markdown = preg_replace(
-            '/\n>?\s*[\x{201C}""][^\x{201D}""]{15,}[\x{201D}""]\s*[\x{2014}\x{2013}—–-]\s*(?!\[)[^\n]+\n\n?/u',
-            "\n",
-            $markdown
-        );
+        // v1.5.90 — Strip ALL hallucinated attributed quotes using a
+        // line-by-line approach. The Unicode regex kept failing due to
+        // encoding mismatches between PHP source and AI output.
+        // Simple rule: any line containing a dash followed by a capitalized
+        // attribution name, where the line has NO markdown link [](url),
+        // gets stripped. No Unicode, no fancy regex. Just string matching.
+        $markdown = self::strip_unlinked_quotes( $markdown );
 
         $quote_score = $scores['expert_quotes']['score'] ?? 0;
         if ( $quote_score < 100 ) {

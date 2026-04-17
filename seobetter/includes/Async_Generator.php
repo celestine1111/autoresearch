@@ -1002,6 +1002,12 @@ class Async_Generator {
             $markdown = Citation_Pool::append_references_section( $markdown, $citation_pool );
         }
 
+        // v1.5.90 — Strip hallucinated attributed quotes BEFORE formatting.
+        // Runs on EVERY article, not just after Optimize All. If the AI wrote
+        // "quote text" — Fake Name with no source link, it gets removed here
+        // so the user NEVER sees it in the preview.
+        $markdown = Content_Injector::strip_unlinked_quotes( $markdown );
+
         // Format as classic HTML for preview
         $formatter = new Content_Formatter();
         $html = $formatter->format( $markdown, 'classic', [
