@@ -1570,6 +1570,16 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 2: Expert Quotes ----
+        // v1.5.87 — FIRST remove any hallucinated quotes the AI wrote
+        // during generation. These are blockquotes with "— Name" attribution
+        // but no URL. They look authoritative but are fabricated.
+        // Pattern: > "quote text" — Some Name (no markdown link in the line)
+        $markdown = preg_replace(
+            '/\n>\s*"[^"]{15,}"\s*—\s*(?!\[)[^\n]+\n\n?/',
+            "\n",
+            $markdown
+        );
+
         $quote_score = $scores['expert_quotes']['score'] ?? 0;
         if ( $quote_score < 100 ) {
             try {

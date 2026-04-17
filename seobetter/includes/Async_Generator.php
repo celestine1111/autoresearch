@@ -379,7 +379,7 @@ class Async_Generator {
             'commercial' => "SEARCH INTENT: Commercial (user is comparing options before buying).\nSTRUCTURE: Include comparison tables with pros/cons, 'Best For' recommendations, specific pricing/features where available. Be balanced and data-driven. Include Product or Review schema signals.",
             'transactional' => "SEARCH INTENT: Transactional (user wants to buy/act now).\nSTRUCTURE: Focus on product details, pricing, features, clear calls-to-action. Be direct and action-oriented. Keep content focused (1000-2000 words). Include purchase-relevant details.",
             'navigational' => "SEARCH INTENT: Navigational (user looking for specific brand/entity).\nSTRUCTURE: Provide direct factual information about the entity. Include official sources. Keep content focused and specific (800-1500 words).",
-            default => "SEARCH INTENT: Informational (user wants to learn/understand).\nSTRUCTURE: Comprehensive guide with definitions, step-by-step explanations, expert quotes, statistics, and FAQ. Be thorough and educational.",
+            default => "SEARCH INTENT: Informational (user wants to learn/understand).\nSTRUCTURE: Comprehensive guide with definitions, step-by-step explanations, real statistics from research data, and FAQ. Be thorough and educational.",
         };
     }
 
@@ -845,7 +845,7 @@ class Async_Generator {
                 . "- Acknowledge a tradeoff, limitation, or counter-view in one sentence somewhere in the section. Use a word like 'however', 'but', 'though', 'drawback', or 'limitation'. This fires CORE-EEAT T1.\n\n"
                 . "CITATIONS + DATA RULES:\n"
                 . "- Include at least one real statistic from the RESEARCH DATA. Do NOT invent numbers.\n"
-                . "- Include at least one expert quote or named organization from the research data if available. Use real names.\n"
+                . "- If the RESEARCH DATA above contains a direct quote (text inside quotation marks with attribution), you may include it. Otherwise do NOT write any attributed quotes — no invented names, no fabricated 'Dr. X says'. Plain-text claims with organization names are fine: 'According to the RSPCA...'.\n"
                 . "- When citing a source, use a clickable Markdown link: [Source Name](URL). Use ONLY URLs that appear in the RESEARCH DATA above. If you want to mention an organization but its URL is not in the research data, link to their homepage domain only (e.g., https://www.rspca.org.au/) — NEVER invent a page path like /adopt-pet/guide because it will be a 404 error.\n"
                 . "- NEVER invent URLs, page paths, book titles, study names, or years. Every link you produce must come from the RESEARCH DATA or be a verified homepage domain.\n"
                 . "- Include 2-3 named entities (organizations, breed names, cities, experts, brands) — helps Entity Density score.\n\n"
@@ -1233,7 +1233,7 @@ KEYWORD PLACEMENT (CRITICAL FOR SEO PLUGINS):
 - IMPORTANT: Do NOT copy any density instruction numbers or ratios into the article body itself. The above is guidance for HOW YOU WRITE, not content to include in the text.
 
 GEO VISIBILITY (Princeton KDD 2024 Research — these boost AI citations):
-- Expert quotes with full attribution: name, title, organization
+- Quote ONLY text that appears in the RESEARCH DATA above. NEVER invent expert names, titles, or organizations. If no quotes exist in the research data, skip quotes entirely — plain-text claims with organization names are fine.
 - Statistics with specific numbers and a source citation: 'eighty-five percent of users prefer X (Source, Year)' — when you include a real statistic from the research data, write the number normally
 - Source attributions in plain text format: '(RSPCA, 2026)' or 'According to the AVMA' — NO hyperlinks required
 - Fluent, polished writing with smooth transitions
@@ -1345,7 +1345,7 @@ RICH FORMATTING (use these patterns naturally — the plugin auto-styles them in
 - For one interesting fact per article, start a paragraph with 'Did you know?' followed by the fact (max 1 per article)
 - When you introduce a technical term for the first time, format the definition on its own paragraph as: **Term**: explanation here. (1-2 per article)
 - For ONE key insight per major section, write the whole sentence as a single bold line on its own paragraph: **This is the most important point in this section.** (1 per H2 section, max 2 per article)
-- For expert quotes, write on their own line as: \"Quote text here\" — Dr. Name, Title, Organization
+- NEVER invent expert quotes with fabricated names like \"Dr. X, Title at Organization\". Only quote text that appears verbatim in the RESEARCH DATA above. If no real quotes exist in the research data, write plain prose instead — do not make up people.
 - Use H2 headings 'Key Takeaways', 'Pros and Cons', 'What You'll Need', or 'Key Insights' verbatim where they fit naturally — these auto-style the following list into colored boxes
 - Statistics with numbers ('78% of dogs prefer X', '3 out of 5 owners report...') are auto pulled-out into stat callouts — write them naturally inside paragraphs
 - For any claim or quote sourced from a social media post (Reddit, Hacker News, Bluesky, Mastodon, DEV.to, Lemmy), DO NOT weave it into a regular paragraph. Instead format it as a markdown blockquote with a platform marker on the first line:
