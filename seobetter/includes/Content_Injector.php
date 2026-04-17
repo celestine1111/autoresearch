@@ -1678,8 +1678,9 @@ Return ONLY the Markdown table, nothing else.";
                         $steps_skipped[] = 'quotes: Sonar returned empty quotes';
                     }
                 } else {
-                    // Fallback to existing method
-                    $result = self::inject_quotes( $markdown, $keyword );
+                    // v1.5.91 — pass $sonar_data so fallback uses scraped
+                    // quotes, not call_sonar_research() hallucinated ones
+                    $result = self::inject_quotes( $markdown, $keyword, $sonar );
                     if ( $result['success'] ) {
                         $markdown = $result['content'];
                         $steps_run[] = 'Expert Quotes: ' . ( $result['added'] ?? 'added' );
