@@ -58,7 +58,6 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
         'target_readability' => absint( $_POST['target_readability'] ?? 7 ),
         'geo_engines'        => array_map( 'sanitize_text_field', $_POST['geo_engines'] ?? [] ),
         'llms_txt_enabled'   => ! empty( $_POST['llms_txt_enabled'] ),
-        'brave_api_key'      => sanitize_text_field( $_POST['brave_api_key'] ?? '' ),
         'tavily_api_key'     => sanitize_text_field( $_POST['tavily_api_key'] ?? '' ),
         'pexels_api_key'     => sanitize_text_field( $_POST['pexels_api_key'] ?? '' ),
     ] );
@@ -314,15 +313,6 @@ $settings = get_option( 'seobetter_settings', [] );
                     </td>
                 </tr>
                 <tr>
-                    <th><?php esc_html_e( 'Brave Search API Key', 'seobetter' ); ?>
-                    </th>
-                    <td>
-                        <input type="password" name="brave_api_key" value="<?php echo esc_attr( $settings['brave_api_key'] ?? '' ); ?>" class="regular-text" placeholder="BSA..." />
-                        <a href="https://brave.com/search/api/" target="_blank" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Free Key', 'seobetter' ); ?></a>
-                        <p class="description"><?php esc_html_e( 'Pro feature. Adds real web statistics and verified sources to generated articles. 2,000 free queries/month.', 'seobetter' ); ?></p>
-                    </td>
-                </tr>
-                <tr>
                     <th><?php esc_html_e( 'Tavily API Key', 'seobetter' ); ?></th>
                     <td>
                         <input type="password" name="tavily_api_key" value="<?php echo esc_attr( $settings['tavily_api_key'] ?? '' ); ?>" class="regular-text" placeholder="tvly-..." />
@@ -508,7 +498,7 @@ $settings = get_option( 'seobetter_settings', [] );
         </div>
 
         <div style="margin:16px 0 8px;padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
-            <strong style="font-size:14px;color:#0f172a"><?php esc_html_e( '🧪 Test all research sources (Reddit / HN / DDG / Bluesky / Mastodon / Dev.to / Lemmy / Wikipedia / Google Trends / Brave / Category APIs / Last30Days)', 'seobetter' ); ?></strong>
+            <strong style="font-size:14px;color:#0f172a"><?php esc_html_e( '🧪 Test all research sources (Reddit / HN / DDG / Bluesky / Mastodon / Dev.to / Lemmy / Wikipedia / Google Trends / Tavily / Category APIs / Last30Days)', 'seobetter' ); ?></strong>
             <p class="description" style="margin:6px 0 10px">
                 <?php esc_html_e( 'Calls every always-on research source independently against the keyword "small business marketing 2026" and reports per-source ok / empty / error status plus latency. Uses Promise.allSettled in the cloud-api so one flaking source cannot block the others. Also probes the local Last30Days Python skill and reports availability.', 'seobetter' ); ?>
             </p>
@@ -836,7 +826,7 @@ jQuery(function($) {
             lines.push('Test keyword:   ' + (res.test_keyword || '?'));
             lines.push('Domain:         ' + (res.domain || 'general'));
             lines.push('Country:        ' + (res.country || '(none)'));
-            lines.push('Brave Search:   ' + (res.brave_configured ? 'CONFIGURED' : 'not configured'));
+            lines.push('Tavily Search:  ' + (res.tavily_configured ? 'CONFIGURED' : 'not configured'));
             lines.push('');
 
             // Cloud-api sources

@@ -16,6 +16,111 @@
 
 ---
 
+## v1.5.98 — Remove Brave Search settings (Tavily replaces it)
+
+**Date:** 2026-04-17
+**Commit:** `4f8d6a4`
+
+### Changes
+
+- **Removed Brave Search API Key field from Settings** — `admin/views/settings.php` line ~317
+  - Tavily Search API now handles all web search, citations, and quote extraction
+  - Brave was a Pro feature for web statistics; Tavily does the same thing better (provides full page content for real quote extraction)
+  - Verify: `grep -n 'brave_api_key' seobetter/admin/views/settings.php` (should return zero)
+
+- **Removed brave_key passing from PHP → cloud-api** — `seobetter.php::rest_test_research_sources()`, `includes/Trend_Researcher.php::cloud_research()`
+  - Without the settings field, no key is ever provided, so the passing code was dead
+  - The `searchBrave()` function in `cloud-api/api/research.js` is left intact (no-op when no key passed)
+  - Verify: `grep -n 'brave_key' seobetter/seobetter.php` (should return only comments)
+  - Verify: `grep -n 'brave_key' seobetter/includes/Trend_Researcher.php` (should return zero)
+
+- **Updated Brave references → Tavily** — settings.php test-research-sources label, content-generator.php Pro upsell text
+  - Verify: `grep -n 'Brave' seobetter/admin/views/settings.php` (should return zero in functional code)
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
+## v1.5.97 — Tavily integration, zero hallucination quotes, GEO 85+ (A grade)
+
+**Date:** 2026-04-18
+**Commit:** `247b460`
+
+### Major Changes
+
+- **Tavily Search API replaces DDG + Sonar for quotes** — `includes/Content_Injector.php::tavily_search_and_extract()`
+  - Calls Tavily directly from PHP via `wp_remote_post()` — no Vercel dependency, no timeout issues
+  - Returns real URLs + raw page content. Quotes are REAL sentences from REAL pages.
+  - Tavily API key stored in plugin Settings page (`tavily_api_key`)
+  - Zero hallucination: every quote has verified source URL from the page we fetched
+  - Verify: `grep -n 'tavily_search_and_extract' seobetter/includes/Content_Injector.php`
+
+- **Aggressive readability prompt** — `includes/Content_Injector.php::simplify_readability()`
+  - Targets 5th grade reading level with 15-word max sentences (was 18 words)
+  - Tested: grade 13.8 → 9.1 in one pass
+  - Verify: `grep -n '5th grade' seobetter/includes/Content_Injector.php`
+
+- **Keyword density prompt** — `includes/Content_Injector.php::optimize_keyword_placement()`
+  - Now says "EXACTLY N mentions" instead of "at most N"
+  - Tested: 1.81% → 0.91% (within 0.5-1.5% target)
+  - Verify: `grep -n 'EXACTLY' seobetter/includes/Content_Injector.php`
+
+- **SEOPress support added** — `seobetter.php::rest_save_draft()` line ~1257
+  - Sets `_seopress_titles_title`, `_seopress_titles_desc`, `_seopress_analysis_target_kw`
+  - Joins existing AIOSEO, Yoast, RankMath population
+  - Verify: `grep -n 'seopress' seobetter/seobetter.php`
+
+- **Freshness step in optimize_all** — `includes/Content_Injector.php::optimize_all()`
+  - "Last Updated: Month Year" now added by optimize_all (was missing)
+  - Verify: `grep -n 'inject_freshness' seobetter/includes/Content_Injector.php`
+
+- **Pass 3 RLFKV bypass for pool URLs** — `seobetter.php::verify_citation_atoms()`
+  - URLs in the trusted pool skip content verification (prevents false stripping)
+  - Verify: `grep -n 'trusted_pool' seobetter/seobetter.php`
+
+- **References section in optimize_all preview** — `seobetter.php::rest_optimize_all()`
+  - `append_references_section()` now called in optimize_all (was only at save time)
+  - Verify: `grep -n 'append_references_section' seobetter/seobetter.php`
+
+- **strip_unlinked_quotes catches lowercase hostnames** — `includes/Content_Injector.php::strip_unlinked_quotes()`
+  - Changed `[A-Z]` to `[A-Za-z]` to catch `— petcircle.com.au` format
+  - Verify: `grep -n 'A-Za-z' seobetter/includes/Content_Injector.php`
+
+### Test Results (jwum.com, 2026-04-18)
+
+8 article types tested: Comparison, How-To, Review, Listicle, Buying Guide, FAQ, Recipe, Local Places.
+
+| Metric | Score | Status |
+|---|---|---|
+| GEO Score | 85/100 (A) | ✅ |
+| Citations | 100/100 — 6 real external links | ✅ |
+| Expert Quotes | 100/100 — 3 linked, 0 hallucinated | ✅ |
+| Statistics | 100/100 | ✅ |
+| Tables | 50/100 — real Sonar data | ✅ |
+| Readability | 66/100 — grade 13.8 → 9.1 | ✅ |
+| Keyword Density | 100/100 — 1.81% → 0.91% | ✅ |
+| Freshness | 100/100 | ✅ |
+| References | Present with clickable links | ✅ |
+| Zero Hallucination | 0 unlinked quotes | ✅ |
+
+### SEO Plugin Population (at save time)
+
+| Plugin | Fields Set |
+|---|---|
+| AIOSEO | title, description, OG, focus keyword, schema (wp_aioseo_posts table) |
+| Yoast | _yoast_wpseo_title, _yoast_wpseo_metadesc, _yoast_wpseo_focuskw |
+| RankMath | rank_math_title, rank_math_description, rank_math_focus_keyword |
+| SEOPress | _seopress_titles_title, _seopress_titles_desc, _seopress_analysis_target_kw |
+| Schema | JSON-LD in post_content as wp:html block (works without any SEO plugin) |
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.81 — Server-side Sonar: works for ALL users on ANY AI model
 
 **Date:** 2026-04-17

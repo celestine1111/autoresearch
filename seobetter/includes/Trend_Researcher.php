@@ -258,12 +258,6 @@ class Trend_Researcher {
             'country'  => $country,
         ];
 
-        // Pass Brave key for Pro users
-        $brave_key = $settings['brave_api_key'] ?? '';
-        if ( ! empty( $brave_key ) && License_Manager::can_use( 'content_brief' ) ) {
-            $body['brave_key'] = $brave_key;
-        }
-
         // v1.5.24 — Places API keys from Settings → Integrations.
         // These power the 5-tier waterfall in cloud-api/api/research.js::
         // fetchPlacesWaterfall(). Tiers with no key are skipped. All three

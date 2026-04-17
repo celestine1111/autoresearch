@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.97
+ * Version: 1.5.98
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.97' );
+define( 'SEOBETTER_VERSION', '1.5.98' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -450,7 +450,7 @@ final class SEOBetter {
         ]);
         // v1.5.67 — diagnostic endpoint for every always-on research source
         // (Reddit, HN, Wikipedia, Google Trends, DuckDuckGo, Bluesky,
-        // Mastodon, Dev.to, Lemmy, Brave Search, category APIs, country APIs)
+        // Mastodon, Dev.to, Lemmy, Tavily, category APIs, country APIs)
         // PLUS the local Last30Days Python skill. Reports per-source ok/empty
         // /error + latency so users can see which sources are reaching their
         // articles and which are flaking.
@@ -977,7 +977,7 @@ final class SEOBetter {
      * with per-source ok/error/latency breakdown. Complements the Sonar and
      * Places Providers tests by covering the rest of the research pipeline:
      * Reddit, Hacker News, Wikipedia, Google Trends, DuckDuckGo, Bluesky,
-     * Mastodon, Dev.to, Lemmy, Brave Search (Pro), category APIs, country
+     * Mastodon, Dev.to, Lemmy, category APIs, country
      * APIs, and the local Last30Days Python skill.
      *
      * Uses Promise.allSettled pattern server-side so a single flaking source
@@ -985,7 +985,6 @@ final class SEOBetter {
      */
     public function rest_test_research_sources( \WP_REST_Request $request ): \WP_REST_Response {
         $settings     = get_option( 'seobetter_settings', [] );
-        $brave_key    = $settings['brave_api_key'] ?? '';
         $test_keyword = sanitize_text_field( $request->get_param( 'keyword' ) ?: 'small business marketing 2026' );
         $domain       = sanitize_text_field( $request->get_param( 'domain' ) ?: 'general' );
         $country      = sanitize_text_field( $request->get_param( 'country' ) ?: '' );
@@ -1025,9 +1024,6 @@ final class SEOBetter {
             'country'          => $country,
             'test_all_sources' => true,
         ];
-        if ( ! empty( $brave_key ) ) {
-            $body['brave_key'] = $brave_key;
-        }
 
         $cloud = [
             'ok'      => false,
@@ -1057,6 +1053,7 @@ final class SEOBetter {
                     $cloud['sources'] = is_array( $decoded['sources'] ?? null ) ? $decoded['sources'] : [];
                     $cloud['summary'] = $decoded['summary'] ?? null;
                     $cloud['total_latency_ms'] = $decoded['total_latency_ms'] ?? null;
+                    // brave_configured kept for cloud-api compat (always false now — Tavily replaced Brave)
                     $cloud['brave_configured'] = $decoded['brave_configured'] ?? false;
                 }
             }
@@ -1072,7 +1069,7 @@ final class SEOBetter {
             'country'        => $country,
             'cloud'          => $cloud,
             'last30days'     => $last30,
-            'brave_configured' => ! empty( $brave_key ),
+            'brave_configured' => false, // Tavily replaced Brave — no user key to check
         ] );
     }
 

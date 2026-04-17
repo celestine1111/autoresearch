@@ -934,7 +934,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             h += '<div style="padding:16px 20px;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:10px;margin-bottom:16px;display:flex;align-items:center;gap:16px">';
             h += '<div style="flex-shrink:0;width:44px;height:44px;background:linear-gradient(135deg,#764ba2,#667eea);border-radius:10px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></div>';
             h += '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:#312e81">+'+missingPoints+' points needed for A grade</div>';
-            h += '<div style="font-size:12px;color:#4338ca;margin-top:2px">Pro plan adds Brave Search for real statistics, expert quotes, and authoritative citations that boost your GEO score to 80+</div></div>';
+            h += '<div style="font-size:12px;color:#4338ca;margin-top:2px">Pro plan adds Tavily Search for real statistics, expert quotes, and authoritative citations that boost your GEO score to 80+</div></div>';
             h += '<a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>" style="flex-shrink:0;padding:8px 16px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap">Upgrade to Pro</a>';
             h += '</div>';
         }
