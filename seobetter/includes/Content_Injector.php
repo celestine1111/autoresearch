@@ -264,19 +264,58 @@ class Content_Injector {
         // Format: "quote text" — [Source Name](url)
         // This produces a clickable link with descriptive anchor text that
         // passes the RLFKV content-word overlap check.
+        // v1.5.85 — Sonar often returns quotes WITHOUT URLs. Per SEO-GEO-AI-
+        // GUIDELINES §4.6: "Full attribution required (name, title, org)" and
+        // §1: "Cite sources = +30% visibility". A quote without a source link
+        // has no E-E-A-T authority. Fix: match source names against the Sonar
+        // citations array (which DOES have URLs), skip quotes with no link.
         $sonar = $sonar_data ?? self::call_sonar_research( $keyword );
         if ( $sonar && ! empty( $sonar['quotes'] ) ) {
+            // Build a lookup of source name → URL from Sonar citations
+            $citation_url_map = [];
+            if ( ! empty( $sonar['citations'] ) ) {
+                foreach ( $sonar['citations'] as $c ) {
+                    if ( empty( $c['url'] ) ) continue;
+                    $name = strtolower( trim( $c['source_name'] ?? '' ) );
+                    $title = strtolower( trim( $c['title'] ?? '' ) );
+                    if ( $name ) $citation_url_map[ $name ] = $c['url'];
+                    // Also map by hostname for fuzzy matching
+                    $host = strtolower( wp_parse_url( $c['url'], PHP_URL_HOST ) ?? '' );
+                    $host = preg_replace( '/^www\./', '', $host );
+                    if ( $host ) $citation_url_map[ $host ] = $c['url'];
+                    // Map by title keywords for broader matching
+                    if ( $title ) $citation_url_map[ $title ] = $c['url'];
+                }
+            }
+
             foreach ( $sonar['quotes'] as $q ) {
                 if ( ! is_array( $q ) || empty( $q['text'] ) ) continue;
                 $text = trim( $q['text'] );
                 if ( strlen( $text ) < 20 || strlen( $text ) > 300 ) continue;
-                $source = $q['source'] ?? 'Industry expert';
+                $source = $q['source'] ?? '';
                 $url = $q['url'] ?? '';
-                if ( $url ) {
-                    $formatted = "\"{$text}\" — [{$source}]({$url})";
-                } else {
-                    $formatted = "\"{$text}\" — {$source}";
+
+                // If no URL, try to find one from the citations map
+                if ( empty( $url ) && ! empty( $source ) ) {
+                    $source_lower = strtolower( trim( $source ) );
+                    // Exact match
+                    if ( isset( $citation_url_map[ $source_lower ] ) ) {
+                        $url = $citation_url_map[ $source_lower ];
+                    } else {
+                        // Fuzzy: check if any citation key contains the source name
+                        foreach ( $citation_url_map as $key => $cit_url ) {
+                            if ( str_contains( $key, $source_lower ) || str_contains( $source_lower, $key ) ) {
+                                $url = $cit_url;
+                                break;
+                            }
+                        }
+                    }
                 }
+
+                // Skip quotes with no source link — no E-E-A-T authority
+                if ( empty( $url ) ) continue;
+
+                $formatted = "\"{$text}\" — [{$source}]({$url})";
                 $quotes[] = $formatted;
                 if ( count( $quotes ) >= 3 ) break;
             }
@@ -1558,7 +1597,17 @@ Return ONLY the Markdown table, nothing else.";
         if ( $quote_score < 100 ) {
             try {
                 if ( $sonar && ! empty( $sonar['quotes'] ) ) {
-                    // Use Sonar quotes directly — real sourced quotes
+                    // v1.5.85 — match source names against citations for URLs
+                    $cit_map = [];
+                    if ( ! empty( $sonar['citations'] ) ) {
+                        foreach ( $sonar['citations'] as $c ) {
+                            if ( empty( $c['url'] ) ) continue;
+                            $n = strtolower( trim( $c['source_name'] ?? '' ) );
+                            $h = strtolower( preg_replace( '/^www\./', '', wp_parse_url( $c['url'], PHP_URL_HOST ) ?? '' ) );
+                            if ( $n ) $cit_map[ $n ] = $c['url'];
+                            if ( $h ) $cit_map[ $h ] = $c['url'];
+                        }
+                    }
                     $quotes = [];
                     foreach ( $sonar['quotes'] as $q ) {
                         if ( empty( $q['text'] ) ) continue;
@@ -1566,11 +1615,19 @@ Return ONLY the Markdown table, nothing else.";
                         if ( strlen( $text ) > 200 ) $text = substr( $text, 0, 197 ) . '...';
                         $source = $q['source'] ?? 'Industry source';
                         $url = $q['url'] ?? '';
-                        if ( $url ) {
-                            $formatted = "\"{$text}\" — [{$source}]({$url})";
-                        } else {
-                            $formatted = "\"{$text}\" — {$source}";
+                        // Try to find URL from citations if missing
+                        if ( empty( $url ) && ! empty( $source ) ) {
+                            $sl = strtolower( trim( $source ) );
+                            if ( isset( $cit_map[ $sl ] ) ) {
+                                $url = $cit_map[ $sl ];
+                            } else {
+                                foreach ( $cit_map as $k => $v ) {
+                                    if ( str_contains( $k, $sl ) || str_contains( $sl, $k ) ) { $url = $v; break; }
+                                }
+                            }
                         }
+                        if ( empty( $url ) ) continue; // Skip — no authority without source link
+                        $formatted = "\"{$text}\" — [{$source}]({$url})";
                         $quotes[] = $formatted;
                         if ( count( $quotes ) >= 3 ) break;
                     }
