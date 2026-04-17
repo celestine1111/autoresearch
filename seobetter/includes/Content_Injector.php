@@ -1369,8 +1369,10 @@ Return ONLY the Markdown table, nothing else.";
                     // The part before the dash should end with a quote character
                     // and the part after should be a capitalized name (2+ words or known source)
                     $ends_with_quote = preg_match( '/["\x{201D}\x{201C}\'\.!?]$/u', $before );
-                    $starts_with_cap = preg_match( '/^[A-Z]/', $after );
-                    if ( $ends_with_quote && $starts_with_cap && strlen( $before ) > 20 ) {
+                    // v1.5.96c — also match lowercase hostnames (petcircle.com.au)
+                    // and capitalized names (Pet Circle). Previous check only caught [A-Z].
+                    $starts_with_name = preg_match( '/^[A-Za-z]/', $after );
+                    if ( $ends_with_quote && $starts_with_name && strlen( $before ) > 20 ) {
                         $has_dash_attribution = true;
                         break;
                     }
