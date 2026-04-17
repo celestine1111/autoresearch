@@ -2256,6 +2256,17 @@ final class SEOBetter {
                 continue;
             }
 
+            // v1.5.96b — Skip verification for hostname-style anchor text.
+            // Tavily quotes use the hostname as anchor: [petcircle.com.au](url).
+            // Pass 3 strips dots from "petcircle.com.au" → "petcirclecomau"
+            // which never matches in page content → link falsely stripped.
+            // Hostnames are verifiable by definition (URL matches the host).
+            if ( preg_match( '/^[a-z0-9.-]+\.(com|org|net|edu|gov|au|uk|nz|ca|io|co)\b/i', trim( $anchor_text ) ) ) {
+                $session_cache[ $url ] = true;
+                set_transient( $cache_key, 'ok', DAY_IN_SECONDS );
+                continue; // Keep the link — hostname IS the verification
+            }
+
             // Extract key terms from anchor text
             $raw_terms = preg_split( '/\s+/', strtolower( wp_strip_all_tags( $anchor_text ) ) );
             $key_terms = [];
