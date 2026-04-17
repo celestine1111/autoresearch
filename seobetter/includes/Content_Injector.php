@@ -264,81 +264,58 @@ class Content_Injector {
         // Format: "quote text" — [Source Name](url)
         // This produces a clickable link with descriptive anchor text that
         // passes the RLFKV content-word overlap check.
-        // v1.5.85 — Sonar often returns quotes WITHOUT URLs. Per SEO-GEO-AI-
-        // GUIDELINES §4.6: "Full attribution required (name, title, org)" and
-        // §1: "Cite sources = +30% visibility". A quote without a source link
-        // has no E-E-A-T authority. Fix: match source names against the Sonar
-        // citations array (which DOES have URLs), skip quotes with no link.
+        // v1.5.86 — ABSOLUTE RULE: no quote is inserted into ANY article
+        // without a verifiable source URL. No fuzzy matching, no guessing,
+        // no keyword-specific workarounds. This works for all keywords,
+        // all content types, all languages. If Sonar/research can't provide
+        // a URL with the quote, the quote is skipped.
+        //
+        // Per SEO-GEO-AI-GUIDELINES.md:
+        //   §4.6: "Full attribution required (name, title, org)"
+        //   §1: "Cite sources = +30% visibility"
+        //   §15: "Trust is most important signal"
+        // Per external-links-policy.md:
+        //   §1: "The only hyperlinks that reach a published article are URLs
+        //        retrieved from a real keyword-targeted web search"
+        //
+        // A quote without a source link is worse than no quote — it looks
+        // like hallucinated authority, which destroys E-E-A-T trust.
+
         $sonar = $sonar_data ?? self::call_sonar_research( $keyword );
+
+        // Source 1: Sonar quotes (only those with URLs)
         if ( $sonar && ! empty( $sonar['quotes'] ) ) {
-            // Build a lookup of source name → URL from Sonar citations
-            $citation_url_map = [];
-            if ( ! empty( $sonar['citations'] ) ) {
-                foreach ( $sonar['citations'] as $c ) {
-                    if ( empty( $c['url'] ) ) continue;
-                    $name = strtolower( trim( $c['source_name'] ?? '' ) );
-                    $title = strtolower( trim( $c['title'] ?? '' ) );
-                    if ( $name ) $citation_url_map[ $name ] = $c['url'];
-                    // Also map by hostname for fuzzy matching
-                    $host = strtolower( wp_parse_url( $c['url'], PHP_URL_HOST ) ?? '' );
-                    $host = preg_replace( '/^www\./', '', $host );
-                    if ( $host ) $citation_url_map[ $host ] = $c['url'];
-                    // Map by title keywords for broader matching
-                    if ( $title ) $citation_url_map[ $title ] = $c['url'];
-                }
-            }
-
             foreach ( $sonar['quotes'] as $q ) {
-                if ( ! is_array( $q ) || empty( $q['text'] ) ) continue;
+                if ( ! is_array( $q ) || empty( $q['text'] ) || empty( $q['url'] ) ) continue;
                 $text = trim( $q['text'] );
+                $url = trim( $q['url'] );
+                $source = trim( $q['source'] ?? '' );
+                // Quality filters — applies to ALL keywords
                 if ( strlen( $text ) < 20 || strlen( $text ) > 300 ) continue;
-                $source = $q['source'] ?? '';
-                $url = $q['url'] ?? '';
+                if ( ! preg_match( '#^https?://#', $url ) ) continue;
+                if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
+                // Skip junk content
+                if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall/i', $text ) ) continue;
 
-                // If no URL, try to find one from the citations map
-                if ( empty( $url ) && ! empty( $source ) ) {
-                    $source_lower = strtolower( trim( $source ) );
-                    // Exact match
-                    if ( isset( $citation_url_map[ $source_lower ] ) ) {
-                        $url = $citation_url_map[ $source_lower ];
-                    } else {
-                        // Fuzzy: check if any citation key contains the source name
-                        foreach ( $citation_url_map as $key => $cit_url ) {
-                            if ( str_contains( $key, $source_lower ) || str_contains( $source_lower, $key ) ) {
-                                $url = $cit_url;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Skip quotes with no source link — no E-E-A-T authority
-                if ( empty( $url ) ) continue;
-
-                $formatted = "\"{$text}\" — [{$source}]({$url})";
-                $quotes[] = $formatted;
+                $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
         }
 
-        // Fallback: Vercel research (Reddit, Wikipedia, social)
-        if ( empty( $quotes ) ) {
+        // Source 2: Vercel research quotes (only those with URLs)
+        if ( count( $quotes ) < 2 ) {
             $research = Trend_Researcher::research( $keyword );
-            $real_quotes = $research['quotes'] ?? [];
-            foreach ( $real_quotes as $q ) {
-                if ( ! is_array( $q ) || empty( $q['text'] ) ) continue;
+            foreach ( ( $research['quotes'] ?? [] ) as $q ) {
+                if ( ! is_array( $q ) || empty( $q['text'] ) || empty( $q['url'] ) ) continue;
                 $text = trim( $q['text'] );
-                if ( strlen( $text ) < 20 ) continue;
-                if ( strlen( $text ) > 200 ) $text = substr( $text, 0, 197 ) . '...';
-                $source = $q['source'] ?? 'Online discussion';
-                $url = $q['url'] ?? '';
-                if ( preg_match( '/april fool|challenge|giveaway|prize|contest/i', $text ) ) continue;
-                if ( $url ) {
-                    $formatted = "\"{$text}\" — [{$source}]({$url})";
-                } else {
-                    $formatted = "\"{$text}\" — {$source}";
-                }
-                $quotes[] = $formatted;
+                $url = trim( $q['url'] );
+                $source = trim( $q['source'] ?? '' );
+                if ( strlen( $text ) < 20 || strlen( $text ) > 200 ) continue;
+                if ( ! preg_match( '#^https?://#', $url ) ) continue;
+                if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
+                if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall/i', $text ) ) continue;
+
+                $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
         }
@@ -1597,38 +1574,19 @@ Return ONLY the Markdown table, nothing else.";
         if ( $quote_score < 100 ) {
             try {
                 if ( $sonar && ! empty( $sonar['quotes'] ) ) {
-                    // v1.5.85 — match source names against citations for URLs
-                    $cit_map = [];
-                    if ( ! empty( $sonar['citations'] ) ) {
-                        foreach ( $sonar['citations'] as $c ) {
-                            if ( empty( $c['url'] ) ) continue;
-                            $n = strtolower( trim( $c['source_name'] ?? '' ) );
-                            $h = strtolower( preg_replace( '/^www\./', '', wp_parse_url( $c['url'], PHP_URL_HOST ) ?? '' ) );
-                            if ( $n ) $cit_map[ $n ] = $c['url'];
-                            if ( $h ) $cit_map[ $h ] = $c['url'];
-                        }
-                    }
+                    // v1.5.86 — ABSOLUTE RULE: no quote without a URL.
+                    // No fuzzy matching. Works for ALL keywords.
                     $quotes = [];
                     foreach ( $sonar['quotes'] as $q ) {
-                        if ( empty( $q['text'] ) ) continue;
+                        if ( empty( $q['text'] ) || empty( $q['url'] ) ) continue;
                         $text = trim( $q['text'] );
-                        if ( strlen( $text ) > 200 ) $text = substr( $text, 0, 197 ) . '...';
-                        $source = $q['source'] ?? 'Industry source';
-                        $url = $q['url'] ?? '';
-                        // Try to find URL from citations if missing
-                        if ( empty( $url ) && ! empty( $source ) ) {
-                            $sl = strtolower( trim( $source ) );
-                            if ( isset( $cit_map[ $sl ] ) ) {
-                                $url = $cit_map[ $sl ];
-                            } else {
-                                foreach ( $cit_map as $k => $v ) {
-                                    if ( str_contains( $k, $sl ) || str_contains( $sl, $k ) ) { $url = $v; break; }
-                                }
-                            }
-                        }
-                        if ( empty( $url ) ) continue; // Skip — no authority without source link
-                        $formatted = "\"{$text}\" — [{$source}]({$url})";
-                        $quotes[] = $formatted;
+                        $url = trim( $q['url'] );
+                        $source = trim( $q['source'] ?? '' );
+                        if ( strlen( $text ) < 20 || strlen( $text ) > 300 ) continue;
+                        if ( ! preg_match( '#^https?://#', $url ) ) continue;
+                        if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
+                        if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall/i', $text ) ) continue;
+                        $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                         if ( count( $quotes ) >= 3 ) break;
                     }
                     if ( ! empty( $quotes ) ) {
