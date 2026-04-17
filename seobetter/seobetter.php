@@ -1557,6 +1557,9 @@ final class SEOBetter {
         $updated_markdown = $this->validate_outbound_links( $updated_markdown, $combined_pool );
         $updated_markdown = self::cleanup_ai_markdown( $updated_markdown );
 
+        // v1.5.97 — Append References section from surviving citations
+        $updated_markdown = SEOBetter\Citation_Pool::append_references_section( $updated_markdown, $combined_pool );
+
         $formatter = new SEOBetter\Content_Formatter();
         $html = $formatter->format( $updated_markdown, 'classic', [ 'accent_color' => $accent ] );
 
@@ -2138,7 +2141,7 @@ final class SEOBetter {
         // but we re-verify against the ANCHOR TEXT here — because a pool URL
         // about "dog beds" shouldn't be cited with anchor text "dog food",
         // even though both are dog-related.
-        $markdown = $this->verify_citation_atoms( $markdown );
+        $markdown = $this->verify_citation_atoms( $markdown, $citation_pool );
 
         // ===== Pass 4: URL deduplication (v1.5.18) =====
         // The system prompt tells the AI "use each pool URL at most once" but
@@ -2209,7 +2212,7 @@ final class SEOBetter {
      * an AI citing "dog nutrition study" and linking to a real but unrelated
      * page on rspca.org.au/about-us.
      */
-    private function verify_citation_atoms( string $markdown ): string {
+    private function verify_citation_atoms( string $markdown, array $trusted_pool = [] ): string {
         // Negative lookbehind for `!` — do not treat image markdown as a link
         if ( ! preg_match_all( '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $markdown, $matches, PREG_SET_ORDER ) ) {
             return $markdown;
@@ -2241,6 +2244,16 @@ final class SEOBetter {
                 if ( ! $session_cache[ $url ] ) {
                     $markdown = str_replace( $full_match, $anchor_text, $markdown );
                 }
+                continue;
+            }
+
+            // v1.5.97 — Skip Pass 3 for URLs already in the trusted pool.
+            // These URLs came from Tavily search results or the Citation Pool
+            // and are already verified real pages. Re-verifying them wastes
+            // time and sometimes fails due to timeouts or anchor text mismatch
+            // (e.g. hostname "petcircle.com.au" stripped to "petcirclecomau").
+            if ( ! empty( $trusted_pool ) && \SEOBetter\Citation_Pool::contains_url( $trusted_pool, $url ) ) {
+                $session_cache[ $url ] = true;
                 continue;
             }
 
