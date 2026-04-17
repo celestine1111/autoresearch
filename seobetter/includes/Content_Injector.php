@@ -1605,8 +1605,7 @@ Return ONLY the Markdown table, nothing else.";
         // to any LLM. If scraper found 0 quotes, step is skipped.
         $markdown = self::strip_unlinked_quotes( $markdown );
 
-        {
-            // Use inject_quotes which now ONLY accepts scraped data
+        try {
             $result = self::inject_quotes( $markdown, $keyword, $sonar );
             if ( $result['success'] ) {
                 $markdown = $result['content'];
@@ -1614,11 +1613,8 @@ Return ONLY the Markdown table, nothing else.";
             } else {
                 $steps_skipped[] = 'quotes: ' . ( $result['error'] ?? 'no verifiable quotes found' );
             }
-            } catch ( \Throwable $e ) {
-                $steps_skipped[] = 'quotes: ' . $e->getMessage();
-            }
-        } else {
-            $steps_skipped[] = 'quotes: score already ' . $quote_score;
+        } catch ( \Throwable $e ) {
+            $steps_skipped[] = 'quotes: ' . $e->getMessage();
         }
 
         // ---- Step 3: Statistics ----
