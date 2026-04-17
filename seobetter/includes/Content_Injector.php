@@ -253,24 +253,20 @@ class Content_Injector {
      * (not a fake quote) only when zero real quotes exist.
      */
     public static function inject_quotes( string $content, string $keyword, ?array $sonar_data = null ): array {
-        // v1.5.94 — SCRAPED QUOTES ONLY. Zero hallucination. Zero fallbacks.
+        // v1.5.96 — TAVILY DIRECT FROM PHP. Zero hallucination. No Vercel dependency.
         //
-        // The ONLY source of quotes is the `sonar_data['quotes']` array,
-        // which contains REAL sentences scraped from REAL web pages by
-        // scrapeAndExtractQuotes() in research.js. Each quote has:
-        //   - text: exact sentence from the page (copy-pasted, not AI-generated)
-        //   - url: the page we fetched it from (verified real)
-        //   - source: the domain hostname
+        // Calls Tavily Search API directly via wp_remote_post(). Gets real
+        // search results with raw page content. Extracts real sentences
+        // from real pages. Every quote has verified text + source URL.
         //
-        // NO fallbacks to: call_sonar_research(), Trend_Researcher, AI generation.
-        // If the scraper found 0 quotes → this step is SKIPPED. An article
-        // without quotes is better than an article with hallucinated quotes.
+        // If Tavily key is not configured or returns 0 quotes → SKIP.
+        // An article without quotes is better than one with fake quotes.
         //
         // Per SEO-GEO-AI-GUIDELINES.md §15: "Trust is most important signal"
-        // Per external-links-policy.md §1: only URLs from real web search
 
         $quotes = [];
 
+        // Source 1: Pre-fetched Tavily/scraped data from Vercel (if available)
         if ( ! empty( $sonar_data['quotes'] ) ) {
             foreach ( $sonar_data['quotes'] as $q ) {
                 if ( ! is_array( $q ) || empty( $q['text'] ) || empty( $q['url'] ) ) continue;
@@ -281,14 +277,30 @@ class Content_Injector {
                 if ( ! preg_match( '#^https?://#', $url ) ) continue;
                 if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
                 if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
+                $quotes[] = "\"{$text}\" — [{$source}]({$url})";
+                if ( count( $quotes ) >= 3 ) break;
+            }
+        }
 
+        // Source 2: Direct Tavily call from PHP (no Vercel, no timeout issues)
+        if ( empty( $quotes ) ) {
+            $tavily = self::tavily_search_and_extract( $keyword );
+            foreach ( ( $tavily['quotes'] ?? [] ) as $q ) {
+                if ( empty( $q['text'] ) || empty( $q['url'] ) ) continue;
+                $text = trim( $q['text'] );
+                $url = trim( $q['url'] );
+                $source = trim( $q['source'] ?? '' );
+                if ( strlen( $text ) < 30 || strlen( $text ) > 300 ) continue;
+                if ( ! preg_match( '#^https?://#', $url ) ) continue;
+                if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
+                if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
         }
 
         if ( empty( $quotes ) ) {
-            return [ 'success' => false, 'error' => 'No verifiable quotes found. The page scraper could not extract relevant sentences with source URLs for this keyword. Quotes skipped to prevent hallucination.' ];
+            return [ 'success' => false, 'error' => 'No verifiable quotes found. Tavily could not extract relevant sentences with source URLs for this keyword. Quotes skipped to prevent hallucination.' ];
         }
 
         // Insert quotes after H2 headings (skip Key Takeaways and FAQ)
@@ -1380,6 +1392,116 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         return implode( "\n", $cleaned );
+    }
+
+    /**
+     * v1.5.96 — Call Tavily Search API directly from PHP.
+     * No Vercel dependency. No timeout issues. Returns real search
+     * results with raw page content for quote extraction.
+     *
+     * @param string $keyword Search query
+     * @return array {results: [...], quotes: [{text, source, url}, ...]}
+     */
+    public static function tavily_search_and_extract( string $keyword ): array {
+        $settings = get_option( 'seobetter_settings', [] );
+        $api_key = $settings['tavily_api_key'] ?? '';
+        if ( empty( $api_key ) ) {
+            return [ 'results' => [], 'quotes' => [] ];
+        }
+
+        $response = wp_remote_post( 'https://api.tavily.com/search', [
+            'timeout' => 20,
+            'headers' => [ 'Content-Type' => 'application/json' ],
+            'body'    => wp_json_encode( [
+                'api_key'            => $api_key,
+                'query'              => $keyword,
+                'include_raw_content' => true,
+                'max_results'        => 3,
+                'search_depth'       => 'basic',
+            ] ),
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            return [ 'results' => [], 'quotes' => [], 'error' => $response->get_error_message() ];
+        }
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( empty( $body['results'] ) ) {
+            return [ 'results' => [], 'quotes' => [] ];
+        }
+
+        // Build results array (for citations/sources)
+        $results = [];
+        foreach ( $body['results'] as $r ) {
+            if ( empty( $r['url'] ) ) continue;
+            $results[] = [
+                'url'         => $r['url'],
+                'title'       => $r['title'] ?? '',
+                'source_name' => wp_parse_url( $r['url'], PHP_URL_HOST ) ?? '',
+            ];
+        }
+
+        // Extract REAL quotes from raw_content — no AI, just text extraction
+        $quotes = [];
+        $key_tokens = array_filter(
+            preg_split( '/\s+/', strtolower( $keyword ) ),
+            fn( $t ) => strlen( $t ) >= 4
+        );
+        $seen_texts = [];
+
+        foreach ( $body['results'] as $r ) {
+            $raw = $r['raw_content'] ?? '';
+            if ( strlen( $raw ) < 500 ) continue;
+
+            $url = $r['url'] ?? '';
+            $host = preg_replace( '/^www\./', '', wp_parse_url( $url, PHP_URL_HOST ) ?? '' );
+
+            // Clean markdown artifacts
+            $clean = preg_replace( '/\[[^\]]*\]\([^)]*\)/', '', $raw );
+            $clean = preg_replace( '/[*_#>]/', '', $clean );
+            $clean = preg_replace( '/\s+/', ' ', $clean );
+
+            // Extract sentences (40-220 chars, starts with capital)
+            preg_match_all( '/[A-Z][^.!?]{38,218}[.!?]/', substr( $clean, 300 ), $matches );
+            $page_count = 0;
+
+            foreach ( ( $matches[0] ?? [] ) as $sentence ) {
+                $lower = strtolower( $sentence );
+                // Require 2+ keyword tokens (or 1 if <3 tokens)
+                $min_tokens = count( $key_tokens ) >= 3 ? 2 : 1;
+                $match_count = 0;
+                foreach ( $key_tokens as $t ) {
+                    if ( strpos( $lower, $t ) !== false ) $match_count++;
+                }
+                if ( $match_count < $min_tokens ) continue;
+
+                // Skip junk
+                if ( preg_match( '/cookie|privacy|subscribe|menu|click|log in|sign up|copyright|read more|img|src=|cdn\.|favicon|breadcrumb/i', $sentence ) ) continue;
+
+                $trimmed = trim( $sentence );
+                if ( strlen( $trimmed ) < 40 || strlen( $trimmed ) > 220 ) continue;
+
+                // Dedupe
+                $key = strtolower( substr( $trimmed, 0, 40 ) );
+                if ( isset( $seen_texts[ $key ] ) ) continue;
+                $seen_texts[ $key ] = true;
+
+                $quotes[] = [
+                    'text'   => $trimmed,
+                    'source' => $host,
+                    'url'    => $url,
+                ];
+
+                $page_count++;
+                if ( $page_count >= 2 ) break;
+            }
+            if ( count( $quotes ) >= 5 ) break;
+        }
+
+        return [
+            'results' => $results,
+            'quotes'  => array_slice( $quotes, 0, 5 ),
+        ];
     }
 
     private static function calc_flesch_kincaid_grade( string $text ): float {
