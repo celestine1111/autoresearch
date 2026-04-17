@@ -345,7 +345,7 @@ class Content_Injector {
 
             // Insert the Sonar table
             $injected = $content;
-            if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $content, $m, PREG_OFFSET_MATCH ) ) {
+            if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $content, $m, PREG_OFFSET_CAPTURE ) ) {
                 $injected = substr( $content, 0, $m[1][1] ) . "\n" . $table . "\n" . substr( $content, $m[1][1] );
             } else {
                 $injected = preg_replace(
@@ -419,7 +419,7 @@ Return ONLY the Markdown table, nothing else.";
         // instead of misleading "Comparison table inserted" success.
         if ( $injected === $content ) {
             // Fallback: insert before the FAQ or References section instead
-            if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $content, $faq_match, PREG_OFFSET_MATCH ) ) {
+            if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $content, $faq_match, PREG_OFFSET_CAPTURE ) ) {
                 $injected = substr( $content, 0, $faq_match[1][1] ) . "\n" . $table . "\n" . substr( $content, $faq_match[1][1] );
             } else {
                 // Last resort: append before end
@@ -1795,7 +1795,7 @@ Return ONLY the Markdown table, nothing else.";
                     // Insert before FAQ/References
                     $table_cols = count( $cols );
                     $table_rows_count = count( array_slice( $rows, 0, 6 ) );
-                    if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $markdown, $m, PREG_OFFSET_MATCH ) ) {
+                    if ( preg_match( '/(\n## (?:FAQ|Frequently|Reference)[^\n]*\n)/i', $markdown, $m, PREG_OFFSET_CAPTURE ) ) {
                         $markdown = substr( $markdown, 0, $m[1][1] ) . "\n" . $table . "\n" . substr( $markdown, $m[1][1] );
                         $steps_run[] = 'Comparison Table: ' . $table_rows_count . ' rows × ' . $table_cols . ' columns (real data from Sonar)';
                     } else {
