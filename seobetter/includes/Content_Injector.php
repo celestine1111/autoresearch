@@ -1079,12 +1079,12 @@ Return ONLY the Markdown table, nothing else.";
             // the AI converting markdown list syntax (- item) to Unicode
             // bullet characters (• item). Content_Formatter only recognises
             // dash/asterisk/plus list markers; • becomes an unstyled paragraph.
-            $prompt = "Rewrite the following article section to Flesch-Kincaid grade 7. Target grade 6-8.\n\n"
+            $prompt = "Rewrite the following article section to a 5th grade reading level. Every sentence MUST be under 15 words. This is critical.\n\n"
                 . "RULES:\n"
-                . "1. Break any sentence over 18 words into two shorter sentences.\n"
-                . "2. Replace multi-syllable words with simpler ones: 'use' not 'utilize', 'help' not 'facilitate', 'show' not 'demonstrate', 'most' not 'the majority of', 'about' not 'regarding', 'start' not 'commence'.\n"
-                . "3. Write to ONE reader using 'you' / 'your'. Not 'pet owners' or 'readers'.\n"
-                . "4. Active voice only.\n"
+                . "1. EVERY sentence must be under 15 words. Split ALL longer sentences. No exceptions.\n"
+                . "2. Use only common words a 10-year-old knows. Replace: 'utilize' → 'use', 'facilitate' → 'help', 'demonstrate' → 'show', 'approximately' → 'about', 'requirements' → 'needs', 'formulated' → 'made', 'specifically' → 'just for', 'recommended' → 'best', 'nutritional' → 'food', 'beneficial' → 'good'.\n"
+                . "3. Write to ONE reader: 'you' and 'your'. Never 'pet owners' or 'one should'.\n"
+                . "4. Active voice only. Never passive.\n"
                 . "5. PRESERVE EVERY FACT: names, numbers, percentages, years, citation URLs, expert quotes, organization names, bullet lists, tables.\n"
                 . "6. PRESERVE EVERY MARKDOWN LINK [text](url) exactly as written. Do not invent new URLs.\n"
                 . "7. PRESERVE the H2 heading line exactly as provided.\n"
@@ -1218,11 +1218,11 @@ Return ONLY the Markdown table, nothing else.";
         $keep_in_h2s = min( 2, max( 0, $target_count - $keep_in_intro ) );
         $max_total = $target_count;
 
-        $prompt = "Rewrite the following article to DRASTICALLY reduce keyword density.\n\n"
+        $prompt = "Rewrite the following article. Your ONLY job: reduce the keyword \"{$keyword}\" from {$kw_count_before} mentions to EXACTLY {$max_total} mentions.\n\n"
             . "FOCUS KEYWORD: \"{$keyword}\"\n"
-            . "CURRENT: {$kw_count_before} exact-phrase mentions ({$density_before}% density)\n"
-            . "TARGET: At most {$max_total} exact-phrase mentions (~1.0% density)\n"
-            . "YOU MUST REMOVE: at least {$mentions_to_rewrite} of the {$kw_count_before} mentions\n\n"
+            . "CURRENT: {$kw_count_before} exact-phrase mentions ({$density_before}% density) — THIS IS WAY TOO HIGH\n"
+            . "TARGET: EXACTLY {$max_total} mentions of the exact phrase in the ENTIRE article\n"
+            . "YOU MUST REPLACE: {$mentions_to_rewrite} of the {$kw_count_before} mentions with different words\n\n"
             . "WHICH MENTIONS TO KEEP (exact phrase \"{$keyword}\"):\n"
             . "- {$keep_in_intro} mention in the first paragraph (SEO plugins check this)\n"
             . "- {$keep_in_h2s} mention(s) in H2 headings\n"

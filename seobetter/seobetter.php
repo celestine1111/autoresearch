@@ -1254,6 +1254,12 @@ final class SEOBetter {
             update_post_meta( $post_id, 'rank_math_description', $meta_desc );
             update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
         }
+        // v1.5.97 — SEOPress support
+        if ( function_exists( 'seopress_init' ) || defined( 'SEOPRESS_VERSION' ) ) {
+            update_post_meta( $post_id, '_seopress_titles_title', $meta_title ?: $title );
+            update_post_meta( $post_id, '_seopress_titles_desc', $meta_desc );
+            update_post_meta( $post_id, '_seopress_analysis_target_kw', $keyword );
+        }
 
         // Build and inject JSON-LD schema directly into the post content
         // This guarantees schema is in the article regardless of SEO plugin
