@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.91
+ * Version: 1.5.92
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.91' );
+define( 'SEOBETTER_VERSION', '1.5.92' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1400,8 +1400,14 @@ final class SEOBetter {
             $refs_before = count( $before_matches[0] );
         }
 
-        // v1.5.91 — pass citation pool so real quote/citation URLs survive
-        $updated_markdown = $this->validate_outbound_links( $updated_markdown, is_array( $existing_pool ) ? $existing_pool : [] );
+        // v1.5.92 — build combined pool with inline URLs so scraped quotes survive
+        $combined_pool = is_array( $existing_pool ) ? $existing_pool : [];
+        if ( preg_match_all( '/(?<!!)\[[^\]]+\]\((https?:\/\/[^)]+)\)/', $updated_markdown, $url_matches ) ) {
+            foreach ( $url_matches[1] as $found_url ) {
+                $combined_pool[] = [ 'url' => $found_url, 'title' => '', 'source_name' => wp_parse_url( $found_url, PHP_URL_HOST ) ?? '', 'verified_at' => time() ];
+            }
+        }
+        $updated_markdown = $this->validate_outbound_links( $updated_markdown, $combined_pool );
 
         // v1.5.67 — recount after validation so the `added` message reflects
         // the actual number of references that survived the whitelist filter.
@@ -1531,12 +1537,24 @@ final class SEOBetter {
 
         $updated_markdown = $result['content'];
 
-        // v1.5.91 — CRITICAL: pass citation pool to validator. Without it,
-        // every URL is checked against the static whitelist only. Scraped
-        // quote URLs (petfoodreviews.com.au etc) aren't whitelisted and
-        // get stripped — turning real linked quotes into unlinked text.
-        // This was the root cause of 20+ failed quote fix attempts.
-        $updated_markdown = $this->validate_outbound_links( $updated_markdown, is_array( $existing_pool ) ? $existing_pool : [] );
+        // v1.5.92 — Build a combined pool: original citation pool + any URLs
+        // the scraper/injector added to the markdown. This ensures scraped
+        // quote URLs (healthydogsmeals.com, petfoodreviews.com.au) survive
+        // validate_outbound_links even if the original pool's topical filter
+        // rejected them. The scraper already verified these pages are real.
+        $combined_pool = is_array( $existing_pool ) ? $existing_pool : [];
+        // Extract all URLs from the updated markdown and add to pool
+        if ( preg_match_all( '/(?<!!)\[[^\]]+\]\((https?:\/\/[^)]+)\)/', $updated_markdown, $url_matches ) ) {
+            foreach ( $url_matches[1] as $found_url ) {
+                $combined_pool[] = [
+                    'url'         => $found_url,
+                    'title'       => '',
+                    'source_name' => wp_parse_url( $found_url, PHP_URL_HOST ) ?? '',
+                    'verified_at' => time(),
+                ];
+            }
+        }
+        $updated_markdown = $this->validate_outbound_links( $updated_markdown, $combined_pool );
         $updated_markdown = self::cleanup_ai_markdown( $updated_markdown );
 
         $formatter = new SEOBetter\Content_Formatter();
