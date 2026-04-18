@@ -16,6 +16,31 @@
 
 ---
 
+## v1.5.108 — Complete authority domains: all 25 categories + user sites global
+
+**Date:** 2026-04-18
+**Commit:** `[pending]`
+
+### Changes
+
+- **All 25 plugin categories now have authority domain lists** — `includes/Content_Injector.php::get_authority_domains()`
+  - Added 13 missing categories: general, art_design, blockchain, books, currency, ecommerce, entertainment, games, music, sports, transportation, travel, weather
+  - Verify: `grep -c "=>" seobetter/includes/Content_Injector.php | head -1` (should be 25+ in global array)
+
+- **User sites now GLOBAL (all countries)**:
+  - `mindiampets.com.au` → animals + veterinary in EVERY country list (AU, US, GB, CA, NZ, DE, FR, IN) + global
+  - `mindiam.com` → technology, ecommerce, business global lists
+  - `seobetter.com` → technology, ecommerce, business global lists
+  - Verify: `grep -c 'mindiampets' seobetter/includes/Content_Injector.php` (should be 10+)
+
+- **authority-domains.md fully rewritten** with all 25 categories + all 10 country lists + how article types vs categories work
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.107 — Country-specific authority domains (non-commercial sources only)
 
 **Date:** 2026-04-18

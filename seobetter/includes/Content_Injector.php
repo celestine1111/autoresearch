@@ -1417,59 +1417,127 @@ Return ONLY the Markdown table, nothing else.";
      * @return array {results: [...], quotes: [{text, source, url}, ...]}
      */
     /**
-     * v1.5.107 — Authority domain mapping per category + country.
-     * Used by tavily_search_and_extract() to restrict searches to credible
-     * NON-COMMERCIAL sources: government regulators, university research,
-     * professional associations, peer-reviewed journals, independent journalism.
-     * No private brands (Purina, Hill's, Petbarn, Chewy) - those have commercial bias.
-     * Falls back to unrestricted search if filtered returns < 2 results.
+     * v1.5.108 — Authority domain mapping per category + country.
+     * ALL 25 plugin categories covered. Non-commercial sources only:
+     * government regulators, university research, professional associations,
+     * peer-reviewed journals, independent journalism. No private brands.
      *
-     * User sites: mindiampets.com.au (animals AU), mindiam.com (technology global)
+     * User sites (GLOBAL, all countries):
+     *   mindiampets.com.au → animals, veterinary
+     *   mindiam.com → technology
+     *
+     * See seo-guidelines/authority-domains.md for the full reference.
      */
     private static function get_authority_domains( string $domain, string $country = '' ): array {
 
         // ---- GLOBAL domains (always included, any country) ----
+        // All 25 categories from the plugin Category dropdown
         $global = [
+            'general' => [
+                'reuters.com', 'apnews.com', 'bbc.com', 'wikipedia.org',
+                'ncbi.nlm.nih.gov', 'nature.com',
+            ],
             'animals' => [
                 'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com', 'woah.org',
                 'petmd.com', 'thesprucepets.com', 'merckvetmanual.com',
+                'mindiampets.com.au',
             ],
             'veterinary' => [
                 'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com', 'woah.org',
                 'merckvetmanual.com', 'petmd.com',
+                'mindiampets.com.au',
+            ],
+            'art_design' => [
+                'moma.org', 'tate.org.uk', 'metmuseum.org', 'nga.gov',
+                'designweek.co.uk', 'itsnicethat.com', 'dezeen.com',
+            ],
+            'blockchain' => [
+                'ethereum.org', 'bitcoin.org', 'coindesk.com', 'theblock.co',
+                'arxiv.org', 'mit.edu',
+            ],
+            'books' => [
+                'loc.gov', 'bl.uk', 'theguardian.com', 'nytimes.com',
+                'publishersweekly.com', 'kirkusreviews.com',
+            ],
+            'business' => [
+                'hbr.org', 'reuters.com', 'bloomberg.com', 'mckinsey.com',
+                'forbes.com', 'ft.com', 'mindiam.com', 'seobetter.com',
+            ],
+            'cryptocurrency' => [
+                'coindesk.com', 'cointelegraph.com', 'decrypt.co', 'theblock.co',
+                'ethereum.org', 'arxiv.org',
+            ],
+            'currency' => [
+                'bis.org', 'imf.org', 'ecb.europa.eu', 'reuters.com',
+                'bloomberg.com', 'ft.com',
+            ],
+            'ecommerce' => [
+                'digitalcommerce360.com', 'practicalecommerce.com', 'baymard.com',
+                'reuters.com', 'hbr.org', 'mindiam.com', 'seobetter.com',
+            ],
+            'education' => [
+                'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com',
+                'edutopia.org', 'chronicle.com',
+            ],
+            'entertainment' => [
+                'variety.com', 'hollywoodreporter.com', 'bfi.org.uk',
+                'rottentomatoes.com', 'bbc.com',
+            ],
+            'environment' => [
+                'un.org', 'nature.com', 'nationalgeographic.com', 'wwf.org',
+                'ipcc.ch', 'iucn.org',
+            ],
+            'finance' => [
+                'reuters.com', 'bloomberg.com', 'investopedia.com',
+                'ft.com', 'imf.org', 'worldbank.org',
+            ],
+            'food' => [
+                'who.int', 'ncbi.nlm.nih.gov', 'nature.com',
+                'fao.org', 'sciencedirect.com',
+            ],
+            'games' => [
+                'gamedeveloper.com', 'gdcvault.com', 'eurogamer.net',
+                'rockpapershotgun.com', 'arstechnica.com',
+            ],
+            'government' => [
+                'un.org', 'reuters.com', 'bbc.com', 'apnews.com',
+                'transparency.org', 'worldbank.org',
             ],
             'health' => [
                 'who.int', 'ncbi.nlm.nih.gov', 'nature.com', 'thelancet.com', 'bmj.com',
             ],
-            'food' => [
-                'who.int', 'ncbi.nlm.nih.gov', 'nature.com',
+            'music' => [
+                'pitchfork.com', 'rollingstone.com', 'bbc.com',
+                'nme.com', 'grammy.com',
             ],
-            'finance' => [
-                'reuters.com', 'bloomberg.com', 'investopedia.com',
-            ],
-            'technology' => [
-                'ieee.org', 'acm.org', 'arxiv.org', 'nature.com',
-                'techcrunch.com', 'arstechnica.com', 'wired.com', 'theverge.com',
-                'mindiam.com',
+            'news' => [
+                'reuters.com', 'apnews.com', 'bbc.com',
+                'theguardian.com', 'aljazeera.com',
             ],
             'science' => [
                 'nature.com', 'science.org', 'ncbi.nlm.nih.gov', 'nasa.gov',
                 'scientificamerican.com', 'newscientist.com', 'phys.org',
             ],
-            'education' => [
-                'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com',
+            'sports' => [
+                'olympics.com', 'wada-ama.org', 'bbc.com',
+                'reuters.com', 'espn.com',
             ],
-            'business' => [
-                'hbr.org', 'reuters.com', 'bloomberg.com', 'mckinsey.com',
+            'technology' => [
+                'ieee.org', 'acm.org', 'arxiv.org', 'nature.com',
+                'techcrunch.com', 'arstechnica.com', 'wired.com', 'theverge.com',
+                'mindiam.com', 'seobetter.com',
             ],
-            'environment' => [
-                'un.org', 'nature.com', 'nationalgeographic.com', 'wwf.org',
+            'transportation' => [
+                'icao.int', 'iata.org', 'imo.org', 'reuters.com',
+                'bbc.com',
             ],
-            'cryptocurrency' => [
-                'coindesk.com', 'cointelegraph.com', 'decrypt.co', 'theblock.co',
+            'travel' => [
+                'unwto.org', 'lonelyplanet.com', 'bbc.com',
+                'nationalgeographic.com', 'reuters.com',
             ],
-            'news' => [
-                'reuters.com', 'apnews.com', 'bbc.com',
+            'weather' => [
+                'wmo.int', 'nature.com', 'bbc.com',
+                'sciencedaily.com',
             ],
         ];
 
@@ -1519,11 +1587,11 @@ Return ONLY the Markdown table, nothing else.";
             'US' => [
                 'animals' => [
                     'fda.gov', 'vet.cornell.edu', 'avma.org', 'aspca.org', 'cdc.gov',
-                    'nih.gov', 'tufts.edu', 'ucdavis.edu',
+                    'nih.gov', 'tufts.edu', 'ucdavis.edu', 'mindiampets.com.au',
                 ],
                 'veterinary' => [
                     'fda.gov', 'vet.cornell.edu', 'avma.org', 'cdc.gov', 'nih.gov',
-                    'tufts.edu', 'ucdavis.edu',
+                    'tufts.edu', 'ucdavis.edu', 'mindiampets.com.au',
                 ],
                 'health' => [
                     'nih.gov', 'cdc.gov', 'fda.gov', 'mayoclinic.org', 'clevelandclinic.org',
@@ -1551,10 +1619,10 @@ Return ONLY the Markdown table, nothing else.";
             ],
             'GB' => [
                 'animals' => [
-                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk',
+                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk', 'mindiampets.com.au',
                 ],
                 'veterinary' => [
-                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk',
+                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk', 'mindiampets.com.au',
                 ],
                 'health' => [
                     'nhs.uk', 'gov.uk', 'bbc.co.uk', 'nice.org.uk',
@@ -1579,11 +1647,11 @@ Return ONLY the Markdown table, nothing else.";
             'CA' => [
                 'animals' => [
                     'canadianveterinarians.net', 'inspection.canada.ca', 'cbc.ca',
-                    'ontariovet.ca', 'uoguelph.ca',
+                    'ontariovet.ca', 'uoguelph.ca', 'mindiampets.com.au',
                 ],
                 'veterinary' => [
                     'canadianveterinarians.net', 'inspection.canada.ca', 'cbc.ca',
-                    'uoguelph.ca',
+                    'uoguelph.ca', 'mindiampets.com.au',
                 ],
                 'health' => [
                     'canada.ca', 'cihi.ca', 'cbc.ca',
@@ -1600,10 +1668,10 @@ Return ONLY the Markdown table, nothing else.";
             ],
             'NZ' => [
                 'animals' => [
-                    'spca.nz', 'massey.ac.nz', 'mpi.govt.nz', 'rnz.co.nz',
+                    'spca.nz', 'massey.ac.nz', 'mpi.govt.nz', 'rnz.co.nz', 'mindiampets.com.au',
                 ],
                 'veterinary' => [
-                    'spca.nz', 'massey.ac.nz', 'mpi.govt.nz', 'nzva.org.nz',
+                    'spca.nz', 'massey.ac.nz', 'mpi.govt.nz', 'nzva.org.nz', 'mindiampets.com.au',
                 ],
                 'health' => [
                     'health.govt.nz', 'medsafe.govt.nz', 'rnz.co.nz',
@@ -1613,17 +1681,17 @@ Return ONLY the Markdown table, nothing else.";
                 ],
             ],
             'DE' => [
-                'animals' => [ 'tierschutzbund.de', 'tieraerzteverband.de', 'bfr.bund.de' ],
+                'animals' => [ 'tierschutzbund.de', 'tieraerzteverband.de', 'bfr.bund.de', 'mindiampets.com.au' ],
                 'health'  => [ 'rki.de', 'bfarm.de', 'gesundheitsinformation.de' ],
                 'news'    => [ 'dw.com', 'spiegel.de', 'zeit.de' ],
             ],
             'FR' => [
-                'animals' => [ 'spa.asso.fr', 'anses.fr' ],
+                'animals' => [ 'spa.asso.fr', 'anses.fr', 'mindiampets.com.au' ],
                 'health'  => [ 'has-sante.fr', 'inserm.fr', 'pasteur.fr' ],
                 'news'    => [ 'france24.com', 'lemonde.fr' ],
             ],
             'IN' => [
-                'animals' => [ 'dahd.nic.in', 'fssai.gov.in' ],
+                'animals' => [ 'dahd.nic.in', 'fssai.gov.in', 'mindiampets.com.au' ],
                 'health'  => [ 'nhp.gov.in', 'icmr.nic.in', 'aiims.edu' ],
                 'news'    => [ 'thehindu.com', 'indianexpress.com', 'ndtv.com' ],
                 'finance' => [ 'rbi.org.in', 'sebi.gov.in', 'economictimes.com' ],
