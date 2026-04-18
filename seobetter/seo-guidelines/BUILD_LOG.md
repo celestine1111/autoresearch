@@ -16,6 +16,46 @@
 
 ---
 
+## v1.5.99 — Fix 3 optimize-all bugs: quote stripping, timeout, missing links on save
+
+**Date:** 2026-04-18
+**Commit:** `bcf38a7`
+
+### Bug Fixes
+
+- **Fix 1: strip_unlinked_quotes() over-stripped content (GEO 63→8)** — `includes/Content_Injector.php::strip_unlinked_quotes()` line ~1371
+  - Root cause: regex `/["\x{201D}\x{201C}\'\.!?]$/u` matched normal paragraphs ending with periods (`.`) as "quotes"
+  - Any paragraph ending with `. — Source Name` got stripped as a "hallucinated quote"
+  - For Review articles this could strip 50%+ of content, cratering the GEO score
+  - Fix: removed `\.!?` from regex — now only matches actual quote characters (`"`, `"`, `"`, `'`, `'`, `'`)
+  - Verify: `grep -n 'ends_with_quote' seobetter/includes/Content_Injector.php`
+
+- **Fix 2: optimize_all timeout for 2000+ word articles** — `includes/Content_Injector.php::optimize_all()` line ~1675
+  - Root cause: `set_time_limit(120)` was too short for Buying Guide + Comparison articles (185+ seconds needed)
+  - Fix: increased to `set_time_limit(300)` (5 minutes)
+  - Verify: `grep -n 'set_time_limit' seobetter/includes/Content_Injector.php`
+
+- **Fix 3: external links stripped at save time** — `seobetter.php::rest_save_draft()` line ~1142
+  - Root cause: `rest_save_draft()` used original `citation_pool` from generation, not the combined pool with optimize_all's URLs
+  - URLs added by Optimize All (Sonar citations, Tavily quotes) passed validation during preview but got stripped at save
+  - Fix: build `combined_pool` by extracting ALL inline markdown URLs before calling `validate_outbound_links()` — same approach as `rest_optimize_all()` (line 1548-1559)
+  - Verify: `grep -n 'combined_pool' seobetter/seobetter.php`
+
+### Test Context
+
+Bugs found during automated 5-keyword × 5-article-type testing on jwum.com:
+- "travel dog bed" (Review): GEO dropped 63→8 — Bug 1
+- "low fat dog food" (Buying Guide): optimize timed out — Bug 2
+- "luxury dog bed" (Comparison): optimize timed out — Bug 2
+- "pet shop hoppers crossing" (Listicle): 67→87 but 0 ext links after save — Bug 3
+- "pet shop darwin" (Blog Post): 60→88 with 2 ext links — partial Bug 3
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.98 — Remove Brave Search settings (Tavily replaces it)
 
 **Date:** 2026-04-17

@@ -232,3 +232,91 @@ These emails fire based on what the user DOES, not when they signed up:
 5. **Phase 4 (5000+ users):** Add behavioral triggers and trial activation sequence.
 
 Don't build email infrastructure before you have users. Freemius gives you the foundation for free.
+
+---
+
+## 10. WordPress Website Outreach (Contact Form Strategy)
+
+### Goal
+Reach WordPress-related websites directly through their contact forms to introduce SEOBetter. Target sites that write about WordPress plugins, SEO, AI content, or blogging — their audience is our audience.
+
+### Target Website Categories
+
+| Category | Examples | Why |
+|---|---|---|
+| WordPress plugin review blogs | WPBeginner, WPMayor, Starter Story, WP Tavern | Their readers actively search for new plugins |
+| SEO tool roundup sites | BloggersPassion, Blogging Wizard, ShoutMeLoud | Already ranking for "best SEO plugins" — a mention = organic traffic |
+| AI content / GEO blogs | Search Engine Journal, Ahrefs Blog, Backlinko | Thought leaders whose endorsement carries weight |
+| WordPress hosting blogs | Hostinger Blog, SiteGround Blog, Cloudways Blog | Large WordPress audiences, often feature partner plugins |
+| WordPress agency sites | Freelance WP devs, small agency "tools we use" pages | They install plugins on client sites — one agency = 10-50 installs |
+| Niche bloggers (pet, food, travel) | Any niche blogger who writes about SEO or content | They ARE the end user — show them how SEOBetter solves their exact problem |
+
+### Message Template (Contact Form)
+
+**Subject:** Quick question about plugin reviews / partnerships
+
+**Body:**
+> Hi [Name/Team],
+>
+> I came across [their site] while researching [topic they cover]. Great content — especially [specific article or feature you genuinely noticed].
+>
+> I'm building SEOBetter, a WordPress plugin that optimizes articles for AI search engines (Google AI Overviews, ChatGPT, Perplexity, Gemini). It's the first plugin focused specifically on GEO (Generative Engine Optimization) — making sure content gets cited by AI, not just ranked by Google.
+>
+> Would you be open to:
+> - A free Pro license to try it out (no strings attached)
+> - A quick demo or walkthrough
+> - Including it in a future roundup or review
+>
+> Either way, happy to answer any questions about GEO or AI-optimized content. It's a new space and there's a lot of misinformation out there.
+>
+> Cheers,
+> Ben
+> seobetter.com
+
+### Key Rules
+
+1. **Personalize every message.** Reference something specific on their site. Generic mass-outreach gets deleted.
+2. **Lead with value, not the ask.** Offer a free Pro license before asking for a review.
+3. **No follow-up spam.** One message per site. If they don't reply, move on.
+4. **Track in a spreadsheet.** Site name, URL, date contacted, response, outcome.
+5. **Prioritize smaller sites.** WPBeginner gets 100 pitches/week. A blogger with 5K monthly visitors will actually read yours and write about it.
+6. **Offer something unique.** Don't say "we're another SEO plugin." Say "we're the first GEO plugin — here's what that means and why it matters now."
+
+### Volume & Cadence
+
+- **Target:** 10-15 sites per week (quality over quantity)
+- **Response rate:** Expect 10-20% reply rate, 5-10% will write something
+- **Timeline:** Start 2 weeks before WordPress.org submission, continue post-launch
+- **Time cost:** ~30 min/day (find site → read their content → write personalized message → submit via contact form)
+
+### What to Offer
+
+| Tier | Offer | Ask |
+|---|---|---|
+| Big sites (50K+ traffic) | Free lifetime Pro license + affiliate commission (30%) | Written review or roundup inclusion |
+| Mid sites (5K-50K traffic) | Free annual Pro license | Honest review (positive or negative) |
+| Small sites / bloggers | Free annual Pro license | Try it and share if they like it |
+| Agencies / freelancers | Free Pro license for their site + 50% off for clients | "Tools we use" mention or referral |
+
+### Tracking Spreadsheet Columns
+
+| Column | Purpose |
+|---|---|
+| Site name | Who |
+| URL | Where |
+| Contact method | Form / email / Twitter DM |
+| Date sent | When |
+| Personalization used | What specific thing you referenced |
+| Response | Yes / No / Pending |
+| Outcome | Review published / Affiliate signed / No response |
+| Link | URL of published review (if any) |
+| Follow-up needed | One follow-up max, 2 weeks later |
+
+### What NOT to Do
+
+- Don't use automated outreach tools (they send generic messages that get spam-filtered)
+- Don't lie about the plugin's capabilities
+- Don't promise paid placements disguised as organic reviews (FTC violation)
+- Don't contact the same site twice within 3 months
+- Don't pitch to sites that explicitly say "we don't accept pitches"
+- Don't send via email unless their contact page provides one — always use their preferred contact method

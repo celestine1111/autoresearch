@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.98
+ * Version: 1.5.99
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.98' );
+define( 'SEOBETTER_VERSION', '1.5.99' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1139,15 +1139,32 @@ final class SEOBetter {
 
         $post_content = '';
 
+        // v1.5.99 — Build combined pool: original citation pool + ALL inline
+        // URLs already in the markdown. This is the same approach used in
+        // rest_optimize_all(). Without this, URLs added by Optimize All
+        // (Sonar citations, Tavily quotes) get stripped at save time because
+        // they're not in the original generation-time pool.
+        $combined_pool = $citation_pool;
+        if ( ! empty( $markdown ) && preg_match_all( '/(?<!!)\[[^\]]+\]\((https?:\/\/[^)]+)\)/', $markdown, $url_matches ) ) {
+            foreach ( $url_matches[1] as $found_url ) {
+                $combined_pool[] = [
+                    'url'         => $found_url,
+                    'title'       => '',
+                    'source_name' => wp_parse_url( $found_url, PHP_URL_HOST ) ?? '',
+                    'verified_at' => time(),
+                ];
+            }
+        }
+
         // Validate all outbound URLs in markdown before formatting.
-        // The citation pool is passed as the primary allow-list — any URL in
-        // the pool is citable, any URL not in the pool falls back to the
-        // static whitelist and Pass 3 content verification.
+        // The combined pool is the primary allow-list — any URL in the pool
+        // is citable, any URL not in the pool falls back to the static
+        // whitelist and Pass 3 content verification.
         if ( ! empty( $markdown ) ) {
-            $markdown = $this->validate_outbound_links( $markdown, $citation_pool );
+            $markdown = $this->validate_outbound_links( $markdown, $combined_pool );
             // Append auto-generated References section for pool URLs the
             // article body actually cited
-            $markdown = $this->append_references_section( $markdown, $citation_pool );
+            $markdown = $this->append_references_section( $markdown, $combined_pool );
         }
 
         if ( ! empty( $markdown ) ) {

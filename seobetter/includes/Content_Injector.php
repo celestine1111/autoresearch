@@ -1368,7 +1368,10 @@ Return ONLY the Markdown table, nothing else.";
                     $after = trim( $parts[1] ?? '' );
                     // The part before the dash should end with a quote character
                     // and the part after should be a capitalized name (2+ words or known source)
-                    $ends_with_quote = preg_match( '/["\x{201D}\x{201C}\'\.!?]$/u', $before );
+                    // v1.5.99 — ONLY match actual quote characters, NOT periods/exclamation/question marks.
+                    // Previous regex included \.!? which matched normal paragraphs ending with a period
+                    // followed by "— Source Name", stripping entire paragraphs and cratering GEO scores.
+                    $ends_with_quote = preg_match( '/["\x{201D}\x{201C}\x{2018}\x{2019}\']$/u', $before );
                     // v1.5.96c — also match lowercase hostnames (petcircle.com.au)
                     // and capitalized names (Pet Circle). Previous check only caught [A-Z].
                     $starts_with_name = preg_match( '/^[A-Za-z]/', $after );
@@ -1672,7 +1675,10 @@ Return ONLY the Markdown table, nothing else.";
         array  $scores = [],
         ?array $sonar_data = null
     ): array {
-        @set_time_limit( 120 );
+        // v1.5.99 — increased from 120 to 300. Buying Guide + Comparison articles
+        // (2000+ words) were timing out at 120s due to multi-step optimization +
+        // Pass 3 URL verification. 300s gives enough headroom.
+        @set_time_limit( 300 );
 
         $steps_run     = [];
         $steps_skipped = [];
