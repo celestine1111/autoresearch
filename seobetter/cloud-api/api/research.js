@@ -3129,7 +3129,7 @@ async function searchTavily(keyword, country = '') {
         if (/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code|add\s*to\s*wishlist|was\s*\$/i.test(s)) continue;
 
         // v1.5.105 — Require substantive claim/opinion language (not marketing taglines)
-        if (!/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i.test(s)) continue;
+        if (!/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|support|reduce|provide|design|feature|material|quality|comfort|protect|treat|condition|symptom|avoid|consider|choose|suitable|essential|option|compare|test|review|evaluat|measure|perform|assess|durabl|withstand|orthoped|joint|muscle|weight|pressure|temperature|waterproof|washable)\b/i.test(s)) continue;
 
         const clean = s.trim();
         if (clean.length < 40 || clean.length > 220) continue;

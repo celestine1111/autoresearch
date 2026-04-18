@@ -283,7 +283,7 @@ class Content_Injector {
                 // v1.5.101 — product listing junk filter on Vercel-sourced quotes too
                 if ( preg_match( '/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code/i', $text ) ) continue;
                 // v1.5.105 — Require substantive claim/opinion language.
-                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i', $text ) ) continue;
+                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|support|reduce|provide|design|feature|material|quality|comfort|protect|treat|condition|symptom|avoid|consider|choose|suitable|essential|option|compare|test|review|evaluat|measure|perform|assess|durabl|withstand|orthoped|joint|muscle|weight|pressure|temperature|waterproof|washable)\b/i', $text ) ) continue;
                 // v1.5.109 — Authority domain filter on Vercel-sourced quotes.
                 // If authority domains are configured, only accept quotes from those
                 // domains. Without this, Vercel quotes bypass the authority filter
@@ -317,7 +317,7 @@ class Content_Injector {
                 if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
                 if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
                 // v1.5.105 — Same substantive language filter as Source 1
-                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i', $text ) ) continue;
+                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|support|reduce|provide|design|feature|material|quality|comfort|protect|treat|condition|symptom|avoid|consider|choose|suitable|essential|option|compare|test|review|evaluat|measure|perform|assess|durabl|withstand|orthoped|joint|muscle|weight|pressure|temperature|waterproof|washable)\b/i', $text ) ) continue;
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
