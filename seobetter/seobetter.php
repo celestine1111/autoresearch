@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.110
+ * Version: 1.5.111
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.110' );
+define( 'SEOBETTER_VERSION', '1.5.111' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1156,6 +1156,12 @@ final class SEOBetter {
             }
         }
 
+        // v1.5.111 — Run cleanup on markdown before save. Catches long dashes,
+        // emoji, and Unicode bullets that survived from generation.
+        if ( ! empty( $markdown ) ) {
+            $markdown = self::cleanup_ai_markdown( $markdown );
+        }
+
         // Validate all outbound URLs in markdown before formatting.
         // The combined pool is the primary allow-list — any URL in the pool
         // is citable, any URL not in the pool falls back to the static
@@ -1506,7 +1512,7 @@ final class SEOBetter {
      * - Stray HTML list/paragraph tags → stripped
      * - Trailing whitespace on list items
      */
-    private static function cleanup_ai_markdown( string $md ): string {
+    public static function cleanup_ai_markdown( string $md ): string {
         // 1. Split inline bullets into separate lines FIRST.
         //    "• item1 • item2 • item3" → "\n- item1\n- item2\n- item3"
         //    Must run before the per-line regex below.

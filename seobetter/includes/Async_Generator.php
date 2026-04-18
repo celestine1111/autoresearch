@@ -402,7 +402,7 @@ class Async_Generator {
      */
     private static function get_prose_template( string $content_type ): array {
         $templates = [
-            'blog_post' => ['sections' => 'Key Takeaways, 3-5 topic sections with H2 headings, FAQ, References', 'guidance' => 'Conversational blog entry. Grab attention with an opening hook. Personal voice allowed. End with a call to action.', 'schema' => 'BlogPosting'],
+            'blog_post' => ['sections' => 'Key Takeaways, 3-5 topic sections with H2 headings, Pros and Cons, FAQ, References', 'guidance' => 'Conversational blog entry. Grab attention with an opening hook. Personal voice allowed. Include a Pros and Cons section. End with a call to action.', 'schema' => 'BlogPosting'],
             'news_article' => ['sections' => 'Key Takeaways, Lede (who/what/when/where/why), Supporting Details, Background Context, What Happens Next, FAQ, References', 'guidance' => 'Inverted pyramid: most important facts first. Neutral third person. Attribute every claim. Short paragraphs.', 'schema' => 'NewsArticle'],
             'opinion' => ['sections' => 'Key Takeaways, Thesis Statement, Supporting Arguments (3 points with evidence), Counterargument, Call to Action, FAQ, References', 'guidance' => 'Argumentative piece with clear stance. First person allowed. Confident tone. Address the strongest counterargument.', 'schema' => 'OpinionNewsArticle'],
             'how_to' => ['sections' => 'Key Takeaways, Why This Matters, What You Will Need, Numbered Steps (each step: action verb + result), Common Problems, Conclusion, FAQ, References', 'guidance' => 'Step-by-step tutorial. Imperative voice (do this, then do that). Clear prerequisites. Each step should be independently actionable.', 'schema' => 'HowTo'],
@@ -426,7 +426,7 @@ class Async_Generator {
         ];
 
         // Shared SEO + humanizer rules appended to all content type guidance
-        $shared = ' CRITICAL RULES FOR ALL TYPES: Include 3+ statistics per 1000 words (+40% AI visibility). Include 2+ expert quotes with full attribution (+41% visibility). Include 5+ inline citations as clickable Markdown links using ONLY URLs from the research data (+30% visibility). NEVER invent URLs or page paths — if you mention an organization without a URL from research data, link to their homepage domain only. Every outgoing link must lead to a real page, not a 404. Follow humanizer rules: no AI words (delve, leverage, pivotal, tapestry, landscape), vary sentence rhythm, write like a knowledgeable human with opinions. Apply E-E-A-T: show experience, expertise, authority, and trustworthiness appropriate to this content type.';
+        $shared = ' CRITICAL RULES FOR ALL TYPES: Include 3+ statistics per 1000 words (+40% AI visibility). Include 2+ expert quotes with full attribution (+41% visibility). Include 5+ inline citations as clickable Markdown links using ONLY URLs from the research data (+30% visibility). NEVER invent URLs or page paths — if you mention an organization without a URL from research data, link to their homepage domain only. Every outgoing link must lead to a real page, not a 404. Include a "## Pros and Cons" section with bullet lists for Pros and Cons (this auto-styles into colored boxes). Follow humanizer rules: no AI words (delve, leverage, pivotal, tapestry, landscape), vary sentence rhythm, write like a knowledgeable human with opinions. Apply E-E-A-T: show experience, expertise, authority, and trustworthiness appropriate to this content type.';
 
         $template = $templates[ $content_type ] ?? $templates['blog_post'];
         $template['guidance'] .= $shared;
@@ -1003,10 +1003,13 @@ class Async_Generator {
         }
 
         // v1.5.90 — Strip hallucinated attributed quotes BEFORE formatting.
-        // Runs on EVERY article, not just after Optimize All. If the AI wrote
-        // "quote text" — Fake Name with no source link, it gets removed here
-        // so the user NEVER sees it in the preview.
         $markdown = Content_Injector::strip_unlinked_quotes( $markdown );
+
+        // v1.5.111 — Run full cleanup on initial generation output.
+        // Previously cleanup_ai_markdown() only ran in optimize/inject-fix,
+        // so initial articles had long dashes (em/en-dash) and emoji.
+        // Now runs on EVERY article at generation time.
+        $markdown = \SEOBetter::cleanup_ai_markdown( $markdown );
 
         // Format as classic HTML for preview
         $formatter = new Content_Formatter();

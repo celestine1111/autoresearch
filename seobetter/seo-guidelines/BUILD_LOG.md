@@ -16,6 +16,39 @@
 
 ---
 
+## v1.5.111 — Fix 4 audit failures: long dashes, quotes fallback, Pros/Cons, save cleanup
+
+**Date:** 2026-04-18
+**Commit:** `[pending]`
+
+### Bug Fixes
+
+- **Long dashes not cleaned in initial generation or save** — 2 locations
+  - `cleanup_ai_markdown()` made public (was private). Now called in:
+    - `Async_Generator::assemble_final()` — cleans initial generation output
+    - `rest_save_draft()` — cleans before formatting and saving
+  - Previously only ran in optimize/inject-fix paths
+  - Verify: `grep -n 'cleanup_ai_markdown' seobetter/includes/Async_Generator.php`
+  - Verify: `grep -n 'cleanup_ai_markdown' seobetter/seobetter.php | grep save`
+
+- **Expert quotes: smart fallback for niche keywords** — `includes/Content_Injector.php::tavily_search_and_extract()`
+  - If authority-restricted search with "expert opinion research" suffix finds < 2 results, retries with JUST the keyword (no suffix) but KEEPS authority domain restriction
+  - Finds more results on authority sites for niche topics like "dog beds for arthritic dogs"
+  - Does NOT remove domain restriction (prevents junk domains leaking in)
+  - Verify: `grep -n 'Simpler query, same domains' seobetter/includes/Content_Injector.php`
+
+- **Pros/Cons section added to ALL article types** — `includes/Async_Generator.php`
+  - Added to blog_post sections template: "Pros and Cons"
+  - Added to shared rules (all 21 types): 'Include a "## Pros and Cons" section'
+  - Auto-styles into green/red colored boxes by Content_Formatter
+  - Verify: `grep -n 'Pros and Cons' seobetter/includes/Async_Generator.php`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.108 — Complete authority domains: all 25 categories + user sites global
 
 **Date:** 2026-04-18

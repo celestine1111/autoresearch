@@ -2111,12 +2111,22 @@ Return ONLY the Markdown table, nothing else.";
             'body'    => wp_json_encode( $tavily_body ),
         ] );
 
-        // v1.5.110 — NO unrestricted fallback. If authority domains find < 2
-        // results, accept what we got (even 0). An article without quotes is
-        // better than one with quotes from mattressmiracle.ca or random blogs.
-        // The previous fallback removed include_domains and retried, which
-        // found the same low-quality domains we were trying to filter out.
-        if ( false ) { // Disabled: unrestricted fallback produces junk quotes
+        // v1.5.111 — Smart fallback: if authority domains find < 2 results,
+        // retry with JUST the keyword (no "expert opinion research" suffix)
+        // but KEEP the include_domains restriction. This finds more results
+        // on authority sites for niche keywords like "dog beds for arthritic dogs"
+        // where "expert opinion research" is too narrow. Does NOT remove
+        // the domain restriction (that would return junk like mattressmiracle.ca).
+        if ( ! is_wp_error( $response ) && ! empty( $authority_domains ) ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( empty( $body['results'] ) || count( $body['results'] ) < 2 ) {
+                $tavily_body['query'] = $keyword; // Simpler query, same domains
+                $response = wp_remote_post( 'https://api.tavily.com/search', [
+                    'timeout' => 20,
+                    'headers' => [ 'Content-Type' => 'application/json' ],
+                    'body'    => wp_json_encode( $tavily_body ),
+                ] );
+            }
         }
 
         if ( is_wp_error( $response ) ) {
