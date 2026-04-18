@@ -16,6 +16,35 @@
 
 ---
 
+## v1.5.106 — Authority domain targeting for Tavily quotes (per category)
+
+**Date:** 2026-04-18
+**Commit:** `[pending]`
+
+### New Feature
+
+- **Authority domain mapping** — `includes/Content_Injector.php::get_authority_domains()` line ~1420
+  - 15 category-specific domain lists (animals, veterinary, health, food, finance, technology, science, education, business, environment, sports, entertainment, cryptocurrency, news, government)
+  - User's sites included: `mindiampets.com.au` (animals, veterinary), `mindiam.com` (technology)
+  - Tavily `include_domains` parameter restricts search to credible sources per category
+  - Falls back to unrestricted search if filtered returns < 2 results
+  - Verify: `grep -n 'get_authority_domains' seobetter/includes/Content_Injector.php`
+
+- **Domain parameter threaded through optimize pipeline**
+  - Frontend sends `domain` in optimize-all AJAX call
+  - `rest_optimize_all()` → `optimize_all()` → `inject_quotes()` → `tavily_search_and_extract()`
+  - Verify: `grep -n 'domain' seobetter/admin/views/content-generator.php | grep optimize`
+
+- **Query changed from "review guide expert tips" to "expert opinion research"**
+  - Better targeting of expert content vs review blogs
+  - Verify: `grep -n 'expert opinion research' seobetter/includes/Content_Injector.php`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.105 — Filter junk stats + require substantive quotes (systematic, all paths)
 
 **Date:** 2026-04-18

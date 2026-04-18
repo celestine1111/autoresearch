@@ -252,7 +252,7 @@ class Content_Injector {
      * Falls back to a clearly-labelled "industry perspective" summary
      * (not a fake quote) only when zero real quotes exist.
      */
-    public static function inject_quotes( string $content, string $keyword, ?array $sonar_data = null ): array {
+    public static function inject_quotes( string $content, string $keyword, ?array $sonar_data = null, string $domain = '' ): array {
         // v1.5.96 — TAVILY DIRECT FROM PHP. Zero hallucination. No Vercel dependency.
         //
         // Calls Tavily Search API directly via wp_remote_post(). Gets real
@@ -290,7 +290,7 @@ class Content_Injector {
 
         // Source 2: Direct Tavily call from PHP (no Vercel, no timeout issues)
         if ( empty( $quotes ) ) {
-            $tavily = self::tavily_search_and_extract( $keyword );
+            $tavily = self::tavily_search_and_extract( $keyword, $domain );
             foreach ( ( $tavily['quotes'] ?? [] ) as $q ) {
                 if ( empty( $q['text'] ) || empty( $q['url'] ) ) continue;
                 $text = trim( $q['text'] );
@@ -1416,30 +1416,127 @@ Return ONLY the Markdown table, nothing else.";
      * @param string $keyword Search query
      * @return array {results: [...], quotes: [{text, source, url}, ...]}
      */
-    public static function tavily_search_and_extract( string $keyword ): array {
+    /**
+     * v1.5.106 — Authority domain mapping per category.
+     * Used by tavily_search_and_extract() to restrict searches to credible
+     * sources. Falls back to unrestricted search if filtered returns < 2 results.
+     */
+    private static function get_authority_domains( string $domain ): array {
+        $map = [
+            'animals' => [
+                'petmd.com', 'hillspet.com', 'purina.com', 'purina.com.au', 'cats.com',
+                'catster.com', 'dogster.com', 'akc.org', 'aspca.org', 'rspca.org.au',
+                'vet.cornell.edu', 'avma.org', 'merckvetmanual.com', 'rover.com',
+                'thesprucepets.com', 'petbarn.com.au', 'petsmart.com', 'chewy.com',
+                'mindiampets.com.au',
+            ],
+            'veterinary' => [
+                'petmd.com', 'hillspet.com', 'purina.com', 'purina.com.au',
+                'vet.cornell.edu', 'avma.org', 'merckvetmanual.com', 'ncbi.nlm.nih.gov',
+                'fda.gov', 'rspca.org.au', 'cats.com', 'thesprucepets.com',
+                'mindiampets.com.au',
+            ],
+            'health' => [
+                'who.int', 'nih.gov', 'cdc.gov', 'mayoclinic.org', 'webmd.com',
+                'healthline.com', 'medlineplus.gov', 'clevelandclinic.org',
+                'hopkinsmedicine.org', 'health.harvard.edu', 'nhs.uk',
+            ],
+            'food' => [
+                'fda.gov', 'nutrition.gov', 'eatright.org', 'healthline.com',
+                'webmd.com', 'mayoclinic.org', 'bbcgoodfood.com', 'eatingwell.com',
+                'allrecipes.com', 'seriouseats.com', 'foodnetwork.com',
+            ],
+            'finance' => [
+                'investopedia.com', 'reuters.com', 'bloomberg.com', 'wsj.com',
+                'ft.com', 'cnbc.com', 'forbes.com', 'nerdwallet.com',
+                'bankrate.com', 'morningstar.com',
+            ],
+            'technology' => [
+                'techcrunch.com', 'arstechnica.com', 'wired.com', 'theverge.com',
+                'ieee.org', 'acm.org', 'zdnet.com', 'cnet.com', 'tomshardware.com',
+                'anandtech.com', 'mindiam.com',
+            ],
+            'science' => [
+                'nature.com', 'science.org', 'newscientist.com', 'nasa.gov',
+                'nih.gov', 'ncbi.nlm.nih.gov', 'scientificamerican.com',
+                'phys.org', 'sciencedaily.com',
+            ],
+            'education' => [
+                'ed.gov', 'edutopia.org', 'coursera.org', 'khanacademy.org',
+                'harvard.edu', 'mit.edu', 'stanford.edu', 'chronicle.com',
+            ],
+            'business' => [
+                'hbr.org', 'forbes.com', 'inc.com', 'entrepreneur.com',
+                'businessinsider.com', 'reuters.com', 'bloomberg.com', 'mckinsey.com',
+            ],
+            'environment' => [
+                'epa.gov', 'un.org', 'nationalgeographic.com', 'wwf.org',
+                'greenpeace.org', 'nature.com', 'climatecentral.org',
+            ],
+            'sports' => [
+                'espn.com', 'bbc.com', 'reuters.com', 'si.com',
+                'theathletic.com', 'nba.com', 'fifa.com',
+            ],
+            'entertainment' => [
+                'imdb.com', 'rottentomatoes.com', 'variety.com', 'hollywoodreporter.com',
+                'rollingstone.com', 'pitchfork.com', 'billboard.com',
+            ],
+            'cryptocurrency' => [
+                'coindesk.com', 'cointelegraph.com', 'decrypt.co', 'theblock.co',
+                'messari.io', 'coinmarketcap.com', 'binance.com',
+            ],
+            'news' => [
+                'reuters.com', 'apnews.com', 'bbc.com', 'nytimes.com',
+                'theguardian.com', 'washingtonpost.com', 'aljazeera.com',
+            ],
+            'government' => [
+                'usa.gov', 'whitehouse.gov', 'congress.gov', 'gao.gov',
+                'federalregister.gov', 'bbc.com', 'reuters.com',
+            ],
+        ];
+
+        return $map[ $domain ] ?? [];
+    }
+
+    public static function tavily_search_and_extract( string $keyword, string $domain = '' ): array {
         $settings = get_option( 'seobetter_settings', [] );
         $api_key = $settings['tavily_api_key'] ?? '';
         if ( empty( $api_key ) ) {
             return [ 'results' => [], 'quotes' => [] ];
         }
 
+        // v1.5.106 — Authority domain targeting. Restricts Tavily search to
+        // credible sources per category. Falls back to unrestricted if < 2 results.
+        $authority_domains = self::get_authority_domains( $domain );
+        $tavily_body = [
+            'api_key'            => $api_key,
+            'query'              => $keyword . ' expert opinion research',
+            'include_raw_content' => true,
+            'max_results'        => 5,
+            'search_depth'       => 'basic',
+        ];
+        if ( ! empty( $authority_domains ) ) {
+            $tavily_body['include_domains'] = $authority_domains;
+        }
+
         $response = wp_remote_post( 'https://api.tavily.com/search', [
             'timeout' => 20,
             'headers' => [ 'Content-Type' => 'application/json' ],
-            // v1.5.100 — Bias query toward editorial/review content. Without this,
-            // product keywords ("travel dog bed") return Amazon/retailer pages
-            // and the quote extractor pulls product listing text ("Regular price
-            // €158,95") instead of expert opinions. Adding "review guide expert"
-            // makes Tavily return review articles, buying guides, and expert
-            // advice pages where real quotable sentences live.
-            'body'    => wp_json_encode( [
-                'api_key'            => $api_key,
-                'query'              => $keyword . ' review guide expert tips',
-                'include_raw_content' => true,
-                'max_results'        => 5,
-                'search_depth'       => 'basic',
-            ] ),
+            'body'    => wp_json_encode( $tavily_body ),
         ] );
+
+        // If authority-filtered search returned < 2 results, retry without filter
+        if ( ! is_wp_error( $response ) && ! empty( $authority_domains ) ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( empty( $body['results'] ) || count( $body['results'] ) < 2 ) {
+                unset( $tavily_body['include_domains'] );
+                $response = wp_remote_post( 'https://api.tavily.com/search', [
+                    'timeout' => 20,
+                    'headers' => [ 'Content-Type' => 'application/json' ],
+                    'body'    => wp_json_encode( $tavily_body ),
+                ] );
+            }
+        }
 
         if ( is_wp_error( $response ) ) {
             return [ 'results' => [], 'quotes' => [], 'error' => $response->get_error_message() ];
@@ -1697,7 +1794,8 @@ Return ONLY the Markdown table, nothing else.";
         string $keyword,
         array  $existing_pool = [],
         array  $scores = [],
-        ?array $sonar_data = null
+        ?array $sonar_data = null,
+        string $domain = ''
     ): array {
         // v1.5.99 — increased from 120 to 300. Buying Guide + Comparison articles
         // (2000+ words) were timing out at 120s due to multi-step optimization +
@@ -1760,7 +1858,7 @@ Return ONLY the Markdown table, nothing else.";
         $markdown = self::strip_unlinked_quotes( $markdown );
 
         try {
-            $result = self::inject_quotes( $markdown, $keyword, $sonar );
+            $result = self::inject_quotes( $markdown, $keyword, $sonar, $domain );
             if ( $result['success'] ) {
                 $markdown = $result['content'];
                 $steps_run[] = 'Expert Quotes: ' . ( $result['added'] ?? 'added' );

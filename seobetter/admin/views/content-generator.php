@@ -1485,7 +1485,9 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     accent_color: draft.accent_color,
                     citation_pool: draft.citation_pool || [],
                     scores: checksForApi,
-                    sonar_data: draft.sonar_data || null
+                    sonar_data: draft.sonar_data || null,
+                    domain: draft.domain || '',
+                    content_type: draft.content_type || 'blog_post'
                 }).then(function(result) {
                     clearInterval(stepInterval);
                     var elapsed = Math.round((Date.now() - startTime) / 1000);
