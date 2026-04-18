@@ -16,6 +16,25 @@
 
 ---
 
+## v1.5.102 — Fix GEO scoring: use hybrid HTML for accurate analysis
+
+**Date:** 2026-04-18
+**Commit:** `[pending]`
+
+### Bug Fix
+
+- **GEO score dropped to 8 after Optimize All on Review articles** — `seobetter.php::rest_optimize_all()` + `rest_inject_fix()`
+  - Root cause: scoring used classic-formatted HTML (with scoped `<style>` + `<div>` wrapper) which confused the GEO analyzer. CSS text leaked into word count and keyword density calculations.
+  - Fix: score using hybrid-formatted HTML (clean Gutenberg blocks) instead of classic. Preview still uses classic HTML for proper styling.
+  - Applied to both `rest_optimize_all()` and `rest_inject_fix()` 
+  - Verify: `grep -n 'hybrid_html' seobetter/seobetter.php`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.101 — Systematic product-listing filter across ALL quote paths
 
 **Date:** 2026-04-18

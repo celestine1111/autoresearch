@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.101
+ * Version: 1.5.102
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.101' );
+define( 'SEOBETTER_VERSION', '1.5.102' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1473,8 +1473,13 @@ final class SEOBetter {
         // the regression the user kept reporting. Classic mode is correct.
         $html = $formatter->format( $updated_markdown, 'classic', [ 'accent_color' => $accent ] );
 
+        // v1.5.101b — Score using hybrid HTML (same fix as rest_optimize_all)
+        $hybrid_html = $formatter->format( $updated_markdown, 'hybrid', [
+            'accent_color' => $accent,
+            'content_type' => $request->get_param( 'content_type' ) ?? 'blog_post',
+        ] );
         $analyzer = new SEOBetter\GEO_Analyzer();
-        $score = $analyzer->analyze( $html, $keyword );
+        $score = $analyzer->analyze( $hybrid_html, $keyword );
 
         return new \WP_REST_Response( [
             'success'   => true,
@@ -1583,8 +1588,17 @@ final class SEOBetter {
         $formatter = new SEOBetter\Content_Formatter();
         $html = $formatter->format( $updated_markdown, 'classic', [ 'accent_color' => $accent ] );
 
+        // v1.5.101b — Score using HYBRID HTML for accuracy. Classic mode wraps
+        // content in <style> + scoped <div> which can confuse the GEO analyzer
+        // (CSS text leaking into word count, keyword density). Hybrid mode
+        // produces clean Gutenberg blocks that the analyzer handles correctly.
+        // The preview still shows the classic-formatted HTML (better styling).
+        $hybrid_html = $formatter->format( $updated_markdown, 'hybrid', [
+            'accent_color' => $accent,
+            'content_type' => $request->get_param( 'content_type' ) ?? 'blog_post',
+        ] );
         $analyzer = new SEOBetter\GEO_Analyzer();
-        $score = $analyzer->analyze( $html, $keyword );
+        $score = $analyzer->analyze( $hybrid_html, $keyword );
 
         return new \WP_REST_Response( [
             'success'       => true,
