@@ -132,13 +132,13 @@ class Content_Injector {
             ];
         }
 
-        // v1.5.113d — Disabled inline [N] anchor injection. The [N](#ref-N)
-        // markdown links don't survive the hybrid formatter — they render as
-        // bare numbers ("72% of beds used it 2.") instead of superscript links.
-        // The article already has named source links (petmd.com, rover.com) +
-        // References section. Inline [N] markers add clutter without value.
-        // $max_anchors = min( $ref_count, 8 );
-        // $injected = self::inject_inline_citation_anchors( $injected, $max_anchors );
+        // v1.5.114 — Named inline source links (Option C). Instead of broken
+        // [N](#ref-N) fragment anchors, inject the source name as a clickable
+        // link to the actual URL after sentences with factual claims.
+        // Example: "72% used memory foam ([Canine Arthritis Resources](url))."
+        // This is what Perplexity, Wikipedia, and modern journalism use.
+        $max_inline = min( $ref_count, 6 );
+        $injected = self::inject_named_source_links( $injected, $pool, $max_inline );
 
         return [
             'success' => true,
@@ -149,13 +149,98 @@ class Content_Injector {
     }
 
     /**
-     * v1.5.65 — Walk the body text and append clickable [N] anchors to
-     * sentences containing factual claims (statistics, percentages, years,
-     * or proper-noun-heavy phrases). Each [N] links to #ref-N in the
-     * References section below. Max N anchors injected.
+     * v1.5.114 — Named inline source links. Finds sentences with factual
+     * claims (stats, percentages, years) and appends the source name as a
+     * clickable link to the actual URL from the citation pool.
      *
-     * Skips: Key Takeaways, FAQ, References sections. Only injects in
-     * main content sections.
+     * Example: "72% used memory foam ([Canine Arthritis Resources](url))."
+     *
+     * Uses a round-robin assignment: each citation pool entry gets used
+     * once before any is reused. Skips Key Takeaways, FAQ, References.
+     */
+    private static function inject_named_source_links( string $markdown, array $pool, int $max_links ): string {
+        if ( $max_links <= 0 || empty( $pool ) ) return $markdown;
+
+        // Split at References — only inject in body content
+        $parts = preg_split( '/(\n##\s*References\s*\n)/i', $markdown, 2, PREG_SPLIT_DELIM_CAPTURE );
+        if ( count( $parts ) < 3 ) return $markdown;
+        $body = $parts[0];
+        $refs_separator = $parts[1];
+        $refs_content = $parts[2];
+
+        // Find candidate sentences with factual claims
+        $candidates = [];
+        if ( preg_match_all( '/([^.\n!?]{20,200}(?:\d{1,3}\s*%|\d+[\.,]\d+\s*%|\$\d[\d,]*|\b(?:19|20)\d{2}\b|[A-Z][a-z]+\s+[A-Z][a-z]+)[^.\n!?]{0,100}[.!?])/', $body, $matches, PREG_OFFSET_CAPTURE ) ) {
+            foreach ( $matches[0] as $m ) {
+                $sentence = $m[0];
+                $offset = $m[1];
+                // Skip if already has a markdown link
+                if ( strpos( $sentence, '](http' ) !== false ) continue;
+                // Skip headings, list items, tables
+                $line_start = strrpos( substr( $body, 0, $offset ), "\n" );
+                $line_start = $line_start === false ? 0 : $line_start + 1;
+                $line_prefix = substr( $body, $line_start, 5 );
+                if ( str_starts_with( ltrim( $line_prefix ), '#' ) ) continue;
+                if ( str_starts_with( ltrim( $line_prefix ), '|' ) ) continue;
+                if ( preg_match( '/^[-*+]\s/', ltrim( $line_prefix ) ) ) continue;
+                // Skip Key Takeaways, FAQ, References sections
+                $preceding = substr( $body, 0, $offset );
+                if ( preg_match_all( '/\n##\s+([^\n]+)/', $preceding, $h2_matches ) ) {
+                    $last_h2 = end( $h2_matches[1] );
+                    if ( preg_match( '/key\s*takeaway|faq|frequently|reference|pros|cons/i', $last_h2 ) ) continue;
+                }
+                $candidates[] = [ 'text' => $sentence, 'offset' => $offset ];
+                if ( count( $candidates ) >= $max_links ) break;
+            }
+        }
+
+        if ( empty( $candidates ) ) return $markdown;
+
+        // Build source name from pool entries (round-robin)
+        $pool_idx = 0;
+        $pool_count = count( $pool );
+
+        // Inject from END backward so offsets stay valid
+        for ( $i = count( $candidates ) - 1; $i >= 0; $i-- ) {
+            $c = $candidates[ $i ];
+            $sentence = $c['text'];
+            $end_offset = $c['offset'] + strlen( $sentence );
+
+            // Pick a pool entry (round-robin)
+            $entry = $pool[ $pool_idx % $pool_count ];
+            $pool_idx++;
+
+            $url = $entry['url'] ?? '';
+            $source_name = $entry['source_name'] ?? '';
+            if ( empty( $url ) ) continue;
+
+            // Clean source name: remove www., capitalize
+            if ( empty( $source_name ) ) {
+                $source_name = preg_replace( '/^www\./', '', wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source' );
+            }
+            $source_name = preg_replace( '/^www\./', '', $source_name );
+            // Use title if available and short enough
+            $title = $entry['title'] ?? '';
+            if ( strlen( $title ) > 5 && strlen( $title ) <= 40 ) {
+                $source_name = $title;
+            }
+
+            // Inject before final punctuation
+            $last_char = substr( $sentence, -1 );
+            if ( in_array( $last_char, [ '.', '!', '?' ], true ) ) {
+                $inject_at = $end_offset - 1;
+                $link = ' ([' . $source_name . '](' . $url . '))';
+                $body = substr( $body, 0, $inject_at ) . $link . substr( $body, $inject_at );
+            }
+        }
+
+        return $body . $refs_separator . $refs_content;
+    }
+
+    /**
+     * v1.5.65 — LEGACY: Walk the body text and append clickable [N] anchors.
+     * Replaced by inject_named_source_links() in v1.5.114.
+     * Kept for reference only — no longer called.
      */
     private static function inject_inline_citation_anchors( string $markdown, int $max_anchors ): string {
         if ( $max_anchors <= 0 ) return $markdown;
