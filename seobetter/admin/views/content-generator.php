@@ -1182,6 +1182,8 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             accent_color: accentVal,
             keyword: res.keyword || '',
             content_type: (document.querySelector('[name="content_type"]')||{}).value||'blog_post',
+            domain: (document.querySelector('[name="domain"]')||{}).value||'',
+            country: (document.getElementById('sb-country-val')||{}).value||'',
             meta_title: (res.meta && res.meta.title) || bestTitle || '',
             meta_description: (res.meta && res.meta.description) || '',
             og_title: (res.meta && res.meta.og_title) || bestTitle || '',
