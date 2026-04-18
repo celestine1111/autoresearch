@@ -99,10 +99,67 @@ class Schema_Generator {
 
         // LocalBusiness — auto-detect from content with addresses
         $local = $this->generate_localbusiness_schemas( $post );
-        if ( ! empty( $local ) ) {
-            foreach ( $local as $lb ) {
-                $schemas[] = $lb;
-            }
+        foreach ( $local as $lb ) {
+            $schemas[] = $lb;
+        }
+
+        // v1.5.119 — Content-detected schemas (triggered by what's IN the article)
+        $content = $post->post_content;
+        $content_type = get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: 'blog_post';
+        $category = get_post_meta( $post->ID, '_seobetter_domain', true ) ?: '';
+
+        // VideoObject — detect embedded YouTube/Vimeo/video tags
+        $video = $this->detect_video_schema( $post, $content );
+        if ( $video ) {
+            $schemas[] = $video;
+        }
+
+        // SoftwareApplication — tech/business category + app/software mentions + rating
+        $software = $this->detect_software_schema( $post, $content, $content_type, $category );
+        if ( $software ) {
+            $schemas[] = $software;
+        }
+
+        // Event — content has future date + location + event name
+        $event = $this->detect_event_schema( $post, $content, $content_type );
+        if ( $event ) {
+            $schemas[] = $event;
+        }
+
+        // ImageObject — license metadata for article images
+        $images = $this->detect_image_schemas( $post, $content );
+        foreach ( $images as $img ) {
+            $schemas[] = $img;
+        }
+
+        // ProfilePage — interview/personal_essay with person bio
+        $profile = $this->detect_profile_schema( $post, $content, $content_type );
+        if ( $profile ) {
+            $schemas[] = $profile;
+        }
+
+        // Course — education/tech category + course/lesson/module structure
+        $course = $this->detect_course_schema( $post, $content, $content_type, $category );
+        if ( $course ) {
+            $schemas[] = $course;
+        }
+
+        // Movie — entertainment category + movie titles
+        $movie = $this->detect_movie_schema( $post, $content, $content_type, $category );
+        if ( $movie ) {
+            $schemas[] = $movie;
+        }
+
+        // Book — books category + book titles
+        $book = $this->detect_book_schema( $post, $content, $content_type, $category );
+        if ( $book ) {
+            $schemas[] = $book;
+        }
+
+        // Dataset — content has data tables with numerical data
+        $dataset = $this->detect_dataset_schema( $post, $content, $content_type );
+        if ( $dataset ) {
+            $schemas[] = $dataset;
         }
 
         // BreadcrumbList — always
@@ -691,6 +748,283 @@ class Schema_Generator {
             '@context'        => 'https://schema.org',
             '@type'           => 'BreadcrumbList',
             'itemListElement' => $items,
+        ];
+    }
+
+    // ================================================================
+    // v1.5.119 — Content-detected schema builders
+    // These scan the HTML content for patterns and generate schemas
+    // automatically. Triggered by category + content type + content.
+    // ================================================================
+
+    /**
+     * VideoObject — detect embedded YouTube/Vimeo/HTML5 video.
+     */
+    private function detect_video_schema( \WP_Post $post, string $content ): ?array {
+        // YouTube embed
+        if ( preg_match( '/(?:youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/', $content, $yt ) ) {
+            $video_id = $yt[1];
+            return [
+                '@type'        => 'VideoObject',
+                'name'         => $post->post_title,
+                'description'  => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
+                'thumbnailUrl' => "https://img.youtube.com/vi/{$video_id}/maxresdefault.jpg",
+                'uploadDate'   => get_the_date( 'c', $post ),
+                'embedUrl'     => "https://www.youtube.com/embed/{$video_id}",
+                'contentUrl'   => "https://www.youtube.com/watch?v={$video_id}",
+            ];
+        }
+        // Vimeo embed
+        if ( preg_match( '/vimeo\.com\/(?:video\/)?(\d+)/', $content, $vm ) ) {
+            return [
+                '@type'        => 'VideoObject',
+                'name'         => $post->post_title,
+                'description'  => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
+                'thumbnailUrl' => [],
+                'uploadDate'   => get_the_date( 'c', $post ),
+                'embedUrl'     => "https://player.vimeo.com/video/{$vm[1]}",
+            ];
+        }
+        return null;
+    }
+
+    /**
+     * SoftwareApplication — tech/business/ecommerce + app/software mentions.
+     */
+    private function detect_software_schema( \WP_Post $post, string $content, string $content_type, string $category ): ?array {
+        $tech_cats = [ 'technology', 'business', 'ecommerce', 'blockchain', 'cryptocurrency' ];
+        $review_types = [ 'review', 'comparison', 'buying_guide', 'tech_article', 'listicle' ];
+        if ( ! in_array( $category, $tech_cats, true ) || ! in_array( $content_type, $review_types, true ) ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+        // Must mention software/app/platform/tool/SaaS
+        if ( ! preg_match( '/\b(app|software|platform|tool|SaaS|application|plugin|extension)\b/i', $text ) ) {
+            return null;
+        }
+        $schema = [
+            '@type'               => 'SoftwareApplication',
+            'name'                => $post->post_title,
+            'applicationCategory' => 'BusinessApplication',
+            'operatingSystem'     => 'Web',
+            'offers'              => [
+                '@type'         => 'Offer',
+                'price'         => '0',
+                'priceCurrency' => 'USD',
+            ],
+        ];
+        // Extract rating if present
+        if ( preg_match( '/(?:rating|score)[\s:]+(\d+(?:\.\d+)?)\s*(?:\/|out of)\s*(\d+)/i', $text, $r ) ) {
+            $schema['aggregateRating'] = [
+                '@type'       => 'AggregateRating',
+                'ratingValue' => $r[1],
+                'bestRating'  => $r[2],
+                'ratingCount' => '1',
+            ];
+        }
+        return $schema;
+    }
+
+    /**
+     * Event — content has future date + location + event-like heading.
+     */
+    private function detect_event_schema( \WP_Post $post, string $content, string $content_type ): ?array {
+        $text = wp_strip_all_tags( $content );
+        // Must have a date pattern AND a location pattern
+        if ( ! preg_match( '/\b(20[2-3]\d[-\/]\d{1,2}[-\/]\d{1,2}|\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+20[2-3]\d)\b/i', $text, $date_match ) ) {
+            return null;
+        }
+        if ( ! preg_match( '/\bat\s+([A-Z][a-zA-Z\s]+(?:Center|Centre|Arena|Stadium|Hall|Theater|Theatre|Convention|Hotel|Park|Venue))/i', $text, $loc_match ) ) {
+            return null;
+        }
+        return [
+            '@type'     => 'Event',
+            'name'      => $post->post_title,
+            'startDate' => $date_match[0],
+            'location'  => [
+                '@type' => 'Place',
+                'name'  => trim( $loc_match[1] ),
+            ],
+            'description' => wp_trim_words( $text, 30 ),
+            'url'         => get_permalink( $post->ID ),
+        ];
+    }
+
+    /**
+     * ImageObject — license metadata for article images.
+     */
+    private function detect_image_schemas( \WP_Post $post, string $content ): array {
+        $schemas = [];
+        preg_match_all( '/<img[^>]+src=["\']([^"\']+)["\'][^>]*alt=["\']([^"\']*)["\'][^>]*>/i', $content, $imgs );
+        if ( empty( $imgs[1] ) ) return [];
+
+        $site_name = get_bloginfo( 'name' );
+        foreach ( array_slice( $imgs[1], 0, 5 ) as $i => $src ) {
+            $alt = $imgs[2][ $i ] ?? '';
+            if ( strlen( $alt ) < 5 ) continue;
+            $schemas[] = [
+                '@type'            => 'ImageObject',
+                'contentUrl'       => $src,
+                'creditText'       => $site_name,
+                'creator'          => [
+                    '@type' => 'Organization',
+                    'name'  => $site_name,
+                ],
+                'copyrightNotice'  => $site_name . ' ' . wp_date( 'Y' ),
+            ];
+        }
+        return $schemas;
+    }
+
+    /**
+     * ProfilePage — interview/personal_essay with person bio.
+     */
+    private function detect_profile_schema( \WP_Post $post, string $content, string $content_type ): ?array {
+        if ( ! in_array( $content_type, [ 'interview', 'personal_essay' ], true ) ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+        // Look for a person name pattern (2-3 capitalized words)
+        if ( ! preg_match( '/\b([A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/', $text, $name ) ) {
+            return null;
+        }
+        // Must have bio-like content nearby
+        if ( ! preg_match( '/\b(CEO|founder|director|author|expert|professor|Dr\.|coach|manager|specialist|professional)\b/i', $text ) ) {
+            return null;
+        }
+        return [
+            '@type'      => 'ProfilePage',
+            'dateCreated'  => get_the_date( 'c', $post ),
+            'dateModified' => get_the_modified_date( 'c', $post ),
+            'mainEntity' => [
+                '@type'       => 'Person',
+                'name'        => $name[1],
+                'description' => wp_trim_words( $text, 20 ),
+                'url'         => get_permalink( $post->ID ),
+            ],
+        ];
+    }
+
+    /**
+     * Course — education/tech category + course/lesson/module structure.
+     */
+    private function detect_course_schema( \WP_Post $post, string $content, string $content_type, string $category ): ?array {
+        if ( ! in_array( $category, [ 'education', 'technology' ], true ) ) {
+            return null;
+        }
+        if ( ! in_array( $content_type, [ 'how_to', 'tech_article', 'listicle', 'pillar_guide' ], true ) ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+        if ( ! preg_match( '/\b(course|lesson|module|curriculum|certification|training program)\b/i', $text ) ) {
+            return null;
+        }
+        return [
+            '@type'       => 'Course',
+            'name'        => $post->post_title,
+            'description' => wp_trim_words( $text, 30 ),
+            'provider'    => [
+                '@type' => 'Organization',
+                'name'  => get_bloginfo( 'name' ),
+                'url'   => home_url(),
+            ],
+            'url'         => get_permalink( $post->ID ),
+        ];
+    }
+
+    /**
+     * Movie — entertainment category + movie titles.
+     */
+    private function detect_movie_schema( \WP_Post $post, string $content, string $content_type, string $category ): ?array {
+        if ( $category !== 'entertainment' ) return null;
+        if ( ! in_array( $content_type, [ 'review', 'comparison', 'listicle', 'blog_post' ], true ) ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+        // Look for movie-like mentions: quoted titles or "directed by"
+        if ( ! preg_match( '/\b(directed by|starring|box office|screenplay|cinematography|film|movie)\b/i', $text ) ) {
+            return null;
+        }
+        // Extract movie name from title
+        $movie_name = preg_replace( '/\b(review|in-depth|comparison|best|top|guide|20\d{2})\b/i', '', $post->post_title );
+        $movie_name = trim( preg_replace( '/\s+/', ' ', $movie_name ) );
+
+        $schema = [
+            '@type'       => 'Movie',
+            'name'        => $movie_name ?: $post->post_title,
+            'description' => wp_trim_words( $text, 30 ),
+            'url'         => get_permalink( $post->ID ),
+        ];
+        // Extract director if mentioned
+        if ( preg_match( '/directed by\s+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $dir ) ) {
+            $schema['director'] = [ '@type' => 'Person', 'name' => $dir[1] ];
+        }
+        // Extract rating if present
+        if ( preg_match( '/(?:rating|score)[\s:]+(\d+(?:\.\d+)?)\s*(?:\/|out of)\s*(\d+)/i', $text, $r ) ) {
+            $schema['aggregateRating'] = [
+                '@type'       => 'AggregateRating',
+                'ratingValue' => $r[1],
+                'bestRating'  => $r[2],
+                'ratingCount' => '1',
+            ];
+        }
+        return $schema;
+    }
+
+    /**
+     * Book — books category + book titles.
+     */
+    private function detect_book_schema( \WP_Post $post, string $content, string $content_type, string $category ): ?array {
+        if ( $category !== 'books' ) return null;
+        if ( ! in_array( $content_type, [ 'review', 'listicle', 'blog_post', 'comparison' ], true ) ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+        if ( ! preg_match( '/\b(author|published|publisher|ISBN|paperback|hardcover|novel|chapter|pages)\b/i', $text ) ) {
+            return null;
+        }
+        $book_name = preg_replace( '/\b(review|best|top|guide|20\d{2})\b/i', '', $post->post_title );
+        $book_name = trim( preg_replace( '/\s+/', ' ', $book_name ) );
+
+        $schema = [
+            '@type' => 'Book',
+            'name'  => $book_name ?: $post->post_title,
+            'url'   => get_permalink( $post->ID ),
+        ];
+        if ( preg_match( '/\bby\s+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $auth ) ) {
+            $schema['author'] = [ '@type' => 'Person', 'name' => $auth[1] ];
+        }
+        return $schema;
+    }
+
+    /**
+     * Dataset — content has data tables with numerical data.
+     */
+    private function detect_dataset_schema( \WP_Post $post, string $content, string $content_type ): ?array {
+        if ( ! in_array( $content_type, [ 'white_paper', 'scholarly_article', 'tech_article', 'blog_post', 'news_article' ], true ) ) {
+            return null;
+        }
+        // Must have a <table> with numerical data
+        if ( ! preg_match( '/<table[^>]*>.*?<\/table>/is', $content ) ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+        // Must mention data/research/statistics/survey
+        if ( ! preg_match( '/\b(dataset|data set|survey results|research data|statistical|findings|sample size)\b/i', $text ) ) {
+            return null;
+        }
+        return [
+            '@type'       => 'Dataset',
+            'name'        => $post->post_title . ' - Data',
+            'description' => wp_trim_words( $text, 30 ),
+            'url'         => get_permalink( $post->ID ),
+            'creator'     => [
+                '@type' => 'Organization',
+                'name'  => get_bloginfo( 'name' ),
+                'url'   => home_url(),
+            ],
+            'datePublished' => get_the_date( 'c', $post ),
+            'license'       => 'https://creativecommons.org/licenses/by/4.0/',
         ];
     }
 }
