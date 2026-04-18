@@ -132,12 +132,13 @@ class Content_Injector {
             ];
         }
 
-        // v1.5.65 — Inline [N] anchor injection. Find sentences in the body
-        // containing statistics, percentages, years, or strong named entities,
-        // and append a clickable [N] superscript that jumps to #ref-N in the
-        // References section. Caps at the number of references available.
-        $max_anchors = min( $ref_count, 8 );
-        $injected = self::inject_inline_citation_anchors( $injected, $max_anchors );
+        // v1.5.113d — Disabled inline [N] anchor injection. The [N](#ref-N)
+        // markdown links don't survive the hybrid formatter — they render as
+        // bare numbers ("72% of beds used it 2.") instead of superscript links.
+        // The article already has named source links (petmd.com, rover.com) +
+        // References section. Inline [N] markers add clutter without value.
+        // $max_anchors = min( $ref_count, 8 );
+        // $injected = self::inject_inline_citation_anchors( $injected, $max_anchors );
 
         return [
             'success' => true,
@@ -266,10 +267,34 @@ class Content_Injector {
 
         $quotes = [];
 
-        // v1.5.109 — Build authority domain list for filtering both sources
-        $authority = self::get_authority_domains( $domain, $country );
+        // v1.5.113 — Shared filters for ALL quote sources.
+        // Substantive filter (blocks marketing taglines), e-commerce filter (blocks product listings),
+        // junk filter (blocks giveaways/cookies). These protect against bad quotes from any source.
+        $substantive_re = '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|support|reduce|provide|design|feature|material|quality|comfort|protect|treat|condition|symptom|avoid|consider|choose|suitable|essential|option|compare|test|review|evaluat|measure|perform|assess|durabl|withstand|orthoped|joint|muscle|weight|pressure|temperature|waterproof|washable)\b/i';
+        $ecommerce_re = '/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code/i';
+        $junk_re = '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i';
 
-        // Source 1: Pre-fetched Tavily/scraped data from Vercel (if available)
+        // Helper: validate a single quote against all filters
+        $validate_quote = function( $q ) use ( $substantive_re, $ecommerce_re, $junk_re ) {
+            if ( ! is_array( $q ) || empty( $q['text'] ) || empty( $q['url'] ) ) return null;
+            $text = trim( $q['text'] );
+            $url = trim( $q['url'] );
+            $source = trim( $q['source'] ?? '' );
+            if ( strlen( $text ) < 30 || strlen( $text ) > 300 ) return null;
+            if ( ! preg_match( '#^https?://#', $url ) ) return null;
+            if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
+            if ( preg_match( $junk_re, $text ) ) return null;
+            if ( preg_match( $ecommerce_re, $text ) ) return null;
+            if ( ! preg_match( $substantive_re, $text ) ) return null;
+            return [ 'text' => $text, 'url' => $url, 'source' => $source ];
+        };
+
+        // v1.5.113b — Simplified Source 1: Sonar data already comes from
+        // Perplexity's curated web search. Only filter out e-commerce junk.
+        // The authority + substantive filters were causing 0 quotes on every
+        // article because Sonar returns quality editorial sites that don't
+        // happen to be in our authority domain list. Perplexity IS the quality
+        // filter — we don't need to second-guess it.
         if ( ! empty( $sonar_data['quotes'] ) ) {
             foreach ( $sonar_data['quotes'] as $q ) {
                 if ( ! is_array( $q ) || empty( $q['text'] ) || empty( $q['url'] ) ) continue;
@@ -279,46 +304,21 @@ class Content_Injector {
                 if ( strlen( $text ) < 30 || strlen( $text ) > 300 ) continue;
                 if ( ! preg_match( '#^https?://#', $url ) ) continue;
                 if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
-                if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
-                // v1.5.101 — product listing junk filter on Vercel-sourced quotes too
-                if ( preg_match( '/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code/i', $text ) ) continue;
-                // v1.5.105 — Require substantive claim/opinion language.
-                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|support|reduce|provide|design|feature|material|quality|comfort|protect|treat|condition|symptom|avoid|consider|choose|suitable|essential|option|compare|test|review|evaluat|measure|perform|assess|durabl|withstand|orthoped|joint|muscle|weight|pressure|temperature|waterproof|washable)\b/i', $text ) ) continue;
-                // v1.5.109 — Authority domain filter on Vercel-sourced quotes.
-                // If authority domains are configured, only accept quotes from those
-                // domains. Without this, Vercel quotes bypass the authority filter
-                // (e.g. mattressmiracle.ca leaking into AU animal articles).
-                if ( ! empty( $authority ) ) {
-                    $quote_host = preg_replace( '/^www\./', '', strtolower( wp_parse_url( $url, PHP_URL_HOST ) ?? '' ) );
-                    $in_authority = false;
-                    foreach ( $authority as $auth_domain ) {
-                        if ( str_ends_with( $quote_host, $auth_domain ) ) {
-                            $in_authority = true;
-                            break;
-                        }
-                    }
-                    if ( ! $in_authority ) continue;
-                }
+                // Only block: junk + e-commerce. No authority filter, no substantive filter.
+                if ( preg_match( $junk_re, $text ) ) continue;
+                if ( preg_match( $ecommerce_re, $text ) ) continue;
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
         }
 
-        // Source 2: Direct Tavily call from PHP (no Vercel, no timeout issues)
-        if ( empty( $quotes ) ) {
+        // Source 2: Direct Tavily call from PHP (only if Source 1 found < 2 quotes)
+        if ( count( $quotes ) < 2 ) {
             $tavily = self::tavily_search_and_extract( $keyword, $domain, $country );
             foreach ( ( $tavily['quotes'] ?? [] ) as $q ) {
-                if ( empty( $q['text'] ) || empty( $q['url'] ) ) continue;
-                $text = trim( $q['text'] );
-                $url = trim( $q['url'] );
-                $source = trim( $q['source'] ?? '' );
-                if ( strlen( $text ) < 30 || strlen( $text ) > 300 ) continue;
-                if ( ! preg_match( '#^https?://#', $url ) ) continue;
-                if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
-                if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
-                // v1.5.105 — Same substantive language filter as Source 1
-                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|support|reduce|provide|design|feature|material|quality|comfort|protect|treat|condition|symptom|avoid|consider|choose|suitable|essential|option|compare|test|review|evaluat|measure|perform|assess|durabl|withstand|orthoped|joint|muscle|weight|pressure|temperature|waterproof|washable)\b/i', $text ) ) continue;
-                $quotes[] = "\"{$text}\" — [{$source}]({$url})";
+                $valid = $validate_quote( $q );
+                if ( ! $valid ) continue;
+                $quotes[] = "\"{$valid['text']}\" — [{$valid['source']}]({$valid['url']})";
                 if ( count( $quotes ) >= 3 ) break;
             }
         }
@@ -2111,21 +2111,35 @@ Return ONLY the Markdown table, nothing else.";
             'body'    => wp_json_encode( $tavily_body ),
         ] );
 
-        // v1.5.111 — Smart fallback: if authority domains find < 2 results,
-        // retry with JUST the keyword (no "expert opinion research" suffix)
-        // but KEEP the include_domains restriction. This finds more results
-        // on authority sites for niche keywords like "dog beds for arthritic dogs"
-        // where "expert opinion research" is too narrow. Does NOT remove
-        // the domain restriction (that would return junk like mattressmiracle.ca).
+        // v1.5.112 — Two-level fallback for authority domain search:
+        // Level 1: retry with simpler query (just keyword) but KEEP authority domains
+        // Level 2: if STILL < 2 results, remove domain restriction entirely
+        //          (the substantive + e-commerce + keyword-token filters protect
+        //          against junk — "mattressmiracle.ca" content won't match "dogs"
+        //          or "arthritic" keyword tokens, so it's filtered out naturally)
         if ( ! is_wp_error( $response ) && ! empty( $authority_domains ) ) {
             $body = json_decode( wp_remote_retrieve_body( $response ), true );
             if ( empty( $body['results'] ) || count( $body['results'] ) < 2 ) {
-                $tavily_body['query'] = $keyword; // Simpler query, same domains
+                // Level 1: simpler query, same authority domains
+                $tavily_body['query'] = $keyword;
                 $response = wp_remote_post( 'https://api.tavily.com/search', [
                     'timeout' => 20,
                     'headers' => [ 'Content-Type' => 'application/json' ],
                     'body'    => wp_json_encode( $tavily_body ),
                 ] );
+                // Level 2: if still < 2, remove domain restriction
+                if ( ! is_wp_error( $response ) ) {
+                    $body2 = json_decode( wp_remote_retrieve_body( $response ), true );
+                    if ( empty( $body2['results'] ) || count( $body2['results'] ) < 2 ) {
+                        unset( $tavily_body['include_domains'] );
+                        $tavily_body['query'] = $keyword . ' expert guide review';
+                        $response = wp_remote_post( 'https://api.tavily.com/search', [
+                            'timeout' => 20,
+                            'headers' => [ 'Content-Type' => 'application/json' ],
+                            'body'    => wp_json_encode( $tavily_body ),
+                        ] );
+                    }
+                }
             }
         }
 
@@ -2399,11 +2413,14 @@ Return ONLY the Markdown table, nothing else.";
         $sonar_used    = false;
 
         // ---- Step 0: Sonar research data ----
-        // v1.5.81 — prefer pre-fetched Sonar data from the Vercel backend
-        // (server-side, available for all users). Fall back to PHP-side
-        // call_sonar_research() only if Vercel didn't provide it.
+        // v1.5.113c — Re-fetch if Vercel returned empty shell (0 quotes, 0 citations, 0 stats).
+        // Previously only re-fetched if $sonar_data === null. But the Vercel backend often
+        // returns a valid structure with all-empty arrays, which skips the re-fetch.
+        // The PHP-side Sonar call uses the user's OpenRouter key and always returns data.
         $sonar = $sonar_data;
-        if ( $sonar === null ) {
+        $sonar_empty = ( $sonar === null
+            || ( empty( $sonar['quotes'] ) && empty( $sonar['citations'] ) && empty( $sonar['statistics'] ) ) );
+        if ( $sonar_empty ) {
             $sonar = self::call_sonar_research( $keyword );
         }
         if ( $sonar !== null ) {
