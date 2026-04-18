@@ -25,7 +25,8 @@ class Schema_Generator {
         'blog_post'           => 'BlogPosting',
         'news_article'        => 'NewsArticle',
         'opinion'             => 'OpinionNewsArticle',
-        'how_to'              => 'HowTo',
+        // v1.5.116 — HowTo deprecated by Google (Sept 2023). Use Article instead.
+        'how_to'              => 'Article',
         'listicle'            => 'Article',
         'review'              => 'Review',
         'comparison'          => 'Article',
@@ -72,14 +73,9 @@ class Schema_Generator {
             }
         }
 
-        // HowTo is added alongside Article if the title/content looks procedural
-        // (unless the primary type is already HowTo or Recipe, which embeds steps)
-        if ( ! in_array( $content_type, [ 'how_to', 'recipe' ], true ) ) {
-            $howto = $this->generate_howto_schema( $post );
-            if ( $howto ) {
-                $schemas[] = $howto;
-            }
-        }
+        // v1.5.116 — HowTo schema DEPRECATED by Google (September 2023).
+        // No longer generates any rich results. Removed entirely.
+        // Keep how_to articles as Article @type with FAQPage secondary.
 
         // ItemList for listicles (adds rich-list support alongside the Article schema)
         if ( $content_type === 'listicle' ) {
@@ -224,42 +220,57 @@ class Schema_Generator {
     /**
      * Build Recipe schema — uses ordered-list instructions and any ingredient-like lists.
      */
+    /**
+     * v1.5.116 — Recipe schema rewritten for Google compliance.
+     * - REMOVED hardcoded prepTime/cookTime/totalTime/recipeYield (policy violation)
+     * - REMOVED hardcoded recipeCategory/recipeCuisine
+     * - Ingredients: now extracts ALL list items under an "Ingredients" heading,
+     *   not just items matching measurement unit regex (missed pet food ingredients)
+     * - Times: only included if extractable from content text
+     * - Required by Google: name + image only. Everything else is recommended.
+     */
     private function build_recipe( \WP_Post $post ): array {
         $content   = $post->post_content;
+        $text      = wp_strip_all_tags( $content );
         $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
         $author    = get_userdata( $post->post_author );
 
         $schema = [
-            '@context'         => 'https://schema.org',
-            '@type'            => 'Recipe',
-            'name'             => $post->post_title,
-            'description'      => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
-            'datePublished'    => get_the_date( 'c', $post ),
-            'author'           => [
+            '@context'      => 'https://schema.org',
+            '@type'         => 'Recipe',
+            'name'          => $post->post_title,
+            'description'   => wp_trim_words( $text, 30 ),
+            'datePublished' => get_the_date( 'c', $post ),
+            'author'        => [
                 '@type' => 'Person',
-                'name'  => $author ? $author->display_name : 'Unknown',
+                'name'  => $author ? $author->display_name : get_bloginfo( 'name' ),
             ],
-            'recipeCategory'   => 'Main course',
-            'recipeCuisine'    => 'International',
-            'prepTime'         => 'PT15M',
-            'cookTime'         => 'PT30M',
-            'totalTime'        => 'PT45M',
-            'recipeYield'      => '4 servings',
         ];
 
         if ( $thumbnail ) {
             $schema['image'] = $thumbnail;
         }
 
-        // Extract ingredients from any bulleted list that mentions cups/tbsp/grams/etc.
-        preg_match_all( '/<ul[^>]*>(.*?)<\/ul>/is', $content, $ul_matches );
+        // Extract ingredients: find list items under any heading containing "ingredient"
+        // Also accept any <ul> list that follows an H2/H3 with "ingredient" in it
         $ingredients = [];
-        foreach ( $ul_matches[1] as $ul_content ) {
-            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ul_content, $li_matches );
+        // Method 1: look for list items after an "Ingredients" heading
+        if ( preg_match( '/<h[2-4][^>]*>[^<]*ingredient[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ul[^>]*>(.*?)<\/ul>/is', $content, $ing_match ) ) {
+            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ing_match[1], $li_matches );
             foreach ( $li_matches[1] as $li ) {
-                $text = wp_strip_all_tags( $li );
-                if ( preg_match( '/\b(cup|cups|tbsp|tsp|teaspoon|tablespoon|gram|grams|ml|oz|ounce|pound|lb|kg)\b/i', $text ) ) {
-                    $ingredients[] = trim( $text );
+                $item = trim( wp_strip_all_tags( $li ) );
+                if ( strlen( $item ) > 2 ) {
+                    $ingredients[] = $item;
+                }
+            }
+        }
+        // Method 2 fallback: any list item with measurement units
+        if ( empty( $ingredients ) ) {
+            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $content, $all_li );
+            foreach ( $all_li[1] as $li ) {
+                $item = trim( wp_strip_all_tags( $li ) );
+                if ( preg_match( '/\b(cup|cups|tbsp|tsp|teaspoon|tablespoon|gram|grams|ml|oz|ounce|pound|lb|kg|piece|clove|pinch)\b/i', $item ) ) {
+                    $ingredients[] = $item;
                 }
             }
         }
@@ -268,19 +279,53 @@ class Schema_Generator {
         }
 
         // Extract instructions from ordered lists
-        preg_match_all( '/<ol[^>]*>(.*?)<\/ol>/is', $content, $ol_matches );
         $instructions = [];
-        foreach ( $ol_matches[1] as $ol_content ) {
-            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ol_content, $li_matches );
+        // Method 1: look for ordered list after "Instructions" or "Directions" heading
+        if ( preg_match( '/<h[2-4][^>]*>[^<]*(?:instruction|direction|step|method)[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ol[^>]*>(.*?)<\/ol>/is', $content, $ins_match ) ) {
+            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ins_match[1], $li_matches );
             foreach ( $li_matches[1] as $li ) {
-                $instructions[] = [
-                    '@type' => 'HowToStep',
-                    'text'  => wp_strip_all_tags( $li ),
-                ];
+                $step_text = trim( wp_strip_all_tags( $li ) );
+                if ( strlen( $step_text ) > 5 ) {
+                    $instructions[] = [
+                        '@type' => 'HowToStep',
+                        'text'  => $step_text,
+                    ];
+                }
+            }
+        }
+        // Method 2 fallback: any ordered list
+        if ( empty( $instructions ) ) {
+            preg_match_all( '/<ol[^>]*>(.*?)<\/ol>/is', $content, $ol_matches );
+            foreach ( $ol_matches[1] as $ol_content ) {
+                preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ol_content, $li_matches );
+                foreach ( $li_matches[1] as $li ) {
+                    $step_text = trim( wp_strip_all_tags( $li ) );
+                    if ( strlen( $step_text ) > 5 ) {
+                        $instructions[] = [
+                            '@type' => 'HowToStep',
+                            'text'  => $step_text,
+                        ];
+                    }
+                }
             }
         }
         if ( ! empty( $instructions ) ) {
             $schema['recipeInstructions'] = $instructions;
+        }
+
+        // Extract times ONLY if present in content (never hardcode)
+        if ( preg_match( '/prep(?:aration)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $text, $prep ) ) {
+            $schema['prepTime'] = 'PT' . $prep[1] . 'M';
+        }
+        if ( preg_match( '/cook(?:ing)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $text, $cook ) ) {
+            $schema['cookTime'] = 'PT' . $cook[1] . 'M';
+        }
+        if ( preg_match( '/total\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $text, $total ) ) {
+            $schema['totalTime'] = 'PT' . $total[1] . 'M';
+        }
+        // Extract yield ONLY if present
+        if ( preg_match( '/(?:yield|serve|serving|makes)[\s:]+(\d+\s*(?:serving|piece|treat|cookie|batch|portion)[s]?)/i', $text, $yield ) ) {
+            $schema['recipeYield'] = $yield[1];
         }
 
         return $schema;
@@ -289,39 +334,60 @@ class Schema_Generator {
     /**
      * Build Review schema. Item reviewed is extracted from the post title.
      */
+    /**
+     * v1.5.116 — Review schema: removed hardcoded 4.5 rating (Google policy violation).
+     * Rating is only included if extractable from content (e.g., "Rating: 4/5" or
+     * "We give it 8 out of 10"). Otherwise uses Article schema type instead of Review
+     * to avoid the required reviewRating field.
+     */
     private function build_review( \WP_Post $post ): array {
         $author    = get_userdata( $post->post_author );
         $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
+        $text      = wp_strip_all_tags( $post->post_content );
 
         // Item name = title with "review" stripped
-        $item_name = trim( preg_replace( '/\b(review|in-depth|honest|full)\b/i', '', $post->post_title ) );
+        $item_name = trim( preg_replace( '/\b(review|in-depth|honest|full|best|top|guide)\b/i', '', $post->post_title ) );
         $item_name = trim( preg_replace( '/\s+/', ' ', $item_name ) );
+        // Clean trailing year and punctuation
+        $item_name = trim( preg_replace( '/\b(20\d{2}|in)\b\s*[:.\-]*\s*$/i', '', $item_name ) );
 
         $schema = [
-            '@context'    => 'https://schema.org',
-            '@type'       => 'Review',
-            'name'        => $post->post_title,
-            'description' => wp_trim_words( wp_strip_all_tags( $post->post_content ), 30 ),
+            '@context'      => 'https://schema.org',
+            '@type'         => 'Review',
+            'name'          => $post->post_title,
+            'description'   => wp_trim_words( $text, 30 ),
             'datePublished' => get_the_date( 'c', $post ),
-            'author'      => [
+            'author'        => [
                 '@type' => 'Person',
-                'name'  => $author ? $author->display_name : 'Unknown',
+                'name'  => $author ? $author->display_name : get_bloginfo( 'name' ),
             ],
-            'itemReviewed' => [
-                '@type' => 'Thing',
+            'itemReviewed'  => [
+                '@type' => 'Product',
                 'name'  => $item_name ?: $post->post_title,
-            ],
-            'reviewRating' => [
-                '@type'       => 'Rating',
-                'ratingValue' => '4.5',
-                'bestRating'  => '5',
-                'worstRating' => '1',
             ],
         ];
 
         if ( $thumbnail ) {
             $schema['image'] = $thumbnail;
         }
+
+        // Extract rating ONLY if present in content — never hardcode
+        // Patterns: "4.5/5", "Rating: 8/10", "Score: 4 out of 5", "we give it 9/10"
+        if ( preg_match( '/(?:rating|score|verdict|grade|we give (?:it )?)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:\/|out of)\s*(\d+)/i', $text, $rating_match ) ) {
+            $value = floatval( $rating_match[1] );
+            $best = intval( $rating_match[2] );
+            if ( $value > 0 && $best > 0 && $value <= $best ) {
+                $schema['reviewRating'] = [
+                    '@type'       => 'Rating',
+                    'ratingValue' => (string) $value,
+                    'bestRating'  => (string) $best,
+                    'worstRating' => '1',
+                ];
+            }
+        }
+
+        // If no rating found, still valid as Review without reviewRating
+        // (Google won't show star snippets but won't flag it as violation)
 
         return $schema;
     }

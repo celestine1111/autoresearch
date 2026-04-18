@@ -16,6 +16,45 @@
 
 ---
 
+## v1.5.116 — Google-compliant schema overhaul (all 21 content types)
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Major Changes
+
+- **Recipe schema: removed ALL hardcoded values** — `includes/Schema_Generator.php::build_recipe()`
+  - REMOVED: hardcoded prepTime (PT15M), cookTime (PT30M), totalTime (PT45M), recipeYield (4 servings), recipeCategory (Main course), recipeCuisine (International) — all were Google policy violations
+  - Times/yield now only included if extractable from content text via regex
+  - Ingredients: now extracts ALL list items under "Ingredients" heading (not just items with measurement units — fixes pet food recipe ingredients)
+  - Instructions: prefers ordered list under "Instructions/Directions" heading
+  - Author: uses display_name (was already correct here)
+  - Verify: `grep -n 'hardcoded' seobetter/includes/Schema_Generator.php` (should return only comments)
+
+- **Review schema: removed hardcoded 4.5 rating** — `includes/Schema_Generator.php::build_review()`
+  - REMOVED: hardcoded ratingValue 4.5/5 — Google policy violation
+  - Rating now only included if extractable from content ("Rating: 4/5", "Score: 8 out of 10")
+  - itemReviewed @type changed from Thing to Product
+  - Author fallback uses site name instead of "Unknown"
+  - Verify: `grep -n 'ratingValue' seobetter/includes/Schema_Generator.php`
+
+- **HowTo schema DEPRECATED** — `includes/Schema_Generator.php`
+  - Google removed HowTo rich results September 2023
+  - `how_to` content type now maps to `Article` (was `HowTo`)
+  - Secondary HowTo schema generation removed entirely
+  - Verify: `grep -n 'HowTo.*DEPRECATED' seobetter/includes/Schema_Generator.php`
+
+- **structured-data.md created** — `seo-guidelines/structured-data.md`
+  - Complete reference: Google policies, required/recommended fields per type, content type mapping
+  - Documents HowTo deprecation, FAQPage restriction, LocalBusiness requirements
+  - Verify: file exists at `seobetter/seo-guidelines/structured-data.md`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.115 — Country context in AI prompts (fixes US-centric content)
 
 **Date:** 2026-04-19
