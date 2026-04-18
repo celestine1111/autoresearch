@@ -348,7 +348,8 @@ This roughly doubles the existing styled-block hit rate without changing the pro
 
 ### Inside Generated Articles
 - **NEVER** place icons next to headings, list items, or inline with sentences
-- **NEVER** use emoji as icons in body copy
+- **NEVER** use emoji as icons in body copy — the plugin strips ALL emoji from content automatically (v1.5.103)
+- **NEVER** use em-dashes (—) or en-dashes (–) — only short dashes (-). The plugin converts all long dashes to short dashes automatically (v1.5.103)
 - No checkmark bullets, no decorative icons beside H2s, no emoji headers
 - This is the single clearest tell that content was AI-generated
 

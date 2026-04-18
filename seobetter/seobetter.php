@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.102
+ * Version: 1.5.103
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.102' );
+define( 'SEOBETTER_VERSION', '1.5.103' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1514,6 +1514,28 @@ final class SEOBetter {
 
         // 2. Convert line-starting Unicode bullets to markdown list markers
         $md = preg_replace( '/^[ \t]*[•●◦▪▸►][ \t]*/m', '- ', $md );
+
+        // 2b. v1.5.103 — Convert emoji bullets to markdown list markers.
+        //     AI models use ✅ ✓ 📌 🔍 ⭐ ➡ 🔹 etc. as list markers.
+        //     Per article_design.md §6: "NEVER use emoji as icons in body copy"
+        //     Covers: Arrows, Misc Technical, Geometric Shapes, Misc Symbols,
+        //     Dingbats, Supplemental Arrows, and ALL Supplementary emoji (U+1F000+).
+        $md = preg_replace( '/^[ \t]*[\x{2190}-\x{21FF}\x{2300}-\x{23FF}\x{25A0}-\x{27BF}\x{2900}-\x{297F}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{1F000}-\x{1FFFF}]+[ \t]+/mu', '- ', $md );
+
+        // 2c. v1.5.103 — Clean up already-mangled emoji (?? or ????) at line starts.
+        //     On utf8 databases, 4-byte emoji become ?? when saved.
+        $md = preg_replace( '/^[ \t]*\?{2,4}[ \t]+(?=[A-Z])/m', '- ', $md );
+
+        // 2d. v1.5.103 — Strip ALL remaining emoji from body content.
+        //     Per article_design.md: "No emoji in article body", "NEVER use
+        //     emoji as icons in body copy", "No checkmark bullets".
+        //     After converting emoji bullets to - above, remove any inline emoji.
+        $md = preg_replace( '/[\x{2190}-\x{21FF}\x{2300}-\x{23FF}\x{25A0}-\x{27BF}\x{2900}-\x{297F}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{1F000}-\x{1FFFF}]+/u', '', $md );
+
+        // 2e. v1.5.103 — Convert em-dashes (—) and en-dashes (–) to short dashes (-)
+        //     Per user rule: "only short dash -". Em/en-dashes cause inconsistent
+        //     rendering across themes and break list detection.
+        $md = str_replace( [ '—', '–' ], '-', $md );
 
         // 3. Convert HTML list items to markdown BEFORE stripping tags.
         //    <li>text</li> → \n- text  (preserves list structure)

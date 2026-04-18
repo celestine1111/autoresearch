@@ -65,6 +65,14 @@ class Content_Formatter {
         // Both need to become "- item1\n- item2\n- item3"
         $markdown = preg_replace( '/([^\n])[ \t]+[•●◦▪▸►][ \t]+/u', "$1\n- ", $markdown );
         $markdown = preg_replace( '/^[ \t]*[•●◦▪▸►][ \t]*/mu', '- ', $markdown );
+        // v1.5.103 — Convert emoji bullets (✅ ✓ 📌 🔍 etc.) to - markers
+        $markdown = preg_replace( '/^[ \t]*[\x{2190}-\x{21FF}\x{2300}-\x{23FF}\x{25A0}-\x{27BF}\x{2900}-\x{297F}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{1F000}-\x{1FFFF}]+[ \t]+/mu', '- ', $markdown );
+        // v1.5.103 — Clean mangled emoji (?? at line starts)
+        $markdown = preg_replace( '/^[ \t]*\?{2,4}[ \t]+(?=[A-Z])/m', '- ', $markdown );
+        // v1.5.103 — Strip ALL remaining emoji (article_design.md: "No emoji in article body")
+        $markdown = preg_replace( '/[\x{2190}-\x{21FF}\x{2300}-\x{23FF}\x{25A0}-\x{27BF}\x{2900}-\x{297F}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{1F000}-\x{1FFFF}]+/u', '', $markdown );
+        // v1.5.103 — Convert em-dashes (—) and en-dashes (–) to short dashes (-)
+        $markdown = str_replace( [ '—', '–' ], '-', $markdown );
         // Also convert 4-space indented text to list items (AI rewrite artefact)
         $markdown = preg_replace( '/^[ \t]{4,}(?!```)([\w"\'(].+)$/m', '- $1', $markdown );
 

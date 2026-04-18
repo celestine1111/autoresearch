@@ -16,6 +16,52 @@
 
 ---
 
+## v1.5.103 — Strip all emoji + convert long dashes to short (systematic, 5+ locations)
+
+**Date:** 2026-04-18
+**Commit:** `[pending]`
+
+### Changes
+
+Per article_design.md: "No emoji in article body", "NEVER use emoji as icons in body copy". AI models frequently use emoji as list markers (✅ 📌 🔍 ⭐) which get mangled to `??` on databases without utf8mb4 support.
+
+Fixed in 5 locations:
+
+1. **cleanup_ai_markdown()** — `seobetter.php` line ~1516
+   - Convert emoji at line starts to `- ` (list markers)
+   - Convert mangled `??` at line starts to `- `
+   - Strip ALL remaining emoji from content (Unicode ranges U+2190-27BF, U+2900-2BFF, U+1F000-1FFFF)
+   - Verify: `grep -n 'Strip ALL remaining emoji' seobetter/seobetter.php`
+
+2. **parse_markdown()** — `includes/Content_Formatter.php` line ~66
+   - Same emoji-to-dash + strip-all treatment before parsing
+   - Verify: `grep -n 'Strip ALL remaining emoji' seobetter/includes/Content_Formatter.php`
+
+3. **get_system_prompt()** — `includes/Async_Generator.php` line ~1364
+   - Added: "NEVER USE EMOJI anywhere in the article"
+   - Verify: `grep -n 'NEVER USE EMOJI' seobetter/includes/Async_Generator.php`
+
+4. **simplify_readability() prompt** — `includes/Content_Injector.php` line ~1095
+   - Added rule 12: "NEVER use emoji anywhere"
+   - Removed ✅ from examples (was contradicting the rule)
+   - Verify: `grep -n 'NEVER use emoji anywhere' seobetter/includes/Content_Injector.php`
+
+5. **optimize_keyword_placement() prompt** — `includes/Content_Injector.php` line ~1245
+   - Added "or emoji" to the no-bullet-characters rule
+   - Verify: `grep -n 'emoji.*dash space' seobetter/includes/Content_Injector.php`
+
+6. **Em-dash/en-dash → short dash** — `seobetter.php::cleanup_ai_markdown()` + `Content_Formatter.php::parse_markdown()`
+   - Converts — (em-dash) and – (en-dash) to - (short dash) in both cleanup paths
+   - Also added to system prompt: "NEVER use long dashes"
+   - Also updated `article_design.md` §6 with the rule
+   - Verify: `grep -n 'em-dash' seobetter/seobetter.php`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.102 — Fix GEO scoring: use hybrid HTML for accurate analysis
 
 **Date:** 2026-04-18

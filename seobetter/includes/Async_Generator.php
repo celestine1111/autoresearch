@@ -1361,7 +1361,8 @@ RICH FORMATTING (use these patterns naturally — the plugin auto-styles them in
 - Valid platform markers: bluesky, mastodon, reddit, hn (or 'hacker news'), dev.to, lemmy. Always include the @handle or username. Always include the post URL on its own second blockquote line when you have one.
 - These rich formatting hints REPLACE the BANNED WRITING PATTERNS rule against excessive bold ONLY for the specific cases above (definitions, key insights). Everywhere else, no bold.
 
-FORMAT: Output GitHub Flavored Markdown. Use tables for comparisons. Use bullet/numbered lists for features and steps.";
+FORMAT: Output GitHub Flavored Markdown. Use tables for comparisons. Use bullet/numbered lists for features and steps.
+NEVER USE EMOJI anywhere in the article — no emoji bullets, no emoji in headings, no emoji in body text. Use - (short dash) for all list items. NEVER use long dashes (em-dash — or en-dash –), only short dashes (-). The article must be pure text with markdown formatting only.";
     }
 
     /**
