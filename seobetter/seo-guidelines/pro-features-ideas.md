@@ -382,4 +382,42 @@
 
 ---
 
+---
+
+## FUTURE PRO TOOLS — Content Intelligence Suite
+
+### Content Freshness Analyzer
+A content freshness tool that analyzes every article from any blog, computes a freshness score, compares up to 3 blogs side-by-side, and generates a prioritized updating list based on traffic decline and content age.
+
+- [ ] Crawl sitemap or RSS feed to index all published articles
+- [ ] Compute freshness score per article (date published, last modified, stats currency, link rot)
+- [ ] Side-by-side comparison of up to 3 blogs (yours vs competitors)
+- [ ] Prioritized update list: highest-traffic articles with lowest freshness first
+- [ ] Traffic decline detection (integrate GSC API or estimate from content signals)
+- [ ] One-click "Refresh This Article" button that feeds the article to the content updater
+
+### Internal Links Intelligence
+An internal links tool that ingests your sitemap, maps all existing internal links, prioritizes pages by opportunity, and gives AI-powered placement suggestions with ready-to-paste HTML snippets.
+
+- [ ] Sitemap ingestion — builds full link graph of the site
+- [ ] Orphan page detection (pages with 0 internal links pointing to them)
+- [ ] Opportunity scoring: pages with high GEO score but low internal links
+- [ ] AI-powered anchor text suggestions — reads both source and target articles
+- [ ] Ready-to-paste HTML snippets with exact insertion point in the source article
+- [ ] Bulk "Add All Suggestions" button for power users
+- [ ] Visual link graph (D3.js or similar) showing link clusters and gaps
+
+### Automatic Content Updater
+An automatic content updater that finds outdated statistics, recommends product mentions, identifies topic gaps from top-ranking competitors, and generates new sections in your writing style. You approve every suggestion before anything changes.
+
+- [ ] Outdated stat finder — scans for statistics with dates older than 12 months, finds current replacements via Tavily/Sonar
+- [ ] Product mention recommender — cross-references article topics with trending products in the category
+- [ ] Competitor gap analysis — scrapes top 5 ranking articles for the keyword, identifies sections/topics they cover that yours doesn't
+- [ ] Section generator — writes new paragraphs in the article's existing tone and style to fill identified gaps
+- [ ] Approval workflow — every suggestion shown as a diff (before/after) with Accept/Reject buttons
+- [ ] Batch mode — queue multiple articles for updating, review all diffs in one session
+- [ ] Change log — tracks what was updated, when, and what the original text was (rollback capability)
+
+---
+
 *Add new ideas to this file as they come up. Move items to "implemented" when built and tested.*
