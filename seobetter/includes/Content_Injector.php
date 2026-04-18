@@ -2111,17 +2111,12 @@ Return ONLY the Markdown table, nothing else.";
             'body'    => wp_json_encode( $tavily_body ),
         ] );
 
-        // If authority-filtered search returned < 2 results, retry without filter
-        if ( ! is_wp_error( $response ) && ! empty( $authority_domains ) ) {
-            $body = json_decode( wp_remote_retrieve_body( $response ), true );
-            if ( empty( $body['results'] ) || count( $body['results'] ) < 2 ) {
-                unset( $tavily_body['include_domains'] );
-                $response = wp_remote_post( 'https://api.tavily.com/search', [
-                    'timeout' => 20,
-                    'headers' => [ 'Content-Type' => 'application/json' ],
-                    'body'    => wp_json_encode( $tavily_body ),
-                ] );
-            }
+        // v1.5.110 — NO unrestricted fallback. If authority domains find < 2
+        // results, accept what we got (even 0). An article without quotes is
+        // better than one with quotes from mattressmiracle.ca or random blogs.
+        // The previous fallback removed include_domains and retried, which
+        // found the same low-quality domains we were trying to filter out.
+        if ( false ) { // Disabled: unrestricted fallback produces junk quotes
         }
 
         if ( is_wp_error( $response ) ) {
