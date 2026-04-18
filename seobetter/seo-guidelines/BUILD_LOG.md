@@ -16,6 +16,32 @@
 
 ---
 
+## v1.5.115 — Country context in AI prompts (fixes US-centric content)
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Bug Fix
+
+- **Country not passed to AI writing prompts** — `includes/Async_Generator.php`
+  - Root cause: country was passed to research APIs and citation pool but NOT to the AI outline or section prompts. AI defaulted to US-centric content even when Australia was selected.
+  - Fix: `TARGET COUNTRY` instruction injected into:
+    - `generate_outline()` — outline prompt (line ~574)
+    - `generate_section()` — every section prompt (line ~669)
+  - Instruction: "Write for {country} audience. Use local brands, regulations, pricing (local currency), terminology. Do NOT default to US examples."
+  - 40+ country names mapped from 2-letter codes
+  - Verify: `grep -n 'TARGET COUNTRY' seobetter/includes/Async_Generator.php`
+
+### Guideline Update
+
+- `plugin_functionality_wordpress.md` §1.4 updated: country selection now affects 3 things (APIs, authority domains, AI prompts)
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.114 — Named inline source links + empty Sonar re-fetch + expanded quote filters
 
 **Date:** 2026-04-19

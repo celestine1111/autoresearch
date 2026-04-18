@@ -470,6 +470,29 @@ class Async_Generator {
         $tone_guidance = self::get_tone_guidance( $tone );
         $audience = $options['audience'] ?? 'general';
         $content_type = $options['content_type'] ?? 'blog_post';
+
+        // v1.5.115 — Country context for AI prompts. Without this, the AI
+        // defaults to US-centric content even when Australia is selected.
+        $country_code = strtoupper( $options['country'] ?? '' );
+        $country_names = [
+            'AU' => 'Australia', 'US' => 'United States', 'GB' => 'United Kingdom',
+            'CA' => 'Canada', 'NZ' => 'New Zealand', 'DE' => 'Germany', 'FR' => 'France',
+            'IT' => 'Italy', 'ES' => 'Spain', 'NL' => 'Netherlands', 'SE' => 'Sweden',
+            'NO' => 'Norway', 'DK' => 'Denmark', 'FI' => 'Finland', 'JP' => 'Japan',
+            'KR' => 'South Korea', 'CN' => 'China', 'IN' => 'India', 'SG' => 'Singapore',
+            'MY' => 'Malaysia', 'ID' => 'Indonesia', 'TH' => 'Thailand', 'PH' => 'Philippines',
+            'BR' => 'Brazil', 'MX' => 'Mexico', 'AR' => 'Argentina', 'CL' => 'Chile',
+            'CO' => 'Colombia', 'ZA' => 'South Africa', 'NG' => 'Nigeria', 'KE' => 'Kenya',
+            'EG' => 'Egypt', 'IL' => 'Israel', 'AE' => 'UAE', 'SA' => 'Saudi Arabia',
+            'TR' => 'Turkey', 'PL' => 'Poland', 'CZ' => 'Czech Republic', 'RO' => 'Romania',
+            'IE' => 'Ireland', 'PT' => 'Portugal', 'AT' => 'Austria', 'CH' => 'Switzerland',
+            'BE' => 'Belgium', 'GR' => 'Greece',
+        ];
+        $country_name = $country_names[ $country_code ] ?? '';
+        $country_context = '';
+        if ( $country_name ) {
+            $country_context = "\nTARGET COUNTRY: {$country_name}. Write for a {$country_name} audience. Use local brands, regulations, pricing (local currency), terminology, and cultural references specific to {$country_name}. Do NOT default to US examples, US brands, US regulations, or US pricing unless the keyword specifically mentions the US.";
+        }
         $prose = self::get_prose_template( $content_type );
 
         $year = wp_date( 'Y' );
@@ -571,7 +594,7 @@ class Async_Generator {
                 ? "- INCLUDE ONE H2 titled exactly \"Quick Comparison Table\" (or \"At a Glance\" for comparison articles). This section will contain a real markdown comparison table — it is REQUIRED for this content type to meet GEO scoring.\n"
                 : '';
 
-            $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "\n\nRequirements:\n"
+            $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "{$country_context}\n\nRequirements:\n"
                 . "- Follow the REQUIRED SECTIONS structure above — use those as your H2 headings\n"
                 . "- Adapt the section names to fit the specific keyword naturally\n"
                 . "- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. SEO plugins check this — headings without the keyword get flagged.\n"
@@ -644,6 +667,20 @@ class Async_Generator {
         $kw_context .= "\n{$tone_guidance}";
         if ( $audience ) $kw_context .= "\nTarget audience: {$audience} — write for this specific reader, use their language and concerns";
         if ( $domain && $domain !== 'general' ) $kw_context .= "\nContent domain: {$domain}";
+        // v1.5.115 — Country context in every section prompt
+        $country_code_sec = strtoupper( $options['country'] ?? '' );
+        $country_names_sec = [
+            'AU' => 'Australia', 'US' => 'United States', 'GB' => 'United Kingdom',
+            'CA' => 'Canada', 'NZ' => 'New Zealand', 'DE' => 'Germany', 'FR' => 'France',
+            'IT' => 'Italy', 'ES' => 'Spain', 'JP' => 'Japan', 'KR' => 'South Korea',
+            'IN' => 'India', 'BR' => 'Brazil', 'MX' => 'Mexico', 'ZA' => 'South Africa',
+            'IE' => 'Ireland', 'NL' => 'Netherlands', 'SE' => 'Sweden', 'NO' => 'Norway',
+            'SG' => 'Singapore', 'AE' => 'UAE', 'SA' => 'Saudi Arabia', 'TR' => 'Turkey',
+        ];
+        $country_name_sec = $country_names_sec[ $country_code_sec ] ?? '';
+        if ( $country_name_sec ) {
+            $kw_context .= "\nTARGET COUNTRY: {$country_name_sec}. Use {$country_name_sec} brands, regulations, pricing (local currency), terminology. Do NOT default to US examples unless the keyword mentions US.";
+        }
         if ( ! empty( $secondary ) ) $kw_context .= "\nSecondary keywords to include: " . implode( ', ', $secondary );
         if ( ! empty( $lsi ) ) $kw_context .= "\nLSI keywords to include: " . implode( ', ', $lsi );
 

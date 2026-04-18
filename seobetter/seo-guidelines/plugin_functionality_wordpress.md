@@ -80,7 +80,13 @@ Selected by the user's **Category** dropdown. All run in parallel with 6s timeou
 
 ### 1.4 Country-Specific APIs (80+ countries)
 
-Selected by the user's **Country & Language** dropdown. Each country can have:
+Selected by the user's **Country & Language** dropdown. The country selection affects THREE things (v1.5.115+):
+
+1. **Research APIs** — country-specific data sources (see below)
+2. **Authority domains** — Tavily quote search restricted to country-relevant credible sources (see authority-domains.md)
+3. **AI writing prompts** — TARGET COUNTRY instruction injected into BOTH outline generation AND section writing prompts. Tells the AI to use local brands, regulations, pricing (local currency), terminology, and cultural references. Prevents US-centric defaults when user selects Australia, UK, etc.
+
+Each country can have:
 - **CKAN portal** — government open data search (most countries)
 - **Statistics office** — national stats API
 - **Central bank** — exchange rates, economic data
