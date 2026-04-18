@@ -16,10 +16,76 @@
 
 ---
 
+## v1.5.114 — Named inline source links + empty Sonar re-fetch + expanded quote filters
+
+**Date:** 2026-04-19
+**Commit:** `50d3c31`
+
+### Major Changes
+
+- **Named inline source links (Option C)** — `includes/Content_Injector.php::inject_named_source_links()` NEW METHOD
+  - Replaced broken `[N](#ref-N)` fragment anchors with named clickable source links
+  - Format: "72% used memory foam ([Canine Arthritis Resources](url))."
+  - Uses the citation pool URLs matched to sentences containing stats/claims
+  - Round-robin assignment: each pool entry used once before reuse
+  - Skips Key Takeaways, FAQ, Pros/Cons, References sections
+  - Max 6 inline citations per article
+  - Legacy `inject_inline_citation_anchors()` kept but no longer called
+  - Verify: `grep -n 'inject_named_source_links' seobetter/includes/Content_Injector.php`
+
+- **Empty Sonar data re-fetch** — `includes/Content_Injector.php::optimize_all()` Step 0
+  - Root cause: Vercel returned `{quotes: [], citations: [], statistics: []}` — not null but empty
+  - Old code: `if ($sonar === null)` — never triggered because empty array !== null
+  - Fix: detects empty shell and re-fetches via PHP-side `call_sonar_research()` using user's OpenRouter key
+  - Verify: `grep -n 'sonar_empty' seobetter/includes/Content_Injector.php`
+
+- **Simplified Source 1 quote filter** — `includes/Content_Injector.php::inject_quotes()`
+  - Removed authority domain + substantive filters from Sonar-sourced quotes
+  - Kept only e-commerce junk filter (blocks "Add to Cart", prices)
+  - Perplexity Sonar already curates quality sources — over-filtering caused 0 quotes on every article
+  - Verify: `grep -n 'Simplified Source 1' seobetter/includes/Content_Injector.php`
+
+- **Two-level Tavily fallback** — `includes/Content_Injector.php::tavily_search_and_extract()`
+  - Level 1: authority domains + simpler keyword query
+  - Level 2: unrestricted search + "expert guide review" query (protected by substantive + e-commerce + keyword-token filters)
+  - Verify: `grep -n 'Level 2' seobetter/includes/Content_Injector.php`
+
+- **Expanded substantive quote filter** — 5 locations (PHP + Vercel)
+  - Added 30+ informational terms: support, reduce, provide, design, feature, material, quality, comfort, protect, treat, orthopedic, joint, weight, pressure, etc.
+  - Applied to PHP Source 2, PHP Tavily extractor, Vercel Tavily, Vercel scraper
+  - Verify: `grep -c 'orthoped' seobetter/includes/Content_Injector.php` (should be 2+)
+
+- **cleanup_ai_markdown in generation + save** — `seobetter.php` + `Async_Generator.php`
+  - Made `cleanup_ai_markdown()` public (was private)
+  - Now runs in `assemble_final()` (generation) AND `rest_save_draft()` (save)
+  - Catches long dashes, emoji, Unicode bullets at every stage
+  - Verify: `grep -n 'cleanup_ai_markdown' seobetter/includes/Async_Generator.php`
+
+- **Pros/Cons in all article types** — `includes/Async_Generator.php::get_content_type_template()`
+  - Added to blog_post sections template
+  - Added to shared rules for ALL 21 content types
+  - Verify: `grep -n 'Pros and Cons' seobetter/includes/Async_Generator.php`
+
+### Test Results (jwum.com, 2026-04-19)
+
+18/19 audit checks passing on "dog beds for arthritic dogs" Blog Post:
+- 3 expert quotes from caninearthritis.org, rover.com (UPenn clinic), fullwoodanimalhospital.com
+- 12 external links with named source attribution
+- References section with clickable links
+- Key Takeaways, Pros/Cons, FAQ, comparison table, freshness signal
+- Schema: Article + FAQPage
+- Only fail: long dashes (WordPress core wptexturize — not fixable without disabling WP core)
+
+### Verified by user
+
+- **CONFIRMED: "looks better"** (2026-04-19)
+
+---
+
 ## v1.5.111 — Fix 4 audit failures: long dashes, quotes fallback, Pros/Cons, save cleanup
 
 **Date:** 2026-04-18
-**Commit:** `[pending]`
+**Commit:** `47eaf61`
 
 ### Bug Fixes
 

@@ -253,8 +253,8 @@ Auto-detected from any paragraph containing a prominent statistic — `\d%`, `X 
 - Trigger regex: `(\d{1,3}(?:[.,]\d+)?\s*%)` OR `\b\d{1,3}\s+(?:out\s+of|in)\s+\d{1,4}\b`
 - Source: `Content_Formatter.php::format_hybrid()` paragraph branch — Stat callout
 
-### 5.10 Expert Quote (`v1.5.14+`)
-Auto-detected from any paragraph matching `"Quote text" — Name, Title` (em/en/regular dash, straight or curly quotes).
+### 5.10 Expert Quote (`v1.5.14+`, updated v1.5.114)
+Auto-detected from any paragraph matching `"Quote text" - Name, Title` (short dash only per v1.5.103+, straight or curly quotes). Quotes are sourced from real web pages via Tavily Search API + Perplexity Sonar (never AI-generated). Each quote links to the actual source URL. Authority domains per category+country prioritized (see authority-domains.md).
 - Layout: italic blockquote with the quote in 1.1em, attribution in a smaller `<footer>` line below
 - Background: surface gray (`#f9fafb`), accent left border (4px), border-radius 0 8px 8px 0
 - Trigger regex (Unicode-aware): `^["\x{201C}]([^"\x{201D}]{20,})["\x{201D}]\s*[\x{2014}\x{2013}\-]\s*([A-Z][a-zA-Z\s.\']+?)(?:,\s*(.+?))?[.\s]*$`
@@ -525,11 +525,22 @@ All dark mode styles are scoped inside:
 4. At save time, `validate_outbound_links()` filters the body (Pass 2 pool membership + static whitelist fallback, Pass 3 RLFKV content verification).
 5. `append_references_section()` walks the cleaned body, collects every pool URL the body actually cited, and appends a numbered `## References` section using **pool metadata titles** (scraped at pool-build time, never written by the AI).
 
+### Inline Citation Format (v1.5.114+)
+
+After the References section is built, `inject_named_source_links()` walks the article body and finds sentences with factual claims (statistics, percentages, years, named entities). For each claim, it appends the **source name as a clickable link** to the actual URL from the citation pool:
+
+> "72% of orthopedic beds used memory foam ([Canine Arthritis Resources](https://caninearthritis.org/article/...))."
+
+This is the Perplexity/Wikipedia citation style — named, clickable, verifiable. Max 6 inline citations per article. Skips Key Takeaways, FAQ, Pros/Cons, References sections.
+
+**Previous format (deprecated):** `[N](#ref-N)` fragment anchors rendered as bare numbers in hybrid mode. Replaced in v1.5.114.
+
 ### Guarantees
 
 - **Zero fabrication surface** — every entry traces to a pool URL that was cited in the body
 - **Only cited entries appear** — no orphan references
 - **Titles come from the pool**, not the AI — they match the real destination page
+- **Inline source links use the actual URL** — clickable external link, not a fragment anchor
 - **If zero pool URLs were cited, no References section is appended** — the article simply ends at its last content section
 
 ### Rendered output (hybrid mode) — LOCKED FORMAT (v1.5.63+)
