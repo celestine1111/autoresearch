@@ -3076,9 +3076,11 @@ async function searchTavily(keyword, country = '') {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: TAVILY_KEY,
-        query: keyword + (country ? ` ${country}` : ''),
+        // v1.5.101 — Bias toward editorial content. Without this, product
+        // keywords return Amazon/retailer pages and quotes become product listings.
+        query: keyword + ' review guide expert tips' + (country ? ` ${country}` : ''),
         include_raw_content: true,
-        max_results: 3,
+        max_results: 5,
         search_depth: 'basic',
       }),
       signal: AbortSignal.timeout(8000),
@@ -3120,8 +3122,11 @@ async function searchTavily(keyword, country = '') {
         const matchCount = keyTokens.filter(t => lower.includes(t)).length;
         if (matchCount < minTokens) continue;
 
-        // Skip junk
+        // Skip junk (nav/UI text)
         if (/cookie|privacy|subscribe|menu|click|log in|sign up|copyright|read more|img|src=|alt=|cdn\.|favicon|navigate|breadcrumb/i.test(s)) continue;
+
+        // v1.5.101 — Skip product listing / e-commerce text
+        if (/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code|add\s*to\s*wishlist|was\s*\$/i.test(s)) continue;
 
         const clean = s.trim();
         if (clean.length < 40 || clean.length > 220) continue;
@@ -3223,7 +3228,10 @@ async function scrapeAndExtractQuotes(urls, keyword) {
       if (matchCount < minTokens) continue;
 
       // Skip junk content (navigation, legal, marketing fluff)
-      if (/cookie|privacy policy|copyright|subscribe|newsletter|sign up|log in|terms of|all rights reserved|powered by|add to cart|buy now|checkout/i.test(sentence)) continue;
+      if (/cookie|privacy policy|copyright|subscribe|newsletter|sign up|log in|terms of|all rights reserved|powered by/i.test(sentence)) continue;
+
+      // v1.5.101 — Skip product listing / e-commerce text (prices, cart, shipping)
+      if (/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code|add\s*to\s*wishlist|was\s*\$/i.test(sentence)) continue;
 
       // Skip sentences that are too generic (no specific facts or claims)
       if (/click here|learn more|read more|see also|related articles|share this/i.test(sentence)) continue;

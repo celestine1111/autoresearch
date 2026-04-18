@@ -277,6 +277,8 @@ class Content_Injector {
                 if ( ! preg_match( '#^https?://#', $url ) ) continue;
                 if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
                 if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
+                // v1.5.101 — product listing junk filter on Vercel-sourced quotes too
+                if ( preg_match( '/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code/i', $text ) ) continue;
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }

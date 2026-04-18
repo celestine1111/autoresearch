@@ -16,6 +16,50 @@
 
 ---
 
+## v1.5.101 — Systematic product-listing filter across ALL quote paths
+
+**Date:** 2026-04-18
+**Commit:** `83305e4`
+
+### Changes
+
+Audited all 4 code paths where quotes enter the system. Applied the same product-listing junk filter and editorial query bias to ALL of them:
+
+- **PHP inject_quotes() Source 1 filter** — `includes/Content_Injector.php::inject_quotes()` line ~279
+  - Vercel-sourced quotes (`sonar_data['quotes']`) now filtered for e-commerce patterns (prices, "Add to Cart", etc.)
+  - Previously only filtered for giveaway/privacy junk
+  - Verify: `grep -n 'regular.price' seobetter/includes/Content_Injector.php`
+
+- **Vercel searchTavily() query bias** — `cloud-api/api/research.js::searchTavily()` line ~3079
+  - Now appends `" review guide expert tips"` to query (same as PHP side)
+  - Increased max_results from 3 to 5 for more editorial pages
+  - Verify: `grep -n 'review guide expert' seobetter/cloud-api/api/research.js`
+
+- **Vercel searchTavily() junk filter** — `cloud-api/api/research.js::searchTavily()` line ~3124
+  - Added e-commerce pattern filter (prices, cart, shipping, discount codes)
+  - Verify: `grep -n 'regular.price' seobetter/cloud-api/api/research.js`
+
+- **Vercel scrapeAndExtractQuotes() junk filter** — `cloud-api/api/research.js::scrapeAndExtractQuotes()` line ~3226
+  - Extended existing filter with full e-commerce pattern set
+  - Previously only had `add to cart|buy now|checkout`
+  - Now includes: price patterns, Regular/Sale price, Free Shipping, wishlist, discount codes
+  - Verify: `grep -n 'sale.price\|free.shipping' seobetter/cloud-api/api/research.js`
+
+### Coverage Matrix (all 4 paths now protected)
+
+| Path | Editorial bias | Product filter |
+|---|---|---|
+| PHP Tavily direct | YES (v1.5.100) | YES (v1.5.100) |
+| PHP inject_quotes Source 1 | n/a | YES (v1.5.101) |
+| Vercel Tavily | YES (v1.5.101) | YES (v1.5.101) |
+| Vercel scraper | n/a | YES (v1.5.101) |
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.100 — Fix product-listing quotes: bias Tavily toward editorial content
 
 **Date:** 2026-04-18
