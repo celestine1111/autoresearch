@@ -420,4 +420,68 @@ An automatic content updater that finds outdated statistics, recommends product 
 
 ---
 
+## PRIORITY FIX — Places Waterfall PHP Fallback
+
+**Problem:** When the Vercel research endpoint returns empty data (timeout, rate limit, deployment stale), local-intent articles get generated with store names but NO addresses, NO website links, NO Google Maps links, NO phone numbers. The Places waterfall (Sonar → OSM → Foursquare → HERE → Google Places) only runs during Vercel-side generation — there's no PHP-side fallback like there is for quotes (Tavily) and citations (Sonar).
+
+**Impact:** Local articles like "pet shops brisbane" list businesses without any way for readers to find them. Destroys local SEO value, E-E-A-T trust, and user experience.
+
+**Fix needed:**
+- [ ] PHP-side Places fallback in `optimize_all()` — if `sonar_data['places']` is empty, run a PHP-side OSM/Nominatim + Overpass query to get real business data
+- [ ] Pass places data to `Places_Link_Injector` at optimize time (currently only at save time)
+- [ ] Ensure LocalBusiness schema is generated from the places data
+- [ ] Add Google Maps link for each business (formatted as `https://www.google.com/maps/search/?api=1&query=BUSINESS+NAME+ADDRESS`)
+- [ ] Add website URL when available from the Places waterfall
+- [ ] Test with: "pet shops brisbane", "vet clinics melbourne", "dog groomers sydney" — verify addresses are real
+
+**Priority:** HIGH — this affects every local-intent keyword for every user
+
+---
+
+## PRO FEATURE — WooCommerce Product Integration
+
+Automatically integrate the user's own WooCommerce products, categories, and blog posts into generated articles when the topic matches.
+
+### How it would work:
+1. **Auto-scan WooCommerce catalog** — on article generation/save, the plugin reads the user's WooCommerce product categories and products via `wc_get_products()` and `get_terms('product_cat')`
+2. **Topic matching** — compare article keyword against product names, category names, and product tags. Use fuzzy matching (keyword tokens appear in product title or category)
+3. **Insert product links** — where the article mentions a product type (e.g. "grain free cat food"), auto-link to the user's matching WooCommerce category page or product page
+4. **"Shop This" product block** — below the comparison table or at the article end, insert a styled block showing 2-3 matching products from the user's store with image, price, and "Shop Now" button
+5. **Internal link scoring** — the EEAT checker already scores internal links. WooCommerce links would automatically satisfy this check
+
+### Implementation details:
+- [ ] `WooCommerce_Integrator` class — scans catalog, caches product index (1hr transient)
+- [ ] `match_products($keyword, $content_type)` — returns matched products + categories sorted by relevance
+- [ ] `inject_product_links($markdown, $matches)` — replaces generic product mentions with WooCommerce links
+- [ ] `render_shop_block($matches)` — styled HTML block with product cards (image, name, price, button)
+- [ ] Settings toggle: "Auto-integrate WooCommerce products" (on/off)
+- [ ] Settings: "Shop block position" — after comparison table / end of article / both
+- [ ] Settings: "Max products per article" — default 3
+- [ ] Only activates if WooCommerce is installed and has products
+- [ ] Works with variable products (shows price range "From $29.99")
+- [ ] Affiliate disclosure auto-inserted if linking to own products
+
+### Example output:
+For keyword "grain free cat food" on a pet store site:
+```
+## Shop Grain Free Cat Food
+
+[Product Image] **Ziwi Peak Air-Dried Cat Food** — $42.99
+Free-range, grain-free recipe with 96% meat content.
+[Shop Now →](https://mindiampets.com.au/product/ziwi-peak-cat-food/)
+
+[Product Image] **Ivory Coat Grain Free Chicken** — $34.99
+Australian-made, grain-free with real chicken.
+[Shop Now →](https://mindiampets.com.au/product/ivory-coat-chicken/)
+```
+
+### Why this is a Pro feature:
+- Direct revenue attribution — articles generate sales, not just traffic
+- Internal linking — every product link is an internal link (SEO boost)
+- E-E-A-T — "we sell these products" = first-hand experience
+- Conversion — readers go from research to purchase without leaving the site
+- Competitive moat — no other AI content plugin does this
+
+---
+
 *Add new ideas to this file as they come up. Move items to "implemented" when built and tested.*
