@@ -266,6 +266,9 @@ class Content_Injector {
 
         $quotes = [];
 
+        // v1.5.109 — Build authority domain list for filtering both sources
+        $authority = self::get_authority_domains( $domain, $country );
+
         // Source 1: Pre-fetched Tavily/scraped data from Vercel (if available)
         if ( ! empty( $sonar_data['quotes'] ) ) {
             foreach ( $sonar_data['quotes'] as $q ) {
@@ -279,10 +282,23 @@ class Content_Injector {
                 if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
                 // v1.5.101 — product listing junk filter on Vercel-sourced quotes too
                 if ( preg_match( '/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code/i', $text ) ) continue;
-                // v1.5.105 — Require substantive claim/opinion language. Rejects
-                // marketing taglines ("Compare dry, wet, and grain-free options")
-                // in favor of expert opinions ("Most cats don't require grain-free food").
+                // v1.5.105 — Require substantive claim/opinion language.
                 if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i', $text ) ) continue;
+                // v1.5.109 — Authority domain filter on Vercel-sourced quotes.
+                // If authority domains are configured, only accept quotes from those
+                // domains. Without this, Vercel quotes bypass the authority filter
+                // (e.g. mattressmiracle.ca leaking into AU animal articles).
+                if ( ! empty( $authority ) ) {
+                    $quote_host = preg_replace( '/^www\./', '', strtolower( wp_parse_url( $url, PHP_URL_HOST ) ?? '' ) );
+                    $in_authority = false;
+                    foreach ( $authority as $auth_domain ) {
+                        if ( str_ends_with( $quote_host, $auth_domain ) ) {
+                            $in_authority = true;
+                            break;
+                        }
+                    }
+                    if ( ! $in_authority ) continue;
+                }
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
