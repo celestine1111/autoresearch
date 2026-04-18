@@ -3128,6 +3128,9 @@ async function searchTavily(keyword, country = '') {
         // v1.5.101 — Skip product listing / e-commerce text
         if (/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code|add\s*to\s*wishlist|was\s*\$/i.test(s)) continue;
 
+        // v1.5.105 — Require substantive claim/opinion language (not marketing taglines)
+        if (!/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i.test(s)) continue;
+
         const clean = s.trim();
         if (clean.length < 40 || clean.length > 220) continue;
 
@@ -3235,6 +3238,9 @@ async function scrapeAndExtractQuotes(urls, keyword) {
 
       // Skip sentences that are too generic (no specific facts or claims)
       if (/click here|learn more|read more|see also|related articles|share this/i.test(sentence)) continue;
+
+      // v1.5.105 — Require substantive claim/opinion language (not marketing taglines)
+      if (!/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i.test(sentence)) continue;
 
       // Clean up leading punctuation/bullets
       const clean = sentence.trim().replace(/^\s*[-–—•*]\s*/, '');
@@ -3578,7 +3584,9 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
       if (!d) return;
       if (d.stats?.length) {
         d.stats.forEach(s => {
-          // Always add stats — AI uses them for writing context
+          // v1.5.105 — Filter out irrelevant filler stats (holidays, trivia, random facts)
+          if (/holiday|Nager\.Date|Numbers? API|Number fact|Quotable|Open Trivia|Zoo Animals API|Dog Facts|Cat Facts|MeowFacts/i.test(s.text)) return;
+          // Always add topic-relevant stats — AI uses them for writing context
           stats.push(s.text);
           // Only add authoritative sources to the references section
           if (s.url && !lowAuthority.has(s.source)) {

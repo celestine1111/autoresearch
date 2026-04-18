@@ -16,6 +16,32 @@
 
 ---
 
+## v1.5.105 — Filter junk stats + require substantive quotes (systematic, all paths)
+
+**Date:** 2026-04-18
+**Commit:** `[pending]`
+
+### Bug Fixes
+
+- **Junk stats filtered (NagerDate holidays, NumberFacts, Quotable)** — 2 locations
+  - PHP `optimize_all()` Step 3: filters stats BEFORE insertion. Skips anything containing "holiday", "Nager.Date", "Numbers API", "Quotable", "Open Trivia", "Zoo Animals API", "Dog Facts", "Cat Facts", "MeowFacts"
+  - Vercel `buildResearchResult()`: same filter at source level so junk never leaves the backend
+  - Verify: `grep -n 'Nager.Date' seobetter/includes/Content_Injector.php`
+  - Verify: `grep -n 'Nager.Date' seobetter/cloud-api/api/research.js | grep -v function`
+
+- **Substantive language filter for quotes** — 5 locations
+  - Rejects marketing taglines ("Compare dry, wet, and grain-free options") in favor of expert opinions ("Most cats don't require grain-free food")
+  - Requires quotes to contain claim/opinion/fact language: recommend, found, study, research, important, risk, benefit, evidence, suggest, show, report, etc.
+  - Applied to: PHP inject_quotes Source 1, PHP inject_quotes Source 2, PHP tavily_search_and_extract, Vercel searchTavily, Vercel scrapeAndExtractQuotes
+  - Verify: `grep -n 'substantive' seobetter/includes/Content_Injector.php`
+  - Verify: `grep -n 'substantive' seobetter/cloud-api/api/research.js`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.104 — Fix CORE-EEAT citation count bug + add FAQ injection to Optimize All
 
 **Date:** 2026-04-18

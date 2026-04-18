@@ -279,6 +279,10 @@ class Content_Injector {
                 if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
                 // v1.5.101 — product listing junk filter on Vercel-sourced quotes too
                 if ( preg_match( '/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code/i', $text ) ) continue;
+                // v1.5.105 — Require substantive claim/opinion language. Rejects
+                // marketing taglines ("Compare dry, wet, and grain-free options")
+                // in favor of expert opinions ("Most cats don't require grain-free food").
+                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i', $text ) ) continue;
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
@@ -296,6 +300,8 @@ class Content_Injector {
                 if ( ! preg_match( '#^https?://#', $url ) ) continue;
                 if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
                 if ( preg_match( '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i', $text ) ) continue;
+                // v1.5.105 — Same substantive language filter as Source 1
+                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i', $text ) ) continue;
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
@@ -1500,6 +1506,10 @@ Return ONLY the Markdown table, nothing else.";
                 $trimmed = trim( $sentence );
                 if ( strlen( $trimmed ) < 40 || strlen( $trimmed ) > 220 ) continue;
 
+                // v1.5.105 — Require substantive claim/opinion language.
+                // Rejects taglines and meta descriptions in favor of expert statements.
+                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i', $trimmed ) ) continue;
+
                 // Dedupe
                 $key = strtolower( substr( $trimmed, 0, 40 ) );
                 if ( isset( $seen_texts[ $key ] ) ) continue;
@@ -1766,8 +1776,27 @@ Return ONLY the Markdown table, nothing else.";
         if ( $stat_score < 70 ) {
             try {
                 if ( $sonar && ! empty( $sonar['statistics'] ) ) {
+                    // v1.5.105 — Filter out irrelevant junk stats before insertion.
+                    // NagerDate holidays, NumberFacts, Quotable random quotes, and
+                    // other filler APIs produce stats like "Upcoming US holiday:
+                    // Truman Day" which have NOTHING to do with the article topic.
+                    $filtered_stats = array_filter( $sonar['statistics'], function( $s ) {
+                        $s = (string) $s;
+                        // Skip holiday/calendar data
+                        if ( preg_match( '/holiday|Nager\.Date|Truman|Memorial Day|Juneteenth|Independence Day|Christmas|Easter|Thanksgiving/i', $s ) ) return false;
+                        // Skip random number/trivia facts
+                        if ( preg_match( '/Numbers? API|Number fact:|random fact|Open Trivia/i', $s ) ) return false;
+                        // Skip random famous quotes (not topic-relevant)
+                        if ( preg_match( '/Quotable,|\(Quotable\)/i', $s ) ) return false;
+                        // Skip zoo/animal fun facts that are filler
+                        if ( preg_match( '/Zoo Animals API|Dog Facts API|Cat Facts|MeowFacts/i', $s ) ) return false;
+                        // Must be at least 20 chars (not just a number)
+                        if ( strlen( trim( $s ) ) < 20 ) return false;
+                        return true;
+                    } );
+
                     $stat_block = "\n\n**Key Statistics:**\n";
-                    foreach ( array_slice( $sonar['statistics'], 0, 4 ) as $stat ) {
+                    foreach ( array_slice( array_values( $filtered_stats ), 0, 4 ) as $stat ) {
                         $stat_block .= "- " . trim( (string) $stat ) . "\n";
                     }
                     $stat_block .= "\n";
