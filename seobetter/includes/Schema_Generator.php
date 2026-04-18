@@ -52,6 +52,22 @@ class Schema_Generator {
      * @param \WP_Post $post The WordPress post.
      * @return array Combined schema array.
      */
+    /**
+     * v1.5.118 — Expanded schema generation with multi-schema stacking.
+     * Each content type gets its primary schema + relevant secondary schemas.
+     * All schemas output without individual @context (caller wraps in @graph).
+     */
+    // Content types that get Speakable (voice assistants)
+    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide' ];
+    // Content types that get FAQPage secondary (when FAQ section detected)
+    private const FAQ_TYPES = [
+        'blog_post', 'how_to', 'listicle', 'review', 'comparison', 'buying_guide',
+        'recipe', 'news_article', 'opinion', 'tech_article', 'white_paper',
+        'scholarly_article', 'glossary_definition', 'case_study', 'interview', 'pillar_guide',
+    ];
+    // Content types that get ItemList
+    private const ITEMLIST_TYPES = [ 'listicle', 'buying_guide', 'pillar_guide' ];
+
     public function generate( \WP_Post $post ): array {
         $schemas = [];
 
@@ -63,29 +79,39 @@ class Schema_Generator {
             $schemas[] = $primary;
         }
 
-        // Secondary schemas — added when relevant content is detected
+        // ---- Secondary schemas ----
 
-        // FAQPage is often added alongside Article when a post has a FAQ section
-        if ( $content_type !== 'faq_page' ) {
+        // FAQPage — added alongside primary when FAQ section detected
+        if ( in_array( $content_type, self::FAQ_TYPES, true ) && $content_type !== 'faq_page' ) {
             $faq = $this->generate_faq_schema( $post );
             if ( $faq ) {
                 $schemas[] = $faq;
             }
         }
 
-        // v1.5.116 — HowTo schema DEPRECATED by Google (September 2023).
-        // No longer generates any rich results. Removed entirely.
-        // Keep how_to articles as Article @type with FAQPage secondary.
-
-        // ItemList for listicles (adds rich-list support alongside the Article schema)
-        if ( $content_type === 'listicle' ) {
+        // ItemList — for listicles, buying guides, pillar guides
+        if ( in_array( $content_type, self::ITEMLIST_TYPES, true ) ) {
             $itemlist = $this->generate_itemlist_schema( $post );
             if ( $itemlist ) {
                 $schemas[] = $itemlist;
             }
         }
 
+        // LocalBusiness — auto-detect from content with addresses
+        $local = $this->generate_localbusiness_schemas( $post );
+        if ( ! empty( $local ) ) {
+            foreach ( $local as $lb ) {
+                $schemas[] = $lb;
+            }
+        }
+
+        // BreadcrumbList — always
         $schemas[] = $this->generate_breadcrumb_schema( $post );
+
+        // Strip @context from individual schemas (caller wraps in single @graph)
+        foreach ( $schemas as &$s ) {
+            unset( $s['@context'] );
+        }
 
         return $schemas;
     }
@@ -136,7 +162,7 @@ class Schema_Generator {
             'dateModified'  => get_the_modified_date( 'c', $post ),
             'author'        => [
                 '@type' => 'Person',
-                'name'  => $author ? $author->display_name : 'Unknown',
+                'name'  => $author ? $author->display_name : get_bloginfo( 'name' ),
             ],
             'publisher'     => [
                 '@type' => 'Organization',
@@ -153,11 +179,16 @@ class Schema_Generator {
             $schema['image'] = $thumbnail;
         }
 
-        // Speakable markup — tells voice assistants which sections to read aloud
-        $schema['speakable'] = [
-            '@type'       => 'SpeakableSpecification',
-            'cssSelector' => [ 'h1', 'h2 + p', '.key-takeaways', '.faq-answer' ],
-        ];
+        // v1.5.118 — Speakable for voice assistants (US English, news/blog content)
+        if ( in_array( $type, [ 'BlogPosting', 'NewsArticle', 'OpinionNewsArticle', 'Article' ], true ) ) {
+            $content_type_check = get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: 'blog_post';
+            if ( in_array( $content_type_check, self::SPEAKABLE_TYPES, true ) ) {
+                $schema['speakable'] = [
+                    '@type'       => 'SpeakableSpecification',
+                    'cssSelector' => [ 'h1', '.key-takeaways', 'h2 + p' ],
+                ];
+            }
+        }
 
         // NewsArticle / OpinionNewsArticle need dateline
         if ( in_array( $type, [ 'NewsArticle', 'OpinionNewsArticle' ], true ) ) {
@@ -395,9 +426,104 @@ class Schema_Generator {
         }
 
         // If no rating found, still valid as Review without reviewRating
-        // (Google won't show star snippets but won't flag it as violation)
+
+        // v1.5.118 — Extract Pros/Cons as positiveNotes/negativeNotes
+        // Google shows these as badges in Product review search results
+        $content = $post->post_content;
+        $pros = [];
+        $cons = [];
+        if ( preg_match( '/<h[2-4][^>]*>[^<]*pros?[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ul[^>]*>(.*?)<\/ul>/is', $content, $pros_match ) ) {
+            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $pros_match[1], $li );
+            foreach ( $li[1] as $item ) {
+                $t = trim( wp_strip_all_tags( $item ) );
+                if ( strlen( $t ) > 3 ) $pros[] = $t;
+            }
+        }
+        if ( preg_match( '/<h[2-4][^>]*>[^<]*cons?[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ul[^>]*>(.*?)<\/ul>/is', $content, $cons_match ) ) {
+            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $cons_match[1], $li );
+            foreach ( $li[1] as $item ) {
+                $t = trim( wp_strip_all_tags( $item ) );
+                if ( strlen( $t ) > 3 ) $cons[] = $t;
+            }
+        }
+        if ( ! empty( $pros ) ) {
+            $schema['positiveNotes'] = [
+                '@type' => 'ItemList',
+                'itemListElement' => array_map( function( $text, $i ) {
+                    return [ '@type' => 'ListItem', 'position' => $i + 1, 'name' => $text ];
+                }, array_slice( $pros, 0, 5 ), array_keys( array_slice( $pros, 0, 5 ) ) ),
+            ];
+        }
+        if ( ! empty( $cons ) ) {
+            $schema['negativeNotes'] = [
+                '@type' => 'ItemList',
+                'itemListElement' => array_map( function( $text, $i ) {
+                    return [ '@type' => 'ListItem', 'position' => $i + 1, 'name' => $text ];
+                }, array_slice( $cons, 0, 5 ), array_keys( array_slice( $cons, 0, 5 ) ) ),
+            ];
+        }
 
         return $schema;
+    }
+
+    /**
+     * v1.5.118 — Generate LocalBusiness schemas from content with addresses.
+     * Auto-detects businesses with street addresses in the article.
+     */
+    private function generate_localbusiness_schemas( \WP_Post $post ): array {
+        $content = $post->post_content;
+        $text = wp_strip_all_tags( $content );
+        $schemas = [];
+
+        // Look for address patterns: "123 Main St" or "42 Smith Road"
+        // Match H2 heading followed by content containing an address
+        preg_match_all( '/<h2[^>]*>(.*?)<\/h2>(.*?)(?=<h2|$)/is', $content, $sections );
+        if ( empty( $sections[1] ) ) return [];
+
+        for ( $i = 0; $i < count( $sections[1] ); $i++ ) {
+            $heading = wp_strip_all_tags( $sections[1][ $i ] );
+            $body = $sections[2][ $i ];
+            $body_text = wp_strip_all_tags( $body );
+
+            // Must contain a street address pattern
+            if ( ! preg_match( '/\d+\s+[A-Z][a-z]+\s+(St|Rd|Ave|Blvd|Dr|Ln|Way|Hwy|Cres|Pde|Street|Road|Avenue|Drive|Place|Circuit)\b/i', $body_text ) ) {
+                continue;
+            }
+
+            // Skip generic headings
+            if ( preg_match( '/^(key takeaway|faq|frequently|reference|pros|cons|introduction|conclusion)/i', $heading ) ) {
+                continue;
+            }
+
+            $business = [
+                '@type'   => 'LocalBusiness',
+                'name'    => $heading,
+                'address' => [
+                    '@type'          => 'PostalAddress',
+                    'streetAddress'  => '', // Will be populated from content
+                ],
+            ];
+
+            // Try to extract full address
+            if ( preg_match( '/(\d+\s+[A-Za-z\s]+(?:St|Rd|Ave|Blvd|Dr|Ln|Way|Hwy|Cres|Pde|Street|Road|Avenue|Drive|Place|Circuit)[^,]*)/i', $body_text, $addr ) ) {
+                $business['address']['streetAddress'] = trim( $addr[1] );
+            }
+
+            // Extract phone if present
+            if ( preg_match( '/(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/', $body_text, $phone ) ) {
+                $business['telephone'] = trim( $phone[0] );
+            }
+
+            // Extract URL if present
+            if ( preg_match( '/https?:\/\/[^\s<"]+/', $body, $url_match ) ) {
+                $business['url'] = $url_match[0];
+            }
+
+            $schemas[] = $business;
+            if ( count( $schemas ) >= 10 ) break; // Cap at 10 businesses
+        }
+
+        return $schemas;
     }
 
     /**
@@ -506,7 +632,7 @@ class Schema_Generator {
         foreach ( $h2_matches[1] as $heading ) {
             $name = wp_strip_all_tags( $heading );
             // Skip generic non-list headings
-            if ( preg_match( '/^(introduction|conclusion|faq|frequently asked|summary|final thoughts)/i', $name ) ) {
+            if ( preg_match( '/^(introduction|conclusion|faq|frequently asked|summary|final thoughts|key takeaway|pros|cons|reference|quick comparison)/i', $name ) ) {
                 continue;
             }
             $items[] = [

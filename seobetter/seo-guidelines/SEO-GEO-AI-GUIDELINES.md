@@ -585,21 +585,40 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 | Glossary | Article + FAQPage | Definition → Explanation → Examples → Related Terms | 400-1200 |
 | Sponsored | AdvertiserContentArticle | Disclosure → Intro → Body → Sponsor CTA | 600-1500 |
 
-### 10.2 Schema Implementation
+### 10.2 Schema Implementation (v1.5.118)
 - JSON-LD format only (not microdata)
-- Single `<script type="application/ld+json">` tag
-- Must match visible page content exactly
-- Validate with Schema.org Validator
-- Content type selection in the form determines the schema @type
-- FAQ Q&A pairs are auto-extracted from content and added as FAQPage schema
-- HowTo steps are auto-extracted from ordered lists
-- Recipe ingredients and instructions are auto-extracted
+- Single `<script type="application/ld+json">` with `@graph` array containing all schemas
+- Must match visible page content exactly — NEVER hardcode values (times, ratings, yields)
+- Validate with Google Rich Results Test: https://search.google.com/test/rich-results
+- Content type selection determines which schemas are generated
+- Multi-schema stacking: each article gets primary + secondary schemas automatically
 
-### 10.3 Schema Notes
-- **HowTo** rich results were deprecated by Google in late 2023 — schema is still valid and useful for AI crawlers
-- **FAQPage** rich results are now limited to government/health sites — still worth emitting for AI/semantic reasons
-- **Review** aggregate ratings must be real and visible on the page
-- **Recipe** requires at least ingredients and instructions to be valid
+### 10.3 Schema Stacking per Content Type (v1.5.118)
+
+| Content Type | Primary | Secondary Schemas |
+|---|---|---|
+| Blog Post | BlogPosting | FAQPage, Speakable, BreadcrumbList |
+| How-To | Article | FAQPage, BreadcrumbList |
+| Listicle | Article | ItemList, FAQPage, BreadcrumbList |
+| Review | Product+Review (with pros/cons) | FAQPage, BreadcrumbList |
+| Comparison | Article | FAQPage, BreadcrumbList |
+| Buying Guide | Article | ItemList, FAQPage, BreadcrumbList |
+| Recipe | Recipe | ItemList (carousel), FAQPage, BreadcrumbList |
+| FAQ Page | FAQPage | BreadcrumbList |
+| News Article | NewsArticle | Speakable, FAQPage, BreadcrumbList |
+| Opinion | OpinionNewsArticle | Speakable, FAQPage, BreadcrumbList |
+| Tech Article | TechArticle | FAQPage, BreadcrumbList |
+| Pillar Guide | Article | ItemList, FAQPage, Speakable, BreadcrumbList |
+| Places articles | + LocalBusiness per business | Auto-detected from addresses in content |
+
+### 10.4 Schema Notes
+- **HowTo** rich results DEPRECATED by Google (Sept 2023) — mapped to Article instead
+- **FAQPage** rich results restricted to government/health sites — still emitted for AI/semantic value
+- **Review** ratings extracted from content only — NEVER hardcoded (Google policy violation)
+- **Recipe** times/yield extracted from content only — omitted if not stated
+- **Product** pros/cons (positiveNotes/negativeNotes) extracted from Pros/Cons sections
+- **LocalBusiness** auto-detected when article contains street addresses
+- **Speakable** enables Google Assistant to read article aloud (US English)
 
 ---
 

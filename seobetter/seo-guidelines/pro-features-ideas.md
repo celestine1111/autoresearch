@@ -484,4 +484,51 @@ Australian-made, grain-free with real chicken.
 
 ---
 
+## PRO FEATURE — Rich Result SERP Preview + Search Performance Dashboard
+
+### Rich Result Preview (in post editor metabox)
+
+A visual preview of how the article will appear in Google Search with its schema markup. Shows different previews per content type:
+
+- [ ] 4th tab in SEOBetter metabox: "Rich Results" (alongside General, Page Analysis, Readability)
+- [ ] Desktop + Mobile toggle views
+- [ ] Recipe: card with image, star rating, cook time, ingredients count
+- [ ] Review/Product: star rating, price, pros/cons badges below title
+- [ ] FAQ: expandable dropdown questions below the listing
+- [ ] News: Top Stories card with thumbnail + date
+- [ ] LocalBusiness: map pin + address + hours
+- [ ] Standard Article: enhanced listing with author, date, image
+- [ ] Schema Impact Estimate panel with research-backed statistics:
+  - "Articles with Recipe schema get 2.7x more clicks" (Searchmetrics)
+  - "Product schema with star ratings increases CTR by 35%" (SEJ)
+  - "Schema markup leads to 30-40% boost in AI citation rates" (Princeton GEO)
+  - "Rich results get 58% of all clicks on page 1" (FirstPageSage)
+- [ ] Schema Validation badge: "Valid (0 errors)" or "3 warnings"
+- [ ] Link to Google Rich Results Test for the page URL
+- [ ] Count of active rich result types: "4 rich results active: Recipe, FAQ, Breadcrumb, Speakable"
+
+### Google Search Console Integration (Pro)
+
+Real performance data per article — requires OAuth connection:
+
+- [ ] Settings: "Connect Google Search Console" button (OAuth2 flow)
+- [ ] Per-article dashboard: Impressions, Clicks, CTR, Average Position
+- [ ] Before/after comparison: schema added vs no schema
+- [ ] Trend charts over 30/60/90 days
+- [ ] Site-wide summary: total rich result impressions, CTR improvement
+- [ ] "Top Performing Articles" leaderboard sorted by clicks
+- [ ] Alert: "Article dropped 5 positions — consider refreshing"
+
+### Content Performance Stats (Free tier)
+
+Research-backed estimates (no API needed):
+
+- [ ] Reading time estimate (word count / 238 wpm): "5 min read — optimal for mobile"
+- [ ] Readability score: "Grade 7 — accessible to 85% of readers"
+- [ ] Content uniqueness signal: "92% original content"
+- [ ] Schema richness score: "4/6 rich result types active"
+- [ ] AI citation readiness: "High — has quotes, citations, FAQ, structured data"
+
+---
+
 *Add new ideas to this file as they come up. Move items to "implemented" when built and tested.*
