@@ -1707,6 +1707,349 @@ Return ONLY the Markdown table, nothing else.";
                 'news'   => [ 'japantimes.co.jp', 'nhk.or.jp' ],
                 'technology' => [ 'nikkei.com' ],
             ],
+            // ── Oceania ──
+            'FJ' => [
+                'news'   => [ 'fbcnews.com.fj', 'fijitimes.com.fj', 'fijivillage.com' ],
+                'health' => [ 'health.gov.fj', 'info.gov.fj' ],
+            ],
+            // ── North America ──
+            'MX' => [
+                'news'       => [ 'gob.mx', 'jornada.com.mx', 'proceso.com.mx', 'eluniversal.com.mx' ],
+                'health'     => [ 'gob.mx', 'imss.gob.mx', 'salud.gob.mx' ],
+                'animals'    => [ 'gob.mx', 'senasica.gob.mx', 'unam.mx', 'mindiampets.com.au' ],
+                'finance'    => [ 'banxico.org.mx', 'gob.mx', 'cnbv.gob.mx' ],
+                'education'  => [ 'unam.mx', 'ipn.mx', 'sep.gob.mx', 'tec.mx' ],
+            ],
+            // ── Europe Western ──
+            'IE' => [
+                'news'       => [ 'rte.ie', 'irishtimes.com', 'thejournal.ie' ],
+                'health'     => [ 'gov.ie', 'hse.ie', 'hiqa.ie' ],
+                'animals'    => [ 'ispca.ie', 'ucd.ie', 'gov.ie', 'mindiampets.com.au' ],
+                'finance'    => [ 'centralbank.ie', 'gov.ie', 'revenue.ie' ],
+                'education'  => [ 'tcd.ie', 'ucd.ie', 'ucc.ie' ],
+            ],
+            'ES' => [
+                'news'       => [ 'rtve.es', 'elpais.com', 'elmundo.es' ],
+                'health'     => [ 'sanidad.gob.es', 'isciii.es', 'aemps.es' ],
+                'animals'    => [ 'mapa.gob.es', 'mindiampets.com.au' ],
+                'finance'    => [ 'bde.es', 'cnmv.es', 'hacienda.gob.es' ],
+                'education'  => [ 'ucm.es', 'ub.edu', 'uam.es' ],
+            ],
+            'PT' => [
+                'news'   => [ 'rtp.pt', 'publico.pt', 'dn.pt' ],
+                'health' => [ 'sns.gov.pt', 'dgs.pt', 'infarmed.pt' ],
+            ],
+            'IT' => [
+                'news'       => [ 'rai.it', 'repubblica.it', 'corriere.it', 'ansa.it' ],
+                'health'     => [ 'salute.gov.it', 'iss.it', 'aifa.gov.it' ],
+                'animals'    => [ 'izsvenezie.it', 'salute.gov.it', 'mindiampets.com.au' ],
+                'finance'    => [ 'bancaditalia.it', 'consob.it', 'mef.gov.it' ],
+                'education'  => [ 'unibo.it', 'uniroma1.it', 'polimi.it' ],
+            ],
+            'NL' => [
+                'news'       => [ 'nos.nl', 'nrc.nl', 'volkskrant.nl' ],
+                'health'     => [ 'rivm.nl', 'rijksoverheid.nl' ],
+                'animals'    => [ 'nvwa.nl', 'wur.nl', 'dierenbescherming.nl', 'mindiampets.com.au' ],
+                'finance'    => [ 'dnb.nl', 'afm.nl', 'rijksoverheid.nl' ],
+                'education'  => [ 'uu.nl', 'uva.nl', 'tudelft.nl' ],
+            ],
+            'AT' => [
+                'news'   => [ 'orf.at', 'derstandard.at', 'diepresse.com' ],
+                'health' => [ 'gesundheit.gv.at', 'sozialministerium.at', 'ages.at' ],
+            ],
+            'GR' => [
+                'news'   => [ 'ert.gr', 'kathimerini.gr', 'tovima.gr' ],
+                'health' => [ 'moh.gov.gr', 'eody.gov.gr' ],
+            ],
+            'CY' => [
+                'news'   => [ 'cybc.com.cy', 'philenews.com' ],
+                'health' => [ 'moh.gov.cy', 'pio.gov.cy' ],
+            ],
+            'MT' => [
+                'news'   => [ 'tvm.com.mt', 'timesofmalta.com' ],
+                'health' => [ 'gov.mt' ],
+            ],
+            // ── Nordic / Baltic ──
+            'SE' => [
+                'news'       => [ 'svt.se', 'sr.se', 'dn.se' ],
+                'health'     => [ 'folkhalsomyndigheten.se', 'socialstyrelsen.se', '1177.se' ],
+                'animals'    => [ 'jordbruksverket.se', 'slu.se', 'mindiampets.com.au' ],
+                'finance'    => [ 'riksbank.se', 'fi.se' ],
+                'education'  => [ 'uu.se', 'lu.se', 'kth.se', 'ki.se' ],
+            ],
+            'NO' => [
+                'news'       => [ 'nrk.no', 'aftenposten.no', 'vg.no' ],
+                'health'     => [ 'fhi.no', 'helsenorge.no', 'helsedirektoratet.no' ],
+                'animals'    => [ 'mattilsynet.no', 'nmbu.no', 'mindiampets.com.au' ],
+                'finance'    => [ 'norges-bank.no', 'finanstilsynet.no' ],
+                'education'  => [ 'uio.no', 'ntnu.no', 'uib.no' ],
+            ],
+            'DK' => [
+                'news'   => [ 'dr.dk', 'politiken.dk', 'berlingske.dk' ],
+                'health' => [ 'sst.dk', 'sundhed.dk', 'ssi.dk' ],
+            ],
+            'FI' => [
+                'news'   => [ 'yle.fi', 'hs.fi' ],
+                'health' => [ 'thl.fi', 'stm.fi', 'fimea.fi' ],
+            ],
+            'IS' => [
+                'news'   => [ 'ruv.is', 'mbl.is' ],
+                'health' => [ 'landlaeknir.is', 'government.is' ],
+            ],
+            'EE' => [
+                'news'   => [ 'err.ee', 'postimees.ee' ],
+                'health' => [ 'terviseamet.ee', 'sm.ee' ],
+            ],
+            'LV' => [
+                'news'   => [ 'lsm.lv', 'delfi.lv' ],
+                'health' => [ 'vm.gov.lv', 'spkc.gov.lv' ],
+            ],
+            'LT' => [
+                'news'   => [ 'lrt.lt', 'delfi.lt' ],
+                'health' => [ 'sam.lrv.lt', 'nvsc.lrv.lt' ],
+            ],
+            // ── Central / Eastern Europe ──
+            'PL' => [
+                'news'       => [ 'tvp.pl', 'polskieradio.pl', 'wyborcza.pl' ],
+                'health'     => [ 'gov.pl', 'pzh.gov.pl', 'nfz.gov.pl' ],
+                'animals'    => [ 'wetgiw.gov.pl', 'sggw.edu.pl', 'mindiampets.com.au' ],
+                'finance'    => [ 'nbp.pl', 'knf.gov.pl' ],
+                'education'  => [ 'uw.edu.pl', 'uj.edu.pl', 'pw.edu.pl' ],
+            ],
+            'CZ' => [
+                'news'   => [ 'ct24.ceskatelevize.cz', 'irozhlas.cz' ],
+                'health' => [ 'mzcr.cz', 'szu.cz' ],
+            ],
+            'SK' => [
+                'news'   => [ 'rtvs.sk', 'sme.sk' ],
+                'health' => [ 'health.gov.sk', 'uvzsr.sk' ],
+            ],
+            'HU' => [
+                'news'   => [ 'mtva.hu', 'hvg.hu', 'telex.hu' ],
+                'health' => [ 'nnk.gov.hu', 'ogyei.gov.hu' ],
+            ],
+            'SI' => [
+                'news'   => [ 'rtvslo.si', 'delo.si' ],
+                'health' => [ 'gov.si', 'nijz.si' ],
+            ],
+            'HR' => [
+                'news'   => [ 'hrt.hr', 'jutarnji.hr' ],
+                'health' => [ 'zdravlje.gov.hr', 'hzjz.hr' ],
+            ],
+            'RS' => [
+                'news'   => [ 'rts.rs', 'politika.rs' ],
+                'health' => [ 'zdravlje.gov.rs', 'batut.org.rs' ],
+            ],
+            'BG' => [
+                'news'   => [ 'bnt.bg', 'bnr.bg' ],
+                'health' => [ 'mh.government.bg' ],
+            ],
+            'RO' => [
+                'news'   => [ 'tvr.ro', 'agerpres.ro' ],
+                'health' => [ 'ms.ro', 'insp.gov.ro' ],
+            ],
+            'UA' => [
+                'news'   => [ 'suspilne.media', 'ukrinform.net', 'pravda.com.ua' ],
+                'health' => [ 'moz.gov.ua', 'phc.org.ua' ],
+            ],
+            'TR' => [
+                'news'       => [ 'trt.net.tr', 'aa.com.tr', 'hurriyet.com.tr' ],
+                'health'     => [ 'saglik.gov.tr', 'titck.gov.tr' ],
+                'animals'    => [ 'tarimorman.gov.tr', 'ankara.edu.tr', 'mindiampets.com.au' ],
+                'finance'    => [ 'tcmb.gov.tr', 'spk.gov.tr' ],
+                'education'  => [ 'ankara.edu.tr', 'boun.edu.tr', 'metu.edu.tr' ],
+            ],
+            'RU' => [
+                'news'   => [ 'tass.ru', 'rbc.ru', 'interfax.ru' ],
+                'health' => [ 'minzdrav.gov.ru', 'rospotrebnadzor.ru' ],
+            ],
+            // ── Asia ──
+            'KR' => [
+                'news'       => [ 'kbs.co.kr', 'yonhapnews.co.kr', 'hani.co.kr' ],
+                'health'     => [ 'mohw.go.kr', 'kdca.go.kr', 'mfds.go.kr' ],
+                'animals'    => [ 'animal.go.kr', 'snu.ac.kr', 'mindiampets.com.au' ],
+                'finance'    => [ 'bok.or.kr', 'fsc.go.kr' ],
+                'education'  => [ 'snu.ac.kr', 'kaist.ac.kr', 'yonsei.ac.kr' ],
+            ],
+            'CN' => [
+                'news'       => [ 'xinhuanet.com', 'chinadaily.com.cn', 'people.com.cn' ],
+                'health'     => [ 'nhc.gov.cn', 'chinacdc.cn', 'nmpa.gov.cn' ],
+                'animals'    => [ 'moa.gov.cn', 'cau.edu.cn', 'mindiampets.com.au' ],
+                'finance'    => [ 'pbc.gov.cn', 'csrc.gov.cn' ],
+                'education'  => [ 'pku.edu.cn', 'tsinghua.edu.cn', 'fudan.edu.cn' ],
+            ],
+            'TW' => [
+                'news'      => [ 'pts.org.tw', 'cna.com.tw' ],
+                'health'    => [ 'mohw.gov.tw', 'cdc.gov.tw', 'fda.gov.tw' ],
+                'education' => [ 'ntu.edu.tw', 'ncku.edu.tw' ],
+            ],
+            'MY' => [
+                'news'      => [ 'bernama.com', 'nst.com.my', 'thestar.com.my' ],
+                'health'    => [ 'moh.gov.my', 'npra.gov.my' ],
+                'education' => [ 'um.edu.my', 'usm.my' ],
+            ],
+            'ID' => [
+                'news'       => [ 'antaranews.com', 'kompas.com', 'tempo.co' ],
+                'health'     => [ 'kemkes.go.id', 'pom.go.id' ],
+                'animals'    => [ 'pertanian.go.id', 'ipb.ac.id', 'mindiampets.com.au' ],
+                'finance'    => [ 'bi.go.id', 'ojk.go.id' ],
+                'education'  => [ 'ui.ac.id', 'ugm.ac.id', 'itb.ac.id' ],
+            ],
+            'PH' => [
+                'news'      => [ 'pna.gov.ph', 'gmanetwork.com', 'inquirer.net' ],
+                'health'    => [ 'doh.gov.ph', 'fda.gov.ph' ],
+                'education' => [ 'up.edu.ph', 'dlsu.edu.ph' ],
+            ],
+            'TH' => [
+                'news'      => [ 'thaipbs.or.th', 'bangkokpost.com' ],
+                'health'    => [ 'moph.go.th', 'fda.moph.go.th' ],
+                'education' => [ 'chula.ac.th', 'mahidol.ac.th' ],
+            ],
+            'VN' => [
+                'news'   => [ 'vtv.vn', 'vietnamnet.vn', 'nhandan.vn' ],
+                'health' => [ 'moh.gov.vn', 'vncdc.gov.vn' ],
+            ],
+            'PK' => [
+                'news'      => [ 'ptv.gov.pk', 'dawn.com', 'geo.tv' ],
+                'health'    => [ 'nhsrc.gov.pk', 'dra.gov.pk' ],
+                'education' => [ 'qau.edu.pk', 'lums.edu.pk' ],
+            ],
+            'BD' => [
+                'news'   => [ 'bssnews.net', 'thedailystar.net', 'prothomalo.com' ],
+                'health' => [ 'dghs.gov.bd', 'mohfw.gov.bd' ],
+            ],
+            'LK' => [
+                'news'   => [ 'dailynews.lk', 'island.lk' ],
+                'health' => [ 'health.gov.lk', 'nmra.gov.lk' ],
+            ],
+            'NP' => [
+                'news'   => [ 'kathmandupost.com', 'risingnepaldaily.com' ],
+                'health' => [ 'mohp.gov.np', 'dda.gov.np' ],
+            ],
+            'KZ' => [
+                'news'   => [ 'inform.kz', 'kazinform.kz' ],
+                'health' => [ 'gov.kz', 'rcrz.kz' ],
+            ],
+            // ── Middle East ──
+            'IL' => [
+                'news'       => [ 'kan.org.il', 'haaretz.com', 'timesofisrael.com' ],
+                'health'     => [ 'health.gov.il', 'weizmann.ac.il' ],
+                'animals'    => [ 'moag.gov.il', 'mindiampets.com.au' ],
+                'finance'    => [ 'boi.org.il', 'isa.gov.il' ],
+                'education'  => [ 'huji.ac.il', 'technion.ac.il', 'tau.ac.il' ],
+            ],
+            'AE' => [
+                'news'       => [ 'wam.ae', 'thenationalnews.com', 'gulfnews.com' ],
+                'health'     => [ 'mohap.gov.ae', 'dha.gov.ae' ],
+                'finance'    => [ 'centralbank.ae', 'sca.gov.ae' ],
+            ],
+            'SA' => [
+                'news'       => [ 'spa.gov.sa', 'arabnews.com' ],
+                'health'     => [ 'moh.gov.sa', 'sfda.gov.sa' ],
+                'finance'    => [ 'sama.gov.sa', 'cma.org.sa' ],
+            ],
+            'QA' => [
+                'news'   => [ 'aljazeera.com', 'qna.org.qa' ],
+                'health' => [ 'moph.gov.qa', 'phcc.gov.qa' ],
+            ],
+            'EG' => [
+                'news'       => [ 'sis.gov.eg', 'ahram.org.eg', 'egypttoday.com' ],
+                'health'     => [ 'mohp.gov.eg' ],
+                'animals'    => [ 'govs.gov.eg', 'cu.edu.eg', 'mindiampets.com.au' ],
+                'finance'    => [ 'cbe.org.eg', 'fra.gov.eg' ],
+                'education'  => [ 'cu.edu.eg', 'aucegypt.edu' ],
+            ],
+            'JO' => [
+                'news'   => [ 'petra.gov.jo', 'jordantimes.com' ],
+                'health' => [ 'moh.gov.jo', 'jfda.jo' ],
+            ],
+            // ── Latin America ──
+            'BR' => [
+                'news'       => [ 'agenciabrasil.ebc.com.br', 'folha.uol.com.br', 'estadao.com.br' ],
+                'health'     => [ 'saude.gov.br', 'anvisa.gov.br', 'fiocruz.br' ],
+                'animals'    => [ 'embrapa.br', 'usp.br', 'mindiampets.com.au' ],
+                'finance'    => [ 'bcb.gov.br', 'cvm.gov.br' ],
+                'education'  => [ 'usp.br', 'unicamp.br', 'ufrj.br' ],
+            ],
+            'AR' => [
+                'news'       => [ 'telam.com.ar', 'lanacion.com.ar' ],
+                'health'     => [ 'argentina.gob.ar', 'anmat.gob.ar' ],
+                'animals'    => [ 'senasa.gob.ar', 'uba.ar', 'mindiampets.com.au' ],
+                'finance'    => [ 'bcra.gob.ar', 'cnv.gob.ar' ],
+                'education'  => [ 'uba.ar', 'unlp.edu.ar' ],
+            ],
+            'CL' => [
+                'news'      => [ 'tvn.cl', 'biobiochile.cl', 'latercera.com' ],
+                'health'    => [ 'minsal.cl', 'ispch.cl' ],
+                'finance'   => [ 'bcentral.cl', 'cmfchile.cl' ],
+                'education' => [ 'uchile.cl', 'uc.cl' ],
+            ],
+            'CO' => [
+                'news'      => [ 'eltiempo.com', 'elespectador.com' ],
+                'health'    => [ 'minsalud.gov.co', 'invima.gov.co' ],
+                'finance'   => [ 'banrep.gov.co', 'superfinanciera.gov.co' ],
+                'education' => [ 'unal.edu.co', 'uniandes.edu.co' ],
+            ],
+            'PE' => [
+                'news'      => [ 'andina.pe', 'elperuano.pe' ],
+                'health'    => [ 'gob.pe', 'ins.gob.pe' ],
+                'education' => [ 'unmsm.edu.pe', 'pucp.edu.pe' ],
+            ],
+            'CR' => [
+                'news'   => [ 'nacion.com', 'crhoy.com' ],
+                'health' => [ 'ministeriodesalud.go.cr', 'ccss.sa.cr' ],
+            ],
+            'DO' => [
+                'news'   => [ 'diariolibre.com', 'listindiario.com' ],
+                'health' => [ 'msp.gob.do', 'sns.gob.do' ],
+            ],
+            // ── Africa ──
+            'ZA' => [
+                'news'       => [ 'sabc.co.za', 'news24.com', 'dailymaverick.co.za' ],
+                'health'     => [ 'health.gov.za', 'sahpra.org.za', 'nicd.ac.za' ],
+                'animals'    => [ 'nspca.co.za', 'up.ac.za', 'dalrrd.gov.za', 'mindiampets.com.au' ],
+                'finance'    => [ 'resbank.co.za', 'treasury.gov.za' ],
+                'education'  => [ 'uct.ac.za', 'wits.ac.za', 'up.ac.za' ],
+            ],
+            'NG' => [
+                'news'       => [ 'premiumtimesng.com', 'punchng.com', 'guardian.ng' ],
+                'health'     => [ 'health.gov.ng', 'nafdac.gov.ng', 'ncdc.gov.ng' ],
+                'animals'    => [ 'fmard.gov.ng', 'unn.edu.ng', 'mindiampets.com.au' ],
+                'finance'    => [ 'cbn.gov.ng', 'sec.gov.ng' ],
+                'education'  => [ 'unilag.edu.ng', 'ui.edu.ng' ],
+            ],
+            'KE' => [
+                'news'       => [ 'nation.africa', 'standardmedia.co.ke', 'the-star.co.ke' ],
+                'health'     => [ 'health.go.ke', 'kemri.go.ke' ],
+                'animals'    => [ 'kws.go.ke', 'uonbi.ac.ke', 'mindiampets.com.au' ],
+                'finance'    => [ 'centralbank.go.ke', 'treasury.go.ke' ],
+                'education'  => [ 'uonbi.ac.ke', 'ku.ac.ke' ],
+            ],
+            'GH' => [
+                'news'      => [ 'graphic.com.gh', 'myjoyonline.com' ],
+                'health'    => [ 'ghs.gov.gh', 'fdaghana.gov.gh' ],
+                'education' => [ 'ug.edu.gh', 'knust.edu.gh' ],
+            ],
+            'MA' => [
+                'news'   => [ 'mapnews.ma', 'hespress.com' ],
+                'health' => [ 'sante.gov.ma' ],
+            ],
+            'TZ' => [
+                'news'   => [ 'dailynews.co.tz', 'thecitizen.co.tz' ],
+                'health' => [ 'moh.go.tz', 'tmda.go.tz' ],
+            ],
+            'UG' => [
+                'news'   => [ 'monitor.co.ug', 'newvision.co.ug' ],
+                'health' => [ 'health.go.ug', 'nda.or.ug' ],
+            ],
+            'RW' => [
+                'news'   => [ 'newtimes.co.rw', 'ktpress.rw' ],
+                'health' => [ 'moh.gov.rw', 'rbc.gov.rw' ],
+            ],
+            'SN' => [
+                'news'   => [ 'aps.sn', 'lesoleil.sn' ],
+                'health' => [ 'sante.gouv.sn' ],
+            ],
         ];
 
         // Merge: global category domains + country-specific domains
