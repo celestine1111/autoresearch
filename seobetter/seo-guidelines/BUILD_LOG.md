@@ -16,6 +16,29 @@
 
 ---
 
+## v1.5.100 — Fix product-listing quotes: bias Tavily toward editorial content
+
+**Date:** 2026-04-18
+**Commit:** `a4c6ce7`
+
+### Bug Fix
+
+- **Tavily query biased toward editorial content** — `includes/Content_Injector.php::tavily_search_and_extract()` line ~1420
+  - Root cause: product keywords ("travel dog bed") returned Amazon/retailer pages. Quote extractor pulled "Regular price €158,95" and product listing titles as "expert quotes"
+  - Fix 1: appended `" review guide expert tips"` to search query → Tavily now returns review articles and buying guides where real expert opinions live
+  - Fix 2: increased max_results from 3 to 5 → more editorial pages to extract from
+  - Verify: `grep -n 'review guide expert' seobetter/includes/Content_Injector.php`
+
+- **Product listing junk filter** — `includes/Content_Injector.php::tavily_search_and_extract()` line ~1487
+  - Skips sentences containing: price patterns ($, €, £ + digits), "Add to Cart", "Regular price", "Free Shipping", "Buy Now", discount/coupon language
+  - Verify: `grep -n 'regular.price\|add.to.cart' seobetter/includes/Content_Injector.php`
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.99 — Fix 3 optimize-all bugs: quote stripping, timeout, missing links on save
 
 **Date:** 2026-04-18

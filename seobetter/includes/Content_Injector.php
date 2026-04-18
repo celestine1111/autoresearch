@@ -1417,11 +1417,17 @@ Return ONLY the Markdown table, nothing else.";
         $response = wp_remote_post( 'https://api.tavily.com/search', [
             'timeout' => 20,
             'headers' => [ 'Content-Type' => 'application/json' ],
+            // v1.5.100 — Bias query toward editorial/review content. Without this,
+            // product keywords ("travel dog bed") return Amazon/retailer pages
+            // and the quote extractor pulls product listing text ("Regular price
+            // €158,95") instead of expert opinions. Adding "review guide expert"
+            // makes Tavily return review articles, buying guides, and expert
+            // advice pages where real quotable sentences live.
             'body'    => wp_json_encode( [
                 'api_key'            => $api_key,
-                'query'              => $keyword,
+                'query'              => $keyword . ' review guide expert tips',
                 'include_raw_content' => true,
-                'max_results'        => 3,
+                'max_results'        => 5,
                 'search_depth'       => 'basic',
             ] ),
         ] );
@@ -1480,8 +1486,13 @@ Return ONLY the Markdown table, nothing else.";
                 }
                 if ( $match_count < $min_tokens ) continue;
 
-                // Skip junk
+                // Skip junk (nav/cookie/UI text)
                 if ( preg_match( '/cookie|privacy|subscribe|menu|click|log in|sign up|copyright|read more|img|src=|cdn\.|favicon|breadcrumb/i', $sentence ) ) continue;
+
+                // v1.5.100 — Skip product listing / e-commerce text.
+                // Without this, product keywords pull "Regular price €158,95"
+                // and Amazon product titles as "expert quotes".
+                if ( preg_match( '/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|add\s*to\s*wishlist|save\s*\d+%|was\s*\$|now\s*\$|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code/i', $sentence ) ) continue;
 
                 $trimmed = trim( $sentence );
                 if ( strlen( $trimmed ) < 40 || strlen( $trimmed ) > 220 ) continue;
