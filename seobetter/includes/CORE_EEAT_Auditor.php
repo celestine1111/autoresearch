@@ -180,8 +180,14 @@ class CORE_EEAT_Auditor {
         preg_match_all( '/\b\d+[\.,]?\d*\s*(?:%|percent|billion|million|thousand|USD|\$|£|€)\b|\b(?:19|20)\d{2}\b/', $text, $num_matches );
         $num_count = count( $num_matches[0] );
 
-        preg_match_all( '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $text, $link_matches );
-        $link_count = count( $link_matches[0] );
+        // v1.5.104 — Count citations from HTML <a href> tags, not markdown [text](url).
+        // After Content_Formatter, links are HTML. wp_strip_all_tags($content) removes
+        // them, so the old markdown regex found 0 citations on every article.
+        preg_match_all( '/href="https?:\/\/[^"]+"/i', $content, $html_link_matches );
+        $link_count = count( $html_link_matches[0] );
+        // Also count markdown-style links (for pre-format scoring)
+        preg_match_all( '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/', $text, $md_link_matches );
+        $link_count += count( $md_link_matches[0] );
 
         preg_match_all( '/\[[A-Z][^\]]*\d{4}\]|\([A-Z][^)]*\d{4}\)|\[\d+\]/', $text, $inline_cite );
         $inline_count = count( $inline_cite[0] );
@@ -189,12 +195,13 @@ class CORE_EEAT_Auditor {
         return [
             [ 'id' => 'R01', 'label' => '≥ 5 specific numbers', 'pass' => $num_count >= 5 ],
             [ 'id' => 'R02', 'label' => '≥ 1 citation per 500 words', 'pass' => ( $link_count + $inline_count ) >= max( 1, floor( $word_count / 500 ) ) ],
-            [ 'id' => 'R03', 'label' => 'Sources are deep article links (not homepages)', 'pass' => $this->deep_links_only( $link_matches[2] ?? [] ) ],
-            [ 'id' => 'R04', 'label' => 'No API URLs cited', 'pass' => ! $this->has_api_urls( $link_matches[2] ?? [] ) ],
+            // v1.5.104 — extract URLs from HTML for deep link + API checks
+            [ 'id' => 'R03', 'label' => 'Sources are deep article links (not homepages)', 'pass' => $this->deep_links_only( $this->extract_urls_from_html( $content ) ) ],
+            [ 'id' => 'R04', 'label' => 'No API URLs cited', 'pass' => ! $this->has_api_urls( $this->extract_urls_from_html( $content ) ) ],
             [ 'id' => 'R05', 'label' => 'Dates accompany statistics', 'pass' => $this->dates_with_stats( $text ) ],
             [ 'id' => 'R06', 'label' => 'Publication year mentioned for key claims', 'pass' => (bool) preg_match( '/\b(19|20)\d{2}\b/', $text ) ],
             [ 'id' => 'R07', 'label' => 'No unsourced "studies show"', 'pass' => ! preg_match( '/studies show|research (has )?shown|experts (say|agree)/i', $text ) || $link_count > 0 ],
-            [ 'id' => 'R08', 'label' => 'At least 2 distinct source domains cited', 'pass' => $this->distinct_domains( $link_matches[2] ?? [] ) >= 2 ],
+            [ 'id' => 'R08', 'label' => 'At least 2 distinct source domains cited', 'pass' => $this->distinct_domains( $this->extract_urls_from_html( $content ) ) >= 2 ],
             [ 'id' => 'R09', 'label' => 'Plain-text attributions where no link exists', 'pass' => (bool) preg_match( '/according to|research from|per the|a study by/i', $text ) ],
             [ 'id' => 'R10', 'label' => 'No internal contradictions', 'pass' => true ], // VETO — handled separately
         ];
@@ -371,6 +378,15 @@ class CORE_EEAT_Auditor {
             if ( $words > 10 ) return false;
         }
         return true;
+    }
+
+    /**
+     * v1.5.104 — Extract URLs from HTML content (href attributes).
+     * Used by R03, R04, R08 checks that need actual URLs.
+     */
+    private function extract_urls_from_html( string $content ): array {
+        preg_match_all( '/href="(https?:\/\/[^"]+)"/i', $content, $m );
+        return $m[1] ?? [];
     }
 
     private function deep_links_only( array $urls ): bool {

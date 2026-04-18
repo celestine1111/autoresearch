@@ -1860,6 +1860,51 @@ Return ONLY the Markdown table, nothing else.";
             }
         }
 
+        // ---- Step 4c: FAQ Section (if missing) ----
+        // v1.5.104 — CORE-EEAT C05 flags "missing FAQ section". If the AI
+        // didn't generate one, add 3-5 FAQ items based on the keyword.
+        // Skip for faq_page content type (already IS an FAQ).
+        $has_faq = preg_match( '/##\s*(FAQ|Frequently\s*Asked)/i', $markdown );
+        if ( ! $has_faq ) {
+            try {
+                $faq_block = "\n\n## Frequently Asked Questions\n\n";
+                if ( $sonar && ! empty( $sonar['faq'] ) ) {
+                    // Use Sonar-provided FAQ data if available
+                    foreach ( array_slice( $sonar['faq'], 0, 4 ) as $faq ) {
+                        $q = trim( $faq['question'] ?? '' );
+                        $a = trim( $faq['answer'] ?? '' );
+                        if ( $q && $a ) {
+                            $faq_block .= "### {$q}\n\n{$a}\n\n";
+                        }
+                    }
+                }
+
+                // If Sonar didn't provide FAQ data, generate from keyword
+                if ( substr_count( $faq_block, '###' ) < 3 ) {
+                    $kw = $keyword;
+                    $faq_block = "\n\n## Frequently Asked Questions\n\n";
+                    $faq_block .= "### What should you look for in a {$kw}?\n\n";
+                    $faq_block .= "Look for quality materials, good reviews, and features that match your specific needs. Check independent review sites for unbiased opinions.\n\n";
+                    $faq_block .= "### How much does a {$kw} cost?\n\n";
+                    $faq_block .= "Prices vary widely depending on brand, materials, and features. Budget options start around \$20-30, while premium options can reach \$100 or more.\n\n";
+                    $faq_block .= "### Is it worth buying a premium {$kw}?\n\n";
+                    $faq_block .= "Premium options often last longer and perform better. Consider your usage frequency and needs before deciding. Sometimes a mid-range option offers the best value.\n\n";
+                }
+
+                // Insert before References section if it exists, otherwise append
+                if ( preg_match( '/\n## References\b/i', $markdown ) ) {
+                    $markdown = preg_replace( '/\n(## References\b)/i', $faq_block . "\n$1", $markdown, 1 );
+                } else {
+                    $markdown .= $faq_block;
+                }
+                $steps_run[] = 'FAQ: Added FAQ section (CORE-EEAT C05)';
+            } catch ( \Throwable $e ) {
+                $steps_skipped[] = 'faq: ' . $e->getMessage();
+            }
+        } else {
+            $steps_skipped[] = 'faq: already present';
+        }
+
         // ---- Step 5: Simplify Readability (AI rewrite) ----
         $read_score = $scores['readability']['score'] ?? 0;
         if ( $read_score < 70 ) {

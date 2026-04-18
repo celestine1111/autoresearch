@@ -16,6 +16,38 @@
 
 ---
 
+## v1.5.104 — Fix CORE-EEAT citation count bug + add FAQ injection to Optimize All
+
+**Date:** 2026-04-18
+**Commit:** `[pending]`
+
+### Bug Fixes
+
+- **CORE-EEAT R02 citation count always 0** - `includes/CORE_EEAT_Auditor.php::audit_referenceability()` line ~183
+  - Root cause: checked for markdown `[text](url)` links in `wp_strip_all_tags($content)` output. After Content_Formatter, links are HTML `<a href>` tags which get stripped - regex matched nothing.
+  - Fix: count `href="https?://..."` patterns in raw HTML `$content` + keep markdown fallback for pre-format scoring
+  - Also fixed R03, R04, R08 helpers to extract URLs from HTML instead of markdown
+  - Added `extract_urls_from_html()` helper method
+  - Verify: `grep -n 'extract_urls_from_html' seobetter/includes/CORE_EEAT_Auditor.php`
+
+### New Feature
+
+- **FAQ injection in Optimize All (Step 4c)** - `includes/Content_Injector.php::optimize_all()` line ~1862
+  - If article has no FAQ section, adds one automatically (CORE-EEAT C05 check)
+  - Uses Sonar FAQ data if available, falls back to keyword-based generic FAQ
+  - Inserts before References section (or appends to end)
+  - Verify: `grep -n 'Step 4c.*FAQ' seobetter/includes/Content_Injector.php`
+
+### Guideline Update
+
+- Updated `SEO-GEO-AI-GUIDELINES.md` §15B to note the R02 fix
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.103 — Strip all emoji + convert long dashes to short (systematic, 5+ locations)
 
 **Date:** 2026-04-18
