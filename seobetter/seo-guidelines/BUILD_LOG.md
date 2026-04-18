@@ -16,6 +16,34 @@
 
 ---
 
+## v1.5.107 — Country-specific authority domains (non-commercial sources only)
+
+**Date:** 2026-04-18
+**Commit:** `[pending]`
+
+### Major Feature
+
+- **Country-specific authority domain mapping** - `includes/Content_Injector.php::get_authority_domains()` line ~1420
+  - Removed all commercial/brand domains (Purina, Hill's, Petbarn, Chewy, PetSmart)
+  - Now uses ONLY non-commercial sources: government regulators, university research, professional associations, peer-reviewed journals, independent journalism
+  - 10 countries with full coverage: AU, US, GB, CA, NZ, DE, FR, IN, SG, JP
+  - 12 categories with global + country-specific lists: animals, veterinary, health, food, finance, technology, science, education, business, environment, cryptocurrency, news
+  - Country parameter threaded through: frontend → rest_optimize_all → optimize_all → inject_quotes → tavily_search_and_extract
+  - User sites included: `mindiampets.com.au` (animals/veterinary AU), `mindiam.com` (technology global)
+  - Falls back to unrestricted search if filtered returns < 2 results
+  - Verify: `grep -n 'get_authority_domains' seobetter/includes/Content_Injector.php`
+  - Verify: `grep -n 'country.*sanitize' seobetter/seobetter.php | grep optimize`
+
+### Example: "grain free cat food" + AU
+Before: kwikpets.com marketing taglines
+After: rspca.org.au, apvma.gov.au, abc.net.au, ncbi.nlm.nih.gov (plus global petmd.com, merckvetmanual.com)
+
+### Verified by user
+
+- **UNTESTED**
+
+---
+
 ## v1.5.106 — Authority domain targeting for Tavily quotes (per category)
 
 **Date:** 2026-04-18

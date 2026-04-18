@@ -1487,7 +1487,8 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     scores: checksForApi,
                     sonar_data: draft.sonar_data || null,
                     domain: draft.domain || '',
-                    content_type: draft.content_type || 'blog_post'
+                    content_type: draft.content_type || 'blog_post',
+                    country: draft.country || ''
                 }).then(function(result) {
                     clearInterval(stepInterval);
                     var elapsed = Math.round((Date.now() - startTime) / 1000);

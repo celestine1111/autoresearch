@@ -252,7 +252,7 @@ class Content_Injector {
      * Falls back to a clearly-labelled "industry perspective" summary
      * (not a fake quote) only when zero real quotes exist.
      */
-    public static function inject_quotes( string $content, string $keyword, ?array $sonar_data = null, string $domain = '' ): array {
+    public static function inject_quotes( string $content, string $keyword, ?array $sonar_data = null, string $domain = '', string $country = '' ): array {
         // v1.5.96 — TAVILY DIRECT FROM PHP. Zero hallucination. No Vercel dependency.
         //
         // Calls Tavily Search API directly via wp_remote_post(). Gets real
@@ -290,7 +290,7 @@ class Content_Injector {
 
         // Source 2: Direct Tavily call from PHP (no Vercel, no timeout issues)
         if ( empty( $quotes ) ) {
-            $tavily = self::tavily_search_and_extract( $keyword, $domain );
+            $tavily = self::tavily_search_and_extract( $keyword, $domain, $country );
             foreach ( ( $tavily['quotes'] ?? [] ) as $q ) {
                 if ( empty( $q['text'] ) || empty( $q['url'] ) ) continue;
                 $text = trim( $q['text'] );
@@ -1417,97 +1417,256 @@ Return ONLY the Markdown table, nothing else.";
      * @return array {results: [...], quotes: [{text, source, url}, ...]}
      */
     /**
-     * v1.5.106 — Authority domain mapping per category.
+     * v1.5.107 — Authority domain mapping per category + country.
      * Used by tavily_search_and_extract() to restrict searches to credible
-     * sources. Falls back to unrestricted search if filtered returns < 2 results.
+     * NON-COMMERCIAL sources: government regulators, university research,
+     * professional associations, peer-reviewed journals, independent journalism.
+     * No private brands (Purina, Hill's, Petbarn, Chewy) - those have commercial bias.
+     * Falls back to unrestricted search if filtered returns < 2 results.
+     *
+     * User sites: mindiampets.com.au (animals AU), mindiam.com (technology global)
      */
-    private static function get_authority_domains( string $domain ): array {
-        $map = [
+    private static function get_authority_domains( string $domain, string $country = '' ): array {
+
+        // ---- GLOBAL domains (always included, any country) ----
+        $global = [
             'animals' => [
-                'petmd.com', 'hillspet.com', 'purina.com', 'purina.com.au', 'cats.com',
-                'catster.com', 'dogster.com', 'akc.org', 'aspca.org', 'rspca.org.au',
-                'vet.cornell.edu', 'avma.org', 'merckvetmanual.com', 'rover.com',
-                'thesprucepets.com', 'petbarn.com.au', 'petsmart.com', 'chewy.com',
-                'mindiampets.com.au',
+                'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com', 'woah.org',
+                'petmd.com', 'thesprucepets.com', 'merckvetmanual.com',
             ],
             'veterinary' => [
-                'petmd.com', 'hillspet.com', 'purina.com', 'purina.com.au',
-                'vet.cornell.edu', 'avma.org', 'merckvetmanual.com', 'ncbi.nlm.nih.gov',
-                'fda.gov', 'rspca.org.au', 'cats.com', 'thesprucepets.com',
-                'mindiampets.com.au',
+                'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com', 'woah.org',
+                'merckvetmanual.com', 'petmd.com',
             ],
             'health' => [
-                'who.int', 'nih.gov', 'cdc.gov', 'mayoclinic.org', 'webmd.com',
-                'healthline.com', 'medlineplus.gov', 'clevelandclinic.org',
-                'hopkinsmedicine.org', 'health.harvard.edu', 'nhs.uk',
+                'who.int', 'ncbi.nlm.nih.gov', 'nature.com', 'thelancet.com', 'bmj.com',
             ],
             'food' => [
-                'fda.gov', 'nutrition.gov', 'eatright.org', 'healthline.com',
-                'webmd.com', 'mayoclinic.org', 'bbcgoodfood.com', 'eatingwell.com',
-                'allrecipes.com', 'seriouseats.com', 'foodnetwork.com',
+                'who.int', 'ncbi.nlm.nih.gov', 'nature.com',
             ],
             'finance' => [
-                'investopedia.com', 'reuters.com', 'bloomberg.com', 'wsj.com',
-                'ft.com', 'cnbc.com', 'forbes.com', 'nerdwallet.com',
-                'bankrate.com', 'morningstar.com',
+                'reuters.com', 'bloomberg.com', 'investopedia.com',
             ],
             'technology' => [
+                'ieee.org', 'acm.org', 'arxiv.org', 'nature.com',
                 'techcrunch.com', 'arstechnica.com', 'wired.com', 'theverge.com',
-                'ieee.org', 'acm.org', 'zdnet.com', 'cnet.com', 'tomshardware.com',
-                'anandtech.com', 'mindiam.com',
+                'mindiam.com',
             ],
             'science' => [
-                'nature.com', 'science.org', 'newscientist.com', 'nasa.gov',
-                'nih.gov', 'ncbi.nlm.nih.gov', 'scientificamerican.com',
-                'phys.org', 'sciencedaily.com',
+                'nature.com', 'science.org', 'ncbi.nlm.nih.gov', 'nasa.gov',
+                'scientificamerican.com', 'newscientist.com', 'phys.org',
             ],
             'education' => [
-                'ed.gov', 'edutopia.org', 'coursera.org', 'khanacademy.org',
-                'harvard.edu', 'mit.edu', 'stanford.edu', 'chronicle.com',
+                'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com',
             ],
             'business' => [
-                'hbr.org', 'forbes.com', 'inc.com', 'entrepreneur.com',
-                'businessinsider.com', 'reuters.com', 'bloomberg.com', 'mckinsey.com',
+                'hbr.org', 'reuters.com', 'bloomberg.com', 'mckinsey.com',
             ],
             'environment' => [
-                'epa.gov', 'un.org', 'nationalgeographic.com', 'wwf.org',
-                'greenpeace.org', 'nature.com', 'climatecentral.org',
-            ],
-            'sports' => [
-                'espn.com', 'bbc.com', 'reuters.com', 'si.com',
-                'theathletic.com', 'nba.com', 'fifa.com',
-            ],
-            'entertainment' => [
-                'imdb.com', 'rottentomatoes.com', 'variety.com', 'hollywoodreporter.com',
-                'rollingstone.com', 'pitchfork.com', 'billboard.com',
+                'un.org', 'nature.com', 'nationalgeographic.com', 'wwf.org',
             ],
             'cryptocurrency' => [
                 'coindesk.com', 'cointelegraph.com', 'decrypt.co', 'theblock.co',
-                'messari.io', 'coinmarketcap.com', 'binance.com',
             ],
             'news' => [
-                'reuters.com', 'apnews.com', 'bbc.com', 'nytimes.com',
-                'theguardian.com', 'washingtonpost.com', 'aljazeera.com',
-            ],
-            'government' => [
-                'usa.gov', 'whitehouse.gov', 'congress.gov', 'gao.gov',
-                'federalregister.gov', 'bbc.com', 'reuters.com',
+                'reuters.com', 'apnews.com', 'bbc.com',
             ],
         ];
 
-        return $map[ $domain ] ?? [];
+        // ---- COUNTRY-SPECIFIC domains ----
+        $by_country = [
+            'AU' => [
+                'animals' => [
+                    'rspca.org.au', 'apvma.gov.au', 'sydney.edu.au', 'unimelb.edu.au',
+                    'abc.net.au', 'csiro.au', 'agriculture.gov.au',
+                    'mindiampets.com.au',
+                ],
+                'veterinary' => [
+                    'rspca.org.au', 'apvma.gov.au', 'sydney.edu.au', 'unimelb.edu.au',
+                    'abc.net.au', 'csiro.au', 'ava.com.au',
+                    'mindiampets.com.au',
+                ],
+                'health' => [
+                    'health.gov.au', 'tga.gov.au', 'nhmrc.gov.au', 'abc.net.au',
+                    'sydney.edu.au', 'unimelb.edu.au',
+                ],
+                'food' => [
+                    'foodstandards.gov.au', 'health.gov.au', 'abc.net.au', 'csiro.au',
+                ],
+                'finance' => [
+                    'rba.gov.au', 'asic.gov.au', 'ato.gov.au', 'abc.net.au', 'afr.com',
+                ],
+                'technology' => [
+                    'itnews.com.au', 'abc.net.au', 'csiro.au',
+                ],
+                'news' => [
+                    'abc.net.au', 'sbs.com.au', 'smh.com.au', 'theage.com.au',
+                ],
+                'environment' => [
+                    'environment.gov.au', 'csiro.au', 'abc.net.au', 'bom.gov.au',
+                ],
+                'education' => [
+                    'education.gov.au', 'sydney.edu.au', 'unimelb.edu.au', 'anu.edu.au',
+                    'uq.edu.au', 'monash.edu', 'abc.net.au',
+                ],
+                'business' => [
+                    'abc.net.au', 'afr.com', 'asic.gov.au', 'rba.gov.au',
+                ],
+                'government' => [
+                    'aph.gov.au', 'pm.gov.au', 'abs.gov.au', 'abc.net.au',
+                ],
+            ],
+            'US' => [
+                'animals' => [
+                    'fda.gov', 'vet.cornell.edu', 'avma.org', 'aspca.org', 'cdc.gov',
+                    'nih.gov', 'tufts.edu', 'ucdavis.edu',
+                ],
+                'veterinary' => [
+                    'fda.gov', 'vet.cornell.edu', 'avma.org', 'cdc.gov', 'nih.gov',
+                    'tufts.edu', 'ucdavis.edu',
+                ],
+                'health' => [
+                    'nih.gov', 'cdc.gov', 'fda.gov', 'mayoclinic.org', 'clevelandclinic.org',
+                    'hopkinsmedicine.org', 'health.harvard.edu', 'medlineplus.gov',
+                ],
+                'food' => [
+                    'fda.gov', 'usda.gov', 'nutrition.gov', 'eatright.org',
+                ],
+                'finance' => [
+                    'sec.gov', 'federalreserve.gov', 'wsj.com', 'cnbc.com',
+                    'nerdwallet.com', 'bankrate.com',
+                ],
+                'technology' => [
+                    'nist.gov', 'mit.edu', 'stanford.edu',
+                ],
+                'news' => [
+                    'nytimes.com', 'washingtonpost.com', 'npr.org', 'pbs.org',
+                ],
+                'government' => [
+                    'usa.gov', 'whitehouse.gov', 'congress.gov', 'gao.gov',
+                ],
+                'education' => [
+                    'ed.gov', 'harvard.edu', 'mit.edu', 'stanford.edu',
+                ],
+            ],
+            'GB' => [
+                'animals' => [
+                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk',
+                ],
+                'veterinary' => [
+                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk',
+                ],
+                'health' => [
+                    'nhs.uk', 'gov.uk', 'bbc.co.uk', 'nice.org.uk',
+                    'ox.ac.uk', 'cam.ac.uk', 'imperial.ac.uk',
+                ],
+                'food' => [
+                    'food.gov.uk', 'nhs.uk', 'bbc.co.uk', 'gov.uk',
+                ],
+                'finance' => [
+                    'bankofengland.co.uk', 'fca.org.uk', 'ft.com', 'bbc.co.uk', 'gov.uk',
+                ],
+                'news' => [
+                    'bbc.co.uk', 'theguardian.com', 'telegraph.co.uk', 'independent.co.uk',
+                ],
+                'technology' => [
+                    'bbc.co.uk', 'theregister.com', 'cam.ac.uk', 'ox.ac.uk',
+                ],
+                'government' => [
+                    'gov.uk', 'parliament.uk', 'bbc.co.uk',
+                ],
+            ],
+            'CA' => [
+                'animals' => [
+                    'canadianveterinarians.net', 'inspection.canada.ca', 'cbc.ca',
+                    'ontariovet.ca', 'uoguelph.ca',
+                ],
+                'veterinary' => [
+                    'canadianveterinarians.net', 'inspection.canada.ca', 'cbc.ca',
+                    'uoguelph.ca',
+                ],
+                'health' => [
+                    'canada.ca', 'cihi.ca', 'cbc.ca',
+                ],
+                'food' => [
+                    'inspection.canada.ca', 'canada.ca', 'cbc.ca',
+                ],
+                'finance' => [
+                    'bankofcanada.ca', 'osc.ca', 'cbc.ca', 'globeandmail.com',
+                ],
+                'news' => [
+                    'cbc.ca', 'globalnews.ca', 'thestar.com', 'globeandmail.com',
+                ],
+            ],
+            'NZ' => [
+                'animals' => [
+                    'spca.nz', 'massey.ac.nz', 'mpi.govt.nz', 'rnz.co.nz',
+                ],
+                'veterinary' => [
+                    'spca.nz', 'massey.ac.nz', 'mpi.govt.nz', 'nzva.org.nz',
+                ],
+                'health' => [
+                    'health.govt.nz', 'medsafe.govt.nz', 'rnz.co.nz',
+                ],
+                'news' => [
+                    'rnz.co.nz', 'stuff.co.nz', 'nzherald.co.nz',
+                ],
+            ],
+            'DE' => [
+                'animals' => [ 'tierschutzbund.de', 'tieraerzteverband.de', 'bfr.bund.de' ],
+                'health'  => [ 'rki.de', 'bfarm.de', 'gesundheitsinformation.de' ],
+                'news'    => [ 'dw.com', 'spiegel.de', 'zeit.de' ],
+            ],
+            'FR' => [
+                'animals' => [ 'spa.asso.fr', 'anses.fr' ],
+                'health'  => [ 'has-sante.fr', 'inserm.fr', 'pasteur.fr' ],
+                'news'    => [ 'france24.com', 'lemonde.fr' ],
+            ],
+            'IN' => [
+                'animals' => [ 'dahd.nic.in', 'fssai.gov.in' ],
+                'health'  => [ 'nhp.gov.in', 'icmr.nic.in', 'aiims.edu' ],
+                'news'    => [ 'thehindu.com', 'indianexpress.com', 'ndtv.com' ],
+                'finance' => [ 'rbi.org.in', 'sebi.gov.in', 'economictimes.com' ],
+                'technology' => [ 'nasscom.in' ],
+            ],
+            'SG' => [
+                'health' => [ 'moh.gov.sg', 'healthhub.sg' ],
+                'news'   => [ 'straitstimes.com', 'channelnewsasia.com' ],
+                'finance' => [ 'mas.gov.sg' ],
+            ],
+            'JP' => [
+                'health' => [ 'mhlw.go.jp' ],
+                'news'   => [ 'japantimes.co.jp', 'nhk.or.jp' ],
+                'technology' => [ 'nikkei.com' ],
+            ],
+        ];
+
+        // Merge: global category domains + country-specific domains
+        $result = $global[ $domain ] ?? [];
+        $country_upper = strtoupper( $country );
+        if ( isset( $by_country[ $country_upper ][ $domain ] ) ) {
+            $result = array_merge( $by_country[ $country_upper ][ $domain ], $result );
+        }
+
+        // If no specific match, try general/news for the country
+        if ( empty( $result ) && isset( $by_country[ $country_upper ]['news'] ) ) {
+            $result = $by_country[ $country_upper ]['news'];
+        }
+
+        return array_unique( $result );
     }
 
-    public static function tavily_search_and_extract( string $keyword, string $domain = '' ): array {
+    public static function tavily_search_and_extract( string $keyword, string $domain = '', string $country = '' ): array {
         $settings = get_option( 'seobetter_settings', [] );
         $api_key = $settings['tavily_api_key'] ?? '';
         if ( empty( $api_key ) ) {
             return [ 'results' => [], 'quotes' => [] ];
         }
 
-        // v1.5.106 — Authority domain targeting. Restricts Tavily search to
-        // credible sources per category. Falls back to unrestricted if < 2 results.
-        $authority_domains = self::get_authority_domains( $domain );
+        // v1.5.107 — Authority domain targeting per category + country.
+        // Restricts to non-commercial sources: govt, uni, research, journalism.
+        // Falls back to unrestricted if filtered returns < 2 results.
+        $authority_domains = self::get_authority_domains( $domain, $country );
         $tavily_body = [
             'api_key'            => $api_key,
             'query'              => $keyword . ' expert opinion research',
@@ -1795,7 +1954,8 @@ Return ONLY the Markdown table, nothing else.";
         array  $existing_pool = [],
         array  $scores = [],
         ?array $sonar_data = null,
-        string $domain = ''
+        string $domain = '',
+        string $country = ''
     ): array {
         // v1.5.99 — increased from 120 to 300. Buying Guide + Comparison articles
         // (2000+ words) were timing out at 120s due to multi-step optimization +
@@ -1858,7 +2018,7 @@ Return ONLY the Markdown table, nothing else.";
         $markdown = self::strip_unlinked_quotes( $markdown );
 
         try {
-            $result = self::inject_quotes( $markdown, $keyword, $sonar, $domain );
+            $result = self::inject_quotes( $markdown, $keyword, $sonar, $domain, $country );
             if ( $result['success'] ) {
                 $markdown = $result['content'];
                 $steps_run[] = 'Expert Quotes: ' . ( $result['added'] ?? 'added' );
