@@ -293,19 +293,27 @@ class Schema_Generator {
                 }
             }
         }
-        // Method 2 fallback: any ordered list
+        // Method 2 fallback: any ordered list — but skip items that look like
+        // ingredients (short + contain measurement units). Instructions should
+        // be action sentences (20+ chars, start with a verb).
         if ( empty( $instructions ) ) {
             preg_match_all( '/<ol[^>]*>(.*?)<\/ol>/is', $content, $ol_matches );
             foreach ( $ol_matches[1] as $ol_content ) {
                 preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ol_content, $li_matches );
+                $ol_steps = [];
                 foreach ( $li_matches[1] as $li ) {
                     $step_text = trim( wp_strip_all_tags( $li ) );
-                    if ( strlen( $step_text ) > 5 ) {
-                        $instructions[] = [
-                            '@type' => 'HowToStep',
-                            'text'  => $step_text,
-                        ];
-                    }
+                    // Skip ingredient-like items (short text with measurement units)
+                    if ( strlen( $step_text ) < 20 ) continue;
+                    if ( preg_match( '/^\d+\s*(cup|tbsp|tsp|gram|ml|oz|lb|kg)\b/i', $step_text ) ) continue;
+                    $ol_steps[] = [
+                        '@type' => 'HowToStep',
+                        'text'  => $step_text,
+                    ];
+                }
+                // Only use this list if it has 2+ real steps
+                if ( count( $ol_steps ) >= 2 && empty( $instructions ) ) {
+                    $instructions = $ol_steps;
                 }
             }
         }

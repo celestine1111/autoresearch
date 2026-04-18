@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.116
+ * Version: 1.5.117
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.116' );
+define( 'SEOBETTER_VERSION', '1.5.117' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -269,6 +269,12 @@ final class SEOBetter {
             return;
         }
         $post_id = get_the_ID();
+        // v1.5.117 — Skip wp_head output if post content already has JSON-LD
+        // (injected as wp:html block by rest_save_draft). Prevents duplication.
+        $post = get_post( $post_id );
+        if ( $post && strpos( $post->post_content, 'application/ld+json' ) !== false ) {
+            return;
+        }
         $schema = get_post_meta( $post_id, '_seobetter_schema', true );
         if ( $schema ) {
             echo '<script type="application/ld+json">' . wp_json_encode( json_decode( $schema, true ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . '</script>' . "\n";
@@ -1281,19 +1287,18 @@ final class SEOBetter {
             update_post_meta( $post_id, '_seopress_analysis_target_kw', $keyword );
         }
 
-        // Build and inject JSON-LD schema directly into the post content
-        // This guarantees schema is in the article regardless of SEO plugin
+        // v1.5.117 — Use Schema_Generator for all schema (replaces build_aioseo_schema).
+        // This ensures the Google-compliant fixes (no hardcoded Recipe times,
+        // no fake Review ratings, deprecated HowTo) apply to saved schema.
         $content_type_param = sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' );
-        $schema_type_for_ld = $this->content_type_to_schema( $content_type_param );
-        $schema_array = $this->build_aioseo_schema( $schema_type_for_ld, $post_id, $meta_title ?: $title, $post_content, $keyword );
+        update_post_meta( $post_id, '_seobetter_content_type', $content_type_param );
+
+        $schema_gen = new SEOBetter\Schema_Generator();
+        $post_obj = get_post( $post_id );
+        $schema_array = $schema_gen->generate( $post_obj );
 
         if ( ! empty( $schema_array ) ) {
-            $schema_ld = [ '@context' => 'https://schema.org' ];
-            if ( count( $schema_array ) === 1 ) {
-                $schema_ld = array_merge( $schema_ld, $schema_array[0] );
-            } else {
-                $schema_ld['@graph'] = $schema_array;
-            }
+            $schema_ld = [ '@context' => 'https://schema.org', '@graph' => $schema_array ];
             $schema_json = wp_json_encode( $schema_ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
 
             // Append JSON-LD as a wp:html block at the end of post content
