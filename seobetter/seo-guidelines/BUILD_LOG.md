@@ -16,6 +16,33 @@
 
 ---
 
+## v1.5.138 — Content type visual differentiation: badges + personalization tips
+
+**Date:** 2026-04-20
+**Commit:** `[pending]`
+
+### Changes
+
+- **Type-specific header badges** — `includes/Content_Formatter.php::get_type_badge()` line ~57
+  - 19 content types get unique colored pill badges at article top (blog_post and recipe excluded)
+  - Each badge has: icon (HTML entity), label text, background color, border color, text color
+  - Examples: "&#9733; PRODUCT REVIEW" (amber), "&#128240; NEWS" (blue), "&#128308; LIVE" (red)
+  - Renders as first wp:html block in format_hybrid()
+  - `Verify:` `grep -n 'get_type_badge' includes/Content_Formatter.php`
+  - `Verified by user:` UNTESTED
+
+- **Personalization tips** — `admin/views/content-generator.php` tipMap
+  - 21 content-type-specific tips shown in a green info box above Save Draft
+  - Framed as "Personalize this article" — not warnings but enhancements
+  - Examples: Review → "Replace verdict rating with your honest score"
+  - `Verify:` `grep -n 'tipMap' admin/views/content-generator.php`
+  - `Verified by user:` UNTESTED
+
+### Guidelines updated
+- `article_design.md` — new "Design adjustments by type (v1.5.138)" section with full badge table + personalization tips documentation
+
+---
+
 ## v1.5.136 — Review schema overhaul: smart itemReviewed detection (9 types)
 
 **Date:** 2026-04-19

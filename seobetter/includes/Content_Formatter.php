@@ -55,6 +55,49 @@ class Content_Formatter {
     }
 
     /**
+     * v1.5.138 — Content type badge: distinct visual label per article type.
+     * Each type gets a unique icon, color, and label so articles look different.
+     * Follows research from authority publishers (NYT, Wirecutter, WikiHow, etc.)
+     */
+    private static function get_type_badge( string $content_type, string $accent ): string {
+        // SVG icons kept minimal (inline, no external deps)
+        $badges = [
+            'review'              => [ 'icon' => '&#9733;',  'label' => 'Product Review',       'bg' => '#fef3c7', 'border' => '#f59e0b', 'color' => '#92400e' ],
+            'comparison'          => [ 'icon' => '&#8644;',  'label' => 'Comparison',            'bg' => '#ede9fe', 'border' => '#8b5cf6', 'color' => '#5b21b6' ],
+            'buying_guide'        => [ 'icon' => '&#128722;','label' => 'Buying Guide',          'bg' => '#ecfdf5', 'border' => '#10b981', 'color' => '#065f46' ],
+            'news_article'        => [ 'icon' => '&#128240;','label' => 'News',                  'bg' => '#eff6ff', 'border' => '#3b82f6', 'color' => '#1e40af' ],
+            'opinion'             => [ 'icon' => '&#128172;','label' => 'Opinion',               'bg' => '#fef2f2', 'border' => '#ef4444', 'color' => '#991b1b' ],
+            'interview'           => [ 'icon' => '&#127908;','label' => 'Interview / Q&A',       'bg' => '#f0fdf4', 'border' => '#22c55e', 'color' => '#166534' ],
+            'case_study'          => [ 'icon' => '&#128200;','label' => 'Case Study',            'bg' => '#eff6ff', 'border' => '#6366f1', 'color' => '#3730a3' ],
+            'tech_article'        => [ 'icon' => '&#128187;','label' => 'Technical Article',     'bg' => '#f1f5f9', 'border' => '#475569', 'color' => '#1e293b' ],
+            'white_paper'         => [ 'icon' => '&#128196;','label' => 'White Paper / Report',  'bg' => '#f8fafc', 'border' => '#94a3b8', 'color' => '#334155' ],
+            'scholarly_article'   => [ 'icon' => '&#127891;','label' => 'Scholarly Article',     'bg' => '#faf5ff', 'border' => '#a855f7', 'color' => '#6b21a8' ],
+            'press_release'       => [ 'icon' => '&#128227;','label' => 'Press Release',         'bg' => '#f0f9ff', 'border' => '#0ea5e9', 'color' => '#0369a1' ],
+            'personal_essay'      => [ 'icon' => '&#9998;',  'label' => 'Essay',                 'bg' => '#fdf4ff', 'border' => '#d946ef', 'color' => '#86198f' ],
+            'glossary_definition' => [ 'icon' => '&#128214;','label' => 'Definition',            'bg' => '#f0fdfa', 'border' => '#14b8a6', 'color' => '#134e4a' ],
+            'sponsored'           => [ 'icon' => '&#9888;',  'label' => 'Sponsored Content',     'bg' => '#fffbeb', 'border' => '#f59e0b', 'color' => '#78350f' ],
+            'live_blog'           => [ 'icon' => '&#128308;','label' => 'Live',                  'bg' => '#fef2f2', 'border' => '#dc2626', 'color' => '#991b1b' ],
+            'faq_page'            => [ 'icon' => '&#10068;', 'label' => 'FAQ',                   'bg' => '#f0fdf4', 'border' => '#16a34a', 'color' => '#166534' ],
+            'listicle'            => [ 'icon' => '&#128203;','label' => 'Top List',              'bg' => '#fff7ed', 'border' => '#f97316', 'color' => '#9a3412' ],
+            'pillar_guide'        => [ 'icon' => '&#128218;','label' => 'Ultimate Guide',        'bg' => '#eff6ff', 'border' => '#2563eb', 'color' => '#1e3a8a' ],
+            'how_to'              => [ 'icon' => '&#128295;','label' => 'How-To Guide',          'bg' => '#ecfdf5', 'border' => '#059669', 'color' => '#064e3b' ],
+        ];
+
+        // blog_post and recipe don't need badges (blog is baseline, recipe has cards)
+        if ( ! isset( $badges[ $content_type ] ) ) {
+            return '';
+        }
+
+        $b = $badges[ $content_type ];
+
+        return '<div style="display:inline-flex;align-items:center;gap:0.5em;padding:0.4em 1em;'
+            . "background:{$b['bg']} !important;border:1px solid {$b['border']};border-radius:20px;"
+            . "color:{$b['color']} !important;font-size:0.8em;font-weight:700;text-transform:uppercase;"
+            . 'letter-spacing:0.08em;margin-bottom:1em">'
+            . "<span style=\"font-size:1.1em\">{$b['icon']}</span> {$b['label']}</div>";
+    }
+
+    /**
      * Parse markdown into structured sections for formatting.
      */
     private function parse_markdown( string $markdown ): array {
@@ -356,6 +399,15 @@ class Content_Formatter {
         $accent = $options['accent_color'] ?? '#764ba2';
         $para_count = 0;
         $more_inserted = false;
+
+        // v1.5.138 — Content type header badge + type-specific intro styling.
+        // Each article type gets a distinct visual badge at the top so the reader
+        // immediately knows what kind of content this is (Review, News, Interview, etc.)
+        $content_type = $options['content_type'] ?? '';
+        $type_badge = self::get_type_badge( $content_type, $accent );
+        if ( $type_badge ) {
+            $output[] = "<!-- wp:html -->\n{$type_badge}\n<!-- /wp:html -->";
+        }
         $in_recipe_card = false; // v1.5.120 — track recipe card wrapper state
         // v1.5.20 — cap stat callouts at 3 per article so percent-heavy
         // articles don't end up with 8+ visual-noise stat cards

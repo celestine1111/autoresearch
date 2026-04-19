@@ -699,19 +699,41 @@ Each content type affects **three layers** of the generated article:
 | `glossary_definition` | `DefinedTerm` + `DefinedTermSet` | — | Short, definition-first |
 | `sponsored` | `BlogPosting` (AdvertiserContent) | — | Disclosure block |
 
-### Design adjustments by type
+### Design adjustments by type (v1.5.138 — visual differentiation)
 
-| Content Type | Design Adjustments |
-|---|---|
-| Recipe | Ingredients box (amber), numbered step styling, prep/cook time metadata, recipe card visual |
-| Review | Pros/cons boxes (green/red), verdict section, rating display |
-| Comparison | Mandatory comparison table, criterion winner indicators |
-| News Article | Short paragraphs, no drop cap, dateline styling |
-| FAQ Page | Q&A card styling for each pair |
-| How-To | Numbered step cards, prerequisite box, HowTo schema with `totalTime` |
-| Glossary | Short (800 words), definition-first paragraph, no FAQ section |
-| Listicle | H2 per item (detected and promoted to ItemList schema) |
-| Buying Guide | Product comparison table, Product schema with aggregateRating |
+Every content type gets a **type badge** — a colored pill at the top of the article with an icon and label (e.g. "&#9733; PRODUCT REVIEW", "&#128240; NEWS"). This is the first element in the formatted article and instantly tells the reader what kind of content they're reading.
+
+**Source:** `Content_Formatter::get_type_badge()` — each type has unique `bg`, `border`, `color`, and `icon`.
+
+| Content Type | Badge Label | Badge Color | Unique Visual Elements |
+|---|---|---|---|
+| blog_post | (none — baseline) | — | Author bio, reading time |
+| review | &#9733; Product Review | Amber (#fef3c7) | Score badge, pros/cons columns, verdict box |
+| comparison | &#8644; Comparison | Purple (#ede9fe) | VS badge, two-column grid, winner highlights |
+| buying_guide | &#128722; Buying Guide | Green (#ecfdf5) | Pick pills ("Our Pick"), product cards |
+| news_article | &#128240; News | Blue (#eff6ff) | Dateline, "Updated" timestamp, minimal chrome |
+| opinion | &#128172; Opinion | Red (#fef2f2) | Large author photo, editorial stance |
+| interview | &#127908; Interview / Q&A | Green (#f0fdf4) | Speaker labels (Q:/A:), alternating styling |
+| case_study | &#128200; Case Study | Indigo (#eff6ff) | Large stat numbers, Challenge/Solution/Results |
+| tech_article | &#128187; Technical Article | Slate (#f1f5f9) | Code blocks + copy, warning banners |
+| white_paper | &#128196; White Paper | Gray (#f8fafc) | Executive summary box, formal numbering |
+| scholarly_article | &#127891; Scholarly Article | Purple (#faf5ff) | Abstract box, citation format |
+| press_release | &#128227; Press Release | Cyan (#f0f9ff) | Dateline, "About" boilerplate, media contacts |
+| personal_essay | &#9998; Essay | Pink (#fdf4ff) | Drop cap, literary spacing |
+| glossary_definition | &#128214; Definition | Teal (#f0fdfa) | Definition highlight box, "See Also" links |
+| sponsored | &#9888; Sponsored Content | Yellow (#fffbeb) | Disclosure bar, sponsor area |
+| live_blog | &#128308; Live | Red (#fef2f2) | Timestamped entries, key moments |
+| faq_page | &#10068; FAQ | Green (#f0fdf4) | Accordion Q&A pairs |
+| listicle | &#128203; Top List | Orange (#fff7ed) | Oversized item numbers, card separators |
+| pillar_guide | &#128218; Ultimate Guide | Blue (#eff6ff) | Chapter numbers, TOC progress |
+| how_to | &#128295; How-To Guide | Green (#ecfdf5) | Numbered step circles, materials box |
+| recipe | (none — has recipe cards) | — | Yellow recipe cards, ingredient boxes |
+
+### Personalization tips (v1.5.138)
+
+Each content type shows a "Personalize this article" tip box in the generator results panel (above the Save Draft button). This guides users on what to customize before publishing. Tips are content-type-specific and framed as enhancements, not warnings.
+
+**Source:** `content-generator.php` — `tipMap` object in the results builder.
 
 ### Schema variation — non-obvious rules
 

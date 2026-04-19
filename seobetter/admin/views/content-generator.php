@@ -1207,6 +1207,37 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             framework: res.framework || {}
         };
 
+        // v1.5.138 — Personalization tips per content type
+        var tipMap = {
+            blog_post: "Add your personal experience and photos. Update the call to action with your actual offer.",
+            how_to: "Test each step yourself before publishing. Replace stock images with your own photos of each step.",
+            listicle: "Reorder items based on your expertise. Add your personal pick at #1 with a note about why.",
+            review: "Replace the verdict rating with your honest score. Update Pros/Cons from real experience. Add your own product photos.",
+            comparison: "Update the comparison table with real specs you've verified. Declare your honest winner.",
+            buying_guide: "Update prices to current values. Add affiliate links to your recommended products. Verify availability.",
+            news_article: "Update the dateline with your city. Verify all facts and statistics are current.",
+            faq_page: "Add questions your actual customers ask. Update answers with your specific product/service details.",
+            pillar_guide: "Add internal links to your own related articles. Update each chapter with your unique insights.",
+            recipe: "Verify all ingredients match the source recipe. Add your own photos of the finished dish. Test it yourself.",
+            case_study: "Replace company name and metrics with your actual client's data. Get permission for the client quote.",
+            tech_article: "Test all code examples before publishing. Update version numbers and dependencies.",
+            interview: "Replace the Q&A with your actual interview transcript. Update the interviewee bio with real details.",
+            white_paper: "Add your own data visualizations. Update the executive summary with your key findings.",
+            opinion: "This is YOUR opinion piece. Strengthen the thesis with your personal experience and evidence.",
+            press_release: "Replace [Company Name] with your business. Update media contact with real details. Add your logo.",
+            personal_essay: "This is your story. Replace placeholder experiences with real moments from your life.",
+            glossary_definition: "Add examples specific to your industry. Link to related terms on your site.",
+            scholarly_article: "Add real citations from your research. Update methodology with your actual study details.",
+            sponsored: "Update the disclosure with your actual sponsor name. Replace the CTA with the sponsor's real link.",
+            live_blog: "Add real timestamps as events happen. Pin the most important updates to Key Moments."
+        };
+        var ct = (form.querySelector('[name="content_type"]') || form.querySelector('#sb-content-type') || {}).value || 'blog_post';
+        var tip = tipMap[ct] || tipMap.blog_post;
+        h += '<div style="margin-top:12px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#166534;display:flex;align-items:flex-start;gap:8px">';
+        h += '<span style="font-size:16px;flex-shrink:0">&#128161;</span>';
+        h += '<div><strong>Personalize this article:</strong> ' + tip + '</div>';
+        h += '</div>';
+
         h += '<div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">';
         h += '<span style="font-size:13px;color:#6b7280">Save as</span>';
         h += '<div style="position:relative;display:inline-block">';
