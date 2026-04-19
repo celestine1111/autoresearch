@@ -651,9 +651,10 @@ class Schema_Generator {
                 $reviewed_extra['servesCuisine'] = ucfirst( $cuisine[1] );
             }
         }
-        // Book detection
+        // Book detection — requires books category OR strong book-specific signals
+        // (NOT just "author" or "published" which appear in many non-book articles)
         elseif ( in_array( $category, [ 'books' ], true )
-            || preg_match( '/\b(book|novel|memoir|autobiography|biography|paperback|hardcover|ebook|kindle|isbn|author|published by|publisher|page[s]?\s+\d+)\b/i', $text ) ) {
+            || preg_match( '/\b(novel|memoir|autobiography|biography|paperback|hardcover|ebook|kindle|isbn|book review|bestseller|chapter[s]?\s+\d+)\b/i', $text ) ) {
             $reviewed_type = 'Book';
             if ( preg_match( '/\bauthor[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $ba ) ) {
                 $reviewed_extra['author'] = [ '@type' => 'Person', 'name' => $ba[1] ];
@@ -789,16 +790,21 @@ class Schema_Generator {
         }
 
         // ── Pros/Cons as positiveNotes/negativeNotes ──
+        // v1.5.136 — More lenient regex: the Pros/Cons lists are wrapped in styled
+        // divs by Content_Formatter, so we look for the heading then find the nearest
+        // list items within the next 2000 chars (handles any wrapper divs between).
         $pros = [];
         $cons = [];
-        if ( preg_match( '/<h[2-4][^>]*>[^<]*pros?[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ul[^>]*>(.*?)<\/ul>/is', $content, $pros_match ) ) {
+
+        // Find Pros heading, then extract all <li> items until next H2/H3 or Cons heading
+        if ( preg_match( '/<h[2-4][^>]*>\s*Pros\s*<\/h[2-4]>(.*?)(?=<h[2-4]|$)/is', $content, $pros_match ) ) {
             preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $pros_match[1], $li );
             foreach ( $li[1] as $item ) {
                 $t = trim( wp_strip_all_tags( $item ) );
                 if ( strlen( $t ) > 3 ) $pros[] = $t;
             }
         }
-        if ( preg_match( '/<h[2-4][^>]*>[^<]*cons?[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ul[^>]*>(.*?)<\/ul>/is', $content, $cons_match ) ) {
+        if ( preg_match( '/<h[2-4][^>]*>\s*Cons\s*<\/h[2-4]>(.*?)(?=<h[2-4]|$)/is', $content, $cons_match ) ) {
             preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $cons_match[1], $li );
             foreach ( $li[1] as $item ) {
                 $t = trim( wp_strip_all_tags( $item ) );

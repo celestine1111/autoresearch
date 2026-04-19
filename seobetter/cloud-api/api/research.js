@@ -3277,23 +3277,35 @@ async function scrapeAndExtractQuotes(urls, keyword) {
 // other fetchers — no extra latency.
 // ============================================================
 
-// v1.5.133 — Dispatcher: uses Serper + Firecrawl if keys are set, falls back to Sonar.
+// v1.5.136 — Dispatcher: uses Serper + Firecrawl if keys are set, falls back to Sonar.
+// Wrapped in try/catch at EVERY level to prevent crashing the main Promise.all.
 async function fetchSonarResearch(keyword, country = '') {
-  const SERPER_KEY = process.env.SERPER_API_KEY;
-  const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY;
+  try {
+    const SERPER_KEY = process.env.SERPER_API_KEY;
+    const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY;
 
-  // New pipeline: Serper search → Firecrawl scrape → LLM extraction
-  if (SERPER_KEY && FIRECRAWL_KEY) {
-    try {
-      const result = await fetchSerperFirecrawlResearch(keyword, country);
-      if (result) return result;
-    } catch (err) {
-      console.error('Serper+Firecrawl failed, falling back to Sonar:', err.message);
+    // New pipeline: Serper search → Firecrawl scrape → LLM extraction
+    if (SERPER_KEY && FIRECRAWL_KEY) {
+      try {
+        const result = await fetchSerperFirecrawlResearch(keyword, country);
+        if (result) return result;
+      } catch (err) {
+        console.error('Serper+Firecrawl failed, falling back to Sonar:', err.message);
+      }
     }
-  }
 
-  // Fallback: legacy Sonar path
-  return fetchSonarResearchLegacy(keyword, country);
+    // Fallback: legacy Sonar path
+    try {
+      return await fetchSonarResearchLegacy(keyword, country);
+    } catch (err) {
+      console.error('Sonar fallback also failed:', err.message);
+      return null;
+    }
+  } catch (err) {
+    // Absolute safety net — never let this crash the main endpoint
+    console.error('fetchSonarResearch total failure:', err.message);
+    return null;
+  }
 }
 
 // ============================================================
@@ -3335,12 +3347,18 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
   if (organicResults.length === 0) return null;
 
   // Build citations from Serper results (these are REAL Google URLs)
-  const serperCitations = organicResults.slice(0, 8).map(r => ({
-    url: r.link,
-    title: r.title || '',
-    source_name: new URL(r.link).hostname.replace('www.', ''),
-    snippet: r.snippet || '',
-  }));
+  const serperCitations = [];
+  for (const r of organicResults.slice(0, 8)) {
+    try {
+      if (!r.link) continue;
+      serperCitations.push({
+        url: r.link,
+        title: r.title || '',
+        source_name: new URL(r.link).hostname.replace('www.', ''),
+        snippet: r.snippet || '',
+      });
+    } catch { /* skip malformed URL */ }
+  }
 
   // --- Step 2: Firecrawl scrape top 5 URLs in parallel ---
   const urlsToScrape = organicResults.slice(0, 5).map(r => r.link);
@@ -3356,10 +3374,12 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
       if (!resp.ok) return null;
       const data = await resp.json();
       if (!data?.success || !data?.data?.markdown) return null;
+      let hostname = '';
+      try { hostname = new URL(url).hostname.replace('www.', ''); } catch {}
       return {
         url,
         title: data.data.metadata?.title || '',
-        source_name: new URL(url).hostname.replace('www.', ''),
+        source_name: hostname,
         markdown: data.data.markdown,
       };
     } catch {
