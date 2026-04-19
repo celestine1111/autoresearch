@@ -288,6 +288,11 @@ class Citation_Pool {
             if ( $title === '' ) {
                 $title = (string) ( $entry['source_name'] ?? wp_parse_url( $url, PHP_URL_HOST ) ?: 'Source' );
             }
+            // v1.5.137 — Sanitize title: brackets break markdown link syntax
+            $title = str_replace( [ '[', ']' ], '', $title );
+            if ( mb_strlen( $title ) > 80 ) {
+                $title = mb_substr( $title, 0, 77 ) . '...';
+            }
             $lines[] = "{$i}. [{$title}]({$url})";
             $i++;
         }

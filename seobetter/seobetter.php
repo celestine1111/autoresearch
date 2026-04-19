@@ -2943,6 +2943,14 @@ final class SEOBetter {
             if ( $title === '' ) {
                 $title = $src ?: 'Source';
             }
+            // v1.5.137 — Sanitize title for markdown link safety.
+            // Titles with [ ] break markdown link syntax: [title with [brackets]](url)
+            // becomes a nested link that the formatter splits incorrectly.
+            $title = str_replace( [ '[', ']' ], '', $title );
+            // Truncate excessively long titles (some Bluesky/Reddit titles are 200+ chars)
+            if ( mb_strlen( $title ) > 80 ) {
+                $title = mb_substr( $title, 0, 77 ) . '...';
+            }
             // v1.5.67 — removed the " — {$src}" suffix. User feedback:
             // "at the end of the link it will reference (perplexity) it
             // doesnt need to do this... just as long as it is accurate and
