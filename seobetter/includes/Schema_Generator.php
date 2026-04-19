@@ -495,6 +495,11 @@ class Schema_Generator {
                     foreach ( $li_matches[1] as $li ) {
                         $item = trim( wp_strip_all_tags( $li ) );
                         if ( strlen( $item ) > 2 && strlen( $item ) < 200 ) {
+                            // v1.5.137 — Skip nutritional data (macros, calories)
+                            // "10g Fat", "41g Carbs", "3g Protein" are NOT ingredients
+                            if ( preg_match( '/^\d+[gm]?\s*(fat|carbs?|protein|calories|cal|kcal|sodium|fiber|fibre|sugar|cholesterol|saturated)\s*$/i', $item ) ) continue;
+                            // Skip pure numbers or very short items like "N/A"
+                            if ( preg_match( '/^[\d\s.,%]+$/', $item ) ) continue;
                             $ingredients[] = $item;
                         }
                     }
@@ -579,6 +584,8 @@ class Schema_Generator {
             foreach ( $all_li[1] as $li ) {
                 $item = trim( wp_strip_all_tags( $li ) );
                 if ( preg_match( '/\b(cup|cups|tbsp|tsp|teaspoon|tablespoon|gram|grams|ml|oz|ounce|pound|lb|kg|piece|clove|pinch)\b/i', $item ) ) {
+                    // v1.5.137 — Skip nutritional macros
+                    if ( preg_match( '/^\d+[gm]?\s*(fat|carbs?|protein|calories|cal|kcal|sodium|fiber|fibre|sugar)\s*$/i', $item ) ) continue;
                     $ingredients[] = $item;
                 }
             }
