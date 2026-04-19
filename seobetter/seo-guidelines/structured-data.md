@@ -93,14 +93,23 @@
 
 **BANNED:** Hardcoded times/yields/ratings/cuisine/calories. If the content doesn't state a value, the field is OMITTED.
 
-**Recipe data sourcing (v1.5.123):**
-- During the research step, if content_type is `recipe`, Tavily searches for real recipes from authority sites (using the category + country authority domain list)
-- Query: `"keyword recipe ingredients instructions"` restricted to authority domains (e.g., petmd.com, rspca.org.au, akc.org for pet recipes)
+**Recipe data sourcing (v1.5.124):**
+- Uses a DEDICATED recipe domain list (`Async_Generator::get_recipe_domains()`) — completely SEPARATE from the general authority domain list (`get_authority_domains()`). Recipe domains are recipe-specific sites in local languages. They NEVER affect other article types.
+- 40+ countries with local-language recipe sites: JP→cookpad.com/kurashiru.com, FR→marmiton.org, DE→chefkoch.de, IT→giallozafferano.it, KR→10000recipe.com, CN→xiachufang.com, BR→tudogostoso.com.br, TR→nefisyemektarifleri.com, etc.
+- Global recipe sites always included: allrecipes.com, bbcgoodfood.com, foodnetwork.com
+- Pet recipe sites always included: petmd.com, akc.org, thesprucepets.com, mindiampets.com.au
+- Query: `"keyword recipe ingredients instructions"` with `include_domains` = country recipe sites + global
+- If country-specific sites return < 2 results, falls back to unrestricted Tavily search
 - Extracts title, URL, and raw page content (ingredients + steps) from top 3 results
-- This REAL recipe data is injected into the AI's research context with the instruction: "Base your recipes on these REAL ingredients and steps. Give each a creative unique name and rewrite the intro."
-- Each recipe ends with: "Inspired by [Source Name](url)" — proving it came from a real, verified source
-- The AI does NOT invent recipes from scratch — it adapts real recipes from credible sources
-- This is critical for pet food recipes where wrong ingredients could harm animals
+- This REAL recipe data is injected into the AI's research context
+- AI rewrites with unique name/intro but keeps REAL ingredients and methods
+- Each recipe ends with: "Inspired by [Source Name](url)"
+- Critical for pet food recipes where wrong ingredients could harm animals
+
+**How it works for ANY country/language:**
+- Japanese user: keyword "手作り犬のおやつ" → searches cookpad.com (JP) → finds Japanese recipes → AI writes in Japanese
+- French user: keyword "recettes pour chiens" → searches marmiton.org (FR) → finds French recipes → AI writes in French
+- Schema `recipeCuisine` auto-set from country code. All schema fields work in any language.
 
 **Country → Cuisine mapping (40+ countries):**
 AU→Australian, US→American, GB→British, FR→French, IT→Italian, JP→Japanese, IN→Indian, MX→Mexican, TH→Thai, CN→Chinese, KR→Korean, ES→Spanish, DE→German, BR→Brazilian, GR→Greek, TR→Turkish, VN→Vietnamese, IE→Irish, NZ→New Zealand

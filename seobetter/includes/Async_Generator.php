@@ -213,17 +213,56 @@ class Async_Generator {
                     'available'  => ! empty( $research['sonar_available'] ),
                 ];
 
-                // v1.5.123 — Recipe sourcing from real authority sites via Tavily.
-                // For recipe content type, search for real recipes on authority
-                // sites (PetMD, AKC, RSPCA, etc.) and extract ingredients + steps.
-                // AI then rewrites with unique name/intro but uses REAL ingredients.
-                // Prevents AI from inventing potentially harmful pet food recipes.
+                // v1.5.124 — Recipe sourcing from DEDICATED recipe domains via Tavily.
+                // Uses get_recipe_domains() — a SEPARATE list from get_authority_domains().
+                // These are recipe-specific sites (cookpad, allrecipes, bbcgoodfood)
+                // NOT the general authority list (which has news/health/gov sites).
+                // Only fires when content_type === 'recipe'. Never affects other types.
                 if ( ( $options['content_type'] ?? '' ) === 'recipe' ) {
-                    $tavily_recipes = Content_Injector::tavily_search_and_extract(
-                        $keyword . ' recipe ingredients instructions',
-                        $options['domain'] ?? 'food',
-                        $options['country'] ?? ''
-                    );
+                    $recipe_domains = self::get_recipe_domains( $options['country'] ?? '' );
+                    $settings = get_option( 'seobetter_settings', [] );
+                    $tavily_key = $settings['tavily_api_key'] ?? '';
+                    $tavily_recipes = [ 'results' => [] ];
+
+                    if ( ! empty( $tavily_key ) ) {
+                        $tavily_body = [
+                            'api_key'             => $tavily_key,
+                            'query'               => $keyword . ' recipe ingredients instructions',
+                            'include_raw_content'  => true,
+                            'max_results'          => 5,
+                            'search_depth'         => 'basic',
+                        ];
+                        if ( ! empty( $recipe_domains ) ) {
+                            $tavily_body['include_domains'] = $recipe_domains;
+                        }
+                        $resp = wp_remote_post( 'https://api.tavily.com/search', [
+                            'timeout' => 20,
+                            'headers' => [ 'Content-Type' => 'application/json' ],
+                            'body'    => wp_json_encode( $tavily_body ),
+                        ] );
+                        if ( ! is_wp_error( $resp ) ) {
+                            $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+                            if ( ! empty( $body['results'] ) ) {
+                                $tavily_recipes['results'] = $body['results'];
+                            }
+                            // Fallback: if recipe domains found < 2, retry without domain filter
+                            if ( count( $tavily_recipes['results'] ) < 2 && ! empty( $recipe_domains ) ) {
+                                unset( $tavily_body['include_domains'] );
+                                $resp2 = wp_remote_post( 'https://api.tavily.com/search', [
+                                    'timeout' => 20,
+                                    'headers' => [ 'Content-Type' => 'application/json' ],
+                                    'body'    => wp_json_encode( $tavily_body ),
+                                ] );
+                                if ( ! is_wp_error( $resp2 ) ) {
+                                    $body2 = json_decode( wp_remote_retrieve_body( $resp2 ), true );
+                                    if ( ! empty( $body2['results'] ) ) {
+                                        $tavily_recipes['results'] = $body2['results'];
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     $recipe_data_block = '';
                     if ( ! empty( $tavily_recipes['results'] ) ) {
                         $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources — use these as your base) ===\n";
@@ -231,7 +270,6 @@ class Async_Generator {
                         foreach ( array_slice( $tavily_recipes['results'], 0, 3 ) as $ri => $recipe_result ) {
                             $raw = $recipe_result['raw_content'] ?? '';
                             if ( strlen( $raw ) < 200 ) continue;
-                            // Extract ingredient-like lines
                             $clean = preg_replace( '/\s+/', ' ', strip_tags( $raw ) );
                             $recipe_data_block .= "Source " . ( $ri + 1 ) . ": " . ( $recipe_result['title'] ?? 'Unknown' ) . "\n";
                             $recipe_data_block .= "URL: " . ( $recipe_result['url'] ?? '' ) . "\n";
@@ -414,6 +452,85 @@ class Async_Generator {
     /**
      * Get tone-specific writing guidance so the AI actually changes voice.
      */
+    /**
+     * v1.5.124 — RECIPE-ONLY domain list. Completely separate from get_authority_domains().
+     * Only used when content_type === 'recipe' during Tavily recipe search.
+     * Never affects other article types. Contains recipe-specific sites per country
+     * in local languages.
+     */
+    private static function get_recipe_domains( string $country = '' ): array {
+        // Global recipe sites (always included)
+        $global = [
+            'allrecipes.com', 'foodnetwork.com', 'bbcgoodfood.com',
+            'epicurious.com', 'seriouseats.com', 'food52.com',
+            // Pet recipe authorities (global)
+            'petmd.com', 'akc.org', 'thesprucepets.com', 'rover.com',
+            'mindiampets.com.au',
+        ];
+
+        // Country-specific recipe sites in local languages
+        $by_country = [
+            'AU' => [ 'taste.com.au', 'sbs.com.au', 'delicious.com.au', 'recipetineats.com' ],
+            'US' => [ 'bonappetit.com', 'kingarthurbaking.com', 'simplyrecipes.com' ],
+            'GB' => [ 'bbc.co.uk', 'jamieoliver.com', 'greatbritishchefs.com', 'olivemagazine.com' ],
+            'CA' => [ 'canadianliving.com', 'ricardocuisine.com', 'chatelaine.com' ],
+            'NZ' => [ 'foodhub.co.nz', 'cuisine.co.nz', 'edmondscooking.co.nz' ],
+            'IE' => [ 'rte.ie', 'irishexaminer.com' ],
+            'JP' => [ 'cookpad.com', 'kurashiru.com', 'delishkitchen.tv', 'orangepage.net' ],
+            'KR' => [ '10000recipe.com', 'haemukja.com', 'wtable.co.kr' ],
+            'CN' => [ 'xiachufang.com', 'meishichina.com', 'douguo.com' ],
+            'TW' => [ 'icook.tw', 'cookpad.com' ],
+            'FR' => [ 'marmiton.org', 'cuisineaz.com', '750g.com' ],
+            'DE' => [ 'chefkoch.de', 'lecker.de', 'essen-und-trinken.de', 'kochbar.de' ],
+            'AT' => [ 'chefkoch.de', 'ichkoche.at' ],
+            'CH' => [ 'chefkoch.de', 'swissmilk.ch' ],
+            'IT' => [ 'giallozafferano.it', 'cucchiaio.it', 'cookist.it' ],
+            'ES' => [ 'recetasgratis.net', 'directoalpaladar.com' ],
+            'PT' => [ 'saboresajinomoto.com.br', 'teleculinaria.pt' ],
+            'BR' => [ 'tudogostoso.com.br', 'panelinha.com.br', 'cybercook.com.br' ],
+            'MX' => [ 'kiwilimon.com', 'cocinadelirante.com', 'recetasgratis.net' ],
+            'AR' => [ 'recetasgratis.com.ar', 'paulinacocina.com.ar' ],
+            'CL' => [ 'recetasgratis.net', 'gourmet.cl' ],
+            'CO' => [ 'recetasgratis.net', 'mycolombianrecipes.com' ],
+            'IN' => [ 'vegrecipesofindia.com', 'hebbars kitchen.com', 'tarladalal.com', 'sanjeevkapoor.com' ],
+            'TH' => [ 'wongnai.com', 'cookpad.com' ],
+            'VN' => [ 'cooky.vn', 'monngonmoingay.com' ],
+            'ID' => [ 'cookpad.com', 'resepkoki.id', 'masakapahariini.com' ],
+            'MY' => [ 'rasa.my', 'cookpad.com' ],
+            'PH' => [ 'panlasangpinoy.com', 'cookpad.com' ],
+            'SG' => [ 'noobcook.com', 'cookpad.com' ],
+            'SE' => [ 'koket.se', 'ica.se', 'arla.se' ],
+            'NO' => [ 'matprat.no', 'godt.no', 'tine.no' ],
+            'DK' => [ 'valdemarsro.dk', 'arla.dk' ],
+            'FI' => [ 'valio.fi', 'kotikokki.net' ],
+            'NL' => [ 'ah.nl', 'leukerecepten.nl', 'smulweb.nl' ],
+            'BE' => [ 'dagelijksekost.een.be', 'leukerecepten.nl' ],
+            'PL' => [ 'kwestiasmaku.com', 'przepisy.pl', 'mojegotowanie.pl' ],
+            'CZ' => [ 'recepty.cz', 'toprecepty.cz' ],
+            'HU' => [ 'nosalty.hu', 'mindmegette.hu' ],
+            'RO' => [ 'reteteculinare.ro', 'bucataras.ro' ],
+            'TR' => [ 'nefisyemektarifleri.com', 'yemek.com', 'lezzet.com.tr' ],
+            'RU' => [ 'povarenok.ru', 'russianfood.com', 'gotovim-doma.ru' ],
+            'UA' => [ 'smachno.ua', 'povarenok.ru' ],
+            'GR' => [ 'sintagespareas.gr', 'akispetretzikis.com' ],
+            'IL' => [ 'foodish.co.il', 'mako.co.il' ],
+            'AE' => [ 'shahiya.com', 'fatafeat.com' ],
+            'SA' => [ 'shahiya.com', 'atyabtabkha.com' ],
+            'EG' => [ 'shahiya.com', 'fatafeat.com' ],
+            'ZA' => [ 'food24.com', 'eatingout.co.za' ],
+            'NG' => [ 'allnigerianrecipes.com', 'sisiyeloo.com' ],
+            'KE' => [ 'kaluhiskitchen.com' ],
+        ];
+
+        $country_upper = strtoupper( $country );
+        $result = $global;
+        if ( isset( $by_country[ $country_upper ] ) ) {
+            $result = array_merge( $by_country[ $country_upper ], $result );
+        }
+
+        return array_unique( $result );
+    }
+
     private static function get_tone_guidance( string $tone ): string {
         return match ( $tone ) {
             'conversational' => "TONE: Conversational. Write like you are talking to a friend over coffee. Use contractions (don't, isn't, you'll). Ask rhetorical questions occasionally. Use 'you' and 'your' frequently. Keep sentences short. Imagine explaining this at a dinner party.",
