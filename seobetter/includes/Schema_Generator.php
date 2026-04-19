@@ -621,13 +621,29 @@ class Schema_Generator {
         if ( strlen( $item_name ) < 3 ) $item_name = $post->post_title;
 
         // ── Smart itemReviewed type detection ──
-        // Detect what's being reviewed based on category + content signals
+        // v1.5.136 — Check the TITLE/KEYWORD first for clear type signals.
+        // Title is the strongest signal for what the user is actually reviewing.
+        // Only fall to content body analysis when title has no clear signal.
         $reviewed_type = 'Product'; // Default
         $reviewed_extra = [];
+        $title_lower = strtolower( $post->post_title );
+        $keyword_lower = strtolower( get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: '' );
+        $title_and_kw = $title_lower . ' ' . $keyword_lower;
 
-        // Software / App detection
-        if ( in_array( $category, [ 'technology', 'games' ], true )
-            || preg_match( '/\b(software|app|application|SaaS|platform|tool|plugin|extension|program|desktop app|web app|mobile app)\b/i', $text ) ) {
+        // Title-first detection: if the title/keyword has "book", "movie", "app", etc.
+        // these are unambiguous signals that override content analysis
+        $title_override = '';
+        if ( preg_match( '/\b(book|novel|memoir|autobiography)\b/i', $title_and_kw ) ) $title_override = 'Book';
+        elseif ( preg_match( '/\b(movie|film)\b/i', $title_and_kw ) ) $title_override = 'Movie';
+        elseif ( preg_match( '/\b(app|software|saas)\b/i', $title_and_kw ) ) $title_override = 'Software';
+        elseif ( preg_match( '/\b(game|gaming|ps5|xbox|nintendo)\b/i', $title_and_kw ) ) $title_override = 'VideoGame';
+        elseif ( preg_match( '/\b(restaurant|cafe|diner|bistro)\b/i', $title_and_kw ) ) $title_override = 'Restaurant';
+        elseif ( preg_match( '/\b(course|class|bootcamp)\b/i', $title_and_kw ) ) $title_override = 'Course';
+
+        // Software / App detection — only if title signals it OR category is tech
+        if ( $title_override === 'Software'
+            || ( ! $title_override && ( in_array( $category, [ 'technology', 'games' ], true )
+            || preg_match( '/\b(software|SaaS|plugin|extension|desktop app|web app|mobile app)\b/i', $text ) ) ) ) {
             if ( preg_match( '/\b(ios|android|iphone|ipad|mobile app|play store|app store)\b/i', $text ) ) {
                 $reviewed_type = 'MobileApplication';
                 if ( preg_match( '/\b(ios|iphone|ipad)\b/i', $text ) ) $reviewed_extra['operatingSystem'] = 'iOS';
@@ -644,34 +660,35 @@ class Schema_Generator {
             }
         }
         // Restaurant / Food detection
-        elseif ( in_array( $category, [ 'food' ], true )
-            || preg_match( '/\b(restaurant|cafe|diner|bistro|eatery|pizzeria|bakery|bar|pub|takeaway|food truck|cuisine|menu|chef)\b/i', $text ) ) {
+        elseif ( $title_override === 'Restaurant'
+            || ( ! $title_override && ( in_array( $category, [ 'food' ], true )
+            || preg_match( '/\b(restaurant|cafe|diner|bistro|eatery|pizzeria|bakery|bar|pub|takeaway|food truck|cuisine|menu|chef)\b/i', $text ) ) ) ) {
             $reviewed_type = 'Restaurant';
             if ( preg_match( '/\b(italian|chinese|japanese|thai|indian|mexican|french|korean|vietnamese|american|australian|mediterranean|seafood|vegan|vegetarian)\b/i', $text, $cuisine ) ) {
                 $reviewed_extra['servesCuisine'] = ucfirst( $cuisine[1] );
             }
         }
-        // Movie / TV detection — MUST come before Book because movies about
-        // biographies/novels will match both, and "movie" in title/keyword is the
-        // strongest signal for what the user is actually reviewing.
-        elseif ( in_array( $category, [ 'entertainment' ], true )
-            || preg_match( '/\b(movie|film|cinema|director|starring|cast|imdb|rotten tomatoes|box office|screenplay|netflix|disney|streaming|oscar|academy award|theater|theatre)\b/i', $text ) ) {
+        // Movie / TV detection
+        elseif ( $title_override === 'Movie'
+            || ( ! $title_override && ( in_array( $category, [ 'entertainment' ], true )
+            || preg_match( '/\b(movie|film|cinema|director|starring|cast|imdb|rotten tomatoes|box office|screenplay|oscar|academy award)\b/i', $text ) ) ) ) {
             $reviewed_type = 'Movie';
             if ( preg_match( '/\bdirector[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $dir ) ) {
                 $reviewed_extra['director'] = [ '@type' => 'Person', 'name' => $dir[1] ];
             }
         }
-        // Book detection — requires books category OR strong book-specific signals.
-        // Placed AFTER Movie so "Oppenheimer movie review" doesn't match on "biography".
-        elseif ( in_array( $category, [ 'books' ], true )
-            || preg_match( '/\b(novel|memoir|autobiography|paperback|hardcover|ebook|kindle|isbn|book review|bestseller|chapter[s]?\s+\d+)\b/i', $text ) ) {
+        // Book detection
+        elseif ( $title_override === 'Book'
+            || ( ! $title_override && ( in_array( $category, [ 'books' ], true )
+            || preg_match( '/\b(novel|memoir|autobiography|paperback|hardcover|ebook|kindle|isbn|book review|bestseller|chapter[s]?\s+\d+)\b/i', $text ) ) ) ) {
             $reviewed_type = 'Book';
             if ( preg_match( '/\bauthor[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $ba ) ) {
                 $reviewed_extra['author'] = [ '@type' => 'Person', 'name' => $ba[1] ];
             }
         }
         // Video Game detection
-        elseif ( preg_match( '/\b(video game|gaming|playstation|xbox|nintendo|steam|pc game|console|fps|rpg|mmorpg|multiplayer|esports)\b/i', $text ) ) {
+        elseif ( $title_override === 'VideoGame'
+            || ( ! $title_override && preg_match( '/\b(video game|gaming|playstation|xbox|nintendo|steam|pc game|console|fps|rpg|mmorpg|multiplayer|esports)\b/i', $text ) ) ) {
             $reviewed_type = 'VideoGame';
             if ( preg_match( '/\b(playstation|ps[45]|xbox|nintendo|pc|steam)\b/i', $text, $plat ) ) {
                 $reviewed_extra['gamePlatform'] = $plat[1];
