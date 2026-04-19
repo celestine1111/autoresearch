@@ -2295,59 +2295,60 @@ final class SEOBetter {
     private function linkify_bracketed_references( string $markdown, array $pool ): string {
         if ( empty( $pool ) ) return $markdown;
 
-        // Build a lookup: lowercase title/source_name fragments → pool entry
+        // Normalize text for matching: lowercase, normalize dashes, strip trailing ellipsis
+        $norm = function( string $s ): string {
+            $s = strtolower( $s );
+            $s = str_replace( [ '—', '–', "\u{2013}", "\u{2014}" ], '-', $s );
+            $s = preg_replace( '/\s*[.\x{2026}]+$/u', '', $s ); // strip trailing ... or …
+            $s = preg_replace( '/\s+/', ' ', trim( $s ) );
+            return $s;
+        };
+
+        // Build a lookup: normalized title/source_name → pool entry
         $lookup = [];
         foreach ( $pool as $entry ) {
             $url = $entry['url'] ?? '';
             if ( empty( $url ) ) continue;
-            // Index by title words (3+ chars) and source_name
-            $title = strtolower( $entry['title'] ?? '' );
-            $source = strtolower( $entry['source_name'] ?? '' );
-            // Use full title as key
+            $title = $norm( $entry['title'] ?? '' );
+            $source = $norm( $entry['source_name'] ?? '' );
             if ( strlen( $title ) > 10 ) {
                 $lookup[ $title ] = $entry;
             }
-            // Use first 40 chars of title as key (AI often truncates)
-            if ( strlen( $title ) > 40 ) {
-                $lookup[ substr( $title, 0, 40 ) ] = $entry;
+            // First 30 chars as key (AI often truncates titles)
+            if ( strlen( $title ) > 30 ) {
+                $lookup[ substr( $title, 0, 30 ) ] = $entry;
             }
-            // Use source_name as key
+            // First 20 chars
+            if ( strlen( $title ) > 20 ) {
+                $lookup[ substr( $title, 0, 20 ) ] = $entry;
+            }
             if ( strlen( $source ) > 3 ) {
                 $lookup[ $source ] = $entry;
             }
         }
 
         // Find [bracketed text] that is NOT already a markdown link (no following (url))
-        // Pattern: [text] NOT followed by (http
         $markdown = preg_replace_callback(
             '/(?<!\!)\[([^\]]{10,120})\](?!\s*\(http)/',
-            function ( $match ) use ( $lookup ) {
+            function ( $match ) use ( $lookup, $norm ) {
                 $text = $match[1];
-                $text_lower = strtolower( $text );
+                $text_n = $norm( $text );
 
                 // Try exact match
-                if ( isset( $lookup[ $text_lower ] ) ) {
-                    $entry = $lookup[ $text_lower ];
-                    return '[' . $text . '](' . $entry['url'] . ')';
+                if ( isset( $lookup[ $text_n ] ) ) {
+                    return '[' . $text . '](' . $lookup[ $text_n ]['url'] . ')';
                 }
 
-                // Try partial match (text contains a key, or key contains text)
+                // Try partial match
                 foreach ( $lookup as $key => $entry ) {
-                    if ( strlen( $key ) > 10 && str_contains( $text_lower, $key ) ) {
+                    if ( strlen( $key ) > 8 && str_contains( $text_n, $key ) ) {
                         return '[' . $text . '](' . $entry['url'] . ')';
                     }
-                    if ( strlen( $text_lower ) > 15 && str_contains( $key, $text_lower ) ) {
+                    if ( strlen( $text_n ) > 12 && str_contains( $key, $text_n ) ) {
                         return '[' . $text . '](' . $entry['url'] . ')';
-                    }
-                    // Match if text starts with the same first 20 chars as a title
-                    if ( strlen( $key ) > 20 && strlen( $text_lower ) > 20 ) {
-                        if ( substr( $text_lower, 0, 20 ) === substr( $key, 0, 20 ) ) {
-                            return '[' . $text . '](' . $entry['url'] . ')';
-                        }
                     }
                 }
 
-                // No match — leave as-is
                 return $match[0];
             },
             $markdown
@@ -2359,27 +2360,20 @@ final class SEOBetter {
         // Removed requirement for preceding punctuation (appears after any word).
         $markdown = preg_replace_callback(
             '/\(([^()]{10,120})\)(?=[.\s,;!?\n]|$)/m',
-            function ( $match ) use ( $lookup ) {
+            function ( $match ) use ( $lookup, $norm ) {
                 $text = $match[1];
-                $text_lower = strtolower( $text );
+                $text_n = $norm( $text );
 
-                // Skip if already contains a URL or is a markdown link
+                // Skip if already contains a URL
                 if ( str_contains( $text, 'http' ) ) return $match[0];
                 if ( str_contains( $text, '](') ) return $match[0];
-                // Skip obvious non-references (short phrases, numbers, common parentheticals)
-                if ( preg_match( '/^(e\.g\.|i\.e\.|see |note:|fig\.|approx|such as|or |and )/i', $text ) ) return $match[0];
-                // Skip if it looks like a price/measurement: ($49.99), (10 min), (3 cups)
+                // Skip non-references
+                if ( preg_match( '/^(e\.g\.|i\.e\.|see |note:|fig\.|approx|such as|or |and |about )/i', $text ) ) return $match[0];
                 if ( preg_match( '/^\$\d|^\d+\s*(min|hour|cup|oz|lb|kg|g|ml|%)/i', $text ) ) return $match[0];
 
                 foreach ( $lookup as $key => $entry ) {
-                    if ( strlen( $key ) > 5 && ( str_contains( $text_lower, $key ) || str_contains( $key, $text_lower ) ) ) {
+                    if ( strlen( $key ) > 5 && ( str_contains( $text_n, $key ) || str_contains( $key, $text_n ) ) ) {
                         return '([' . $text . '](' . $entry['url'] . '))';
-                    }
-                    // Also match if the parenthetical starts with the same words as a pool title
-                    if ( strlen( $key ) > 20 && strlen( $text_lower ) > 20 ) {
-                        if ( substr( $text_lower, 0, 20 ) === substr( $key, 0, 20 ) ) {
-                            return '([' . $text . '](' . $entry['url'] . '))';
-                        }
                     }
                 }
 
