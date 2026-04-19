@@ -154,7 +154,11 @@ class Async_Generator {
                     : 'Researching recent trends + building citation pool...';
 
                 $research = Trend_Researcher::research( $keyword, $options['domain'] ?? 'general', $options['country'] ?? '' );
-                $job['results']['trends'] = $research['for_prompt'] ?? '';
+                // v1.5.137 — Strip Crossref/academic junk from research context BEFORE AI sees it.
+                // Prevents AI from writing about "cited 0 times" or academic paper titles.
+                $trends_raw = $research['for_prompt'] ?? '';
+                $trends_raw = preg_replace( '/[^\n]*(?:cited \d+ times|Crossref,?\s*\d{4}|doi\.org\/|Government Gazette|Annual Report \d{4})[^\n]*\n?/i', '', $trends_raw );
+                $job['results']['trends'] = $trends_raw;
                 $job['results']['trend_source'] = $research['source'] ?? 'unknown';
 
                 // v1.5.26 — stash the Places waterfall output so the post-generation

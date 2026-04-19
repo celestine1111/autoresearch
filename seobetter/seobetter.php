@@ -1747,7 +1747,20 @@ final class SEOBetter {
         //    content (not a code block), convert to a list item.
         $md = preg_replace( '/^[ \t]{4,}(?!```)([\w"\'(].+)$/m', '- $1', $md );
 
-        // 5. Collapse any resulting blank-line runs to max 2 newlines
+        // 5. v1.5.137 — Strip academic/Crossref junk text from AI output.
+        //    The AI sometimes writes about academic papers from Crossref data
+        //    even when DOI URLs are blocked. Remove sentences referencing:
+        //    - "cited X times" (Crossref citation counts)
+        //    - "Crossref" as a source
+        //    - "doi.org" URLs as text
+        //    - Government Gazette references
+        //    - Academic paper titles with quotation marks + "et al."
+        //    Per external-links-policy.md: doi.org and crossref.org are blocked.
+        $md = preg_replace( '/[^\n]*(?:cited \d+ times|Crossref,?\s*\d{4}|doi\.org\/|Government Gazette)[^\n]*\n?/i', '', $md );
+        // Strip broken citation markers: [text](doi.org/...) that slipped through
+        $md = preg_replace( '/\[[^\]]*\]\(https?:\/\/(?:dx\.)?doi\.org\/[^)]+\)/', '', $md );
+
+        // 6. Collapse any resulting blank-line runs to max 2 newlines
         $md = preg_replace( '/\n{3,}/', "\n\n", $md );
 
         return $md;
