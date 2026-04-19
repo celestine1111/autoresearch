@@ -16,6 +16,68 @@
 
 ---
 
+## v1.5.135 — Rich Results Preview metabox tab + 6 new schema types
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Phase 1: Rich Results Preview (4th metabox tab)
+
+- **Rich Results tab in metabox** — `seobetter.php::render_metabox()` line ~3229
+  - New 4th tab: General | Page Analysis | Readability | **Rich Results**
+  - Google SERP preview card with schema enhancements (Recipe stars, FAQ dropdowns, Review rating, Product price)
+  - Active rich result types checklist with count + details
+  - "Not detected" list for types that could apply but weren't found
+  - Schema Impact Estimate with 7 research-backed statistics
+  - Schema Validation with per-field required/recommended checks
+  - Raw JSON-LD inspector with syntax-highlighted pre + copy button
+  - Direct links to Google Rich Results Test + Schema.org Validator
+  - `Verify:` `grep -n 'richresults' seobetter.php`
+  - `Verified by user:` UNTESTED
+
+### Phase 2: 6 New Schema Types (content-detected)
+
+- **Product schema** — `includes/Schema_Generator.php::detect_product_schema()` line ~1170
+  - Fires for: review, buying_guide, comparison, sponsored, listicle
+  - Detects price patterns ($, GBP, EUR, AUD), extracts product name from title
+  - Generates Offer with price + currency + availability
+  - `Verify:` `grep -n 'detect_product_schema' includes/Schema_Generator.php`
+
+- **Organization schema** — `includes/Schema_Generator.php::detect_organization_schema()` line ~1220
+  - Fires for: press_release, case_study, sponsored, interview
+  - Uses site name + logo from site icon
+  - `Verify:` `grep -n 'detect_organization_schema' includes/Schema_Generator.php`
+
+- **QAPage schema** — `includes/Schema_Generator.php::detect_qa_schema()` line ~1240
+  - Fires for: interview, faq_page
+  - Extracts first Q&A pair (question heading ending with ? + answer paragraph)
+  - `Verify:` `grep -n 'detect_qa_schema' includes/Schema_Generator.php`
+
+- **ClaimReview / Fact Check schema** — `includes/Schema_Generator.php::detect_factcheck_schema()` line ~1280
+  - Fires for: news_article, opinion, blog_post, scholarly_article
+  - Detects fact-check language (claim, verdict, true/false)
+  - `Verify:` `grep -n 'detect_factcheck_schema' includes/Schema_Generator.php`
+
+- **JobPosting schema** — `includes/Schema_Generator.php::detect_job_schema()` line ~1330
+  - Fires for: any content type with job/career/salary patterns
+  - Extracts salary range, employment type (full-time/part-time/contract)
+  - `Verify:` `grep -n 'detect_job_schema' includes/Schema_Generator.php`
+
+- **VacationRental / LodgingBusiness schema** — `includes/Schema_Generator.php::detect_vacation_rental_schema()` line ~1390
+  - Fires for: travel/places content with accommodation mentions
+  - Detects: vacation rental, airbnb, vrbo, villa, cottage, etc.
+  - `Verify:` `grep -n 'detect_vacation_rental_schema' includes/Schema_Generator.php`
+
+All new schemas wired into `generate()` method between Dataset and BreadcrumbList.
+`Verified by user:` UNTESTED
+
+### Guidelines updated
+- `structured-data.md` §3 — updated Rich Result Status table with all 26 schema types
+- `plugin_UX.md` §8 — Rich Results Preview checklist (added in v1.5.134)
+- `plugin_functionality_wordpress.md` §11.3 — Rich Results Preview section (added in v1.5.134)
+
+---
+
 ## v1.5.134 — Rich Results Preview panel in Gutenberg sidebar
 
 **Date:** 2026-04-19

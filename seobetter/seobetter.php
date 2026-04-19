@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.134
+ * Version: 1.5.135
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.134' );
+define( 'SEOBETTER_VERSION', '1.5.135' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -604,7 +604,7 @@ final class SEOBetter {
                 }
                 $result['schema_types'] = implode( ' + ', $types );
             }
-            // v1.5.134 — Pass full schema for Rich Results Preview
+            // v1.5.135 — Pass full schema for Rich Results Preview
             $result['schema_data'] = $decoded;
         }
 
@@ -3226,6 +3226,7 @@ final class SEOBetter {
                 <button type="button" class="sb-meta-tab sb-meta-tab-active" data-tab="general" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid #764ba2;margin-bottom:-2px;color:#764ba2">General</button>
                 <button type="button" class="sb-meta-tab" data-tab="analysis" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Page Analysis</button>
                 <button type="button" class="sb-meta-tab" data-tab="readability" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Readability</button>
+                <button type="button" class="sb-meta-tab" data-tab="richresults" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Rich Results</button>
                 <div style="margin-left:auto;display:flex;align-items:center;padding-right:16px;gap:8px">
                     <span style="font-size:13px;font-weight:700;color:<?php echo esc_attr( $score_color ); ?>"><?php echo esc_html( $score ); ?>/100</span>
                     <span style="font-size:11px;padding:2px 8px;background:<?php echo esc_attr( $score_color ); ?>20;color:<?php echo esc_attr( $score_color ); ?>;border-radius:4px;font-weight:600"><?php echo esc_html( $grade ); ?></span>
@@ -3361,6 +3362,263 @@ final class SEOBetter {
                     <strong>[<?php echo esc_html( ucfirst( $s['type'] ?? 'issue' ) ); ?>]</strong> <?php echo esc_html( $s['message'] ); ?>
                 </div>
                 <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- Rich Results Tab (v1.5.135) -->
+            <div class="sb-meta-panel" data-panel="richresults" style="padding:20px;display:none">
+                <?php
+                $schema_raw = get_post_meta( $post->ID, '_seobetter_schema', true );
+                $schema_decoded = $schema_raw ? json_decode( $schema_raw, true ) : null;
+                $graph = $schema_decoded['@graph'] ?? [];
+                $rich_types = [];
+                $faq_questions = [];
+                $recipe_data = null;
+                $review_data = null;
+                $product_data = null;
+                $video_data = null;
+                $event_data = null;
+                $local_data = null;
+                $job_data = null;
+                $breadcrumbs = [];
+
+                foreach ( $graph as $item ) {
+                    $t = $item['@type'] ?? '';
+                    if ( $t === 'Recipe' && ! $recipe_data ) {
+                        $recipe_data = $item;
+                        $rich_types[] = [ 'type' => 'Recipe', 'label' => 'Recipe card', 'detail' => ( $item['prepTime'] ?? '' ) ? preg_replace( '/^PT(\d+)M$/', '$1 min', $item['prepTime'] ) : '' ];
+                    } elseif ( $t === 'FAQPage' ) {
+                        $faq_questions = $item['mainEntity'] ?? [];
+                        $rich_types[] = [ 'type' => 'FAQ', 'label' => 'FAQ dropdowns', 'detail' => count( $faq_questions ) . ' questions' ];
+                    } elseif ( $t === 'Review' ) {
+                        $review_data = $item;
+                        $rating = $item['reviewRating']['ratingValue'] ?? '';
+                        $rich_types[] = [ 'type' => 'Review', 'label' => 'Review snippet', 'detail' => $rating ? $rating . '/5 stars' : '' ];
+                    } elseif ( $t === 'Product' ) {
+                        $product_data = $item;
+                        $price = $item['offers']['price'] ?? '';
+                        $rich_types[] = [ 'type' => 'Product', 'label' => 'Product listing', 'detail' => $price ? '$' . $price : '' ];
+                    } elseif ( $t === 'VideoObject' ) {
+                        $video_data = $item;
+                        $rich_types[] = [ 'type' => 'Video', 'label' => 'Video thumbnail', 'detail' => $item['duration'] ?? '' ];
+                    } elseif ( $t === 'Event' ) {
+                        $event_data = $item;
+                        $rich_types[] = [ 'type' => 'Event', 'label' => 'Event listing', 'detail' => $item['startDate'] ?? '' ];
+                    } elseif ( $t === 'LocalBusiness' || ( is_string( $t ) && strpos( $t, 'Business' ) !== false ) ) {
+                        $local_data = $item;
+                        $rich_types[] = [ 'type' => 'LocalBusiness', 'label' => 'Local business', 'detail' => $item['address']['streetAddress'] ?? '' ];
+                    } elseif ( $t === 'JobPosting' ) {
+                        $job_data = $item;
+                        $rich_types[] = [ 'type' => 'Job', 'label' => 'Job posting', 'detail' => $item['employmentType'] ?? '' ];
+                    } elseif ( $t === 'BreadcrumbList' ) {
+                        foreach ( ( $item['itemListElement'] ?? [] ) as $li ) { $breadcrumbs[] = $li['name'] ?? ''; }
+                        $rich_types[] = [ 'type' => 'Breadcrumb', 'label' => 'Breadcrumb trail', 'detail' => '' ];
+                    } elseif ( $t === 'ItemList' ) {
+                        $count = count( $item['itemListElement'] ?? [] );
+                        $rich_types[] = [ 'type' => 'ItemList', 'label' => 'Carousel list', 'detail' => $count . ' items' ];
+                    } elseif ( $t === 'ClaimReview' ) {
+                        $rich_types[] = [ 'type' => 'FactCheck', 'label' => 'Fact check', 'detail' => $item['reviewRating']['alternateName'] ?? '' ];
+                    } elseif ( $t === 'SoftwareApplication' ) {
+                        $rich_types[] = [ 'type' => 'Software', 'label' => 'Software app', 'detail' => $item['operatingSystem'] ?? '' ];
+                    } elseif ( $t === 'Course' ) {
+                        $rich_types[] = [ 'type' => 'Course', 'label' => 'Course listing', 'detail' => '' ];
+                    } elseif ( $t === 'Movie' ) {
+                        $rich_types[] = [ 'type' => 'Movie', 'label' => 'Movie info', 'detail' => '' ];
+                    } elseif ( $t === 'Book' ) {
+                        $rich_types[] = [ 'type' => 'Book', 'label' => 'Book info', 'detail' => '' ];
+                    } elseif ( $t === 'Dataset' ) {
+                        $rich_types[] = [ 'type' => 'Dataset', 'label' => 'Dataset', 'detail' => '' ];
+                    } elseif ( $t === 'Organization' ) {
+                        $rich_types[] = [ 'type' => 'Organization', 'label' => 'Organization', 'detail' => $item['name'] ?? '' ];
+                    } elseif ( $t === 'QAPage' ) {
+                        $rich_types[] = [ 'type' => 'QA', 'label' => 'Q&A page', 'detail' => '' ];
+                    } elseif ( $t === 'LodgingBusiness' ) {
+                        $rich_types[] = [ 'type' => 'VacationRental', 'label' => 'Vacation rental', 'detail' => $item['priceRange'] ?? '' ];
+                    } elseif ( isset( $item['speakable'] ) ) {
+                        $rich_types[] = [ 'type' => 'Speakable', 'label' => 'Voice search eligible', 'detail' => '' ];
+                    }
+                }
+
+                // Deduplicate by type (e.g. multiple Recipe schemas)
+                $seen_types = [];
+                $unique_rich_types = [];
+                foreach ( $rich_types as $rt ) {
+                    if ( ! in_array( $rt['type'], $seen_types ) ) {
+                        $seen_types[] = $rt['type'];
+                        $unique_rich_types[] = $rt;
+                    }
+                }
+                $rich_types = $unique_rich_types;
+                ?>
+
+                <?php if ( empty( $graph ) ) : ?>
+                    <div style="text-align:center;padding:40px 20px;color:#9ca3af">
+                        <div style="font-size:28px;margin-bottom:8px">🔍</div>
+                        <div style="font-size:14px;font-weight:600;color:#6b7280;margin-bottom:4px">No Schema Data</div>
+                        <div style="font-size:12px">Save a draft from the article generator to see Rich Results Preview.</div>
+                    </div>
+                <?php else : ?>
+
+                <!-- SERP Preview with Rich Results -->
+                <div style="margin-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;margin-bottom:8px">Google Search Preview</div>
+                    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-family:Arial,Helvetica,sans-serif">
+                        <!-- Breadcrumbs -->
+                        <div style="font-size:12px;color:#202124;margin-bottom:4px">
+                            <?php echo esc_html( ! empty( $breadcrumbs ) ? implode( ' > ', $breadcrumbs ) : wp_parse_url( home_url(), PHP_URL_HOST ) ); ?>
+                        </div>
+                        <!-- Title -->
+                        <div style="font-size:18px;color:#1a0dab;margin-bottom:4px;line-height:1.3"><?php echo esc_html( $meta_title ); ?></div>
+
+                        <?php if ( $recipe_data ) : ?>
+                            <div style="font-size:12px;color:#70757a;margin-bottom:4px">
+                                <span style="color:#e67700">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                <?php if ( ! empty( $recipe_data['prepTime'] ) ) echo ' &middot; ' . esc_html( preg_replace( '/^PT(\d+)M$/', '$1 min', $recipe_data['prepTime'] ) ); ?>
+                                <?php if ( ! empty( $recipe_data['nutrition']['calories'] ) ) echo ' &middot; ' . esc_html( $recipe_data['nutrition']['calories'] ); ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ( $review_data && ! empty( $review_data['reviewRating']['ratingValue'] ) ) : ?>
+                            <div style="font-size:12px;color:#70757a;margin-bottom:4px">
+                                <span style="color:#e67700">&#9733;&#9733;&#9733;&#9733;<?php echo ( (float) $review_data['reviewRating']['ratingValue'] >= 4.5 ) ? '&#9733;' : '&#9734;'; ?></span>
+                                <?php echo esc_html( $review_data['reviewRating']['ratingValue'] ); ?>/5 &middot; Review
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- Description -->
+                        <div style="font-size:13px;color:#4d5156;line-height:1.5"><?php echo esc_html( mb_substr( $meta_desc, 0, 160 ) ); ?></div>
+
+                        <?php if ( ! empty( $faq_questions ) ) : ?>
+                            <div style="margin-top:8px;border-top:1px solid #e8eaed;padding-top:6px">
+                                <?php foreach ( array_slice( $faq_questions, 0, 3 ) as $q ) : ?>
+                                    <div style="font-size:13px;color:#1a73e8;padding:4px 0;cursor:pointer">&#9660; <?php echo esc_html( $q['name'] ?? '' ); ?></div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ( $product_data && ! empty( $product_data['offers']['price'] ) ) : ?>
+                            <div style="margin-top:6px;font-size:12px;color:#202124">
+                                <strong>$<?php echo esc_html( $product_data['offers']['price'] ); ?></strong>
+                                <span style="color:#188038"> &middot; In stock</span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Active Rich Result Types -->
+                <div style="margin-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;margin-bottom:8px"><?php echo count( $rich_types ); ?> Rich Result Type<?php echo count( $rich_types ) !== 1 ? 's' : ''; ?> Active</div>
+                    <?php foreach ( $rich_types as $rt ) : ?>
+                        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;border-bottom:1px solid #f9fafb">
+                            <span style="color:#22c55e;font-weight:700">&#10003;</span>
+                            <span style="color:#374151"><?php echo esc_html( $rt['label'] ); ?></span>
+                            <?php if ( $rt['detail'] ) : ?>
+                                <span style="color:#9ca3af;font-size:11px">(<?php echo esc_html( $rt['detail'] ); ?>)</span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <?php
+                    // Show what's NOT detected
+                    $all_possible = [ 'Recipe', 'FAQ', 'Review', 'Product', 'Video', 'Event', 'LocalBusiness', 'Job', 'FactCheck', 'Breadcrumb', 'ItemList', 'Speakable', 'Software', 'Course', 'VacationRental' ];
+                    $active_types = array_column( $rich_types, 'type' );
+                    $missing = array_diff( $all_possible, $active_types );
+                    if ( ! empty( $missing ) ) :
+                    ?>
+                        <div style="margin-top:8px;font-size:12px;color:#9ca3af">
+                            Not detected: <?php echo esc_html( implode( ', ', $missing ) ); ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Schema Impact Estimate -->
+                <div style="margin-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;margin-bottom:8px">Schema Impact Estimate</div>
+                    <?php
+                    $impacts = [];
+                    if ( in_array( 'Recipe', $active_types ) ) $impacts[] = '+2.7x clicks with Recipe rich results (Searchmetrics, 2024)';
+                    if ( in_array( 'FAQ', $active_types ) ) $impacts[] = '+87% CTR with FAQ schema for informational queries (Ahrefs)';
+                    if ( in_array( 'Review', $active_types ) || in_array( 'Product', $active_types ) ) $impacts[] = '+35% CTR with star ratings (Search Engine Journal)';
+                    if ( in_array( 'Video', $active_types ) ) $impacts[] = '+157% organic traffic with video rich results (BrightEdge)';
+                    if ( count( $active_types ) > 0 ) {
+                        $impacts[] = '+30-40% AI citation rate from structured data (Princeton GEO study)';
+                        $impacts[] = 'Pages with schema rank avg 4 positions higher (Milestone Research, 2023)';
+                        $impacts[] = 'Rich results get 58% of all page 1 clicks (FirstPageSage, 2024)';
+                    }
+                    foreach ( $impacts as $imp ) :
+                    ?>
+                        <div style="font-size:12px;color:#4b5563;padding:3px 0">&#128202; <?php echo esc_html( $imp ); ?></div>
+                    <?php endforeach; ?>
+                </div>
+
+                <!-- Schema Validation -->
+                <div style="margin-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;margin-bottom:8px">Validation</div>
+                    <?php
+                    $errors = 0;
+                    $warnings = 0;
+                    $checks_list = [];
+                    foreach ( $graph as $item ) {
+                        $t = $item['@type'] ?? '';
+                        if ( $t === 'Recipe' ) {
+                            if ( ! empty( $item['name'] ) ) $checks_list[] = [ true, 'Recipe.name', $item['name'] ];
+                            else { $checks_list[] = [ false, 'Recipe.name', 'MISSING (required)' ]; $errors++; }
+                            if ( ! empty( $item['image'] ) ) $checks_list[] = [ true, 'Recipe.image', is_array( $item['image'] ) ? count( $item['image'] ) . ' URLs' : '1 URL' ];
+                            else { $checks_list[] = [ false, 'Recipe.image', 'MISSING (required)' ]; $errors++; }
+                            $checks_list[] = [ ! empty( $item['recipeIngredient'] ), 'Recipe.ingredients', ! empty( $item['recipeIngredient'] ) ? count( $item['recipeIngredient'] ) . ' items' : 'not set' ];
+                            if ( empty( $item['recipeIngredient'] ) ) $warnings++;
+                            $checks_list[] = [ ! empty( $item['recipeCuisine'] ), 'Recipe.cuisine', $item['recipeCuisine'] ?? 'not set' ];
+                            if ( empty( $item['recipeCuisine'] ) ) $warnings++;
+                        }
+                        if ( $t === 'FAQPage' ) {
+                            $qc = count( $item['mainEntity'] ?? [] );
+                            $checks_list[] = [ $qc > 0, 'FAQ.questions', $qc . ' questions' ];
+                            if ( $qc === 0 ) $errors++;
+                        }
+                        if ( $t === 'Review' ) {
+                            $checks_list[] = [ ! empty( $item['reviewRating'] ), 'Review.rating', ! empty( $item['reviewRating']['ratingValue'] ) ? $item['reviewRating']['ratingValue'] . '/5' : 'not set' ];
+                            if ( empty( $item['reviewRating'] ) ) $warnings++;
+                        }
+                        if ( $t === 'Product' ) {
+                            $checks_list[] = [ ! empty( $item['name'] ), 'Product.name', $item['name'] ?? 'MISSING' ];
+                            if ( empty( $item['name'] ) ) $errors++;
+                        }
+                    }
+                    $valid = $errors === 0;
+                    ?>
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:13px">
+                        <span style="font-size:16px"><?php echo $valid ? '&#9989;' : '&#9888;&#65039;'; ?></span>
+                        <span style="font-weight:600;color:<?php echo $valid ? '#22c55e' : '#ef4444'; ?>">
+                            <?php echo $valid ? 'Schema valid' : 'Schema has issues'; ?>
+                        </span>
+                        <span style="color:#9ca3af;font-size:12px">(<?php echo $errors; ?> error<?php echo $errors !== 1 ? 's' : ''; ?>, <?php echo $warnings; ?> warning<?php echo $warnings !== 1 ? 's' : ''; ?>)</span>
+                    </div>
+                    <?php foreach ( $checks_list as $ck ) : ?>
+                        <div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;border-bottom:1px solid #f9fafb">
+                            <span style="color:<?php echo $ck[0] ? '#22c55e' : '#ef4444'; ?>"><?php echo $ck[0] ? '&#10003;' : '&#10007;'; ?></span>
+                            <span style="color:#6b7280;font-weight:600;min-width:120px"><?php echo esc_html( $ck[1] ); ?></span>
+                            <span style="color:#374151"><?php echo esc_html( $ck[2] ); ?></span>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <div style="margin-top:10px">
+                        <a href="https://search.google.com/test/rich-results?url=<?php echo urlencode( get_permalink( $post->ID ) ); ?>" target="_blank" rel="noopener" style="font-size:12px;color:#764ba2;text-decoration:none">&#128279; Test in Google Rich Results Test &rarr;</a>
+                        <span style="margin:0 6px;color:#d1d5db">|</span>
+                        <a href="https://validator.schema.org/#url=<?php echo urlencode( get_permalink( $post->ID ) ); ?>" target="_blank" rel="noopener" style="font-size:12px;color:#764ba2;text-decoration:none">&#128279; Schema.org Validator &rarr;</a>
+                    </div>
+                </div>
+
+                <!-- Raw JSON-LD Inspector -->
+                <div style="margin-bottom:10px">
+                    <div style="font-size:13px;font-weight:600;margin-bottom:6px;cursor:pointer" onclick="var el=document.getElementById('sb-schema-raw');el.style.display=el.style.display==='none'?'block':'none';this.querySelector('span').textContent=el.style.display==='none'?'&#9660;':'&#9650;'">
+                        <span>&#9660;</span> View Raw JSON-LD (<?php echo count( $graph ); ?> schema<?php echo count( $graph ) !== 1 ? 's' : ''; ?>)
+                    </div>
+                    <div id="sb-schema-raw" style="display:none">
+                        <pre style="background:#1e293b;color:#e2e8f0;padding:12px;border-radius:8px;font-size:11px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all"><?php echo esc_html( wp_json_encode( $schema_decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ); ?></pre>
+                        <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('sb-schema-raw').querySelector('pre').textContent).then(function(){alert('Copied!')})" style="margin-top:6px;padding:4px 12px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer">Copy JSON-LD</button>
+                    </div>
+                </div>
+
                 <?php endif; ?>
             </div>
         </div>

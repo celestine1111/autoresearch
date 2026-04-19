@@ -43,10 +43,26 @@
 | **Review snippet** | ACTIVE | Yes — review type |
 | **FAQPage** | RESTRICTED (gov/health only) | Yes — but no rich results for most sites |
 | **HowTo** | DEPRECATED (Sept 2023) | Yes but SHOULD NOT — no rich results |
-| **LocalBusiness** | ACTIVE | NOT YET — needed for places articles |
+| **LocalBusiness** | ACTIVE | Yes — auto-detected from addresses |
 | **ItemList** | ACTIVE | Yes — listicle type |
 | **BreadcrumbList** | ACTIVE | Yes — all types |
 | **DefinedTerm** | ACTIVE | Yes — glossary type |
+| **Product** | ACTIVE | Yes (v1.5.135) — review, buying_guide, comparison, sponsored |
+| **Organization** | ACTIVE | Yes (v1.5.135) — press_release, case_study, sponsored |
+| **QAPage** | ACTIVE | Yes (v1.5.135) — interview, faq_page |
+| **ClaimReview** | ACTIVE | Yes (v1.5.135) — news, opinion (fact check language) |
+| **JobPosting** | ACTIVE | Yes (v1.5.135) — career/HR content with salary |
+| **VacationRental/LodgingBusiness** | ACTIVE | Yes (v1.5.135) — travel/accommodation content |
+| **VideoObject** | ACTIVE | Yes — auto-detected from YouTube/Vimeo embeds |
+| **SoftwareApplication** | ACTIVE | Yes — tech/business category with app mentions |
+| **Event** | ACTIVE | Yes — auto-detected from dates + locations |
+| **Course** | ACTIVE | Yes — education/tech category |
+| **Movie** | ACTIVE | Yes — entertainment category |
+| **Book** | ACTIVE | Yes — books category |
+| **Dataset** | ACTIVE | Yes — white_paper, scholarly with data tables |
+| **ImageObject** | ACTIVE | Yes — license metadata on images |
+| **ProfilePage** | ACTIVE | Yes — interview, personal_essay |
+| **Speakable** | ACTIVE | Yes — blog, news, opinion, pillar |
 
 ---
 

@@ -190,6 +190,43 @@ class Schema_Generator {
             $schemas[] = $dataset;
         }
 
+        // v1.5.135 — New content-detected schema types
+        // Product — review/buying_guide/comparison with prices
+        $product = $this->detect_product_schema( $post, $content, $content_type, $category );
+        if ( $product ) {
+            $schemas[] = $product;
+        }
+
+        // Organization — press_release/case_study/sponsored
+        $org = $this->detect_organization_schema( $post, $content, $content_type );
+        if ( $org ) {
+            $schemas[] = $org;
+        }
+
+        // QAPage — interview/faq_page with Q&A pairs
+        $qa = $this->detect_qa_schema( $post, $content, $content_type );
+        if ( $qa ) {
+            $schemas[] = $qa;
+        }
+
+        // ClaimReview / Fact Check — news/opinion with verification language
+        $factcheck = $this->detect_factcheck_schema( $post, $content, $content_type );
+        if ( $factcheck ) {
+            $schemas[] = $factcheck;
+        }
+
+        // JobPosting — content with job listings
+        $job = $this->detect_job_schema( $post, $content, $content_type );
+        if ( $job ) {
+            $schemas[] = $job;
+        }
+
+        // VacationRental / LodgingBusiness — travel content with accommodation
+        $vacation = $this->detect_vacation_rental_schema( $post, $content, $content_type, $category );
+        if ( $vacation ) {
+            $schemas[] = $vacation;
+        }
+
         // BreadcrumbList — always
         $schemas[] = $this->generate_breadcrumb_schema( $post );
 
@@ -1161,5 +1198,254 @@ class Schema_Generator {
             'datePublished' => get_the_date( 'c', $post ),
             'license'       => 'https://creativecommons.org/licenses/by/4.0/',
         ];
+    }
+
+    // ============================================================
+    // v1.5.135 — New content-detected schema types
+    // ============================================================
+
+    /**
+     * Product schema — detected in review, buying_guide, comparison, sponsored.
+     * Only fires when content mentions specific product names with prices or ratings.
+     */
+    private function detect_product_schema( \WP_Post $post, string $content, string $content_type, string $category ): ?array {
+        if ( ! in_array( $content_type, [ 'review', 'buying_guide', 'comparison', 'sponsored', 'listicle' ], true ) ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+
+        // Must mention price or cost patterns
+        $has_price = preg_match( '/[\$\£\€\¥]\s*\d+[\d,\.]*|\d+[\d,\.]*\s*(USD|AUD|GBP|EUR|dollars|pounds)/i', $text, $price_match );
+        if ( ! $has_price ) return null;
+
+        // Extract product name from title (strip "review", "best", "top", "vs" etc.)
+        $product_name = trim( preg_replace( '/\b(review|best|top|vs\.?|versus|guide|comparison|buying|in\s+20\d{2})\b/i', '', $post->post_title ) );
+        $product_name = trim( preg_replace( '/\s+/', ' ', $product_name ) );
+        if ( strlen( $product_name ) < 3 ) $product_name = $post->post_title;
+
+        $schema = [
+            '@type'       => 'Product',
+            'name'        => $product_name,
+            'description' => wp_trim_words( $text, 30 ),
+            'url'         => get_permalink( $post->ID ),
+        ];
+
+        // Extract price
+        if ( $has_price ) {
+            $price_val = preg_replace( '/[^\d\.]/', '', $price_match[0] );
+            $schema['offers'] = [
+                '@type'         => 'Offer',
+                'price'         => $price_val,
+                'priceCurrency' => preg_match( '/\£|GBP/i', $price_match[0] ) ? 'GBP'
+                    : ( preg_match( '/\€|EUR/i', $price_match[0] ) ? 'EUR'
+                    : ( preg_match( '/AUD/i', $price_match[0] ) ? 'AUD' : 'USD' ) ),
+                'availability'  => 'https://schema.org/InStock',
+            ];
+        }
+
+        // Image
+        $thumb = get_the_post_thumbnail_url( $post->ID, 'full' );
+        if ( $thumb ) $schema['image'] = $thumb;
+
+        return $schema;
+    }
+
+    /**
+     * Organization schema — detected in press_release, case_study, sponsored.
+     * Auto-adds publisher Organization for articles that mention companies.
+     */
+    private function detect_organization_schema( \WP_Post $post, string $content, string $content_type ): ?array {
+        if ( ! in_array( $content_type, [ 'press_release', 'case_study', 'sponsored', 'interview' ], true ) ) {
+            return null;
+        }
+        return [
+            '@type' => 'Organization',
+            'name'  => get_bloginfo( 'name' ),
+            'url'   => home_url(),
+            'logo'  => [
+                '@type'  => 'ImageObject',
+                'url'    => get_site_icon_url( 512 ) ?: '',
+            ],
+        ];
+    }
+
+    /**
+     * QAPage schema — for interview and faq_page types.
+     * Single best-answer format (different from FAQPage which has multiple Q&As).
+     */
+    private function detect_qa_schema( \WP_Post $post, string $content, string $content_type ): ?array {
+        if ( ! in_array( $content_type, [ 'interview', 'faq_page' ], true ) ) {
+            return null;
+        }
+        // Find the first Q&A pair (question heading + answer paragraph)
+        if ( ! preg_match( '/<h[2-3][^>]*>(.*?\?)\s*<\/h[2-3]>\s*(?:<[^>]+>)*\s*<p[^>]*>(.*?)<\/p>/is', $content, $qa ) ) {
+            return null;
+        }
+        $question = wp_strip_all_tags( $qa[1] );
+        $answer = wp_strip_all_tags( $qa[2] );
+        if ( strlen( $answer ) < 20 ) return null;
+
+        return [
+            '@type'      => 'QAPage',
+            'mainEntity' => [
+                '@type'          => 'Question',
+                'name'           => $question,
+                'text'           => $question,
+                'answerCount'    => 1,
+                'dateCreated'    => get_the_date( 'c', $post ),
+                'acceptedAnswer' => [
+                    '@type'       => 'Answer',
+                    'text'        => $answer,
+                    'dateCreated' => get_the_date( 'c', $post ),
+                    'upvoteCount' => 0,
+                    'author'      => [
+                        '@type' => 'Person',
+                        'name'  => $this->get_author_name( $post ),
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * ClaimReview / Fact Check schema — for news and opinion articles
+     * that contain claim verification language.
+     */
+    private function detect_factcheck_schema( \WP_Post $post, string $content, string $content_type ): ?array {
+        if ( ! in_array( $content_type, [ 'news_article', 'opinion', 'blog_post', 'scholarly_article' ], true ) ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+
+        // Must contain fact-check language
+        if ( ! preg_match( '/\b(fact[- ]check|claim|verdict|rating|true|false|mostly true|mostly false|misleading|unproven)\b/i', $text ) ) {
+            return null;
+        }
+        // Must have a claim + verdict pattern
+        if ( ! preg_match( '/claim[:\s]+["\']?(.{20,150})["\']?/i', $text, $claim_match ) ) {
+            return null;
+        }
+
+        // Try to extract verdict
+        $verdict = 'Unrated';
+        if ( preg_match( '/verdict[:\s]+(.{5,50})/i', $text, $v ) ) {
+            $verdict = trim( $v[1] );
+        } elseif ( preg_match( '/\b(true|false|mostly true|mostly false|misleading|partly true|unproven)\b/i', $text, $v ) ) {
+            $verdict = ucfirst( $v[1] );
+        }
+
+        return [
+            '@type'         => 'ClaimReview',
+            'url'           => get_permalink( $post->ID ),
+            'datePublished' => get_the_date( 'c', $post ),
+            'author'        => [
+                '@type' => 'Organization',
+                'name'  => get_bloginfo( 'name' ),
+                'url'   => home_url(),
+            ],
+            'claimReviewed' => trim( $claim_match[1] ),
+            'reviewRating'  => [
+                '@type'       => 'Rating',
+                'ratingValue' => $verdict,
+                'bestRating'  => 'True',
+                'worstRating' => 'False',
+                'alternateName' => $verdict,
+            ],
+        ];
+    }
+
+    /**
+     * JobPosting schema — detected when content contains job/career listings.
+     */
+    private function detect_job_schema( \WP_Post $post, string $content, string $content_type ): ?array {
+        $text = wp_strip_all_tags( $content );
+
+        // Must have job-related patterns
+        if ( ! preg_match( '/\b(job\s*posting|career|hiring|apply\s*now|salary|compensation|full[- ]time|part[- ]time|remote\s*position)\b/i', $text ) ) {
+            return null;
+        }
+        // Must have a salary/pay mention
+        if ( ! preg_match( '/[\$\£\€]\s*[\d,]+|salary|compensation|pay\s*range/i', $text ) ) {
+            return null;
+        }
+
+        // Extract job title from first heading or title
+        $job_title = $post->post_title;
+        if ( preg_match( '/<h2[^>]*>(.*?(?:position|role|job|career|hiring).*?)<\/h2>/is', $content, $jt ) ) {
+            $job_title = wp_strip_all_tags( $jt[1] );
+        }
+
+        $schema = [
+            '@type'           => 'JobPosting',
+            'title'           => $job_title,
+            'description'     => wp_trim_words( $text, 50 ),
+            'datePosted'      => get_the_date( 'c', $post ),
+            'hiringOrganization' => [
+                '@type' => 'Organization',
+                'name'  => get_bloginfo( 'name' ),
+                'url'   => home_url(),
+            ],
+        ];
+
+        // Salary
+        if ( preg_match( '/[\$\£\€]\s*([\d,]+)(?:\s*[-–]\s*[\$\£\€]?\s*([\d,]+))?/i', $text, $sal ) ) {
+            $schema['baseSalary'] = [
+                '@type'    => 'MonetaryAmount',
+                'currency' => 'USD',
+                'value'    => [
+                    '@type'    => 'QuantitativeValue',
+                    'minValue' => (int) str_replace( ',', '', $sal[1] ),
+                    'maxValue' => ! empty( $sal[2] ) ? (int) str_replace( ',', '', $sal[2] ) : (int) str_replace( ',', '', $sal[1] ),
+                    'unitText' => 'YEAR',
+                ],
+            ];
+        }
+
+        // Employment type
+        if ( preg_match( '/\b(full[- ]time)\b/i', $text ) ) $schema['employmentType'] = 'FULL_TIME';
+        elseif ( preg_match( '/\b(part[- ]time)\b/i', $text ) ) $schema['employmentType'] = 'PART_TIME';
+        elseif ( preg_match( '/\b(contract)\b/i', $text ) ) $schema['employmentType'] = 'CONTRACTOR';
+
+        return $schema;
+    }
+
+    /**
+     * VacationRental schema — for travel/places content with accommodation.
+     */
+    private function detect_vacation_rental_schema( \WP_Post $post, string $content, string $content_type, string $category ): ?array {
+        if ( ! in_array( $category, [ 'transportation', 'general' ], true ) && $content_type !== 'listicle' && $content_type !== 'review' ) {
+            return null;
+        }
+        $text = wp_strip_all_tags( $content );
+
+        // Must mention accommodation types
+        if ( ! preg_match( '/\b(vacation\s*rental|airbnb|vrbo|holiday\s*home|beach\s*house|cabin|villa|cottage|chalet|lodge|holiday\s*let|serviced\s*apartment)\b/i', $text ) ) {
+            return null;
+        }
+
+        // Must mention price/night or booking
+        if ( ! preg_match( '/\b(per\s*night|\/night|book(?:ing)?|nightly\s*rate|from\s*[\$\£\€]\d+)\b/i', $text ) ) {
+            return null;
+        }
+
+        // Extract property name from title
+        $name = $post->post_title;
+
+        $schema = [
+            '@type'         => 'LodgingBusiness',
+            'name'          => $name,
+            'description'   => wp_trim_words( $text, 30 ),
+            'url'           => get_permalink( $post->ID ),
+        ];
+
+        $thumb = get_the_post_thumbnail_url( $post->ID, 'full' );
+        if ( $thumb ) $schema['image'] = $thumb;
+
+        // Price range
+        if ( preg_match( '/[\$\£\€]\s*(\d+)\s*(?:[-–]|to)\s*[\$\£\€]?\s*(\d+)/i', $text, $pr ) ) {
+            $schema['priceRange'] = '$' . $pr[1] . ' - $' . $pr[2];
+        }
+
+        return $schema;
     }
 }
