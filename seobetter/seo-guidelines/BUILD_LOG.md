@@ -7,12 +7,36 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-15
+> **Last updated:** 2026-04-19
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.125 — Recipe ingredient safety rule (ingredients must be identical to source)
+
+**Date:** 2026-04-19
+**Commit:** `07eedb2`
+
+### Changes
+
+- **Recipe AI prompt: ingredient safety rule** — `includes/Async_Generator.php::get_prose_template()` line ~565 + recipe_data_block line ~269
+  - AI prompt now explicitly states: "INGREDIENTS MUST BE IDENTICAL — Copy the exact ingredients and quantities from the source. Do NOT add, remove, substitute, or change any ingredient or measurement."
+  - Applies to ALL recipes (human food, pet food, any category) — not just pet recipes
+  - Wrong substitutions can cause allergic reactions, food safety issues, or harm animals
+  - What AI CAN change for uniqueness: (1) recipe NAME, (2) intro/description wording, (3) instruction phrasing (same steps, different words)
+  - What AI CANNOT change: ingredients, quantities, cooking temperatures, cooking times
+  - Both the research data injection block AND the content type template enforce this rule
+  - `Verify:` `grep -n 'INGREDIENTS MUST BE IDENTICAL' includes/Async_Generator.php`
+  - `Verified by user:` UNTESTED
+
+### Guidelines updated in this commit
+- `article_design.md` §5.11 — added INGREDIENT SAFETY RULE block
+- `plugin_functionality_wordpress.md` — updated Recipe row with v1.5.125 safety rule
+- `structured-data.md` §Recipe data sourcing — replaced old "rewrites with unique name/intro" with explicit safety rule
 
 ---
 

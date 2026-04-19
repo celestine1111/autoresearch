@@ -275,6 +275,8 @@ Auto-detected from any paragraph matching `"Quote text" - Name, Title` (short da
   - `### Instructions` — numbered list (renders as step boxes per §5.9)
   - `### Storage` — paragraph with storage notes
   - Attribution: "Inspired by [Source Name](url)" — links to the real source recipe from authority site (v1.5.123: recipes sourced via Tavily from PetMD, RSPCA, AKC etc. — never invented by AI)
+- **INGREDIENT SAFETY RULE (v1.5.125):** Ingredients and quantities MUST be copied exactly from the source recipe. AI must NOT add, remove, or substitute any ingredient or measurement. Wrong substitutions can cause allergic reactions, food safety issues, or harm animals. This applies to ALL recipes (human food, pet food, any category).
+- **What AI CAN change to make each recipe unique:** (1) Recipe NAME — creative, different from source. (2) Intro/description — rewritten in article's voice. (3) Instruction WORDING — same steps rephrased. (4) Cooking temperatures and times must stay exactly as the source states.
 - **Multiple recipes:** Each recipe gets its OWN card. Cards are separated by `---` or next H2.
 - **Stats/citations injection:** SKIPPED inside recipe cards. Stats belong in the intro section before recipes.
 - **Schema:** Each recipe card generates a separate `@type: Recipe` JSON-LD schema with `recipeIngredient`, `recipeInstructions` (HowToStep with name + text + url), `prepTime`, `cookTime`, `recipeCuisine` (from country), `keywords`, `recipeCategory`, `nutrition.calories` (if stated), `image` (array of 3 URLs for Google's 1:1, 4:3, 16:9 ratios).
