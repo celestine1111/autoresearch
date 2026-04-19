@@ -207,7 +207,8 @@ class Citation_Pool {
         $lines[] = "\nRULES for these citations:";
         $lines[] = "- Any hyperlink you output must be character-for-character identical to one of the URLs above";
         $lines[] = "- Match the citation to the claim — don't cite a random pool URL just because it's available";
-        $lines[] = "- Use each URL at most once";
+        $lines[] = "- You CAN reuse the same URL multiple times if you reference the same source in different sections";
+        $lines[] = "- Every time you mention a source by name, make it a clickable link — do NOT write plain-text source names without linking them";
         $lines[] = "- If a claim isn't supported by any URL in the pool, use a plain-text attribution instead (no link)";
         $lines[] = "- DO NOT output a References section — the plugin builds it automatically from the citations you used in the body";
         $lines[] = "- Zero hyperlinks + good plain-text attributions is a PASS. Hallucinated URLs are a FAIL.\n";
