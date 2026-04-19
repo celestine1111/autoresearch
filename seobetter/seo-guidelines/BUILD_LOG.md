@@ -16,6 +16,51 @@
 
 ---
 
+## v1.5.126 — Schema bugfixes: ghost recipe, FAQ detection, author email, recipeCuisine, JSON escaping
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Changes
+
+- **Ghost recipe schema from intro H2 fixed** — `includes/Schema_Generator.php::build_recipe()` line ~398
+  - Recipe sections now require BOTH `<ul>` (ingredients) AND `<ol>` (instructions) to qualify
+  - Previously only required either, causing intro sections with bullet lists to generate invalid Recipe schemas
+  - Also expanded skip-heading pattern to catch "Why Homemade...", "How to Store...", "Comparison Table", etc.
+  - `Verify:` `grep -n 'has_ingredients || ! has_instructions' includes/Schema_Generator.php`
+  - `Verified by user:` UNTESTED
+
+- **recipeCuisine not set — country now saved as post meta** — `seobetter.php::rest_save_draft()` line ~1296
+  - `_seobetter_country` and `_seobetter_domain` now persisted via `update_post_meta()` on save
+  - Schema_Generator reads `_seobetter_country` and maps to cuisine name (AU→Australian, etc.)
+  - `Verify:` `grep -n '_seobetter_country' seobetter.php`
+  - `Verified by user:` UNTESTED
+
+- **Author email as display_name fixed** — `includes/Schema_Generator.php::get_author_name()` line ~30
+  - New helper method checks if display_name is an email address via `is_email()`
+  - Falls back to site name if display_name is an email
+  - Used by build_article(), build_recipe(), build_review() — all 3 author references
+  - `Verify:` `grep -n 'get_author_name' includes/Schema_Generator.php`
+  - `Verified by user:` UNTESTED
+
+- **FAQ detecting non-question H2s fixed** — `includes/Schema_Generator.php::generate_faq_schema()` line ~757
+  - Now requires question mark `?` at end of heading to be detected as FAQ
+  - Previously matched any heading starting with "What/How/Why" (e.g. "Why Homemade Treats Matter")
+  - `Verify:` `grep -n 'Require a question mark' includes/Schema_Generator.php`
+  - `Verified by user:` UNTESTED
+
+- **JSON-LD quote escaping** — `includes/Schema_Generator.php::sanitize_schema_strings()` line ~200
+  - Recursive method replaces `"` with `'` in all schema string values
+  - Prevents WordPress wptexturize() from converting escaped `\"` to unescaped smart quotes in inline JSON-LD
+  - Skips @type, @context, @id, and URLs
+  - `Verify:` `grep -n 'sanitize_schema_strings' includes/Schema_Generator.php`
+  - `Verified by user:` UNTESTED
+
+### Guidelines updated in this commit
+- BUILD_LOG only (schema bugs, no guideline behavior changes)
+
+---
+
 ## v1.5.125 — Recipe ingredient safety rule (ingredients must be identical to source)
 
 **Date:** 2026-04-19

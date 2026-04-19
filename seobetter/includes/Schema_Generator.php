@@ -22,6 +22,24 @@ class Schema_Generator {
     private array $_multi_recipes = [];
 
     /**
+     * v1.5.126 — Get author name from post, with email-as-display-name fallback.
+     * Google policy: author.name must be a real name, never an email address.
+     * If display_name looks like an email, fall back to site name.
+     */
+    private function get_author_name( \WP_Post $post ): string {
+        $author = get_userdata( $post->post_author );
+        if ( $author && $author->display_name ) {
+            $name = $author->display_name;
+            // If display_name IS an email address, use site name instead
+            if ( is_email( $name ) ) {
+                return get_bloginfo( 'name' ) ?: 'Author';
+            }
+            return $name;
+        }
+        return get_bloginfo( 'name' ) ?: 'Author';
+    }
+
+    /**
      * Map SEOBetter content types to primary Schema.org @type values.
      */
     private const CONTENT_TYPE_MAP = [
@@ -180,7 +198,31 @@ class Schema_Generator {
             unset( $s['@context'] );
         }
 
+        // v1.5.126 — Sanitize all string values in schema to prevent broken JSON.
+        // WordPress wptexturize() converts escaped \" to unescaped smart quotes
+        // when JSON-LD is stored inline in post_content. Replace literal double
+        // quotes inside string values with single quotes to prevent this.
+        $schemas = $this->sanitize_schema_strings( $schemas );
+
         return $schemas;
+    }
+
+    /**
+     * Recursively replace double quotes with single quotes in all string values.
+     * Prevents wptexturize from breaking inline JSON-LD.
+     */
+    private function sanitize_schema_strings( array $data ): array {
+        foreach ( $data as $key => &$value ) {
+            if ( is_string( $value ) ) {
+                // Don't sanitize URLs or @type/@context values
+                if ( $key !== '@type' && $key !== '@context' && $key !== '@id' && ! filter_var( $value, FILTER_VALIDATE_URL ) ) {
+                    $value = str_replace( '"', "'", $value );
+                }
+            } elseif ( is_array( $value ) ) {
+                $value = $this->sanitize_schema_strings( $value );
+            }
+        }
+        return $data;
     }
 
     /**
@@ -217,7 +259,6 @@ class Schema_Generator {
      * Build a standard Article-family schema (Article, BlogPosting, NewsArticle, etc.).
      */
     private function build_article( \WP_Post $post, string $type ): array {
-        $author    = get_userdata( $post->post_author );
         $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
 
         $schema = [
@@ -229,7 +270,7 @@ class Schema_Generator {
             'dateModified'  => get_the_modified_date( 'c', $post ),
             'author'        => [
                 '@type' => 'Person',
-                'name'  => $author ? $author->display_name : get_bloginfo( 'name' ),
+                'name'  => $this->get_author_name( $post ),
             ],
             'publisher'     => [
                 '@type' => 'Organization',
@@ -327,14 +368,13 @@ class Schema_Generator {
         $content   = $post->post_content;
         $text      = wp_strip_all_tags( $content );
         $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
-        $author    = get_userdata( $post->post_author );
         $permalink = get_permalink( $post->ID );
         $keyword   = get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: '';
         $country   = get_post_meta( $post->ID, '_seobetter_country', true ) ?: '';
 
         $author_data = [
             '@type' => 'Person',
-            'name'  => $author ? $author->display_name : get_bloginfo( 'name' ),
+            'name'  => $this->get_author_name( $post ),
         ];
 
         // Map country code to cuisine name
@@ -360,15 +400,18 @@ class Schema_Generator {
                 $body = $sections[2][ $s ];
                 $body_text = wp_strip_all_tags( $body );
 
-                // Skip non-recipe sections
-                if ( preg_match( '/^(key\s*takeaway|why\s*this|quick\s*comparison|what\s*ingredient|pros|cons|faq|frequently|reference|safety|what\s*to\s*avoid)/i', $heading ) ) {
+                // v1.5.126 — Skip non-recipe sections. Expanded pattern to catch
+                // intro/context H2s that aren't actual recipes.
+                if ( preg_match( '/^(key\s*takeaway|why\s+(this|homemade|making|you)|how\s+to\s+store|quick\s*comparison|what\s*(ingredient|to\s*avoid)|pros\s*(and|&)|cons|faq|frequently|reference|safety|comparison\s*table|nutrition|benefit|matter|getting\s*started)/i', $heading ) ) {
                     continue;
                 }
 
-                // Must have either ingredients list OR instructions list to be a recipe
-                $has_ingredients = preg_match( '/<ul[^>]*>.*?<\/ul>/is', $body ) || preg_match( '/ingredient/i', $body );
-                $has_instructions = preg_match( '/<ol[^>]*>.*?<\/ol>/is', $body ) || preg_match( '/instruction|direction|step|method/i', $body );
-                if ( ! $has_ingredients && ! $has_instructions ) continue;
+                // Must have BOTH an ingredients list (<ul>) AND an instructions list (<ol>)
+                // to qualify as a recipe section. Just having one is likely a non-recipe section
+                // with a bullet list (e.g. "Why Homemade Treats Matter" with benefit bullets).
+                $has_ingredients = (bool) preg_match( '/<ul[^>]*>.*?<\/ul>/is', $body );
+                $has_instructions = (bool) preg_match( '/<ol[^>]*>.*?<\/ol>/is', $body );
+                if ( ! $has_ingredients || ! $has_instructions ) continue;
 
                 $recipe_num++;
                 $recipe = [
@@ -526,7 +569,6 @@ class Schema_Generator {
      * to avoid the required reviewRating field.
      */
     private function build_review( \WP_Post $post ): array {
-        $author    = get_userdata( $post->post_author );
         $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
         $text      = wp_strip_all_tags( $post->post_content );
 
@@ -544,7 +586,7 @@ class Schema_Generator {
             'datePublished' => get_the_date( 'c', $post ),
             'author'        => [
                 '@type' => 'Person',
-                'name'  => $author ? $author->display_name : get_bloginfo( 'name' ),
+                'name'  => $this->get_author_name( $post ),
             ],
             'itemReviewed'  => [
                 '@type' => 'Product',
@@ -712,7 +754,11 @@ class Schema_Generator {
         foreach ( $heading_matches[1] as $i => $heading ) {
             $heading_text = wp_strip_all_tags( $heading );
 
-            $is_question = preg_match( '/\?$|^(what|how|why|when|where|who|which|can|does|is|are|should|do)\b/i', $heading_text );
+            // v1.5.126 — Require a question mark to be a FAQ question.
+            // Previously matched any heading starting with "What/How/Why" etc.,
+            // which falsely detected content H2s like "Why Homemade Treats Matter"
+            // and "What Ingredients to Avoid" as FAQ questions.
+            $is_question = preg_match( '/\?\s*$/', $heading_text );
             if ( ! $is_question ) {
                 continue;
             }
