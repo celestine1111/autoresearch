@@ -263,12 +263,13 @@ class Async_Generator {
                         }
                     }
 
-                    // v1.5.128 — Extract STRUCTURED recipe data from Tavily results.
-                    // The AI does NOT write ingredients or instructions — those are
-                    // injected from the real source data in assemble_final().
-                    // The AI only writes: recipe name, intro paragraph, storage notes.
+                    // v1.5.131 — Recipe sourcing from Tavily.
+                    // Count ALL results with 200+ chars as valid sources (not gated on extraction).
+                    // Try to extract structured data as a bonus — if extraction succeeds,
+                    // give AI the parsed ingredients to copy. If not, give raw text.
                     $recipe_data_block = '';
                     $usable_recipe_count = 0;
+                    $recipe_sources = [];
                     $extracted_recipes = [];
 
                     if ( ! empty( $tavily_recipes['results'] ) ) {
@@ -276,40 +277,56 @@ class Async_Generator {
                             $raw = $recipe_result['raw_content'] ?? '';
                             if ( strlen( $raw ) < 200 ) continue;
 
-                            $parsed = self::extract_recipe_from_raw( $raw );
-                            if ( empty( $parsed['ingredients'] ) ) continue;
+                            $clean = preg_replace( '/\s+/', ' ', strip_tags( $raw ) );
+                            $source = [
+                                'title' => $recipe_result['title'] ?? 'Unknown',
+                                'url'   => $recipe_result['url'] ?? '',
+                                'text'  => mb_substr( $clean, 0, 800 ),
+                            ];
 
-                            $parsed['source_title'] = $recipe_result['title'] ?? 'Unknown';
-                            $parsed['source_url']   = $recipe_result['url'] ?? '';
-                            $extracted_recipes[] = $parsed;
+                            // Try structured extraction (bonus — not required)
+                            $parsed = self::extract_recipe_from_raw( $raw );
+                            if ( ! empty( $parsed['ingredients'] ) ) {
+                                $source['parsed'] = $parsed;
+                                $parsed['source_title'] = $source['title'];
+                                $parsed['source_url']   = $source['url'];
+                                $extracted_recipes[] = $parsed;
+                            }
+
+                            $recipe_sources[] = $source;
                         }
-                        $usable_recipe_count = count( $extracted_recipes );
+                        $usable_recipe_count = count( $recipe_sources );
 
                         if ( $usable_recipe_count > 0 ) {
                             $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources — use these as your base) ===\n";
                             $recipe_data_block .= "You have {$usable_recipe_count} real recipe source(s) below. Write EXACTLY {$usable_recipe_count} recipe(s) — one per source.\n";
-                            $recipe_data_block .= "ABSOLUTE RULE: Do NOT invent any recipe. Copy the EXACT ingredients and quantities from each source below. Do NOT add, remove, substitute, or change any ingredient or measurement.\n";
+                            $recipe_data_block .= "ABSOLUTE RULE: Do NOT invent any recipe. Use ONLY ingredients and steps from these sources. Do NOT add, remove, substitute, or change any ingredient or measurement.\n";
                             $recipe_data_block .= "What you CAN change: (1) Give each recipe a creative unique NAME. (2) Rewrite the intro in your own words. (3) Rephrase instruction wording (same steps, different phrasing). (4) Keep temperatures and times exactly as stated.\n";
                             $recipe_data_block .= "At the end of EACH recipe write: \"Inspired by [Source Name](source_url)\"\n\n";
 
-                            foreach ( $extracted_recipes as $ri => $rec ) {
+                            foreach ( $recipe_sources as $ri => $src ) {
                                 $n = $ri + 1;
-                                $recipe_data_block .= "--- Source {$n}: {$rec['source_title']} ---\n";
-                                $recipe_data_block .= "URL: {$rec['source_url']}\n";
-                                // Give AI the FULL ingredient list so it can copy them
-                                $recipe_data_block .= "INGREDIENTS (copy these EXACTLY):\n";
-                                foreach ( $rec['ingredients'] as $ing ) {
-                                    $recipe_data_block .= "  - {$ing}\n";
-                                }
-                                if ( ! empty( $rec['instructions'] ) ) {
-                                    $recipe_data_block .= "INSTRUCTIONS (rephrase wording but keep same steps):\n";
-                                    foreach ( array_slice( $rec['instructions'], 0, 10 ) as $si => $step ) {
-                                        $recipe_data_block .= "  " . ( $si + 1 ) . ". {$step}\n";
+                                $recipe_data_block .= "--- Source {$n}: {$src['title']} ---\n";
+                                $recipe_data_block .= "URL: {$src['url']}\n";
+
+                                // If we parsed structured data, show it clearly
+                                if ( ! empty( $src['parsed']['ingredients'] ) ) {
+                                    $recipe_data_block .= "INGREDIENTS (copy these EXACTLY):\n";
+                                    foreach ( $src['parsed']['ingredients'] as $ing ) {
+                                        $recipe_data_block .= "  - {$ing}\n";
                                     }
+                                    if ( ! empty( $src['parsed']['instructions'] ) ) {
+                                        $recipe_data_block .= "INSTRUCTIONS (rephrase wording but keep same steps):\n";
+                                        foreach ( array_slice( $src['parsed']['instructions'], 0, 10 ) as $si => $step ) {
+                                            $recipe_data_block .= "  " . ( $si + 1 ) . ". {$step}\n";
+                                        }
+                                    }
+                                } else {
+                                    // Fall back to raw text excerpt
+                                    $recipe_data_block .= "Content excerpt (find and copy the exact ingredients and steps from this):\n";
+                                    $recipe_data_block .= $src['text'] . "\n";
                                 }
-                                if ( ! empty( $rec['prep_time'] ) ) $recipe_data_block .= "Prep: {$rec['prep_time']} min\n";
-                                if ( ! empty( $rec['cook_time'] ) ) $recipe_data_block .= "Cook: {$rec['cook_time']} min\n";
-                                if ( ! empty( $rec['yield'] ) )     $recipe_data_block .= "Yield: {$rec['yield']}\n";
+
                                 $recipe_data_block .= "\n";
                             }
                         }
