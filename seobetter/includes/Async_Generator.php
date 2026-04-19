@@ -263,43 +263,56 @@ class Async_Generator {
                         }
                     }
 
-                    // v1.5.127 — Count usable recipe sources. Only recipes with real
-                    // source data get written. No invented recipes allowed.
+                    // v1.5.128 — Extract STRUCTURED recipe data from Tavily results.
+                    // The AI does NOT write ingredients or instructions — those are
+                    // injected from the real source data in assemble_final().
+                    // The AI only writes: recipe name, intro paragraph, storage notes.
                     $recipe_data_block = '';
                     $usable_recipe_count = 0;
+                    $extracted_recipes = [];
 
                     if ( ! empty( $tavily_recipes['results'] ) ) {
-                        $recipe_sources = [];
                         foreach ( array_slice( $tavily_recipes['results'], 0, 5 ) as $recipe_result ) {
                             $raw = $recipe_result['raw_content'] ?? '';
                             if ( strlen( $raw ) < 200 ) continue;
-                            $clean = preg_replace( '/\s+/', ' ', strip_tags( $raw ) );
-                            $recipe_sources[] = [
-                                'title' => $recipe_result['title'] ?? 'Unknown',
-                                'url'   => $recipe_result['url'] ?? '',
-                                'text'  => mb_substr( $clean, 0, 800 ),
-                            ];
+
+                            $parsed = self::extract_recipe_from_raw( $raw );
+                            if ( empty( $parsed['ingredients'] ) ) continue;
+
+                            $parsed['source_title'] = $recipe_result['title'] ?? 'Unknown';
+                            $parsed['source_url']   = $recipe_result['url'] ?? '';
+                            $extracted_recipes[] = $parsed;
                         }
-                        $usable_recipe_count = count( $recipe_sources );
+                        $usable_recipe_count = count( $extracted_recipes );
 
                         if ( $usable_recipe_count > 0 ) {
                             $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources) ===\n";
-                            $recipe_data_block .= "You have {$usable_recipe_count} real recipe source(s) below. Write EXACTLY {$usable_recipe_count} recipe(s) — one per source.\n";
-                            $recipe_data_block .= "ABSOLUTE RULE: Do NOT invent any recipe. Every recipe in the article MUST come from one of these sources. If there is only 1 source, write only 1 recipe.\n";
-                            $recipe_data_block .= "SAFETY RULE — INGREDIENTS MUST BE IDENTICAL: Copy the exact ingredients and quantities from the source. Do NOT add, remove, substitute, or change any ingredient or measurement. Wrong substitutions can cause allergic reactions, food safety issues, or harm animals.\n";
-                            $recipe_data_block .= "WHAT YOU CAN CHANGE: (1) Give each recipe a creative unique NAME different from the source. (2) Rewrite the intro/description in your own words. (3) Rephrase instruction WORDING (same steps, different phrasing). (4) Keep cooking temperatures and times exactly as the source states.\n";
+                            $recipe_data_block .= "You have {$usable_recipe_count} real recipe source(s). Write EXACTLY {$usable_recipe_count} recipe(s).\n";
+                            $recipe_data_block .= "YOU DO NOT WRITE INGREDIENTS OR INSTRUCTIONS — those are auto-injected from the real source after you write.\n";
+                            $recipe_data_block .= "For each recipe, write ONLY: (1) a creative unique H2 name, (2) a 2-3 sentence intro, (3) storage notes.\n";
+                            $recipe_data_block .= "Use these placeholders EXACTLY where the real data will be injected:\n";
+                            $recipe_data_block .= "  ### Ingredients\n  [REAL_INGREDIENTS_N]\n  ### Instructions\n  [REAL_INSTRUCTIONS_N]\n";
                             $recipe_data_block .= "At the end of EACH recipe write: \"Inspired by [Source Name](source_url)\"\n\n";
 
-                            foreach ( $recipe_sources as $ri => $src ) {
-                                $recipe_data_block .= "Source " . ( $ri + 1 ) . ": " . $src['title'] . "\n";
-                                $recipe_data_block .= "URL: " . $src['url'] . "\n";
-                                $recipe_data_block .= "Content excerpt: " . $src['text'] . "\n\n";
+                            foreach ( $extracted_recipes as $ri => $rec ) {
+                                $n = $ri + 1;
+                                $recipe_data_block .= "--- Source {$n}: {$rec['source_title']} ---\n";
+                                $recipe_data_block .= "URL: {$rec['source_url']}\n";
+                                $recipe_data_block .= "Ingredients ({$n}): " . implode( ' | ', array_slice( $rec['ingredients'], 0, 5 ) ) . ( count( $rec['ingredients'] ) > 5 ? '...' : '' ) . "\n";
+                                if ( ! empty( $rec['instructions'] ) ) {
+                                    $recipe_data_block .= "Steps ({$n}): " . count( $rec['instructions'] ) . " steps\n";
+                                }
+                                if ( ! empty( $rec['prep_time'] ) ) $recipe_data_block .= "Prep: {$rec['prep_time']} min\n";
+                                if ( ! empty( $rec['cook_time'] ) ) $recipe_data_block .= "Cook: {$rec['cook_time']} min\n";
+                                if ( ! empty( $rec['yield'] ) )     $recipe_data_block .= "Yield: {$rec['yield']}\n";
+                                $recipe_data_block .= "\n";
                             }
                         }
                     }
 
-                    // Store the count so get_prose_template can use it
-                    $job['recipe_source_count'] = $usable_recipe_count;
+                    // Store extracted data for assemble_final() injection
+                    $job['recipe_source_count']   = $usable_recipe_count;
+                    $job['extracted_recipes']      = $extracted_recipes;
 
                     if ( $recipe_data_block ) {
                         $job['results']['trends'] = ( $job['results']['trends'] ?? '' ) . $recipe_data_block;
@@ -604,13 +617,18 @@ class Async_Generator {
             . ', What Ingredients to Avoid (Safety), Pros and Cons, FAQ, References';
 
         $guidance = "RECIPE CARD FORMAT. Write EXACTLY {$count} recipe(s) — one per real source provided in the research data above. "
-            . "ABSOLUTE RULE: Every recipe MUST come from the REAL RECIPE DATA sources above. Do NOT invent any recipe. If there is 1 source, write 1 recipe. If there are 2 sources, write 2 recipes. Never add extra recipes beyond what the sources provide. "
-            . "INGREDIENT SAFETY RULE: Copy the EXACT ingredients and quantities from the source — do NOT add, remove, or substitute any ingredient or measurement. Wrong substitutions can cause allergic reactions, food safety issues, or harm animals. "
-            . "What you CAN change: (1) give each recipe a creative unique NAME, (2) rewrite the intro/description in your own words, (3) rephrase instruction WORDING (same steps, different phrasing). Keep cooking temperatures and times exactly as stated in the source. "
-            . "Each recipe MUST have: a creative unique name as the H2, then subsections: Ingredients (as a bullet list under ### Ingredients), Instructions (as a numbered list under ### Instructions), and Storage Notes. "
-            . "Include prep time, cook time, yield, AND approximate calories per serving at the top of each recipe in bold (e.g. **Prep Time:** 10 minutes | **Cook Time:** 20 minutes | **Yields:** 24 treats | **Calories:** 45 per treat). "
+            . "ABSOLUTE RULE: Every recipe MUST come from the REAL RECIPE DATA sources. Do NOT invent any recipe. "
+            . "IMPORTANT: You do NOT write ingredients or instructions — those are auto-injected from the verified source. "
+            . "For each recipe, use this EXACT structure:\n"
+            . "## Recipe N: [Your Creative Name]\n"
+            . "[2-3 sentence intro in your own words]\n\n"
+            . "### Ingredients\n[REAL_INGREDIENTS_N]\n\n"
+            . "### Instructions\n[REAL_INSTRUCTIONS_N]\n\n"
+            . "### Storage Notes\n[Write 1-2 sentences about storage]\n\n"
+            . "Inspired by [Source Name](source_url)\n\n"
+            . "Replace N with the recipe number (1, 2, 3). The [REAL_INGREDIENTS_N] and [REAL_INSTRUCTIONS_N] placeholders will be replaced with real data from the source website. "
             . "Put ALL statistics, expert quotes, and context in the intro section BEFORE the recipes - NEVER inside a recipe card. "
-            . 'At the end of EACH recipe write: "Inspired by [Source Name](source_url)" citing the original source. Every recipe MUST have this attribution line.';
+            . 'Every recipe MUST end with "Inspired by [Source Name](source_url)" using the real source name and URL from the research data.';
 
         return [
             'sections' => $sections,
@@ -1240,6 +1258,232 @@ class Async_Generator {
      * Assemble the final article result (formatting, scoring, images).
      */
     /**
+     * v1.5.128 — Extract structured recipe data from raw HTML/text content.
+     * Parses ingredients (bullet/list items with measurements), instructions
+     * (numbered steps), and timing info from Tavily's raw page content.
+     */
+    private static function extract_recipe_from_raw( string $raw ): array {
+        $result = [
+            'ingredients'  => [],
+            'instructions' => [],
+            'prep_time'    => '',
+            'cook_time'    => '',
+            'yield'        => '',
+        ];
+
+        // Strip HTML tags but keep line breaks for list detection
+        $text = preg_replace( '/<br\s*\/?>/i', "\n", $raw );
+        $text = preg_replace( '/<\/li>/i', "\n", $text );
+        $text = preg_replace( '/<\/p>/i', "\n", $text );
+        $text = strip_tags( $text );
+        $text = html_entity_decode( $text, ENT_QUOTES, 'UTF-8' );
+
+        $lines = preg_split( '/\n+/', $text );
+
+        // ── Extract ingredients ──
+        // Look for lines that contain measurements (cup, tbsp, tsp, oz, gram, etc.)
+        $in_ingredients = false;
+        $in_instructions = false;
+        $measurement_pattern = '/\b(\d[\d\/\.\s]*)\s*(cup|cups|tablespoon|tablespoons|tbsp|teaspoon|teaspoons|tsp|ounce|ounces|oz|pound|pounds|lb|lbs|gram|grams|g|kg|ml|liter|litre|can|package|pkg|slice|slices|piece|pieces|clove|cloves|pinch|handful|bunch|stick|sticks|large|medium|small)\b/i';
+
+        foreach ( $lines as $line ) {
+            $line = trim( $line );
+            if ( strlen( $line ) < 3 || strlen( $line ) > 200 ) continue;
+
+            // Detect section headers
+            $lower = strtolower( $line );
+            if ( preg_match( '/^ingredient/i', $line ) || $lower === 'ingredients' || $lower === 'ingredients:' ) {
+                $in_ingredients = true;
+                $in_instructions = false;
+                continue;
+            }
+            if ( preg_match( '/^(instruction|direction|method|step|preparation)/i', $line ) ) {
+                $in_ingredients = false;
+                $in_instructions = true;
+                continue;
+            }
+            // Stop ingredient collection at non-ingredient sections
+            if ( preg_match( '/^(nutrition|note|tip|storage|serving|description|review)/i', $line ) ) {
+                $in_ingredients = false;
+                $in_instructions = false;
+                continue;
+            }
+
+            // Collect ingredients
+            if ( $in_ingredients || preg_match( $measurement_pattern, $line ) ) {
+                // Clean bullet markers
+                $clean = preg_replace( '/^[\-\*\•\·\◦\▪]\s*/', '', $line );
+                $clean = preg_replace( '/^\d+[\.\)]\s*/', '', $clean );
+                $clean = trim( $clean );
+                if ( strlen( $clean ) > 3 && strlen( $clean ) < 150 ) {
+                    // Verify it looks like an ingredient (has a measurement or food word)
+                    if ( preg_match( $measurement_pattern, $clean ) || $in_ingredients ) {
+                        $result['ingredients'][] = $clean;
+                        if ( ! $in_ingredients ) $in_ingredients = true;
+                    }
+                }
+                continue;
+            }
+
+            // Collect instructions
+            if ( $in_instructions ) {
+                $clean = preg_replace( '/^(step\s*)?\d+[\.\):\-]\s*/i', '', $line );
+                $clean = trim( $clean );
+                if ( strlen( $clean ) > 15 ) {
+                    $result['instructions'][] = $clean;
+                }
+                continue;
+            }
+        }
+
+        // ── Fallback: if no ingredients found via sections, scan all lines ──
+        if ( empty( $result['ingredients'] ) ) {
+            foreach ( $lines as $line ) {
+                $line = trim( $line );
+                if ( strlen( $line ) < 5 || strlen( $line ) > 150 ) continue;
+                if ( preg_match( $measurement_pattern, $line ) ) {
+                    $clean = preg_replace( '/^[\-\*\•\·]\s*/', '', $line );
+                    $clean = preg_replace( '/^\d+[\.\)]\s*/', '', $clean );
+                    $clean = trim( $clean );
+                    if ( strlen( $clean ) > 3 ) {
+                        $result['ingredients'][] = $clean;
+                    }
+                }
+            }
+        }
+
+        // ── Fallback: if no instructions found, grab numbered sentences ──
+        if ( empty( $result['instructions'] ) ) {
+            foreach ( $lines as $line ) {
+                $line = trim( $line );
+                if ( preg_match( '/^(step\s*)?\d+[\.\):\-]\s*(.{20,})/i', $line, $m ) ) {
+                    $result['instructions'][] = trim( $m[2] );
+                }
+            }
+        }
+
+        // ── Extract times ──
+        $full_text = implode( ' ', $lines );
+        if ( preg_match( '/prep(?:aration)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $full_text, $m ) ) {
+            $result['prep_time'] = $m[1];
+        }
+        if ( preg_match( '/cook(?:ing)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $full_text, $m ) ) {
+            $result['cook_time'] = $m[1];
+        }
+        if ( preg_match( '/(?:yield|serve|serving|makes)[\s:]+(.{3,30})/i', $full_text, $m ) ) {
+            $result['yield'] = trim( $m[1] );
+        }
+
+        // Deduplicate ingredients
+        $result['ingredients'] = array_values( array_unique( $result['ingredients'] ) );
+
+        return $result;
+    }
+
+    /**
+     * v1.5.128 — Inject real recipe data into AI-generated article.
+     * Replaces [REAL_INGREDIENTS_N] and [REAL_INSTRUCTIONS_N] placeholders
+     * with actual extracted data from Tavily sources. Also replaces any
+     * AI-written ingredients/instructions in recipe sections with real data.
+     */
+    private static function inject_real_recipe_data( string $markdown, array $extracted_recipes ): string {
+        if ( empty( $extracted_recipes ) ) return $markdown;
+
+        // First: replace placeholders if AI used them
+        foreach ( $extracted_recipes as $i => $rec ) {
+            $n = $i + 1;
+
+            // Build real ingredients markdown
+            $ing_md = '';
+            foreach ( $rec['ingredients'] as $ing ) {
+                $ing_md .= "- {$ing}\n";
+            }
+
+            // Build real instructions markdown
+            $inst_md = '';
+            foreach ( $rec['instructions'] as $si => $step ) {
+                $inst_md .= ( $si + 1 ) . ". {$step}\n";
+            }
+
+            // Replace placeholders
+            $markdown = str_replace( "[REAL_INGREDIENTS_{$n}]", trim( $ing_md ), $markdown );
+            $markdown = str_replace( "[REAL_INSTRUCTIONS_{$n}]", trim( $inst_md ), $markdown );
+        }
+
+        // Second: even if AI didn't use placeholders and wrote its own ingredients,
+        // find recipe sections and OVERWRITE the ingredients + instructions.
+        // Split on H2 headings
+        $parts = preg_split( '/^(##\s+.+)$/m', $markdown, -1, PREG_SPLIT_DELIM_CAPTURE );
+        $recipe_index = 0;
+        $result = '';
+
+        for ( $p = 0; $p < count( $parts ); $p++ ) {
+            $part = $parts[ $p ];
+
+            // Is this an H2 heading?
+            if ( preg_match( '/^##\s+(.+)$/m', $part ) ) {
+                $body = $parts[ $p + 1 ] ?? '';
+
+                // Is this a recipe section? (has ### Ingredients AND ### Instructions)
+                $has_ing  = preg_match( '/###\s*Ingredients/i', $body );
+                $has_inst = preg_match( '/###\s*Instructions/i', $body );
+
+                if ( $has_ing && $has_inst && $recipe_index < count( $extracted_recipes ) ) {
+                    $rec = $extracted_recipes[ $recipe_index ];
+
+                    // Build replacement ingredients
+                    $real_ing = "### Ingredients\n\n";
+                    foreach ( $rec['ingredients'] as $ing ) {
+                        $real_ing .= "- {$ing}\n";
+                    }
+
+                    // Build replacement instructions
+                    $real_inst = "### Instructions\n\n";
+                    foreach ( $rec['instructions'] as $si => $step ) {
+                        $real_inst .= ( $si + 1 ) . ". {$step}\n";
+                    }
+
+                    // Replace the ingredients section
+                    $body = preg_replace(
+                        '/###\s*Ingredients\s*\n(.*?)(?=###|\z)/is',
+                        $real_ing . "\n",
+                        $body,
+                        1
+                    );
+
+                    // Replace the instructions section
+                    $body = preg_replace(
+                        '/###\s*Instructions\s*\n(.*?)(?=###|Inspired by|\z)/is',
+                        $real_inst . "\n",
+                        $body,
+                        1
+                    );
+
+                    // Add timing metadata if available and not already present
+                    if ( ! empty( $rec['prep_time'] ) && ! preg_match( '/Prep\s*Time/i', $body ) ) {
+                        $timing = "**Prep Time:** {$rec['prep_time']} minutes";
+                        if ( ! empty( $rec['cook_time'] ) ) $timing .= " | **Cook Time:** {$rec['cook_time']} minutes";
+                        if ( ! empty( $rec['yield'] ) ) $timing .= " | **Yields:** {$rec['yield']}";
+                        // Insert after the first paragraph
+                        $body = preg_replace( '/\n\n/', "\n\n{$timing}\n\n", $body, 1 );
+                    }
+
+                    $parts[ $p + 1 ] = $body;
+                    $recipe_index++;
+                }
+            }
+
+            $result .= $part;
+        }
+
+        // If we used the parts approach, use result; otherwise return markdown with placeholder replacements
+        if ( $recipe_index > 0 ) {
+            return $result;
+        }
+        return $markdown;
+    }
+
+    /**
      * v1.5.127 — Strip recipe sections that have no "Inspired by [Source](url)" attribution.
      * This is the hard safety gate: if the AI invents a recipe without a real source,
      * it gets removed from the article before the user ever sees it.
@@ -1314,11 +1558,18 @@ class Async_Generator {
             $markdown = Citation_Pool::append_references_section( $markdown, $citation_pool );
         }
 
-        // v1.5.127 — RECIPE SOURCE VALIDATION (security check).
-        // Strip any recipe section that doesn't have "Inspired by [Source](url)".
-        // This is the hard gate: even if the AI ignores the prompt and invents a
-        // recipe, it gets removed here before the article is shown to the user.
+        // v1.5.128 — RECIPE DATA INJECTION (hard enforcement).
+        // Replaces AI-written ingredients/instructions with REAL data extracted
+        // from Tavily source pages. The AI cannot fake ingredients because it
+        // doesn't write them — they come from the actual recipe website.
         $content_type = $options['content_type'] ?? '';
+        $extracted_recipes = $job['extracted_recipes'] ?? [];
+        if ( $content_type === 'recipe' && ! empty( $extracted_recipes ) ) {
+            $markdown = self::inject_real_recipe_data( $markdown, $extracted_recipes );
+        }
+
+        // v1.5.127 — RECIPE SOURCE VALIDATION (safety net).
+        // Strip any recipe section that doesn't have "Inspired by [Source](url)".
         if ( $content_type === 'recipe' ) {
             $markdown = self::strip_unsourced_recipes( $markdown );
         }

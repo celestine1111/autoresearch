@@ -16,6 +16,42 @@
 
 ---
 
+## v1.5.128 — Recipe data injection: AI cannot write ingredients/instructions
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Changes
+
+- **Recipe data extraction from Tavily sources** — `includes/Async_Generator.php::extract_recipe_from_raw()` line ~1260
+  - Parses raw HTML/text from Tavily to extract structured data: ingredients (with measurements), instructions (numbered steps), prep/cook times, yield
+  - Uses measurement pattern matching (cup, tbsp, oz, gram, etc.) and section header detection
+  - Fallback scanning if section headers not found
+  - `Verify:` `grep -n 'extract_recipe_from_raw' includes/Async_Generator.php`
+  - `Verified by user:` UNTESTED
+
+- **Real data injection into AI output** — `includes/Async_Generator.php::inject_real_recipe_data()` line ~1384
+  - After AI generates article, finds each recipe section and OVERWRITES ingredients + instructions with verified source data
+  - Works via placeholders (`[REAL_INGREDIENTS_N]`) OR by regex-replacing `### Ingredients` and `### Instructions` sections
+  - AI writes ONLY: recipe name, intro paragraph, storage notes
+  - AI CANNOT fake ingredients because it doesn't write them
+  - `Verify:` `grep -n 'inject_real_recipe_data' includes/Async_Generator.php`
+  - `Verified by user:` UNTESTED
+
+- **AI prompt updated for placeholder system** — `includes/Async_Generator.php::build_recipe_template()` line ~619
+  - AI told to use `[REAL_INGREDIENTS_N]` and `[REAL_INSTRUCTIONS_N]` placeholders
+  - Explicit: "You do NOT write ingredients or instructions — those are auto-injected"
+  - `Verify:` `grep -n 'REAL_INGREDIENTS' includes/Async_Generator.php`
+  - `Verified by user:` UNTESTED
+
+### 4-layer recipe safety enforcement (updated from 3-layer)
+1. **Layer 1 (count match):** Dynamic template — N recipes for N sources
+2. **Layer 2 (prompt):** AI told to use placeholders, not write ingredients
+3. **Layer 3 (data injection):** `inject_real_recipe_data()` overwrites AI ingredients with real source data
+4. **Layer 4 (strip gate):** `strip_unsourced_recipes()` removes any recipe without "Inspired by [Source](url)"
+
+---
+
 ## v1.5.127 — No invented recipes: 3-layer enforcement (count match + prompt + strip gate)
 
 **Date:** 2026-04-19
