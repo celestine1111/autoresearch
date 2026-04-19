@@ -355,6 +355,17 @@ class Citation_Pool {
             return false;
         }
 
+        // v1.5.137 — Block academic/DOI/data URLs that aren't useful for general articles.
+        // DOI links often 404, government gazettes are junk for most topics,
+        // and raw data API endpoints aren't reader-friendly.
+        if ( preg_match( '/^(doi\.org|dx\.doi\.org)$/i', $host ) ) {
+            return false;
+        }
+        // Block raw government data/gazette/JSON endpoints
+        if ( preg_match( '#\.(json|xml|csv|pdf)$#i', $trimmed_path ) ) {
+            return false;
+        }
+
         // No API hosts
         if ( preg_match( '/(^|\.)api\.|-api\.|\.herokuapp\.com$/i', $host ) ) {
             return false;

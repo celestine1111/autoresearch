@@ -2325,6 +2325,14 @@ final class SEOBetter {
 
             // Hard-fail rules (apply regardless of pool membership)
             //
+            // v1.5.137 — Block DOI/academic URLs (often 404, not reader-friendly)
+            if ( preg_match( '/^(doi\.org|dx\.doi\.org)$/i', $host ) ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+            // v1.5.137 — Block raw data file URLs (.json, .xml, .csv)
+            if ( preg_match( '#\.(json|xml|csv)$#i', $path ?? '' ) ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
             // Anchor text must not be an API / dataset / tool name
             if ( preg_match( '/\b(api|endpoint|dataset|sdk|webhook)\b/i', $text ) ) {
                 return [ 'keep' => false, 'text' => $text ];

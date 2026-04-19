@@ -3792,6 +3792,8 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
     'Free Dictionary API', 'Numbers API', 'Zoo Animals API', 'Dog Facts API',
     'Cat Facts API', 'MeowFacts', 'Fruityvice', 'Quotable', 'Open Trivia Database',
     'SWAPI (Star Wars API)', 'PokéAPI', 'Currency Exchange API', 'ADS-B Exchange',
+    // v1.5.137 — Academic/data sources: stats used for context but DOI/gazette URLs excluded
+    'Crossref', 'OpenAlex', 'Europe PMC',
   ]);
 
   if (categoryData?.length) {
@@ -3800,8 +3802,11 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
       if (!d) return;
       if (d.stats?.length) {
         d.stats.forEach(s => {
-          // v1.5.105 — Filter out irrelevant filler stats (holidays, trivia, random facts)
+          // v1.5.137 — Filter out irrelevant filler stats (holidays, trivia, random facts, academic junk)
           if (/holiday|Nager\.Date|Numbers? API|Number fact|Quotable|Open Trivia|Zoo Animals API|Dog Facts|Cat Facts|MeowFacts/i.test(s.text)) return;
+          // v1.5.137 — Filter Crossref academic citation counts ("cited X times") and DOI references.
+          // These leak into Key Takeaways as "has been cited 0 times" — useless for readers.
+          if (/cited \d+ times|doi\.org|Crossref,|Government Gazette|Annual Report \d{4}/i.test(s.text)) return;
           // Always add topic-relevant stats — AI uses them for writing context
           stats.push(s.text);
           // Only add authoritative sources to the references section
@@ -3976,7 +3981,8 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
     keyword,
     stats: stats.slice(0, 20),
     quotes: quotes.slice(0, 5),
-    sources: uniqueSources.slice(0, 25),
+    // v1.5.137 — Filter DOI/academic/data URLs from sources (break reader experience)
+    sources: uniqueSources.filter(s => !/(^|\.)doi\.org|\.json$|\.xml$|\.csv$|Government Gazette/i.test(s.url || '')).slice(0, 25),
     trends: trending.slice(0, 12),
     for_prompt: p.join('\n'),
     domain: domain || 'general',

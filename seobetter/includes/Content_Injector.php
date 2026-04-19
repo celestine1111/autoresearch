@@ -2583,6 +2583,8 @@ Return ONLY the Markdown table, nothing else.";
                         if ( preg_match( '/Quotable,|\(Quotable\)/i', $s ) ) return false;
                         // Skip zoo/animal fun facts that are filler
                         if ( preg_match( '/Zoo Animals API|Dog Facts API|Cat Facts|MeowFacts/i', $s ) ) return false;
+                        // v1.5.137 — Skip Crossref academic citation counts and government gazette junk
+                        if ( preg_match( '/cited \d+ times|doi\.org|Crossref,|Government Gazette|Annual Report \d{4}/i', $s ) ) return false;
                         // Must be at least 20 chars (not just a number)
                         if ( strlen( trim( $s ) ) < 20 ) return false;
                         return true;
