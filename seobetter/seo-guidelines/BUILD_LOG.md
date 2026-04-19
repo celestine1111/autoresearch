@@ -39,6 +39,30 @@
 
 ---
 
+## v1.5.137 — Regenerate schema URLs on publish (draft ?p=ID → pretty permalink)
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Changes
+
+- **Schema URL refresh on publish** — `seobetter.php::update_schema_on_publish()` line ~358
+  - Hooks into `transition_post_status` — fires when post goes from draft/pending → publish
+  - Regenerates Schema_Generator output with correct `get_permalink()` (pretty URL)
+  - Updates both `_seobetter_schema` post meta AND inline JSON-LD in `post_content`
+  - Replaces existing `<!-- wp:html -->` schema block via regex, or appends if missing
+  - Uses `$wpdb->update()` directly to avoid re-triggering `save_post` hooks
+  - `Verify:` `grep -n 'update_schema_on_publish' seobetter.php`
+  - `Verified by user:` UNTESTED
+
+### Root cause
+Schema was generated at `rest_save_draft()` time when post was a draft. `get_permalink()` returns `?p=ID` for drafts. On publish, WordPress assigns a pretty permalink but the inline schema in `post_content` was never updated. Now `transition_post_status` hook regenerates it.
+
+### Guidelines updated
+- `structured-data.md` §8 — should note schema is refreshed on publish
+
+---
+
 ## v1.5.135 — Rich Results Preview metabox tab + 6 new schema types
 
 **Date:** 2026-04-19

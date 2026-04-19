@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.136
+ * Version: 1.5.137
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.136' );
+define( 'SEOBETTER_VERSION', '1.5.137' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -65,6 +65,9 @@ final class SEOBetter {
         add_action( 'wp_head', [ $this, 'output_social_meta' ], 2 );
         add_action( 'wp_head', [ $this, 'output_ai_meta' ], 3 );
         add_action( 'save_post', [ $this, 'analyze_on_save' ], 20, 2 );
+        // v1.5.137 — Regenerate inline schema when post is published.
+        // Draft schema uses ?p=ID URLs; publishing gives pretty permalinks.
+        add_action( 'transition_post_status', [ $this, 'update_schema_on_publish' ], 20, 3 );
         add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
 
         // llms.txt support
@@ -349,6 +352,70 @@ final class SEOBetter {
         }
     }
 
+    /**
+     * v1.5.137 — Regenerate schema with correct permalink when post is published.
+     * Schema generated at draft time uses ?p=ID URLs. On publish, WordPress
+     * assigns a pretty permalink (e.g. /best-dog-food-australia/). This hook
+     * regenerates the JSON-LD in both post_content and post meta so all URLs
+     * (mainEntityOfPage, BreadcrumbList items, Recipe step URLs) use the
+     * canonical pretty permalink.
+     */
+    public function update_schema_on_publish( string $new_status, string $old_status, \WP_Post $post ): void {
+        // Only fire when transitioning TO publish (from draft, pending, future, etc.)
+        if ( $new_status !== 'publish' || $old_status === 'publish' ) {
+            return;
+        }
+        // Only for posts/pages with SEOBetter schema
+        $existing_schema = get_post_meta( $post->ID, '_seobetter_schema', true );
+        if ( empty( $existing_schema ) ) {
+            return;
+        }
+
+        try {
+            // Regenerate schema — now get_permalink() returns the pretty URL
+            $schema_gen = new SEOBetter\Schema_Generator();
+            $schema_array = $schema_gen->generate( $post );
+
+            if ( ! empty( $schema_array ) ) {
+                $schema_ld = [ '@context' => 'https://schema.org', '@graph' => $schema_array ];
+
+                // Update post meta
+                update_post_meta( $post->ID, '_seobetter_schema', wp_json_encode( $schema_ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) );
+
+                // Update inline schema in post_content
+                $content = $post->post_content;
+                $schema_json = wp_json_encode( $schema_ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
+
+                // Replace existing inline JSON-LD block
+                $new_block = "<!-- wp:html -->\n<script type=\"application/ld+json\">\n{$schema_json}\n</script>\n<!-- /wp:html -->";
+
+                if ( preg_match( '/<!-- wp:html -->\s*<script[^>]*application\/ld\+json[^>]*>.*?<\/script>\s*<!-- \/wp:html -->/s', $content ) ) {
+                    // Replace existing schema block
+                    $content = preg_replace(
+                        '/<!-- wp:html -->\s*<script[^>]*application\/ld\+json[^>]*>.*?<\/script>\s*<!-- \/wp:html -->/s',
+                        $new_block,
+                        $content,
+                        1
+                    );
+                } else {
+                    // Append if no existing block found
+                    $content .= "\n\n" . $new_block;
+                }
+
+                // Use wpdb directly to avoid triggering save_post again
+                global $wpdb;
+                $wpdb->update(
+                    $wpdb->posts,
+                    [ 'post_content' => $content ],
+                    [ 'ID' => $post->ID ]
+                );
+                clean_post_cache( $post->ID );
+            }
+        } catch ( \Throwable $e ) {
+            // Non-fatal — don't break publishing
+        }
+    }
+
     public function register_rest_routes(): void {
         register_rest_route( 'seobetter/v1', '/analyze/(?P<post_id>\d+)', [
             'methods'             => 'GET',
@@ -604,7 +671,7 @@ final class SEOBetter {
                 }
                 $result['schema_types'] = implode( ' + ', $types );
             }
-            // v1.5.136 — Pass full schema for Rich Results Preview
+            // v1.5.137 — Pass full schema for Rich Results Preview
             $result['schema_data'] = $decoded;
         }
 
@@ -3365,7 +3432,7 @@ final class SEOBetter {
                 <?php endif; ?>
             </div>
 
-            <!-- Rich Results Tab (v1.5.136) -->
+            <!-- Rich Results Tab (v1.5.137) -->
             <div class="sb-meta-panel" data-panel="richresults" style="padding:20px;display:none">
                 <?php
                 $schema_raw = get_post_meta( $post->ID, '_seobetter_schema', true );
