@@ -356,6 +356,7 @@ class Content_Formatter {
         $accent = $options['accent_color'] ?? '#764ba2';
         $para_count = 0;
         $more_inserted = false;
+        $in_recipe_card = false; // v1.5.120 — track recipe card wrapper state
         // v1.5.20 — cap stat callouts at 3 per article so percent-heavy
         // articles don't end up with 8+ visual-noise stat cards
         $stat_count = 0;
@@ -381,12 +382,29 @@ class Content_Formatter {
                         }
                     }
 
-                    // v1.5.18 — apply accent color to H2 headings via Gutenberg
-                    // style attribute JSON + inline style. This makes saved
-                    // drafts visually match the preview's colored H2s while
-                    // keeping headings editable as native wp:heading blocks.
-                    // H1/H3+ render plain (H1 is the post title, H3+ are
-                    // sub-sub-sections that should inherit theme defaults).
+                    // v1.5.120 — Recipe Card styling. When a H2 matches a recipe
+                    // pattern ("Recipe 1:", numbered recipe like "1. Peanut Butter"),
+                    // wrap the section in a styled card with rounded border + background.
+                    $is_recipe_heading = (bool) preg_match( '/^(?:Recipe\s*\d|#?\d+[\.\)]\s*[A-Z])/i', $text );
+                    // Also detect creative recipe names that follow the pattern from the template
+                    if ( ! $is_recipe_heading && ( $options['content_type'] ?? '' ) === 'recipe' ) {
+                        // In recipe articles, any H2 that's NOT a generic section is likely a recipe
+                        $is_recipe_heading = ! preg_match( '/^(key\s*takeaway|why\s*this|quick\s*comparison|what\s*ingredient|pros|cons|faq|frequently|reference|safety)/i', $text );
+                    }
+
+                    // Close previous recipe card if open
+                    if ( ! empty( $in_recipe_card ) && $level === 2 ) {
+                        $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                        $in_recipe_card = false;
+                    }
+
+                    // Open new recipe card
+                    if ( $is_recipe_heading && $level === 2 ) {
+                        $output[] = "<!-- wp:html -->\n<div style=\"background:linear-gradient(135deg, #fefce8 0%, #fef3c7 100%) !important;border:2px solid #fde68a;border-radius:16px;padding:1.5em 2em;margin:1.5em 0;box-shadow:0 2px 8px rgba(251,191,36,0.1)\">\n<!-- /wp:html -->";
+                        $in_recipe_card = true;
+                    }
+
+                    // v1.5.18 — apply accent color to H2 headings
                     if ( $level === 2 ) {
                         $hex = $accent;
                         $output[] = '<!-- wp:heading {"style":{"color":{"text":"' . esc_attr( $hex ) . '"}}} -->';
@@ -750,6 +768,11 @@ class Content_Formatter {
                     $output[] = '<!-- /wp:image -->';
                     break;
             }
+        }
+
+        // v1.5.120 — Close any open recipe card at end of content
+        if ( $in_recipe_card ) {
+            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
         }
 
         return implode( "\n\n", $output );

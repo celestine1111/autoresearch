@@ -187,7 +187,8 @@ class Content_Injector {
                 $preceding = substr( $body, 0, $offset );
                 if ( preg_match_all( '/\n##\s+([^\n]+)/', $preceding, $h2_matches ) ) {
                     $last_h2 = end( $h2_matches[1] );
-                    if ( preg_match( '/key\s*takeaway|faq|frequently|reference|pros|cons/i', $last_h2 ) ) continue;
+                    // v1.5.120 — Also skip recipe card sections (ingredients, instructions, storage)
+                    if ( preg_match( '/key\s*takeaway|faq|frequently|reference|pros|cons|recipe\s*\d|ingredient|instruction|direction|storage|method/i', $last_h2 ) ) continue;
                 }
                 $candidates[] = [ 'text' => $sentence, 'offset' => $offset ];
                 if ( count( $candidates ) >= $max_links ) break;
@@ -416,7 +417,7 @@ class Content_Injector {
         $injected = $content;
         $quote_idx = 0;
         $injected = preg_replace_callback(
-            '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]*\n){2,3})/',
+            '/(## (?!Key Takeaway|FAQ|Frequently|Reference|Recipe \d|Ingredient|Instruction|Direction|Storage|Method)[^\n]+\n(?:[^\n]*\n){2,3})/',
             function( $m ) use ( &$quote_idx, $quotes ) {
                 if ( $quote_idx >= count( $quotes ) ) return $m[0];
                 $q = $quotes[ $quote_idx ];
@@ -458,7 +459,7 @@ class Content_Injector {
                 $injected = substr( $content, 0, $m[1][1] ) . "\n" . $table . "\n" . substr( $content, $m[1][1] );
             } else {
                 $injected = preg_replace(
-                    '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,3})/',
+                    '/(## (?!Key Takeaway|FAQ|Frequently|Reference|Recipe \d|Ingredient|Instruction|Direction|Storage|Method)[^\n]+\n(?:[^\n]+\n){1,3})/',
                     '$1' . "\n" . $table . "\n\n",
                     $content,
                     1
@@ -517,7 +518,7 @@ Return ONLY the Markdown table, nothing else.";
 
         // Find first content H2 (skip Key Takeaways) and insert table after its first paragraph
         $injected = preg_replace(
-            '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,3})/',
+            '/(## (?!Key Takeaway|FAQ|Frequently|Reference|Recipe \d|Ingredient|Instruction|Direction|Storage|Method)[^\n]+\n(?:[^\n]+\n){1,3})/',
             '$1' . "\n" . $table . "\n\n",
             $content,
             1 // Only first match
@@ -605,7 +606,7 @@ Return ONLY the Markdown table, nothing else.";
 
         // Insert after first content H2's first paragraph
         $injected = preg_replace(
-            '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,2})/',
+            '/(## (?!Key Takeaway|FAQ|Frequently|Reference|Recipe \d|Ingredient|Instruction|Direction|Storage|Method)[^\n]+\n(?:[^\n]+\n){1,2})/',
             '$1' . $stat_block,
             $content,
             1
@@ -2593,7 +2594,7 @@ Return ONLY the Markdown table, nothing else.";
                     }
                     $stat_block .= "\n";
                     $injected = preg_replace(
-                        '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,2})/',
+                        '/(## (?!Key Takeaway|FAQ|Frequently|Reference|Recipe \d|Ingredient|Instruction|Direction|Storage|Method)[^\n]+\n(?:[^\n]+\n){1,2})/',
                         '$1' . $stat_block,
                         $markdown,
                         1
@@ -2643,7 +2644,7 @@ Return ONLY the Markdown table, nothing else.";
                         $steps_run[] = 'Comparison Table: ' . $table_rows_count . ' rows × ' . $table_cols . ' columns (real data from Sonar)';
                     } else {
                         $injected = preg_replace(
-                            '/(## (?!Key Takeaway|FAQ|Frequently|Reference)[^\n]+\n(?:[^\n]+\n){1,3})/',
+                            '/(## (?!Key Takeaway|FAQ|Frequently|Reference|Recipe \d|Ingredient|Instruction|Direction|Storage|Method)[^\n]+\n(?:[^\n]+\n){1,3})/',
                             '$1' . "\n" . $table . "\n\n",
                             $markdown,
                             1
