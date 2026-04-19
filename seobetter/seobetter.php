@@ -2353,20 +2353,33 @@ final class SEOBetter {
             $markdown
         );
 
-        // Also handle (Source Name) parenthetical references that match pool entries
-        // Only match short parentheticals (5-60 chars) at end of sentences
+        // Also handle (Source Name) parenthetical references that match pool entries.
+        // These appear mid-sentence or at end: "...appeal (Source Name)." or "...data (Source, 2026)."
+        // Increased length limit to 120 chars (AI writes long source titles).
+        // Removed requirement for preceding punctuation (appears after any word).
         $markdown = preg_replace_callback(
-            '/(?<=[.!?])\s*\(([^()]{5,60})\)(?=\s|$|\n)/m',
+            '/\(([^()]{10,120})\)(?=[.\s,;!?\n]|$)/m',
             function ( $match ) use ( $lookup ) {
                 $text = $match[1];
                 $text_lower = strtolower( $text );
 
-                // Skip if already contains a URL
+                // Skip if already contains a URL or is a markdown link
                 if ( str_contains( $text, 'http' ) ) return $match[0];
+                if ( str_contains( $text, '](') ) return $match[0];
+                // Skip obvious non-references (short phrases, numbers, common parentheticals)
+                if ( preg_match( '/^(e\.g\.|i\.e\.|see |note:|fig\.|approx|such as|or |and )/i', $text ) ) return $match[0];
+                // Skip if it looks like a price/measurement: ($49.99), (10 min), (3 cups)
+                if ( preg_match( '/^\$\d|^\d+\s*(min|hour|cup|oz|lb|kg|g|ml|%)/i', $text ) ) return $match[0];
 
                 foreach ( $lookup as $key => $entry ) {
                     if ( strlen( $key ) > 5 && ( str_contains( $text_lower, $key ) || str_contains( $key, $text_lower ) ) ) {
-                        return ' ([' . $text . '](' . $entry['url'] . '))';
+                        return '([' . $text . '](' . $entry['url'] . '))';
+                    }
+                    // Also match if the parenthetical starts with the same words as a pool title
+                    if ( strlen( $key ) > 20 && strlen( $text_lower ) > 20 ) {
+                        if ( substr( $text_lower, 0, 20 ) === substr( $key, 0, 20 ) ) {
+                            return '([' . $text . '](' . $entry['url'] . '))';
+                        }
                     }
                 }
 
