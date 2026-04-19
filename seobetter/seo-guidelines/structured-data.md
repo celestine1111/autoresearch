@@ -64,22 +64,58 @@
   - `author.url` — author page or social profile
 - `publisher` — Organization with name and url
 
-### Recipe
-**Required:** `name`, `image`
-**Recommended:**
-- `author` (Person/Organization)
-- `datePublished` (ISO 8601)
-- `description` (text summary)
-- `recipeIngredient` (array of ingredient strings)
-- `recipeInstructions` (array of HowToStep with `text`)
-- `recipeCategory` (e.g., "Pet Treats", "Dessert" — NOT hardcoded)
-- `recipeCuisine` (e.g., "Australian" — NOT hardcoded)
-- `prepTime`, `cookTime`, `totalTime` (ISO 8601 duration — ONLY if extractable from content)
-- `recipeYield` (ONLY if stated in content)
-- `keywords` (comma-separated)
-- `nutrition.calories` (ONLY if stated, requires recipeYield)
+### Recipe (v1.5.121 — Google-exact format)
 
-**BANNED:** Hardcoded times/yields. If the content doesn't state prep/cook time, OMIT the field.
+**Required:** `name`, `image`
+
+**Implemented fields (all extracted from content, never hardcoded):**
+
+| Field | Source | Example |
+|---|---|---|
+| `name` | H2 heading of each recipe section | "Crunchy PB Pup Biscuits" |
+| `image` | Featured image (1st recipe) or section `<img>` (others) | Array of URLs |
+| `author` | WordPress user display_name, fallback to site name | `{"@type":"Person","name":"Ben"}` |
+| `datePublished` | Post publish date (ISO 8601) | "2026-04-19" |
+| `description` | First 25 words of recipe section text | "Easy 3-ingredient treats..." |
+| `recipeCuisine` | Mapped from country setting (40+ countries) | AU→"Australian", FR→"French" |
+| `recipeCategory` | Extracted from content ("treat", "snack", "meal") | "Treat" |
+| `keywords` | Focus keyword from article | "homemade dog treats" |
+| `prepTime` | Regex: "Prep Time: X minutes" | "PT10M" |
+| `cookTime` | Regex: "Cook Time: X minutes" | "PT20M" |
+| `totalTime` | Regex: "Total Time: X minutes" | "PT30M" |
+| `recipeYield` | Regex: "Yields: X treats/servings" | "24 treats" |
+| `recipeIngredient` | `<ul>` list items in recipe section | ["2 cups flour", "1 egg"] |
+| `recipeInstructions` | `<ol>` items with `name` + `text` + `url` per step | HowToStep array |
+
+**Multi-recipe support:** Articles with 3+ recipe H2 sections generate SEPARATE Recipe schemas per recipe, plus an ItemList carousel schema. Google shows each recipe as a swipeable card.
+
+**BANNED:** Hardcoded times/yields/ratings/cuisine. If the content doesn't state a value, the field is OMITTED.
+
+**Country → Cuisine mapping (40+ countries):**
+AU→Australian, US→American, GB→British, FR→French, IT→Italian, JP→Japanese, IN→Indian, MX→Mexican, TH→Thai, CN→Chinese, KR→Korean, ES→Spanish, DE→German, BR→Brazilian, GR→Greek, TR→Turkish, VN→Vietnamese, IE→Irish, NZ→New Zealand
+
+**Google's exact JSON-LD format (what we generate):**
+```json
+{
+  "@type": "Recipe",
+  "name": "Crunchy PB Pup Biscuits",
+  "image": ["https://example.com/photo.jpg"],
+  "author": {"@type": "Person", "name": "Ben"},
+  "datePublished": "2026-04-19",
+  "description": "Easy 3-ingredient peanut butter dog treats...",
+  "recipeCuisine": "Australian",
+  "prepTime": "PT10M",
+  "cookTime": "PT20M",
+  "recipeYield": "24 treats",
+  "recipeCategory": "Treat",
+  "keywords": "homemade dog treats",
+  "recipeIngredient": ["2 cups wholemeal flour", "1/2 cup peanut butter", "2 eggs"],
+  "recipeInstructions": [
+    {"@type": "HowToStep", "name": "Preheat oven", "text": "Preheat oven to 180C (350F).", "url": "https://example.com/recipe#step1-1"},
+    {"@type": "HowToStep", "name": "Mix ingredients", "text": "Mix flour and peanut butter until crumbly.", "url": "https://example.com/recipe#step1-2"}
+  ]
+}
+```
 
 ### Review
 **Required:** `author`, `itemReviewed`, `itemReviewed.name`, `reviewRating`

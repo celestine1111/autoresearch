@@ -260,7 +260,27 @@ Auto-detected from any paragraph matching `"Quote text" - Name, Title` (short da
 - Trigger regex (Unicode-aware): `^["\x{201C}]([^"\x{201D}]{20,})["\x{201D}]\s*[\x{2014}\x{2013}\-]\s*([A-Z][a-zA-Z\s.\']+?)(?:,\s*(.+?))?[.\s]*$`
 - Source: `Content_Formatter.php::format_hybrid()` paragraph branch — Expert quote
 
-### 5.11 Definition Box (`v1.5.14+`)
+### 5.11 Recipe Card (`v1.5.120+`)
+
+Auto-detected when content_type is `recipe` and H2 heading is NOT a generic section (Key Takeaways, FAQ, Pros/Cons, References, Safety). Each recipe section gets wrapped in a styled card.
+
+- **Background:** Warm gradient `linear-gradient(135deg, #fefce8 0%, #fef3c7 100%)` (light amber)
+- **Border:** `2px solid #fde68a` (amber), `border-radius: 16px`
+- **Padding:** `1.5em 2em`
+- **Shadow:** `0 2px 8px rgba(251,191,36,0.1)` (subtle amber glow)
+- **Content structure inside card:**
+  - H2: Recipe name (creative, unique — e.g. "Crunchy PB Pup Biscuits")
+  - Bold metadata: `**Prep Time:** 10 min | **Cook Time:** 20 min | **Yields:** 24 treats`
+  - `### Ingredients` — bullet list (renders as amber ingredients box per §5.8)
+  - `### Instructions` — numbered list (renders as step boxes per §5.9)
+  - `### Storage` — paragraph with storage notes
+  - Attribution: "Adapted from [Source Name](url)"
+- **Multiple recipes:** Each recipe gets its OWN card. Cards are separated by `---` or next H2.
+- **Stats/citations injection:** SKIPPED inside recipe cards. Stats belong in the intro section before recipes.
+- **Schema:** Each recipe card generates a separate `@type: Recipe` JSON-LD schema with `recipeIngredient`, `recipeInstructions` (HowToStep with name + text + url), `prepTime`, `cookTime`, `recipeCuisine` (from country), `keywords`, `recipeCategory`.
+- **Source:** `Content_Formatter.php::format_hybrid()` heading branch — Recipe card detection
+
+### 5.12 Definition Box (`v1.5.14+`)
 Auto-detected from paragraphs starting with `**Term**:` (i.e. raw markdown `**Term**: explanation`).
 - Layout: term in accent color + semibold, separator middot, explanation in body color
 - Background: light gray (`#f8fafc`), 1px border (`#e2e8f0`), border-radius 8px

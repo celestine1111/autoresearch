@@ -80,11 +80,44 @@ Selected by the user's **Category** dropdown. All run in parallel with 6s timeou
 
 ### 1.4 Country-Specific APIs (80+ countries)
 
-Selected by the user's **Country & Language** dropdown. The country selection affects THREE things (v1.5.115+):
+Selected by the user's **Country & Language** dropdown. The country selection affects FIVE things (v1.5.121+):
 
 1. **Research APIs** — country-specific data sources (see below)
 2. **Authority domains** — Tavily quote search restricted to country-relevant credible sources (see authority-domains.md)
 3. **AI writing prompts** — TARGET COUNTRY instruction injected into BOTH outline generation AND section writing prompts. Tells the AI to use local brands, regulations, pricing (local currency), terminology, and cultural references. Prevents US-centric defaults when user selects Australia, UK, etc.
+4. **Recipe schema `recipeCuisine`** — mapped from country code (AU→"Australian", FR→"French", JP→"Japanese", etc. — 40+ countries). Ensures Google Recipe rich results show the correct cuisine.
+5. **Article language** — the Language dropdown sets the `LANGUAGE` instruction in the system prompt. ALL content (headings, paragraphs, FAQ, Key Takeaways, recipe ingredients/instructions) must be in the selected language.
+
+### 1.4.1 How Country & Language Settings Flow Through Article Generation (v1.5.121)
+
+```
+User selects: Country = AU, Language = English
+    ↓
+Form values stored in _seobetterDraft:
+    draft.country = "AU"
+    draft.domain = "animals" (category)
+    ↓
+Generation:
+    Async_Generator receives country → injects TARGET COUNTRY: Australia
+    into outline prompt + every section prompt
+    AI writes with Australian brands, AUD, local terminology
+    ↓
+Optimization (Optimize All):
+    Content_Injector receives country + domain
+    → authority domains for AU + animals = rspca.org.au, apvma.gov.au, etc.
+    → Tavily search restricted to these authority domains
+    → quotes from Australian sources, not US defaults
+    ↓
+Save:
+    Schema_Generator receives country from _seobetter_country post meta
+    → Recipe: recipeCuisine = "Australian"
+    → All schemas use Australian date format, author display_name
+    ↓
+Published article:
+    Content: Australian brands, AUD pricing, local references
+    Schema: recipeCuisine: "Australian", author from WP profile
+    Citations: from rspca.org.au, abc.net.au, etc.
+```
 
 Each country can have:
 - **CKAN portal** — government open data search (most countries)
@@ -311,7 +344,7 @@ Each content type has: required sections, writing guidance, schema type, shared 
 | News Article | NewsArticle | Lede → Details → Background → Closing |
 | FAQ Page | FAQPage | Intro → Q&A Pairs |
 | Ultimate Guide | Article | TOC → Chapters → Summary → Resources |
-| Recipe | Recipe | Story → Tips → Ingredients → Steps → Notes |
+| Recipe | Recipe × N + ItemList | Key Takeaways → Why This Matters → Comparison Table → Recipe 1 Card → Recipe 2 Card → Recipe 3 Card → Safety → Pros/Cons → FAQ |
 | Case Study | Article | Summary → Challenge → Solution → Results |
 | Interview | Article | Intro → Bio → Q&A → Closing |
 | Tech Article | TechArticle | Build → Prerequisites → Walkthrough → Testing |
