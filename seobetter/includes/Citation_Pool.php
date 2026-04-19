@@ -81,15 +81,17 @@ class Citation_Pool {
             }
         }
 
-        // v1.5.81 — merge Sonar citations from the Vercel backend.
-        // These are high-quality URLs from Perplexity's live web search,
-        // available for ALL users regardless of their AI provider.
+        // v1.5.137 — Serper/Firecrawl citations from the Vercel backend.
+        // These are Google search results for the exact keyword — already topically
+        // relevant by definition. Marked with _serper_bypass so the topical filter
+        // below skips them (Google already did the relevance filtering).
         foreach ( $sonar_citations as $sc ) {
             if ( ! is_array( $sc ) || empty( $sc['url'] ) ) continue;
             $candidates[] = [
-                'url'         => $sc['url'],
-                'title'       => $sc['title'] ?? '',
-                'source_name' => $sc['source_name'] ?? wp_parse_url( $sc['url'], PHP_URL_HOST ),
+                'url'            => $sc['url'],
+                'title'          => $sc['title'] ?? '',
+                'source_name'    => $sc['source_name'] ?? wp_parse_url( $sc['url'], PHP_URL_HOST ),
+                '_serper_bypass' => true,
             ];
         }
 
@@ -149,7 +151,13 @@ class Citation_Pool {
             // v1.5.62 — topical relevance. Title OR URL slug must contain
             // at least one content token from the keyword. Skips when the
             // keyword has no usable tokens (e.g. pure stopwords).
-            if ( ! empty( $key_tokens ) ) {
+            // v1.5.137 — Skip for Serper/Firecrawl citations (_serper_bypass).
+            // Google searched for the exact keyword, so results are inherently
+            // relevant. The filter was stripping ALL citations for abstract
+            // keywords like "why ai wont replace teachers" where the tokens
+            // (wont, replace, teachers) don't appear in citation titles.
+            $bypass = ! empty( $c['_serper_bypass'] );
+            if ( ! $bypass && ! empty( $key_tokens ) ) {
                 $title_lower = strtolower( $c['title'] ?? '' );
                 $slug_lower  = strtolower( wp_parse_url( $url, PHP_URL_PATH ) ?? '' );
                 $haystack    = $title_lower . ' ' . $slug_lower;
