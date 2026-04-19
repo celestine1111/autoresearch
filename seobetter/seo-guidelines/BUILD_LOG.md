@@ -16,6 +16,46 @@
 
 ---
 
+## v1.5.127 — No invented recipes: 3-layer enforcement (count match + prompt + strip gate)
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Changes
+
+- **Dynamic recipe count from real sources** — `includes/Async_Generator.php::build_recipe_template()` line ~575
+  - Recipe template now builds dynamically: N recipes = N Tavily sources
+  - If 1 source found → article has 1 recipe. If 0 → informational article (no recipe cards)
+  - Template explicitly tells AI: "Write EXACTLY N recipe(s). Do NOT invent any recipe."
+  - `Verify:` `grep -n 'build_recipe_template' includes/Async_Generator.php`
+  - `Verified by user:` UNTESTED
+
+- **Post-generation recipe strip gate** — `includes/Async_Generator.php::strip_unsourced_recipes()` line ~1245
+  - Runs on assembled markdown BEFORE formatting and before user sees the article
+  - Splits article on H2 headings, identifies recipe sections (has Ingredients + Instructions)
+  - Strips any recipe section that lacks `Inspired by [Source](url)` with a real URL
+  - This is the hard safety gate — even if AI ignores the prompt, unsourced recipes are removed
+  - `Verify:` `grep -n 'strip_unsourced_recipes' includes/Async_Generator.php`
+  - `Verified by user:` UNTESTED
+
+- **Source count passed through generation pipeline** — `includes/Async_Generator.php` lines ~301, ~346, ~716, ~885
+  - `$job['recipe_source_count']` set during Tavily search step
+  - Passed via `$options['recipe_source_count']` to outline and section generation
+  - Both `generate_outline()` and `generate_section()` use the count for template
+  - `Verify:` `grep -n 'recipe_source_count' includes/Async_Generator.php`
+  - `Verified by user:` UNTESTED
+
+### Three-layer recipe safety enforcement
+1. **Layer 1 (count match):** Dynamic template writes N recipes for N sources
+2. **Layer 2 (prompt enforcement):** "ABSOLUTE RULE: Do NOT invent any recipe"
+3. **Layer 3 (post-generation strip):** `strip_unsourced_recipes()` removes any recipe without "Inspired by [Source](url)"
+
+### Guidelines updated in this commit
+- `article_design.md` §5.11 — added NO INVENTED RECIPES block with 3-layer explanation
+- `structured-data.md` — added 3-layer enforcement note
+
+---
+
 ## v1.5.126 — Schema bugfixes: ghost recipe, FAQ detection, author email, recipeCuisine, JSON escaping
 
 **Date:** 2026-04-19

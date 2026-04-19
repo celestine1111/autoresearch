@@ -263,21 +263,45 @@ class Async_Generator {
                         }
                     }
 
+                    // v1.5.127 — Count usable recipe sources. Only recipes with real
+                    // source data get written. No invented recipes allowed.
                     $recipe_data_block = '';
+                    $usable_recipe_count = 0;
+
                     if ( ! empty( $tavily_recipes['results'] ) ) {
-                        $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources — use these as your base) ===\n";
-                        $recipe_data_block .= "IMPORTANT: Base your recipes on these REAL ingredients and steps.\n";
-                        $recipe_data_block .= "SAFETY RULE — INGREDIENTS MUST BE IDENTICAL: Copy the exact ingredients and quantities from the source. Do NOT add, remove, substitute, or change any ingredient or measurement. Wrong substitutions can cause allergic reactions, food safety issues, or harm animals.\n";
-                        $recipe_data_block .= "WHAT YOU CAN CHANGE: (1) Give each recipe a creative unique NAME different from the source. (2) Rewrite the intro/description in your own words. (3) Rephrase instruction WORDING (same steps, different phrasing). (4) Keep cooking temperatures and times exactly as the source states.\n";
-                        $recipe_data_block .= "At the end of each recipe write: \"Inspired by [Source Name](source_url)\"\n\n";
-                        foreach ( array_slice( $tavily_recipes['results'], 0, 3 ) as $ri => $recipe_result ) {
+                        $recipe_sources = [];
+                        foreach ( array_slice( $tavily_recipes['results'], 0, 5 ) as $recipe_result ) {
                             $raw = $recipe_result['raw_content'] ?? '';
                             if ( strlen( $raw ) < 200 ) continue;
                             $clean = preg_replace( '/\s+/', ' ', strip_tags( $raw ) );
-                            $recipe_data_block .= "Source " . ( $ri + 1 ) . ": " . ( $recipe_result['title'] ?? 'Unknown' ) . "\n";
-                            $recipe_data_block .= "URL: " . ( $recipe_result['url'] ?? '' ) . "\n";
-                            $recipe_data_block .= "Content excerpt: " . mb_substr( $clean, 0, 800 ) . "\n\n";
+                            $recipe_sources[] = [
+                                'title' => $recipe_result['title'] ?? 'Unknown',
+                                'url'   => $recipe_result['url'] ?? '',
+                                'text'  => mb_substr( $clean, 0, 800 ),
+                            ];
                         }
+                        $usable_recipe_count = count( $recipe_sources );
+
+                        if ( $usable_recipe_count > 0 ) {
+                            $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources) ===\n";
+                            $recipe_data_block .= "You have {$usable_recipe_count} real recipe source(s) below. Write EXACTLY {$usable_recipe_count} recipe(s) — one per source.\n";
+                            $recipe_data_block .= "ABSOLUTE RULE: Do NOT invent any recipe. Every recipe in the article MUST come from one of these sources. If there is only 1 source, write only 1 recipe.\n";
+                            $recipe_data_block .= "SAFETY RULE — INGREDIENTS MUST BE IDENTICAL: Copy the exact ingredients and quantities from the source. Do NOT add, remove, substitute, or change any ingredient or measurement. Wrong substitutions can cause allergic reactions, food safety issues, or harm animals.\n";
+                            $recipe_data_block .= "WHAT YOU CAN CHANGE: (1) Give each recipe a creative unique NAME different from the source. (2) Rewrite the intro/description in your own words. (3) Rephrase instruction WORDING (same steps, different phrasing). (4) Keep cooking temperatures and times exactly as the source states.\n";
+                            $recipe_data_block .= "At the end of EACH recipe write: \"Inspired by [Source Name](source_url)\"\n\n";
+
+                            foreach ( $recipe_sources as $ri => $src ) {
+                                $recipe_data_block .= "Source " . ( $ri + 1 ) . ": " . $src['title'] . "\n";
+                                $recipe_data_block .= "URL: " . $src['url'] . "\n";
+                                $recipe_data_block .= "Content excerpt: " . $src['text'] . "\n\n";
+                            }
+                        }
+                    }
+
+                    // Store the count so get_prose_template can use it
+                    $job['recipe_source_count'] = $usable_recipe_count;
+
+                    if ( $recipe_data_block ) {
                         $job['results']['trends'] = ( $job['results']['trends'] ?? '' ) . $recipe_data_block;
                     }
                 }
@@ -315,6 +339,10 @@ class Async_Generator {
 
             } elseif ( $step === 'outline' ) {
                 $step_label = 'Creating article outline...';
+                // v1.5.127 — Pass recipe source count to outline so template matches sources
+                if ( isset( $job['recipe_source_count'] ) ) {
+                    $options['recipe_source_count'] = $job['recipe_source_count'];
+                }
                 $outline = self::generate_outline( $keyword, $options, $secondary, $lsi );
                 if ( ! $outline['success'] ) {
                     return self::step_error( $job, $job_id, $step_index, $outline['error'] ?? 'Outline generation failed.' );
@@ -548,7 +576,50 @@ class Async_Generator {
      * Get prose template sections for a content type.
      * Returns section structure guidance for the outline and section generation.
      */
-    private static function get_prose_template( string $content_type ): array {
+    /**
+     * v1.5.127 — Build recipe template dynamically based on available sources.
+     * The number of recipes matches the number of real sources from Tavily.
+     * If 0 sources found, the article becomes informational (no recipe cards).
+     */
+    private static function build_recipe_template( int $source_count ): array {
+        // Clamp to 1-5 recipes
+        $count = max( 0, min( 5, $source_count ) );
+
+        if ( $count === 0 ) {
+            // No recipe sources found — write informational article instead
+            return [
+                'sections' => 'Key Takeaways, Why This Matters (stats and context), What to Look For in Good Recipes, Where to Find Trusted Recipes Online, What Ingredients to Avoid (Safety), Pros and Cons, FAQ, References',
+                'guidance' => 'IMPORTANT: No verified recipe data was found from trusted sources. Do NOT invent any recipes. Instead, write an informational guide about this topic: what to look for in good recipes, safety tips, where to find trusted recipes online (link to well-known recipe sites), and general guidance. Focus on education and safety rather than providing specific recipes without verified sources.',
+                'schema'   => 'Article',
+            ];
+        }
+
+        // Build section list dynamically
+        $recipe_sections = [];
+        for ( $i = 1; $i <= $count; $i++ ) {
+            $recipe_sections[] = "Recipe {$i}: [Creative Name] (with Ingredients + Instructions + Storage subsections)";
+        }
+        $sections = 'Key Takeaways, Why This Matters (stats and context - NOT inside recipes), Quick Comparison Table, '
+            . implode( ', ', $recipe_sections )
+            . ', What Ingredients to Avoid (Safety), Pros and Cons, FAQ, References';
+
+        $guidance = "RECIPE CARD FORMAT. Write EXACTLY {$count} recipe(s) — one per real source provided in the research data above. "
+            . "ABSOLUTE RULE: Every recipe MUST come from the REAL RECIPE DATA sources above. Do NOT invent any recipe. If there is 1 source, write 1 recipe. If there are 2 sources, write 2 recipes. Never add extra recipes beyond what the sources provide. "
+            . "INGREDIENT SAFETY RULE: Copy the EXACT ingredients and quantities from the source — do NOT add, remove, or substitute any ingredient or measurement. Wrong substitutions can cause allergic reactions, food safety issues, or harm animals. "
+            . "What you CAN change: (1) give each recipe a creative unique NAME, (2) rewrite the intro/description in your own words, (3) rephrase instruction WORDING (same steps, different phrasing). Keep cooking temperatures and times exactly as stated in the source. "
+            . "Each recipe MUST have: a creative unique name as the H2, then subsections: Ingredients (as a bullet list under ### Ingredients), Instructions (as a numbered list under ### Instructions), and Storage Notes. "
+            . "Include prep time, cook time, yield, AND approximate calories per serving at the top of each recipe in bold (e.g. **Prep Time:** 10 minutes | **Cook Time:** 20 minutes | **Yields:** 24 treats | **Calories:** 45 per treat). "
+            . "Put ALL statistics, expert quotes, and context in the intro section BEFORE the recipes - NEVER inside a recipe card. "
+            . 'At the end of EACH recipe write: "Inspired by [Source Name](source_url)" citing the original source. Every recipe MUST have this attribution line.';
+
+        return [
+            'sections' => $sections,
+            'guidance' => $guidance,
+            'schema'   => 'Recipe',
+        ];
+    }
+
+    private static function get_prose_template( string $content_type, int $recipe_source_count = 3 ): array {
         $templates = [
             'blog_post' => ['sections' => 'Key Takeaways, 3-5 topic sections with H2 headings, Pros and Cons, FAQ, References', 'guidance' => 'Conversational blog entry. Grab attention with an opening hook. Personal voice allowed. Include a Pros and Cons section. End with a call to action.', 'schema' => 'BlogPosting'],
             'news_article' => ['sections' => 'Key Takeaways, Lede (who/what/when/where/why), Supporting Details, Background Context, What Happens Next, FAQ, References', 'guidance' => 'Inverted pyramid: most important facts first. Neutral third person. Attribute every claim. Short paragraphs.', 'schema' => 'NewsArticle'],
@@ -562,7 +633,7 @@ class Async_Generator {
             'case_study' => ['sections' => 'Key Takeaways, Executive Summary, The Challenge, The Solution, Results and Metrics, Client Quote, FAQ, References', 'guidance' => 'Customer success story. Lead with the metric. Problem-solution-result structure. Include specific numbers. End with a direct quote from the client.', 'schema' => 'Article'],
             'interview' => ['sections' => 'Key Takeaways, Introduction (why this person), Short Bio, Q&A Pairs (5-10 questions), Closing Thoughts, References', 'guidance' => 'Q&A format. Questions should be bold H3 headings. Answers should feel natural and conversational. Include follow-up questions.', 'schema' => 'Article'],
             'faq_page' => ['sections' => 'Topic Introduction, 10-15 Question and Answer Pairs, References', 'guidance' => 'Collection of Q&A pairs. Questions phrased exactly as users search. Direct answers in the first sentence. Vary answer lengths.', 'schema' => 'FAQPage'],
-            'recipe' => ['sections' => 'Key Takeaways, Why This Matters (stats and context - NOT inside recipes), Quick Comparison Table, Recipe 1: [Creative Name] (with Ingredients + Instructions + Storage subsections), Recipe 2: [Creative Name] (same structure), Recipe 3: [Creative Name] (same structure), What Ingredients to Avoid (Safety), Pros and Cons, FAQ, References', 'guidance' => 'RECIPE CARD FORMAT. Write 3 distinct recipes on this topic. CRITICAL: If REAL RECIPE DATA is provided in the research data above, you MUST base your recipes on those real ingredients and steps — do NOT invent recipes from scratch. INGREDIENT SAFETY RULE: Copy the EXACT ingredients and quantities from the source — do NOT add, remove, or substitute any ingredient or measurement. Wrong substitutions can cause allergic reactions, food safety issues, or harm animals. What you CAN change: (1) give each recipe a creative unique NAME, (2) rewrite the intro/description in your own words, (3) rephrase instruction WORDING (same steps, different phrasing). Keep cooking temperatures and times exactly as stated in the source. Each recipe MUST have: a creative unique name as the H2, then subsections: Ingredients (as a bullet list under ### Ingredients), Instructions (as a numbered list under ### Instructions), and Storage Notes. Include prep time, cook time, yield, AND approximate calories per serving at the top of each recipe in bold (e.g. **Prep Time:** 10 minutes | **Cook Time:** 20 minutes | **Yields:** 24 treats | **Calories:** 45 per treat). Put ALL statistics, expert quotes, and context in the intro section BEFORE the recipes - NEVER inside a recipe card. At the end of each recipe write: "Inspired by [Source Name](source_url)" citing the original source.', 'schema' => 'Recipe'],
+            'recipe' => self::build_recipe_template( $recipe_source_count ),
             'tech_article' => ['sections' => 'Key Takeaways, What You Will Build, Prerequisites, Setup, Code Walkthrough (with code blocks), Testing and Verification, Recap and Further Reading, FAQ, References', 'guidance' => 'Developer tutorial. Include code blocks. Explain each step. List prerequisites clearly. Test everything you recommend.', 'schema' => 'TechArticle'],
             'white_paper' => ['sections' => 'Executive Summary, Introduction and Problem Statement, Methodology, Findings, Analysis, Recommendations, Conclusion, References', 'guidance' => 'Authoritative research report. Data-driven. Formal tone. Every claim backed by evidence. Include charts/tables for data visualization.', 'schema' => 'Report'],
             'scholarly_article' => ['sections' => 'Abstract, Introduction, Literature Review, Methods, Results, Discussion, Conclusion, References', 'guidance' => 'Academic paper format. Formal academic tone. Cite all claims. Include methodology details. Discuss limitations.', 'schema' => 'ScholarlyArticle'],
@@ -641,7 +712,8 @@ class Async_Generator {
         if ( $country_name ) {
             $country_context = "\nTARGET COUNTRY: {$country_name}. Write for a {$country_name} audience. Use local brands, regulations, pricing (local currency), terminology, and cultural references specific to {$country_name}. Do NOT default to US examples, US brands, US regulations, or US pricing unless the keyword specifically mentions the US.";
         }
-        $prose = self::get_prose_template( $content_type );
+        $recipe_count = $options['recipe_source_count'] ?? 3;
+        $prose = self::get_prose_template( $content_type, $recipe_count );
 
         $year = wp_date( 'Y' );
         $min_kw_headings = max( 2, round( $content_sections * 0.5 ) );
@@ -809,7 +881,8 @@ class Async_Generator {
         $intent_guidance = self::get_intent_guidance( $intent );
         $tone_guidance = self::get_tone_guidance( $tone );
         $content_type = $options['content_type'] ?? 'blog_post';
-        $prose = self::get_prose_template( $content_type );
+        $recipe_count = $options['recipe_source_count'] ?? 3;
+        $prose = self::get_prose_template( $content_type, $recipe_count );
         $kw_context = "\nCONTENT TYPE: {$content_type}. {$prose['guidance']}";
         $kw_context .= "\n{$intent_guidance}";
         $kw_context .= "\n{$tone_guidance}";
@@ -1166,6 +1239,60 @@ class Async_Generator {
     /**
      * Assemble the final article result (formatting, scoring, images).
      */
+    /**
+     * v1.5.127 — Strip recipe sections that have no "Inspired by [Source](url)" attribution.
+     * This is the hard safety gate: if the AI invents a recipe without a real source,
+     * it gets removed from the article before the user ever sees it.
+     *
+     * Works by splitting the markdown on H2 headings, checking each recipe section
+     * for the "Inspired by" pattern with a real URL, and only keeping sourced recipes.
+     */
+    private static function strip_unsourced_recipes( string $markdown ): string {
+        // Split on H2 headings: ## Heading or # Heading
+        $parts = preg_split( '/^(##?\s+.+)$/m', $markdown, -1, PREG_SPLIT_DELIM_CAPTURE );
+
+        $result = '';
+        $stripped_count = 0;
+
+        for ( $i = 0; $i < count( $parts ); $i++ ) {
+            $part = $parts[ $i ];
+
+            // Check if this is an H2 heading that looks like a recipe
+            if ( preg_match( '/^##?\s+(.+)$/m', $part, $heading_match ) ) {
+                $heading = $heading_match[1];
+                $body = $parts[ $i + 1 ] ?? '';
+
+                // Is this a recipe section? (has "Recipe" in name, or has Ingredients + Instructions)
+                $is_recipe = preg_match( '/^recipe\s*\d|^recipe:/i', trim( $heading ) )
+                    || ( preg_match( '/###\s*ingredients/i', $body ) && preg_match( '/###\s*instructions/i', $body ) );
+
+                if ( $is_recipe ) {
+                    // Check for "Inspired by [Source](url)" with a real URL
+                    $has_source = preg_match( '/Inspired by\s*\[([^\]]+)\]\(https?:\/\/[^)]+\)/', $body );
+
+                    if ( ! $has_source ) {
+                        // Strip this recipe — skip heading and body
+                        $stripped_count++;
+                        $i++; // Skip the body part too
+                        continue;
+                    }
+                }
+
+                // Keep this section
+                $result .= $part;
+            } else {
+                $result .= $part;
+            }
+        }
+
+        if ( $stripped_count > 0 ) {
+            // Add a note about stripped recipes
+            error_log( "SEOBetter: Stripped {$stripped_count} unsourced recipe(s) from article" );
+        }
+
+        return $result;
+    }
+
     private static function assemble_final( array $job ): array {
         $keyword = $job['keyword'];
         $options = $job['options'];
@@ -1185,6 +1312,15 @@ class Async_Generator {
         $citation_pool = $job['results']['citation_pool'] ?? [];
         if ( ! empty( $citation_pool ) ) {
             $markdown = Citation_Pool::append_references_section( $markdown, $citation_pool );
+        }
+
+        // v1.5.127 — RECIPE SOURCE VALIDATION (security check).
+        // Strip any recipe section that doesn't have "Inspired by [Source](url)".
+        // This is the hard gate: even if the AI ignores the prompt and invents a
+        // recipe, it gets removed here before the article is shown to the user.
+        $content_type = $options['content_type'] ?? '';
+        if ( $content_type === 'recipe' ) {
+            $markdown = self::strip_unsourced_recipes( $markdown );
         }
 
         // v1.5.90 — Strip hallucinated attributed quotes BEFORE formatting.

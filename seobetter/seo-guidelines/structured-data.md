@@ -105,6 +105,7 @@
 - **INGREDIENT SAFETY RULE (v1.5.125):** Ingredients and quantities MUST be copied exactly from the source recipe. AI must NOT add, remove, or substitute any ingredient or measurement. Wrong substitutions can cause allergic reactions, food safety issues, or harm animals. This applies to ALL recipes — human food, pet food, any category.
 - **What AI changes to make each recipe unique:** (1) Recipe NAME — creative, different from source. (2) Intro/description — rewritten in article's voice. (3) Instruction WORDING — same steps, rephrased. (4) Cooking temperatures and times stay exactly as the source states.
 - Each recipe ends with: "Inspired by [Source Name](url)"
+- **NO INVENTED RECIPES (v1.5.127):** Three-layer enforcement — (1) recipe count matches source count, (2) AI prompt forbids inventing, (3) `strip_unsourced_recipes()` hard-strips any recipe without "Inspired by [Source](url)". If 0 sources found, article becomes informational (no recipe cards).
 
 **How it works for ANY country/language:**
 - Japanese user: keyword "手作り犬のおやつ" → searches cookpad.com (JP) → finds Japanese recipes → AI writes in Japanese
