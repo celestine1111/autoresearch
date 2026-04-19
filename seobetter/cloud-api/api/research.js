@@ -192,10 +192,24 @@ export default async function handler(req, res) {
     const allCatEntries = [...catEntries, ...countryEntries];
     const catPromises = allCatEntries.map(e => e.promise);
 
-    const [coreResults, catResults] = await Promise.all([
-      Promise.all(freeSearches),
-      Promise.all(catPromises),
+    // v1.5.136 — Use allSettled so one crashing source can't kill the whole endpoint.
+    // Previously Promise.all — any single API returning HTML instead of JSON would
+    // crash everything, causing 0 citations/quotes/stats in every article.
+    const [coreSettled, catSettled] = await Promise.all([
+      Promise.allSettled(freeSearches),
+      Promise.allSettled(catPromises),
     ]);
+
+    const coreResults = coreSettled.map(r => r.status === 'fulfilled' ? r.value : null);
+    const catResults = catSettled.map(r => r.status === 'fulfilled' ? r.value : null);
+
+    // Log which sources failed
+    coreSettled.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        const names = ['reddit','hn','wiki','trends','tavily','ddg','bluesky','mastodon','devto','lemmy','places','sonar'];
+        console.error(`Source ${names[i] || i} failed:`, r.reason?.message || r.reason);
+      }
+    });
 
     const [redditData, hnData, wikiData, trendsData, tavilyData, ddgData, blueskyData, mastodonData, devtoData, lemmyData, placesData, sonarResearchData, ...extraCore] = coreResults;
     const braveData = brave_key ? extraCore[0] : null;

@@ -679,9 +679,10 @@ class Schema_Generator {
         elseif ( preg_match( '/\d+\s+[A-Z][a-z]+\s+(St|Rd|Ave|Blvd|Dr|Street|Road|Avenue|Drive)\b/i', $text ) ) {
             $reviewed_type = 'LocalBusiness';
         }
-        // Course / Education
+        // Course / Education — requires education category OR specific course platform names
+        // (NOT just "training" or "class" which appear in many non-education articles like dog breeding)
         elseif ( in_array( $category, [ 'education' ], true )
-            || preg_match( '/\b(course|class|training|bootcamp|certification|udemy|coursera|skillshare|masterclass)\b/i', $text ) ) {
+            || preg_match( '/\b(udemy|coursera|skillshare|masterclass|bootcamp|online course|certification program|learning path)\b/i', $text ) ) {
             $reviewed_type = 'Course';
             if ( preg_match( '/\b(?:by|from|offered by|provider)\s+([A-Z][a-zA-Z\s]{3,30})\b/', $text, $prov ) ) {
                 $reviewed_extra['provider'] = [ '@type' => 'Organization', 'name' => trim( $prov[1] ) ];
