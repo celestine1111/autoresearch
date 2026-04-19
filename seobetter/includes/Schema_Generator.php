@@ -18,6 +18,9 @@ namespace SEOBetter;
  */
 class Schema_Generator {
 
+    /** @var array Multi-recipe storage for build_recipe() → generate() */
+    private array $_multi_recipes = [];
+
     /**
      * Map SEOBetter content types to primary Schema.org @type values.
      */
@@ -77,6 +80,13 @@ class Schema_Generator {
         $primary = $this->generate_primary_schema( $post, $content_type );
         if ( $primary ) {
             $schemas[] = $primary;
+        }
+
+        // v1.5.121 — Add additional recipes (if build_recipe found multiple)
+        if ( ! empty( $this->_multi_recipes ) && count( $this->_multi_recipes ) > 1 ) {
+            foreach ( array_slice( $this->_multi_recipes, 1 ) as $extra_recipe ) {
+                $schemas[] = $extra_recipe;
+            }
         }
 
         // ---- Secondary schemas ----
@@ -306,54 +316,168 @@ class Schema_Generator {
     }
 
     /**
-     * Build Recipe schema — uses ordered-list instructions and any ingredient-like lists.
-     */
-    /**
-     * v1.5.116 — Recipe schema rewritten for Google compliance.
-     * - REMOVED hardcoded prepTime/cookTime/totalTime/recipeYield (policy violation)
-     * - REMOVED hardcoded recipeCategory/recipeCuisine
-     * - Ingredients: now extracts ALL list items under an "Ingredients" heading,
-     *   not just items matching measurement unit regex (missed pet food ingredients)
-     * - Times: only included if extractable from content text
-     * - Required by Google: name + image only. Everything else is recommended.
+     * v1.5.121 — Full Google-compliant Recipe schema matching their exact example.
+     * Supports MULTIPLE recipes per article (each gets its own Recipe schema).
+     * Extracts all fields Google recommends: name, image, author, description,
+     * recipeCuisine, prepTime, cookTime, totalTime, keywords, recipeYield,
+     * recipeCategory, recipeIngredient, recipeInstructions (with name + text + url).
+     * NEVER hardcodes values — only includes what's extractable from content.
      */
     private function build_recipe( \WP_Post $post ): array {
         $content   = $post->post_content;
         $text      = wp_strip_all_tags( $content );
         $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
         $author    = get_userdata( $post->post_author );
+        $permalink = get_permalink( $post->ID );
+        $keyword   = get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: '';
+        $country   = get_post_meta( $post->ID, '_seobetter_country', true ) ?: '';
 
-        $schema = [
-            '@context'      => 'https://schema.org',
-            '@type'         => 'Recipe',
-            'name'          => $post->post_title,
-            'description'   => wp_trim_words( $text, 30 ),
-            'datePublished' => get_the_date( 'c', $post ),
-            'author'        => [
-                '@type' => 'Person',
-                'name'  => $author ? $author->display_name : get_bloginfo( 'name' ),
-            ],
+        $author_data = [
+            '@type' => 'Person',
+            'name'  => $author ? $author->display_name : get_bloginfo( 'name' ),
         ];
 
-        if ( $thumbnail ) {
-            $schema['image'] = $thumbnail;
-        }
+        // Map country code to cuisine name
+        $cuisine_map = [
+            'AU' => 'Australian', 'US' => 'American', 'GB' => 'British', 'FR' => 'French',
+            'IT' => 'Italian', 'JP' => 'Japanese', 'IN' => 'Indian', 'MX' => 'Mexican',
+            'TH' => 'Thai', 'CN' => 'Chinese', 'KR' => 'Korean', 'ES' => 'Spanish',
+            'DE' => 'German', 'BR' => 'Brazilian', 'GR' => 'Greek', 'TR' => 'Turkish',
+            'VN' => 'Vietnamese', 'IE' => 'Irish', 'NZ' => 'New Zealand',
+        ];
+        $cuisine = $cuisine_map[ strtoupper( $country ) ] ?? '';
 
-        // Extract ingredients: find list items under any heading containing "ingredient"
-        // Also accept any <ul> list that follows an H2/H3 with "ingredient" in it
-        $ingredients = [];
-        // Method 1: look for list items after an "Ingredients" heading
-        if ( preg_match( '/<h[2-4][^>]*>[^<]*ingredient[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ul[^>]*>(.*?)<\/ul>/is', $content, $ing_match ) ) {
-            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ing_match[1], $li_matches );
-            foreach ( $li_matches[1] as $li ) {
-                $item = trim( wp_strip_all_tags( $li ) );
-                if ( strlen( $item ) > 2 ) {
-                    $ingredients[] = $item;
+        // Try to detect MULTIPLE recipes by splitting on H2 headings
+        // Each recipe section: H2 name → content with ingredients + instructions
+        preg_match_all( '/<h2[^>]*>(.*?)<\/h2>(.*?)(?=<h2|$)/is', $content, $sections );
+
+        $recipes = [];
+        $recipe_num = 0;
+
+        if ( ! empty( $sections[1] ) ) {
+            for ( $s = 0; $s < count( $sections[1] ); $s++ ) {
+                $heading = wp_strip_all_tags( $sections[1][ $s ] );
+                $body = $sections[2][ $s ];
+                $body_text = wp_strip_all_tags( $body );
+
+                // Skip non-recipe sections
+                if ( preg_match( '/^(key\s*takeaway|why\s*this|quick\s*comparison|what\s*ingredient|pros|cons|faq|frequently|reference|safety|what\s*to\s*avoid)/i', $heading ) ) {
+                    continue;
                 }
+
+                // Must have either ingredients list OR instructions list to be a recipe
+                $has_ingredients = preg_match( '/<ul[^>]*>.*?<\/ul>/is', $body ) || preg_match( '/ingredient/i', $body );
+                $has_instructions = preg_match( '/<ol[^>]*>.*?<\/ol>/is', $body ) || preg_match( '/instruction|direction|step|method/i', $body );
+                if ( ! $has_ingredients && ! $has_instructions ) continue;
+
+                $recipe_num++;
+                $recipe = [
+                    '@type'         => 'Recipe',
+                    'name'          => $heading,
+                    'description'   => wp_trim_words( $body_text, 25 ),
+                    'datePublished' => get_the_date( 'c', $post ),
+                    'author'        => $author_data,
+                ];
+
+                // Image: use featured image for first recipe, try to find section images for others
+                if ( $recipe_num === 1 && $thumbnail ) {
+                    $recipe['image'] = [ $thumbnail ];
+                } elseif ( preg_match( '/<img[^>]+src=["\']([^"\']+)["\']/', $body, $img_match ) ) {
+                    $recipe['image'] = [ $img_match[1] ];
+                } elseif ( $thumbnail ) {
+                    $recipe['image'] = [ $thumbnail ];
+                }
+
+                // Keywords from focus keyword
+                if ( $keyword ) {
+                    $recipe['keywords'] = $keyword;
+                }
+
+                // Cuisine from country
+                if ( $cuisine ) {
+                    $recipe['recipeCuisine'] = $cuisine;
+                }
+
+                // Extract ingredients from <ul> lists in this section
+                $ingredients = [];
+                preg_match_all( '/<ul[^>]*>(.*?)<\/ul>/is', $body, $ul_matches );
+                foreach ( $ul_matches[1] as $ul ) {
+                    preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ul, $li_matches );
+                    foreach ( $li_matches[1] as $li ) {
+                        $item = trim( wp_strip_all_tags( $li ) );
+                        if ( strlen( $item ) > 2 && strlen( $item ) < 200 ) {
+                            $ingredients[] = $item;
+                        }
+                    }
+                }
+                if ( ! empty( $ingredients ) ) {
+                    $recipe['recipeIngredient'] = array_slice( $ingredients, 0, 30 );
+                }
+
+                // Extract instructions from <ol> lists — with name + text + url per step
+                $instructions = [];
+                preg_match_all( '/<ol[^>]*>(.*?)<\/ol>/is', $body, $ol_matches );
+                $step_num = 0;
+                foreach ( $ol_matches[1] as $ol ) {
+                    preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ol, $li_matches );
+                    foreach ( $li_matches[1] as $li ) {
+                        $step_text = trim( wp_strip_all_tags( $li ) );
+                        if ( strlen( $step_text ) < 10 ) continue;
+                        // Skip ingredient-like items
+                        if ( preg_match( '/^\d+\s*(cup|tbsp|tsp|gram|ml|oz|lb|kg)\b/i', $step_text ) ) continue;
+                        $step_num++;
+                        $step = [
+                            '@type' => 'HowToStep',
+                            'name'  => wp_trim_words( $step_text, 5, '' ),
+                            'text'  => $step_text,
+                            'url'   => $permalink . '#step' . $recipe_num . '-' . $step_num,
+                        ];
+                        $instructions[] = $step;
+                    }
+                }
+                if ( ! empty( $instructions ) ) {
+                    $recipe['recipeInstructions'] = $instructions;
+                }
+
+                // Extract times from this section's text
+                if ( preg_match( '/prep(?:aration)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $body_text, $prep ) ) {
+                    $recipe['prepTime'] = 'PT' . $prep[1] . 'M';
+                }
+                if ( preg_match( '/cook(?:ing)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $body_text, $cook ) ) {
+                    $recipe['cookTime'] = 'PT' . $cook[1] . 'M';
+                }
+                if ( preg_match( '/total\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $body_text, $total ) ) {
+                    $recipe['totalTime'] = 'PT' . $total[1] . 'M';
+                }
+                if ( preg_match( '/(?:yield|serve|serving|makes)[\s:]+(\d+\s*(?:serving|piece|treat|cookie|batch|portion)[s]?)/i', $body_text, $yield ) ) {
+                    $recipe['recipeYield'] = $yield[1];
+                }
+
+                // Extract category from content context
+                if ( preg_match( '/\b(treat|snack|meal|drink|dessert|breakfast|dinner|lunch|side dish|appetizer|main course|biscuit)\b/i', $body_text, $cat ) ) {
+                    $recipe['recipeCategory'] = ucfirst( strtolower( $cat[1] ) );
+                }
+
+                $recipes[] = $recipe;
+                if ( $recipe_num >= 5 ) break; // Max 5 recipes per article
             }
         }
-        // Method 2 fallback: any list item with measurement units
-        if ( empty( $ingredients ) ) {
+
+        // Fallback: if no per-section recipes found, build single recipe from whole article
+        if ( empty( $recipes ) ) {
+            $recipe = [
+                '@type'         => 'Recipe',
+                'name'          => $post->post_title,
+                'description'   => wp_trim_words( $text, 30 ),
+                'datePublished' => get_the_date( 'c', $post ),
+                'author'        => $author_data,
+            ];
+            if ( $thumbnail ) $recipe['image'] = [ $thumbnail ];
+            if ( $keyword ) $recipe['keywords'] = $keyword;
+            if ( $cuisine ) $recipe['recipeCuisine'] = $cuisine;
+
+            // Extract from full content (existing logic)
+            $ingredients = [];
             preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $content, $all_li );
             foreach ( $all_li[1] as $li ) {
                 $item = trim( wp_strip_all_tags( $li ) );
@@ -361,70 +485,18 @@ class Schema_Generator {
                     $ingredients[] = $item;
                 }
             }
-        }
-        if ( ! empty( $ingredients ) ) {
-            $schema['recipeIngredient'] = array_slice( $ingredients, 0, 30 );
+            if ( ! empty( $ingredients ) ) $recipe['recipeIngredient'] = array_slice( $ingredients, 0, 30 );
+
+            if ( preg_match( '/prep(?:aration)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $text, $prep ) ) $recipe['prepTime'] = 'PT' . $prep[1] . 'M';
+            if ( preg_match( '/cook(?:ing)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $text, $cook ) ) $recipe['cookTime'] = 'PT' . $cook[1] . 'M';
+
+            $recipes[] = $recipe;
         }
 
-        // Extract instructions from ordered lists
-        $instructions = [];
-        // Method 1: look for ordered list after "Instructions" or "Directions" heading
-        if ( preg_match( '/<h[2-4][^>]*>[^<]*(?:instruction|direction|step|method)[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ol[^>]*>(.*?)<\/ol>/is', $content, $ins_match ) ) {
-            preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ins_match[1], $li_matches );
-            foreach ( $li_matches[1] as $li ) {
-                $step_text = trim( wp_strip_all_tags( $li ) );
-                if ( strlen( $step_text ) > 5 ) {
-                    $instructions[] = [
-                        '@type' => 'HowToStep',
-                        'text'  => $step_text,
-                    ];
-                }
-            }
-        }
-        // Method 2 fallback: any ordered list — but skip items that look like
-        // ingredients (short + contain measurement units). Instructions should
-        // be action sentences (20+ chars, start with a verb).
-        if ( empty( $instructions ) ) {
-            preg_match_all( '/<ol[^>]*>(.*?)<\/ol>/is', $content, $ol_matches );
-            foreach ( $ol_matches[1] as $ol_content ) {
-                preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ol_content, $li_matches );
-                $ol_steps = [];
-                foreach ( $li_matches[1] as $li ) {
-                    $step_text = trim( wp_strip_all_tags( $li ) );
-                    // Skip ingredient-like items (short text with measurement units)
-                    if ( strlen( $step_text ) < 20 ) continue;
-                    if ( preg_match( '/^\d+\s*(cup|tbsp|tsp|gram|ml|oz|lb|kg)\b/i', $step_text ) ) continue;
-                    $ol_steps[] = [
-                        '@type' => 'HowToStep',
-                        'text'  => $step_text,
-                    ];
-                }
-                // Only use this list if it has 2+ real steps
-                if ( count( $ol_steps ) >= 2 && empty( $instructions ) ) {
-                    $instructions = $ol_steps;
-                }
-            }
-        }
-        if ( ! empty( $instructions ) ) {
-            $schema['recipeInstructions'] = $instructions;
-        }
-
-        // Extract times ONLY if present in content (never hardcode)
-        if ( preg_match( '/prep(?:aration)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $text, $prep ) ) {
-            $schema['prepTime'] = 'PT' . $prep[1] . 'M';
-        }
-        if ( preg_match( '/cook(?:ing)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $text, $cook ) ) {
-            $schema['cookTime'] = 'PT' . $cook[1] . 'M';
-        }
-        if ( preg_match( '/total\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $text, $total ) ) {
-            $schema['totalTime'] = 'PT' . $total[1] . 'M';
-        }
-        // Extract yield ONLY if present
-        if ( preg_match( '/(?:yield|serve|serving|makes)[\s:]+(\d+\s*(?:serving|piece|treat|cookie|batch|portion)[s]?)/i', $text, $yield ) ) {
-            $schema['recipeYield'] = $yield[1];
-        }
-
-        return $schema;
+        // Return first recipe as primary (generate() handles adding others)
+        // Store all recipes for the generate() method to add to @graph
+        $this->_multi_recipes = $recipes;
+        return $recipes[0];
     }
 
     /**
