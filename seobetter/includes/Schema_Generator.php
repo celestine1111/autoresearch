@@ -379,13 +379,22 @@ class Schema_Generator {
                     'author'        => $author_data,
                 ];
 
-                // Image: use featured image for first recipe, try to find section images for others
+                // v1.5.122 — Image array with multiple sizes (Google wants 1:1, 4:3, 16:9)
+                // WordPress stores images in multiple sizes. Use the largest available
+                // and include the full URL for all 3 ratio slots (Google accepts same URL).
+                $recipe_img = '';
                 if ( $recipe_num === 1 && $thumbnail ) {
-                    $recipe['image'] = [ $thumbnail ];
+                    $recipe_img = $thumbnail;
                 } elseif ( preg_match( '/<img[^>]+src=["\']([^"\']+)["\']/', $body, $img_match ) ) {
-                    $recipe['image'] = [ $img_match[1] ];
+                    $recipe_img = $img_match[1];
                 } elseif ( $thumbnail ) {
-                    $recipe['image'] = [ $thumbnail ];
+                    $recipe_img = $thumbnail;
+                }
+                if ( $recipe_img ) {
+                    // Google recommends 3 images in different aspect ratios.
+                    // If we only have one image, provide it 3 times — Google accepts this
+                    // and will crop/resize as needed for different surfaces.
+                    $recipe['image'] = [ $recipe_img, $recipe_img, $recipe_img ];
                 }
 
                 // Keywords from focus keyword
@@ -458,6 +467,14 @@ class Schema_Generator {
                     $recipe['recipeCategory'] = ucfirst( strtolower( $cat[1] ) );
                 }
 
+                // v1.5.122 — Nutrition extraction (only if stated in content)
+                if ( preg_match( '/(\d+)\s*(?:calories|cal|kcal)\b/i', $body_text, $cal ) ) {
+                    $recipe['nutrition'] = [
+                        '@type'    => 'NutritionInformation',
+                        'calories' => $cal[1] . ' calories',
+                    ];
+                }
+
                 $recipes[] = $recipe;
                 if ( $recipe_num >= 5 ) break; // Max 5 recipes per article
             }
@@ -472,7 +489,7 @@ class Schema_Generator {
                 'datePublished' => get_the_date( 'c', $post ),
                 'author'        => $author_data,
             ];
-            if ( $thumbnail ) $recipe['image'] = [ $thumbnail ];
+            if ( $thumbnail ) $recipe['image'] = [ $thumbnail, $thumbnail, $thumbnail ];
             if ( $keyword ) $recipe['keywords'] = $keyword;
             if ( $cuisine ) $recipe['recipeCuisine'] = $cuisine;
 

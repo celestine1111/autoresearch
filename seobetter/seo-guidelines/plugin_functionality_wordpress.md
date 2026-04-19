@@ -344,7 +344,7 @@ Each content type has: required sections, writing guidance, schema type, shared 
 | News Article | NewsArticle | Lede → Details → Background → Closing |
 | FAQ Page | FAQPage | Intro → Q&A Pairs |
 | Ultimate Guide | Article | TOC → Chapters → Summary → Resources |
-| Recipe | Recipe × N + ItemList | Key Takeaways → Why This Matters → Comparison Table → Recipe 1 Card → Recipe 2 Card → Recipe 3 Card → Safety → Pros/Cons → FAQ |
+| Recipe | Recipe × N + ItemList | Key Takeaways → Why This Matters → Comparison Table → Recipe 1 Card (Ingredients + Instructions + Storage + Calories) → Recipe 2 Card → Recipe 3 Card → Safety → Pros/Cons → FAQ |
 | Case Study | Article | Summary → Challenge → Solution → Results |
 | Interview | Article | Intro → Bio → Q&A → Closing |
 | Tech Article | TechArticle | Build → Prerequisites → Walkthrough → Testing |

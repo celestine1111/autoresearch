@@ -382,12 +382,11 @@ class Content_Formatter {
                         }
                     }
 
-                    // v1.5.120 — Recipe Card styling. When a H2 matches a recipe
-                    // pattern ("Recipe 1:", numbered recipe like "1. Peanut Butter"),
-                    // wrap the section in a styled card with rounded border + background.
-                    $is_recipe_heading = (bool) preg_match( '/^(?:Recipe\s*\d|#?\d+[\.\)]\s*[A-Z])/i', $text );
-                    // Also detect creative recipe names that follow the pattern from the template
-                    if ( ! $is_recipe_heading && ( $options['content_type'] ?? '' ) === 'recipe' ) {
+                    // v1.5.122 — Recipe Card styling ONLY for recipe content type.
+                    // Yellow background cards only wrap recipe sections in recipe articles.
+                    // Other article types never get yellow recipe cards.
+                    $is_recipe_heading = false;
+                    if ( ( $options['content_type'] ?? '' ) === 'recipe' ) {
                         // In recipe articles, any H2 that's NOT a generic section is likely a recipe
                         $is_recipe_heading = ! preg_match( '/^(key\s*takeaway|why\s*this|quick\s*comparison|what\s*ingredient|pros|cons|faq|frequently|reference|safety)/i', $text );
                     }

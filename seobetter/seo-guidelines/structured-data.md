@@ -73,7 +73,7 @@
 | Field | Source | Example |
 |---|---|---|
 | `name` | H2 heading of each recipe section | "Crunchy PB Pup Biscuits" |
-| `image` | Featured image (1st recipe) or section `<img>` (others) | Array of URLs |
+| `image` | Featured image (1st recipe) or section `<img>` (others) — **array of 3** (Google wants 1:1, 4:3, 16:9 ratios) | `["url", "url", "url"]` |
 | `author` | WordPress user display_name, fallback to site name | `{"@type":"Person","name":"Ben"}` |
 | `datePublished` | Post publish date (ISO 8601) | "2026-04-19" |
 | `description` | First 25 words of recipe section text | "Easy 3-ingredient treats..." |
@@ -89,7 +89,9 @@
 
 **Multi-recipe support:** Articles with 3+ recipe H2 sections generate SEPARATE Recipe schemas per recipe, plus an ItemList carousel schema. Google shows each recipe as a swipeable card.
 
-**BANNED:** Hardcoded times/yields/ratings/cuisine. If the content doesn't state a value, the field is OMITTED.
+| `nutrition.calories` | Regex: "X calories" or "X cal" in recipe section | `{"@type":"NutritionInformation","calories":"45 calories"}` |
+
+**BANNED:** Hardcoded times/yields/ratings/cuisine/calories. If the content doesn't state a value, the field is OMITTED.
 
 **Country → Cuisine mapping (40+ countries):**
 AU→Australian, US→American, GB→British, FR→French, IT→Italian, JP→Japanese, IN→Indian, MX→Mexican, TH→Thai, CN→Chinese, KR→Korean, ES→Spanish, DE→German, BR→Brazilian, GR→Greek, TR→Turkish, VN→Vietnamese, IE→Irish, NZ→New Zealand
