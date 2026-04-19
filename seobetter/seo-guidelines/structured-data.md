@@ -154,14 +154,38 @@ AU→Australian, US→American, GB→British, FR→French, IT→Italian, JP→Ja
 }
 ```
 
-### Review
-**Required:** `author`, `itemReviewed`, `itemReviewed.name`, `reviewRating`
-**Recommended:**
-- `datePublished`
-- `reviewRating.ratingValue` — MUST be derived from content (e.g., verdict section)
-- `reviewRating.bestRating`, `worstRating`
+### Review (v1.5.136 — smart itemReviewed detection)
 
-**BANNED:** Hardcoded ratingValue. If the article doesn't contain a rating, use Article schema instead.
+**Required:** `author`, `itemReviewed`, `itemReviewed.name`
+**Recommended:** `reviewRating`, `datePublished`, `publisher`, `positiveNotes`, `negativeNotes`
+
+**BANNED:** Hardcoded ratingValue. Rating only included if extractable from content.
+
+**Smart itemReviewed @type detection (v1.5.136):**
+The `build_review()` method auto-detects WHAT is being reviewed and sets the correct Schema.org @type:
+
+| Content Signals | itemReviewed @type | Extra Fields Added |
+|---|---|---|
+| Software/app/SaaS/tool/plugin mentions + tech category | `SoftwareApplication` | operatingSystem, applicationCategory |
+| iOS/Android/mobile app/Play Store mentions | `MobileApplication` | operatingSystem (iOS/Android) |
+| Restaurant/cafe/diner/cuisine/menu mentions + food category | `Restaurant` | servesCuisine, priceRange, address, telephone |
+| Book/novel/author/ISBN/publisher mentions + books category | `Book` | author (Person) |
+| Movie/film/director/IMDB/Netflix mentions + entertainment | `Movie` | director (Person) |
+| Video game/PlayStation/Xbox/Steam/gaming | `VideoGame` | gamePlatform |
+| Street address detected in content | `LocalBusiness` | address (PostalAddress), telephone |
+| Course/class/training/Udemy/Coursera + education | `Course` | provider (Organization) |
+| Event/conference/concert + date mentions | `Event` | — |
+| Default (no specific signals) | `Product` | offers (price + currency) |
+
+**Country-aware pricing:** Currency code auto-detected from content ($, GBP, EUR) with country fallback (AU→AUD, CA→CAD, JP→JPY, NZ→NZD).
+
+**Google-exact fields (all types):**
+- `author` with `@type: Person`, `name`, `url` (author archive page)
+- `publisher` with `@type: Organization`, `name` (site name)
+- `image` array (3 URLs for 1:1, 4:3, 16:9 ratios)
+- `datePublished` and `dateModified` in ISO 8601
+- `positiveNotes` / `negativeNotes` as ItemList (from Pros/Cons section)
+- `reviewRating` only if extractable (patterns: "4.5/5", "Rating: 8/10", "Score: 4 out of 5")
 
 ### FAQPage
 **Required:** `mainEntity` (array of Question/Answer)

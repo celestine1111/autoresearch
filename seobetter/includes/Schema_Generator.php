@@ -597,47 +597,185 @@ class Schema_Generator {
     }
 
     /**
-     * Build Review schema. Item reviewed is extracted from the post title.
-     */
-    /**
-     * v1.5.116 — Review schema: removed hardcoded 4.5 rating (Google policy violation).
-     * Rating is only included if extractable from content (e.g., "Rating: 4/5" or
-     * "We give it 8 out of 10"). Otherwise uses Article schema type instead of Review
-     * to avoid the required reviewRating field.
+     * v1.5.136 — Review schema: Google-exact format with smart itemReviewed detection.
+     *
+     * Detects WHAT is being reviewed from content + category and uses the correct
+     * Schema.org @type: Product, SoftwareApplication, Restaurant, LocalBusiness,
+     * Book, Movie, MobileApplication, VideoGame, etc.
+     *
+     * Rating only included if extractable from content (never hardcoded).
+     * Includes publisher, author.url, image on itemReviewed.
+     * Pros/Cons extracted as positiveNotes/negativeNotes.
      */
     private function build_review( \WP_Post $post ): array {
         $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
         $text      = wp_strip_all_tags( $post->post_content );
+        $content   = $post->post_content;
+        $category  = get_post_meta( $post->ID, '_seobetter_domain', true ) ?: '';
+        $country   = get_post_meta( $post->ID, '_seobetter_country', true ) ?: '';
 
-        // Item name = title with "review" stripped
-        $item_name = trim( preg_replace( '/\b(review|in-depth|honest|full|best|top|guide)\b/i', '', $post->post_title ) );
+        // Item name = title with common review words stripped
+        $item_name = trim( preg_replace( '/\b(review|in-depth|honest|full|best|top|guide|comparison|vs\.?|versus|roundup|our|the)\b/i', '', $post->post_title ) );
         $item_name = trim( preg_replace( '/\s+/', ' ', $item_name ) );
-        // Clean trailing year and punctuation
         $item_name = trim( preg_replace( '/\b(20\d{2}|in)\b\s*[:.\-]*\s*$/i', '', $item_name ) );
+        if ( strlen( $item_name ) < 3 ) $item_name = $post->post_title;
 
+        // ── Smart itemReviewed type detection ──
+        // Detect what's being reviewed based on category + content signals
+        $reviewed_type = 'Product'; // Default
+        $reviewed_extra = [];
+
+        // Software / App detection
+        if ( in_array( $category, [ 'technology', 'games' ], true )
+            || preg_match( '/\b(software|app|application|SaaS|platform|tool|plugin|extension|program|desktop app|web app|mobile app)\b/i', $text ) ) {
+            if ( preg_match( '/\b(ios|android|iphone|ipad|mobile app|play store|app store)\b/i', $text ) ) {
+                $reviewed_type = 'MobileApplication';
+                if ( preg_match( '/\b(ios|iphone|ipad)\b/i', $text ) ) $reviewed_extra['operatingSystem'] = 'iOS';
+                elseif ( preg_match( '/\bandroid\b/i', $text ) ) $reviewed_extra['operatingSystem'] = 'Android';
+            } else {
+                $reviewed_type = 'SoftwareApplication';
+                if ( preg_match( '/\b(windows|mac|linux|chrome|web)\b/i', $text, $os ) ) {
+                    $reviewed_extra['operatingSystem'] = ucfirst( $os[1] );
+                }
+            }
+            // App category
+            if ( preg_match( '/\b(productivity|finance|health|fitness|education|entertainment|social|photo|video|music|business|utility|game)\b/i', $text, $appcat ) ) {
+                $reviewed_extra['applicationCategory'] = ucfirst( $appcat[1] ) . 'Application';
+            }
+        }
+        // Restaurant / Food detection
+        elseif ( in_array( $category, [ 'food' ], true )
+            || preg_match( '/\b(restaurant|cafe|diner|bistro|eatery|pizzeria|bakery|bar|pub|takeaway|food truck|cuisine|menu|chef)\b/i', $text ) ) {
+            $reviewed_type = 'Restaurant';
+            if ( preg_match( '/\b(italian|chinese|japanese|thai|indian|mexican|french|korean|vietnamese|american|australian|mediterranean|seafood|vegan|vegetarian)\b/i', $text, $cuisine ) ) {
+                $reviewed_extra['servesCuisine'] = ucfirst( $cuisine[1] );
+            }
+        }
+        // Book detection
+        elseif ( in_array( $category, [ 'books' ], true )
+            || preg_match( '/\b(book|novel|memoir|autobiography|biography|paperback|hardcover|ebook|kindle|isbn|author|published by|publisher|page[s]?\s+\d+)\b/i', $text ) ) {
+            $reviewed_type = 'Book';
+            if ( preg_match( '/\bauthor[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $ba ) ) {
+                $reviewed_extra['author'] = [ '@type' => 'Person', 'name' => $ba[1] ];
+            }
+        }
+        // Movie / TV detection
+        elseif ( in_array( $category, [ 'entertainment' ], true )
+            || preg_match( '/\b(movie|film|cinema|director|starring|cast|imdb|rotten tomatoes|box office|screenplay|netflix|disney|streaming)\b/i', $text ) ) {
+            $reviewed_type = 'Movie';
+            if ( preg_match( '/\bdirector[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $dir ) ) {
+                $reviewed_extra['director'] = [ '@type' => 'Person', 'name' => $dir[1] ];
+            }
+        }
+        // Video Game detection
+        elseif ( preg_match( '/\b(video game|gaming|playstation|xbox|nintendo|steam|pc game|console|fps|rpg|mmorpg|multiplayer|esports)\b/i', $text ) ) {
+            $reviewed_type = 'VideoGame';
+            if ( preg_match( '/\b(playstation|ps[45]|xbox|nintendo|pc|steam)\b/i', $text, $plat ) ) {
+                $reviewed_extra['gamePlatform'] = $plat[1];
+            }
+        }
+        // Local Business detection (has address)
+        elseif ( preg_match( '/\d+\s+[A-Z][a-z]+\s+(St|Rd|Ave|Blvd|Dr|Street|Road|Avenue|Drive)\b/i', $text ) ) {
+            $reviewed_type = 'LocalBusiness';
+        }
+        // Course / Education
+        elseif ( in_array( $category, [ 'education' ], true )
+            || preg_match( '/\b(course|class|training|bootcamp|certification|udemy|coursera|skillshare|masterclass)\b/i', $text ) ) {
+            $reviewed_type = 'Course';
+            if ( preg_match( '/\b(?:by|from|offered by|provider)\s+([A-Z][a-zA-Z\s]{3,30})\b/', $text, $prov ) ) {
+                $reviewed_extra['provider'] = [ '@type' => 'Organization', 'name' => trim( $prov[1] ) ];
+            }
+        }
+        // Event
+        elseif ( preg_match( '/\b(event|conference|concert|festival|show|summit|expo|workshop|meetup|hackathon)\b/i', $text )
+            && preg_match( '/\b(january|february|march|april|may|june|july|august|september|october|november|december|20\d{2})\b/i', $text ) ) {
+            $reviewed_type = 'Event';
+        }
+
+        // ── Build the itemReviewed object ──
+        $item_reviewed = array_merge(
+            [ '@type' => $reviewed_type, 'name' => $item_name ],
+            $reviewed_extra
+        );
+
+        // Add image to itemReviewed
+        if ( $thumbnail ) {
+            $item_reviewed['image'] = $thumbnail;
+        }
+
+        // Add price for Product/Software if detected
+        if ( in_array( $reviewed_type, [ 'Product', 'SoftwareApplication', 'MobileApplication' ], true ) ) {
+            if ( preg_match( '/[\$\£\€\¥]\s*([\d,]+(?:\.\d{2})?)/i', $text, $price ) ) {
+                $currency = 'USD';
+                if ( preg_match( '/\£/', $text ) ) $currency = 'GBP';
+                elseif ( preg_match( '/\€/', $text ) ) $currency = 'EUR';
+                elseif ( preg_match( '/AUD/i', $text ) || $country === 'AU' ) $currency = 'AUD';
+                elseif ( preg_match( '/CAD/i', $text ) || $country === 'CA' ) $currency = 'CAD';
+                elseif ( preg_match( '/NZD/i', $text ) || $country === 'NZ' ) $currency = 'NZD';
+                elseif ( preg_match( '/\¥|JPY/i', $text ) || $country === 'JP' ) $currency = 'JPY';
+
+                $item_reviewed['offers'] = [
+                    '@type'         => 'Offer',
+                    'price'         => str_replace( ',', '', $price[1] ),
+                    'priceCurrency' => $currency,
+                    'availability'  => 'https://schema.org/InStock',
+                ];
+            }
+        }
+
+        // Add priceRange for Restaurant/LocalBusiness
+        if ( in_array( $reviewed_type, [ 'Restaurant', 'LocalBusiness' ], true ) ) {
+            if ( preg_match( '/(\$\$?\$?\$?)/', $text, $pr ) ) {
+                $item_reviewed['priceRange'] = $pr[1];
+            }
+        }
+
+        // Add address for Restaurant/LocalBusiness if detected
+        if ( in_array( $reviewed_type, [ 'Restaurant', 'LocalBusiness' ], true ) ) {
+            if ( preg_match( '/(\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(?:St|Rd|Ave|Blvd|Dr|Street|Road|Avenue|Drive|Place|Lane|Way|Circuit|Parade|Crescent))\b/i', $text, $addr ) ) {
+                $address = [ '@type' => 'PostalAddress', 'streetAddress' => $addr[1] ];
+                // Try to detect country from post meta
+                $country_map = [
+                    'AU' => 'AU', 'US' => 'US', 'GB' => 'GB', 'CA' => 'CA', 'NZ' => 'NZ',
+                    'IE' => 'IE', 'DE' => 'DE', 'FR' => 'FR', 'JP' => 'JP', 'IN' => 'IN',
+                ];
+                if ( ! empty( $country ) && isset( $country_map[ $country ] ) ) {
+                    $address['addressCountry'] = $country_map[ $country ];
+                }
+                $item_reviewed['address'] = $address;
+            }
+            // Phone
+            if ( preg_match( '/(?:phone|tel|call)[:\s]+([+\d\s\-()]{8,20})/i', $text, $phone ) ) {
+                $item_reviewed['telephone'] = trim( $phone[1] );
+            }
+        }
+
+        // ── Build the Review schema ──
         $schema = [
             '@context'      => 'https://schema.org',
             '@type'         => 'Review',
             'name'          => $post->post_title,
             'description'   => wp_trim_words( $text, 30 ),
             'datePublished' => get_the_date( 'c', $post ),
+            'dateModified'  => get_the_modified_date( 'c', $post ),
             'author'        => [
                 '@type' => 'Person',
                 'name'  => $this->get_author_name( $post ),
+                'url'   => get_author_posts_url( $post->post_author ),
             ],
-            'itemReviewed'  => [
-                '@type' => 'Product',
-                'name'  => $item_name ?: $post->post_title,
+            'publisher'     => [
+                '@type' => 'Organization',
+                'name'  => get_bloginfo( 'name' ),
             ],
+            'itemReviewed'  => $item_reviewed,
         ];
 
         if ( $thumbnail ) {
-            $schema['image'] = $thumbnail;
+            $schema['image'] = [ $thumbnail, $thumbnail, $thumbnail ];
         }
 
-        // Extract rating ONLY if present in content — never hardcode
-        // Patterns: "4.5/5", "Rating: 8/10", "Score: 4 out of 5", "we give it 9/10"
-        if ( preg_match( '/(?:rating|score|verdict|grade|we give (?:it )?)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:\/|out of)\s*(\d+)/i', $text, $rating_match ) ) {
+        // ── Extract rating ONLY if present in content ──
+        if ( preg_match( '/(?:rating|score|verdict|grade|we give (?:it )?|overall)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:\/|out of)\s*(\d+)/i', $text, $rating_match ) ) {
             $value = floatval( $rating_match[1] );
             $best = intval( $rating_match[2] );
             if ( $value > 0 && $best > 0 && $value <= $best ) {
@@ -650,11 +788,7 @@ class Schema_Generator {
             }
         }
 
-        // If no rating found, still valid as Review without reviewRating
-
-        // v1.5.118 — Extract Pros/Cons as positiveNotes/negativeNotes
-        // Google shows these as badges in Product review search results
-        $content = $post->post_content;
+        // ── Pros/Cons as positiveNotes/negativeNotes ──
         $pros = [];
         $cons = [];
         if ( preg_match( '/<h[2-4][^>]*>[^<]*pros?[^<]*<\/h[2-4]>\s*(?:<[^>]*>)*\s*<ul[^>]*>(.*?)<\/ul>/is', $content, $pros_match ) ) {

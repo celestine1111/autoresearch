@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.135
+ * Version: 1.5.136
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.135' );
+define( 'SEOBETTER_VERSION', '1.5.136' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -604,7 +604,7 @@ final class SEOBetter {
                 }
                 $result['schema_types'] = implode( ' + ', $types );
             }
-            // v1.5.135 — Pass full schema for Rich Results Preview
+            // v1.5.136 — Pass full schema for Rich Results Preview
             $result['schema_data'] = $decoded;
         }
 
@@ -3365,7 +3365,7 @@ final class SEOBetter {
                 <?php endif; ?>
             </div>
 
-            <!-- Rich Results Tab (v1.5.135) -->
+            <!-- Rich Results Tab (v1.5.136) -->
             <div class="sb-meta-panel" data-panel="richresults" style="padding:20px;display:none">
                 <?php
                 $schema_raw = get_post_meta( $post->ID, '_seobetter_schema', true );

@@ -16,6 +16,29 @@
 
 ---
 
+## v1.5.136 — Review schema overhaul: smart itemReviewed detection (9 types)
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Changes
+
+- **Smart itemReviewed type detection** — `includes/Schema_Generator.php::build_review()` line ~608
+  - Auto-detects what's being reviewed from content + category:
+    Product, SoftwareApplication, MobileApplication, Restaurant, Book, Movie, VideoGame, LocalBusiness, Course, Event
+  - Each type gets extra relevant fields (operatingSystem, servesCuisine, director, gamePlatform, etc.)
+  - Country-aware pricing: currency from content ($, GBP, EUR) with country fallback (AU→AUD, etc.)
+  - Added: publisher, author.url, dateModified, image array (3 URLs)
+  - Address + phone extraction for Restaurant/LocalBusiness reviews
+  - Price extraction for Product/Software reviews
+  - `Verify:` `grep -n 'Smart itemReviewed' includes/Schema_Generator.php`
+  - `Verified by user:` UNTESTED
+
+### Guidelines updated
+- `structured-data.md` — Review section rewritten with full detection table + Google-exact fields
+
+---
+
 ## v1.5.135 — Rich Results Preview metabox tab + 6 new schema types
 
 **Date:** 2026-04-19
