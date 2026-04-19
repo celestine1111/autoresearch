@@ -1343,6 +1343,14 @@ final class SEOBetter {
             $markdown = self::cleanup_ai_markdown( $markdown );
         }
 
+        // v1.5.137 — Convert bracketed text references to real links.
+        // The AI often writes [Source Name] or (Source Name) as plain text
+        // instead of [Source Name](url). Match these against the Citation Pool
+        // and convert to clickable markdown links.
+        if ( ! empty( $markdown ) && ! empty( $combined_pool ) ) {
+            $markdown = $this->linkify_bracketed_references( $markdown, $combined_pool );
+        }
+
         // Validate all outbound URLs in markdown before formatting.
         // The combined pool is the primary allow-list — any URL in the pool
         // is citable, any URL not in the pool falls back to the static
@@ -2273,6 +2281,104 @@ final class SEOBetter {
     /**
      * Strip or validate all outbound links in the article.
      *
+    /**
+     * v1.5.137 — Convert bracketed text references into real markdown links.
+     *
+     * The AI often writes [Source Name] or (Source Name) as plain text brackets
+     * without a URL. This method matches the text inside brackets against the
+     * Citation Pool titles/source_names and converts them to clickable links.
+     *
+     * Example:
+     *   Input:  "as highlighted in several critical reviews [My Problem with Atomic Habits by James Clear (2023)]"
+     *   Output: "as highlighted in several critical reviews ([My Problem with Atomic Habits by James Clear (2023)](https://thewallflowerdigest.co.uk/...))"
+     */
+    private function linkify_bracketed_references( string $markdown, array $pool ): string {
+        if ( empty( $pool ) ) return $markdown;
+
+        // Build a lookup: lowercase title/source_name fragments → pool entry
+        $lookup = [];
+        foreach ( $pool as $entry ) {
+            $url = $entry['url'] ?? '';
+            if ( empty( $url ) ) continue;
+            // Index by title words (3+ chars) and source_name
+            $title = strtolower( $entry['title'] ?? '' );
+            $source = strtolower( $entry['source_name'] ?? '' );
+            // Use full title as key
+            if ( strlen( $title ) > 10 ) {
+                $lookup[ $title ] = $entry;
+            }
+            // Use first 40 chars of title as key (AI often truncates)
+            if ( strlen( $title ) > 40 ) {
+                $lookup[ substr( $title, 0, 40 ) ] = $entry;
+            }
+            // Use source_name as key
+            if ( strlen( $source ) > 3 ) {
+                $lookup[ $source ] = $entry;
+            }
+        }
+
+        // Find [bracketed text] that is NOT already a markdown link (no following (url))
+        // Pattern: [text] NOT followed by (http
+        $markdown = preg_replace_callback(
+            '/(?<!\!)\[([^\]]{10,120})\](?!\s*\(http)/',
+            function ( $match ) use ( $lookup ) {
+                $text = $match[1];
+                $text_lower = strtolower( $text );
+
+                // Try exact match
+                if ( isset( $lookup[ $text_lower ] ) ) {
+                    $entry = $lookup[ $text_lower ];
+                    return '[' . $text . '](' . $entry['url'] . ')';
+                }
+
+                // Try partial match (text contains a key, or key contains text)
+                foreach ( $lookup as $key => $entry ) {
+                    if ( strlen( $key ) > 10 && str_contains( $text_lower, $key ) ) {
+                        return '[' . $text . '](' . $entry['url'] . ')';
+                    }
+                    if ( strlen( $text_lower ) > 15 && str_contains( $key, $text_lower ) ) {
+                        return '[' . $text . '](' . $entry['url'] . ')';
+                    }
+                    // Match if text starts with the same first 20 chars as a title
+                    if ( strlen( $key ) > 20 && strlen( $text_lower ) > 20 ) {
+                        if ( substr( $text_lower, 0, 20 ) === substr( $key, 0, 20 ) ) {
+                            return '[' . $text . '](' . $entry['url'] . ')';
+                        }
+                    }
+                }
+
+                // No match — leave as-is
+                return $match[0];
+            },
+            $markdown
+        );
+
+        // Also handle (Source Name) parenthetical references that match pool entries
+        // Only match short parentheticals (5-60 chars) at end of sentences
+        $markdown = preg_replace_callback(
+            '/(?<=[.!?])\s*\(([^()]{5,60})\)(?=\s|$|\n)/m',
+            function ( $match ) use ( $lookup ) {
+                $text = $match[1];
+                $text_lower = strtolower( $text );
+
+                // Skip if already contains a URL
+                if ( str_contains( $text, 'http' ) ) return $match[0];
+
+                foreach ( $lookup as $key => $entry ) {
+                    if ( strlen( $key ) > 5 && ( str_contains( $text_lower, $key ) || str_contains( $key, $text_lower ) ) ) {
+                        return ' ([' . $text . '](' . $entry['url'] . '))';
+                    }
+                }
+
+                return $match[0];
+            },
+            $markdown
+        );
+
+        return $markdown;
+    }
+
+    /**
      * This runs in two passes:
      *
      * 1. MALFORMED LINK PASS — strips markdown links whose "URL" isn't actually a URL
