@@ -1379,105 +1379,95 @@ class Async_Generator {
     }
 
     /**
-     * v1.5.128 — Inject real recipe data into AI-generated article.
-     * Replaces [REAL_INGREDIENTS_N] and [REAL_INSTRUCTIONS_N] placeholders
-     * with actual extracted data from Tavily sources. Also replaces any
-     * AI-written ingredients/instructions in recipe sections with real data.
+     * v1.5.129 — Inject real recipe data into AI-generated article.
+     * Finds each recipe section (### Ingredients + ### Instructions) and
+     * OVERWRITES the AI-written content with verified source data.
+     * SAFE: if anything goes wrong, returns the original markdown unchanged.
      */
     private static function inject_real_recipe_data( string $markdown, array $extracted_recipes ): string {
         if ( empty( $extracted_recipes ) ) return $markdown;
 
-        // First: replace placeholders if AI used them
-        foreach ( $extracted_recipes as $i => $rec ) {
-            $n = $i + 1;
+        $original = $markdown; // Safety backup
+
+        // Find recipe sections by looking for ### Ingredients followed by ### Instructions
+        // Process each extracted recipe in order, matching to each recipe section found
+        $recipe_index = 0;
+
+        foreach ( $extracted_recipes as $rec ) {
+            if ( empty( $rec['ingredients'] ) ) continue;
 
             // Build real ingredients markdown
-            $ing_md = '';
+            $real_ing = "### Ingredients\n\n";
             foreach ( $rec['ingredients'] as $ing ) {
-                $ing_md .= "- {$ing}\n";
+                $real_ing .= "- {$ing}\n";
+            }
+            $real_ing .= "\n";
+
+            // Build real instructions markdown (if available)
+            $real_inst = '';
+            if ( ! empty( $rec['instructions'] ) ) {
+                $real_inst = "### Instructions\n\n";
+                foreach ( $rec['instructions'] as $si => $step ) {
+                    $real_inst .= ( $si + 1 ) . ". {$step}\n";
+                }
+                $real_inst .= "\n";
             }
 
-            // Build real instructions markdown
-            $inst_md = '';
-            foreach ( $rec['instructions'] as $si => $step ) {
-                $inst_md .= ( $si + 1 ) . ". {$step}\n";
-            }
-
-            // Replace placeholders
-            $markdown = str_replace( "[REAL_INGREDIENTS_{$n}]", trim( $ing_md ), $markdown );
-            $markdown = str_replace( "[REAL_INSTRUCTIONS_{$n}]", trim( $inst_md ), $markdown );
-        }
-
-        // Second: even if AI didn't use placeholders and wrote its own ingredients,
-        // find recipe sections and OVERWRITE the ingredients + instructions.
-        // Split on H2 headings
-        $parts = preg_split( '/^(##\s+.+)$/m', $markdown, -1, PREG_SPLIT_DELIM_CAPTURE );
-        $recipe_index = 0;
-        $result = '';
-
-        for ( $p = 0; $p < count( $parts ); $p++ ) {
-            $part = $parts[ $p ];
-
-            // Is this an H2 heading?
-            if ( preg_match( '/^##\s+(.+)$/m', $part ) ) {
-                $body = $parts[ $p + 1 ] ?? '';
-
-                // Is this a recipe section? (has ### Ingredients AND ### Instructions)
-                $has_ing  = preg_match( '/###\s*Ingredients/i', $body );
-                $has_inst = preg_match( '/###\s*Instructions/i', $body );
-
-                if ( $has_ing && $has_inst && $recipe_index < count( $extracted_recipes ) ) {
-                    $rec = $extracted_recipes[ $recipe_index ];
-
-                    // Build replacement ingredients
-                    $real_ing = "### Ingredients\n\n";
-                    foreach ( $rec['ingredients'] as $ing ) {
-                        $real_ing .= "- {$ing}\n";
-                    }
-
-                    // Build replacement instructions
-                    $real_inst = "### Instructions\n\n";
-                    foreach ( $rec['instructions'] as $si => $step ) {
-                        $real_inst .= ( $si + 1 ) . ". {$step}\n";
-                    }
-
-                    // Replace the ingredients section
-                    $body = preg_replace(
-                        '/###\s*Ingredients\s*\n(.*?)(?=###|\z)/is',
-                        $real_ing . "\n",
-                        $body,
-                        1
-                    );
-
-                    // Replace the instructions section
-                    $body = preg_replace(
-                        '/###\s*Instructions\s*\n(.*?)(?=###|Inspired by|\z)/is',
-                        $real_inst . "\n",
-                        $body,
-                        1
-                    );
-
-                    // Add timing metadata if available and not already present
-                    if ( ! empty( $rec['prep_time'] ) && ! preg_match( '/Prep\s*Time/i', $body ) ) {
-                        $timing = "**Prep Time:** {$rec['prep_time']} minutes";
-                        if ( ! empty( $rec['cook_time'] ) ) $timing .= " | **Cook Time:** {$rec['cook_time']} minutes";
-                        if ( ! empty( $rec['yield'] ) ) $timing .= " | **Yields:** {$rec['yield']}";
-                        // Insert after the first paragraph
-                        $body = preg_replace( '/\n\n/', "\n\n{$timing}\n\n", $body, 1 );
-                    }
-
-                    $parts[ $p + 1 ] = $body;
-                    $recipe_index++;
+            // Find the Nth occurrence of ### Ingredients section and replace it
+            // Use a simple approach: find position of "### Ingredients" after the previous replacement
+            $search_pos = 0;
+            for ( $skip = 0; $skip <= $recipe_index; $skip++ ) {
+                $pos = stripos( $markdown, '### Ingredients', $search_pos );
+                if ( $pos === false ) break;
+                if ( $skip < $recipe_index ) {
+                    $search_pos = $pos + 15; // Move past this occurrence
                 }
             }
 
-            $result .= $part;
+            if ( $pos !== false ) {
+                // Find where this ingredients section ends (next ### or next ## or end)
+                $end_pos = strlen( $markdown );
+                foreach ( [ '### Instructions', '### Storage', '###', '## ' ] as $delimiter ) {
+                    $dpos = stripos( $markdown, $delimiter, $pos + 15 );
+                    if ( $dpos !== false && $dpos < $end_pos ) {
+                        $end_pos = $dpos;
+                    }
+                }
+
+                // Replace the ingredients section
+                $replaced = substr( $markdown, 0, $pos ) . $real_ing . substr( $markdown, $end_pos );
+                if ( $replaced && strlen( $replaced ) > strlen( $markdown ) * 0.5 ) {
+                    $markdown = $replaced;
+                }
+
+                // Now replace the instructions section (find it after the new ingredients)
+                if ( $real_inst ) {
+                    $inst_pos = stripos( $markdown, '### Instructions', $pos );
+                    if ( $inst_pos !== false ) {
+                        $inst_end = strlen( $markdown );
+                        foreach ( [ '### Storage', '### ', '## ', 'Inspired by' ] as $delimiter ) {
+                            $dpos = stripos( $markdown, $delimiter, $inst_pos + 16 );
+                            if ( $dpos !== false && $dpos < $inst_end ) {
+                                $inst_end = $dpos;
+                            }
+                        }
+                        $replaced = substr( $markdown, 0, $inst_pos ) . $real_inst . substr( $markdown, $inst_end );
+                        if ( $replaced && strlen( $replaced ) > strlen( $markdown ) * 0.5 ) {
+                            $markdown = $replaced;
+                        }
+                    }
+                }
+            }
+
+            $recipe_index++;
         }
 
-        // If we used the parts approach, use result; otherwise return markdown with placeholder replacements
-        if ( $recipe_index > 0 ) {
-            return $result;
+        // Safety check: if the result is dramatically shorter, something went wrong — return original
+        if ( strlen( $markdown ) < strlen( $original ) * 0.3 ) {
+            error_log( 'SEOBetter: inject_real_recipe_data safety check failed — returning original' );
+            return $original;
         }
+
         return $markdown;
     }
 
@@ -1528,8 +1518,13 @@ class Async_Generator {
         }
 
         if ( $stripped_count > 0 ) {
-            // Add a note about stripped recipes
             error_log( "SEOBetter: Stripped {$stripped_count} unsourced recipe(s) from article" );
+        }
+
+        // Safety check: if result is dramatically shorter, return original
+        if ( strlen( $result ) < strlen( $markdown ) * 0.3 ) {
+            error_log( 'SEOBetter: strip_unsourced_recipes safety check — too much stripped, returning original' );
+            return $markdown;
         }
 
         return $result;
