@@ -24,12 +24,10 @@ namespace SEOBetter;
 class Citation_Pool {
 
     private const CACHE_TTL = 21600; // 6 hours
-    // v1.5.63 — cache version bump invalidates all pre-v1.5.62 pools.
-    // Without this, v1.5.62's topical relevance filter isn't applied
-    // because stale pools built under v1.5.61 (no filter) were still
-    // being returned from the transient cache. Bump this whenever the
-    // pool builder logic changes.
-    private const CACHE_VERSION = 'v2';
+    // v1.5.136 — cache version bump invalidates all stale pools.
+    // Bump this whenever pool builder logic changes.
+    // v3: invalidates empty pools cached during Serper+Firecrawl crash era.
+    private const CACHE_VERSION = 'v3';
 
     /**
      * Build a citation pool for a keyword. Returns an array of pool entries:
@@ -55,7 +53,9 @@ class Citation_Pool {
 
         $cache_key = 'seobetter_pool_' . self::CACHE_VERSION . '_' . md5( $keyword . '|' . $country . '|' . $domain );
         $cached = get_transient( $cache_key );
-        if ( is_array( $cached ) ) {
+        // v1.5.136 — only use cache if pool is non-empty. Empty pools from
+        // previous crashes should not be served from cache.
+        if ( is_array( $cached ) && ! empty( $cached ) ) {
             return $cached;
         }
 
@@ -177,7 +177,10 @@ class Citation_Pool {
             }
         }
 
-        set_transient( $cache_key, $pool, self::CACHE_TTL );
+        // Only cache non-empty pools — empty pools from API failures should be retried
+        if ( ! empty( $pool ) ) {
+            set_transient( $cache_key, $pool, self::CACHE_TTL );
+        }
         return $pool;
     }
 
