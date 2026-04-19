@@ -29,8 +29,8 @@ class Trend_Researcher {
     // without requiring a manual DB cleanup.
     // v7 — v1.5.26 added the `places` array, v1.5.30 added Sonar tier, v1.5.34
     // fixes stale caches from pre-v1.5.26 deployments still hitting old shape.
-    // v1.5.136 — bump to invalidate stale results from Serper+Firecrawl crash era
-    private const CACHE_VERSION = 'v8';
+    // v1.5.137 — bump to force fresh research for Serper bypass fix
+    private const CACHE_VERSION = 'v9';
 
     /**
      * Check if Last30Days is available.

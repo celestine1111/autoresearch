@@ -24,10 +24,8 @@ namespace SEOBetter;
 class Citation_Pool {
 
     private const CACHE_TTL = 21600; // 6 hours
-    // v1.5.136 — cache version bump invalidates all stale pools.
-    // Bump this whenever pool builder logic changes.
-    // v3: invalidates empty pools cached during Serper+Firecrawl crash era.
-    private const CACHE_VERSION = 'v3';
+    // v1.5.137 — bump to force fresh pool build with Serper bypass flag.
+    private const CACHE_VERSION = 'v4';
 
     /**
      * Build a citation pool for a keyword. Returns an array of pool entries:
