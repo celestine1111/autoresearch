@@ -16,6 +16,62 @@
 
 ---
 
+## v1.5.133 — Serper + Firecrawl research pipeline (replaces Sonar)
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Major Architecture Change
+
+Replaced Perplexity Sonar (AI black box) with Serper (Google search) + Firecrawl (page scraper) + cheap LLM extraction. The AI now reads ACTUAL page content instead of inventing facts from training data.
+
+### Changes
+
+- **New research pipeline** — `cloud-api/api/research.js::fetchSerperFirecrawlResearch()` line ~3290
+  - Step 1: Serper searches Google → real URLs with snippets
+  - Step 2: Firecrawl scrapes top 5 URLs → clean markdown
+  - Step 3: Cheap LLM (Llama 3.1 8B) extracts quotes/stats from REAL page text
+  - Returns exact same shape: `{citations, quotes, statistics, table_data}`
+  - Auto-fallback to Sonar if SERPER_API_KEY or FIRECRAWL_API_KEY not set
+  - `Verify:` `grep -n 'fetchSerperFirecrawlResearch' cloud-api/api/research.js`
+  - `Verified by user:` UNTESTED
+
+- **New scrape endpoint** — `cloud-api/api/scrape.js` (NEW FILE)
+  - POST /api/scrape — takes a URL, returns clean Firecrawl markdown
+  - Used by PHP recipe pipeline for structured recipe extraction
+  - `Verify:` `ls cloud-api/api/scrape.js`
+  - `Verified by user:` UNTESTED
+
+- **Recipe pipeline uses Firecrawl** — `includes/Async_Generator.php` line ~276
+  - After Tavily finds recipe URLs, calls /api/scrape for clean markdown
+  - extract_recipe_from_raw() now gets clean structured text instead of messy HTML
+  - Falls back to Tavily raw_content if Firecrawl unavailable
+  - `Verify:` `grep -n 'api/scrape' includes/Async_Generator.php`
+  - `Verified by user:` UNTESTED
+
+- **Sonar kept as fallback** — `cloud-api/api/research.js::fetchSonarResearchLegacy()`
+  - Renamed from fetchSonarResearch → fetchSonarResearchLegacy
+  - Dispatcher function routes to new pipeline if keys set, Sonar if not
+  - `Verify:` `grep -n 'fetchSonarResearchLegacy' cloud-api/api/research.js`
+  - `Verified by user:` UNTESTED
+
+### Env vars (Vercel)
+- `SERPER_API_KEY` — from serper.dev
+- `FIRECRAWL_API_KEY` — from firecrawl.dev
+- `EXTRACTION_MODEL` — optional, default `meta-llama/llama-3.1-8b-instant`
+- `OPENROUTER_KEY` — existing, reused for extraction LLM
+
+### Why this fixes hallucination
+- Sonar: AI searches + synthesizes = unverifiable claims
+- New: Google search (real URLs) + scraper (real page text) + extraction from real content
+- Every quote is a sentence from a real page. Every stat has a real source. Every URL is from Google.
+
+### Guidelines updated
+- `plugin_functionality_wordpress.md` — research pipeline section
+- `research-notes.md` — updated status
+
+---
+
 ## v1.5.128 — Recipe data injection: AI cannot write ingredients/instructions
 
 **Date:** 2026-04-19

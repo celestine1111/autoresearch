@@ -120,12 +120,8 @@ Replace the single Sonar call with:
 
 ## Decision
 
-**Keep Sonar for now (v1.5.81+). Revisit at 1000+ Pro users or if Sonar costs exceed $200/month.**
+**IMPLEMENTED in v1.5.133 (2026-04-19).** Serper + Firecrawl is now the primary research pipeline. Sonar kept as automatic fallback if Serper/Firecrawl keys are not set.
 
-The Serper + Firecrawl pipeline is objectively better (cheaper, verifiable, self-hostable) but requires:
-- Two new API integrations
-- Error handling for multi-step pipeline
-- Firecrawl rate limiting (scraping 5 pages per article)
-- Testing across different content types
+Implementation: `cloud-api/api/research.js::fetchSerperFirecrawlResearch()` + `cloud-api/api/scrape.js` (new endpoint for PHP recipe pipeline).
 
-Not worth the engineering time until the current architecture is proven and generating revenue.
+Env vars on Vercel: `SERPER_API_KEY`, `FIRECRAWL_API_KEY`, `EXTRACTION_MODEL` (optional).

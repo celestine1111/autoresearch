@@ -2,6 +2,9 @@
   "functions": {
     "api/research.js": {
       "maxDuration": 60
+    },
+    "api/scrape.js": {
+      "maxDuration": 30
     }
   },
   "headers": [

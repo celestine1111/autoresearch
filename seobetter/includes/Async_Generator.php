@@ -273,19 +273,45 @@ class Async_Generator {
                     $extracted_recipes = [];
 
                     if ( ! empty( $tavily_recipes['results'] ) ) {
-                        foreach ( array_slice( $tavily_recipes['results'], 0, 5 ) as $recipe_result ) {
-                            $raw = $recipe_result['raw_content'] ?? '';
-                            if ( strlen( $raw ) < 200 ) continue;
+                        // v1.5.133 — Get the Vercel cloud URL for Firecrawl scraping
+                        $cloud_url = Cloud_API::get_cloud_url();
 
-                            $clean = preg_replace( '/\s+/', ' ', strip_tags( $raw ) );
+                        foreach ( array_slice( $tavily_recipes['results'], 0, 5 ) as $recipe_result ) {
+                            $page_url = $recipe_result['url'] ?? '';
+                            $raw = $recipe_result['raw_content'] ?? '';
+
+                            // v1.5.133 — Try Firecrawl scrape for clean markdown (much better than Tavily raw HTML)
+                            $firecrawl_md = null;
+                            if ( ! empty( $page_url ) && ! empty( $cloud_url ) ) {
+                                $scrape_resp = wp_remote_post( $cloud_url . '/api/scrape', [
+                                    'timeout' => 15,
+                                    'headers' => [ 'Content-Type' => 'application/json' ],
+                                    'body'    => wp_json_encode( [ 'url' => $page_url ] ),
+                                ] );
+                                if ( ! is_wp_error( $scrape_resp ) ) {
+                                    $scrape_body = json_decode( wp_remote_retrieve_body( $scrape_resp ), true );
+                                    if ( ! empty( $scrape_body['success'] ) && ! empty( $scrape_body['markdown'] ) ) {
+                                        $firecrawl_md = $scrape_body['markdown'];
+                                    }
+                                }
+                            }
+
+                            // Use Firecrawl markdown if available, fall back to Tavily raw_content
+                            $content_to_parse = $firecrawl_md ?? $raw;
+                            if ( strlen( $content_to_parse ) < 200 ) continue;
+
+                            $clean = $firecrawl_md
+                                ? mb_substr( preg_replace( '/\s+/', ' ', $firecrawl_md ), 0, 1200 )
+                                : mb_substr( preg_replace( '/\s+/', ' ', strip_tags( $raw ) ), 0, 800 );
+
                             $source = [
                                 'title' => $recipe_result['title'] ?? 'Unknown',
-                                'url'   => $recipe_result['url'] ?? '',
-                                'text'  => mb_substr( $clean, 0, 800 ),
+                                'url'   => $page_url,
+                                'text'  => $clean,
                             ];
 
-                            // Try structured extraction (bonus — not required)
-                            $parsed = self::extract_recipe_from_raw( $raw );
+                            // Extract structured recipe data — works much better on Firecrawl markdown
+                            $parsed = self::extract_recipe_from_raw( $content_to_parse );
                             if ( ! empty( $parsed['ingredients'] ) ) {
                                 $source['parsed'] = $parsed;
                                 $parsed['source_title'] = $source['title'];

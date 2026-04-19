@@ -32,7 +32,25 @@
 
 **Why these 9?** As of v1.5.16 the always-on social signal is broad and free. X/Twitter is **deliberately not included** — there is no clean free X API in 2026 (see [pro-features-ideas.md → X / Twitter integration](pro-features-ideas.md) for the cookie-auth path planned for a future release). The 4 new v1.5.16 sources collectively replace ~70% of what X used to provide, across more languages and niches.
 
-### 1.2 Optional Pro Source
+### 1.2 Server-Side Research (Serper + Firecrawl — v1.5.133)
+
+**Replaces Perplexity Sonar.** Runs on Vercel using Ben's API keys. Falls back to Sonar if keys not set.
+
+| Step | Service | What It Does | Cost |
+|---|---|---|---|
+| **Search** | Serper (Google SERP) | Searches Google → 8-10 real URLs with titles and snippets | $0.001/search |
+| **Scrape** | Firecrawl | Scrapes top 5 URLs → clean markdown (no nav, ads, sidebars) | $0.001/page |
+| **Extract** | OpenRouter (Llama 3.1 8B) | Extracts quotes, stats, table data from REAL page text | $0.001/call |
+
+**Why this replaces Sonar:** Sonar is an AI that searches and synthesizes — it hallucinates URLs, invents quotes, makes up statistics. The new pipeline gives the extraction LLM ACTUAL page content to read, so every quote is a real sentence from a real page, every stat has a real source, every URL is from Google.
+
+**Return shape:** Identical to Sonar — `{citations, quotes, statistics, table_data}`. No PHP changes needed.
+
+**Env vars (Vercel):** `SERPER_API_KEY`, `FIRECRAWL_API_KEY`, `EXTRACTION_MODEL` (optional, default `meta-llama/llama-3.1-8b-instant`)
+
+**Recipe pipeline (v1.5.133):** After Tavily finds recipe URLs, PHP calls `/api/scrape` to get clean Firecrawl markdown. `extract_recipe_from_raw()` works much better on clean structured markdown than on messy Tavily raw HTML.
+
+### 1.3 Optional Pro Source
 
 | Source | URL Pattern | Requires | What It Returns |
 |---|---|---|---|

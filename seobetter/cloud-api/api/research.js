@@ -3277,11 +3277,195 @@ async function scrapeAndExtractQuotes(urls, keyword) {
 // other fetchers — no extra latency.
 // ============================================================
 
+// v1.5.133 — Dispatcher: uses Serper + Firecrawl if keys are set, falls back to Sonar.
 async function fetchSonarResearch(keyword, country = '') {
+  const SERPER_KEY = process.env.SERPER_API_KEY;
+  const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY;
+
+  // New pipeline: Serper search → Firecrawl scrape → LLM extraction
+  if (SERPER_KEY && FIRECRAWL_KEY) {
+    try {
+      const result = await fetchSerperFirecrawlResearch(keyword, country);
+      if (result) return result;
+    } catch (err) {
+      console.error('Serper+Firecrawl failed, falling back to Sonar:', err.message);
+    }
+  }
+
+  // Fallback: legacy Sonar path
+  return fetchSonarResearchLegacy(keyword, country);
+}
+
+// ============================================================
+// SERPER + FIRECRAWL PIPELINE (v1.5.133)
+// Step 1: Serper searches Google → real URLs
+// Step 2: Firecrawl scrapes top 5 → clean markdown
+// Step 3: Cheap LLM extracts structured data from real page content
+// Returns exact same shape as Sonar: {citations, quotes, statistics, table_data}
+// ============================================================
+
+async function fetchSerperFirecrawlResearch(keyword, country = '') {
+  const SERPER_KEY = process.env.SERPER_API_KEY;
+  const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY;
+  const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+  const EXTRACTION_MODEL = process.env.EXTRACTION_MODEL || 'meta-llama/llama-3.1-8b-instant';
+
+  // --- Step 1: Serper search ---
+  const countryMap = { AU: 'au', US: 'us', GB: 'uk', CA: 'ca', NZ: 'nz', IE: 'ie', IN: 'in', DE: 'de', FR: 'fr', JP: 'jp', BR: 'br', MX: 'mx', ES: 'es', IT: 'it', KR: 'kr', NL: 'nl', SE: 'se' };
+  const gl = countryMap[(country || '').toUpperCase()] || '';
+
+  const serperBody = { q: keyword, num: 10 };
+  if (gl) serperBody.gl = gl;
+
+  const serperResp = await fetch('https://google.serper.dev/search', {
+    method: 'POST',
+    headers: { 'X-API-KEY': SERPER_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(serperBody),
+    signal: AbortSignal.timeout(8000),
+  });
+
+  if (!serperResp.ok) {
+    console.error(`Serper error: ${serperResp.status}`);
+    return null;
+  }
+
+  const serperData = await serperResp.json();
+  const organicResults = serperData?.organic || [];
+
+  if (organicResults.length === 0) return null;
+
+  // Build citations from Serper results (these are REAL Google URLs)
+  const serperCitations = organicResults.slice(0, 8).map(r => ({
+    url: r.link,
+    title: r.title || '',
+    source_name: new URL(r.link).hostname.replace('www.', ''),
+    snippet: r.snippet || '',
+  }));
+
+  // --- Step 2: Firecrawl scrape top 5 URLs in parallel ---
+  const urlsToScrape = organicResults.slice(0, 5).map(r => r.link);
+
+  const scrapePromises = urlsToScrape.map(async (url) => {
+    try {
+      const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${FIRECRAWL_KEY}` },
+        body: JSON.stringify({ url, formats: ['markdown'], onlyMainContent: true, timeout: 10000 }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (!data?.success || !data?.data?.markdown) return null;
+      return {
+        url,
+        title: data.data.metadata?.title || '',
+        source_name: new URL(url).hostname.replace('www.', ''),
+        markdown: data.data.markdown,
+      };
+    } catch {
+      return null; // Single page failure is non-fatal
+    }
+  });
+
+  const scrapeResults = (await Promise.allSettled(scrapePromises))
+    .map(r => r.status === 'fulfilled' ? r.value : null)
+    .filter(Boolean);
+
+  if (scrapeResults.length === 0) {
+    // Firecrawl got nothing — return Serper citations only (still real URLs)
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+  }
+
+  // --- Step 3: LLM extraction from scraped content ---
+  if (!OPENROUTER_KEY) {
+    // No LLM key — return just the citations from Serper
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+  }
+
+  // Build context from scraped pages (truncate each to ~2000 chars)
+  let context = '';
+  for (const page of scrapeResults) {
+    const truncated = page.markdown.slice(0, 2000);
+    context += `\n=== Page: ${page.title} (${page.url}) ===\n${truncated}\n`;
+  }
+
+  const countryHint = country ? ` Target audience is in ${country}. Prefer sources from ${country} when available.` : '';
+
+  const extractPrompt = `Here is the actual content from ${scrapeResults.length} web pages about "${keyword}":
+${context}
+
+Based ONLY on the actual page content above, extract a JSON object with exactly these 4 keys:
+{
+  "quotes": [
+    {"text": "exact sentence from the pages above", "source": "Website Name", "url": "page URL where it appears"},
+    (2-4 entries. ONLY sentences that appear VERBATIM in the pages above. Include the exact URL.)
+  ],
+  "statistics": [
+    "65% of dog owners prefer grain-free options (Pet Food Industry Association, 2025)",
+    (3-5 entries. ONLY numbers/percentages that appear in the pages above, with source names.)
+  ],
+  "table_data": {
+    "columns": ["Name", "Key Feature", "Best For"],
+    "rows": [["Real Item", "Real feature from pages", "Real use case"]],
+    (ONLY if comparison data exists in the pages above. Otherwise set to null.)
+  }
+}
+
+CRITICAL: Extract ONLY information that actually appears in the page content above.
+Do NOT add any data from your training knowledge. If a field has no matches, use an empty array.
+Return ONLY the JSON object. No markdown fences.`;
+
+  try {
+    const llmResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}` },
+      body: JSON.stringify({
+        model: EXTRACTION_MODEL,
+        messages: [
+          { role: 'system', content: 'You are a data extraction assistant. Extract ONLY information that appears verbatim in the provided page content. Never add information from your training data.' },
+          { role: 'user', content: extractPrompt },
+        ],
+        max_tokens: 2000,
+        temperature: 0.0,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!llmResp.ok) {
+      return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+    }
+
+    const llmData = await llmResp.json();
+    let content = llmData?.choices?.[0]?.message?.content || '';
+    if (!content) {
+      return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+    }
+
+    content = content.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '').trim();
+    const parsed = JSON.parse(content);
+
+    return {
+      citations: serperCitations,
+      quotes: Array.isArray(parsed.quotes) ? parsed.quotes : [],
+      statistics: Array.isArray(parsed.statistics) ? parsed.statistics : [],
+      table_data: parsed.table_data && typeof parsed.table_data === 'object' ? parsed.table_data : null,
+    };
+  } catch (err) {
+    console.error('LLM extraction error (non-fatal):', err.message);
+    // Still return the real Serper citations even if extraction fails
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+  }
+}
+
+// ============================================================
+// LEGACY SONAR PATH (kept as fallback)
+// ============================================================
+
+async function fetchSonarResearchLegacy(keyword, country = '') {
   const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
   const SONAR_MODEL = process.env.SONAR_MODEL || 'perplexity/sonar';
 
-  if (!OPENROUTER_KEY) return null; // No server key — graceful skip
+  if (!OPENROUTER_KEY) return null;
 
   try {
     const controller = new AbortController();
@@ -3346,7 +3530,6 @@ CRITICAL RULES:
     let content = data?.choices?.[0]?.message?.content || '';
     if (!content) return null;
 
-    // Strip markdown fences if present
     content = content.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '').trim();
 
     const parsed = JSON.parse(content);
@@ -3359,7 +3542,6 @@ CRITICAL RULES:
       table_data: parsed.table_data && typeof parsed.table_data === 'object' ? parsed.table_data : null,
     };
   } catch (err) {
-    // Sonar failure is non-fatal — other fetchers still provide data
     console.error('Sonar research error (non-fatal):', err.message || err);
     return null;
   }
