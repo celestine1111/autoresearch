@@ -1499,8 +1499,13 @@ class Async_Generator {
                     || ( preg_match( '/###\s*ingredients/i', $body ) && preg_match( '/###\s*instructions/i', $body ) );
 
                 if ( $is_recipe ) {
-                    // Check for "Inspired by [Source](url)" with a real URL
-                    $has_source = preg_match( '/Inspired by\s*\[([^\]]+)\]\(https?:\/\/[^)]+\)/', $body );
+                    // Check for source attribution — multiple formats:
+                    // 1. Markdown: "Inspired by [Source](url)"
+                    // 2. Plain text with URL: "Inspired by Source (url)"
+                    // 3. Any "Inspired by" followed by a URL somewhere in the body
+                    $has_source = preg_match( '/Inspired by\s*\[([^\]]+)\]\(https?:\/\/[^)]+\)/', $body )
+                        || preg_match( '/Inspired by.{0,60}https?:\/\//', $body )
+                        || preg_match( '/Source:\s*https?:\/\//', $body );
 
                     if ( ! $has_source ) {
                         // Strip this recipe — skip heading and body
@@ -1551,18 +1556,11 @@ class Async_Generator {
             $markdown = Citation_Pool::append_references_section( $markdown, $citation_pool );
         }
 
-        // v1.5.128 — RECIPE DATA INJECTION (hard enforcement).
-        // Replaces AI-written ingredients/instructions with REAL data extracted
-        // from Tavily source pages. The AI cannot fake ingredients because it
-        // doesn't write them — they come from the actual recipe website.
+        // v1.5.130 — Recipe source validation.
+        // Strip recipe sections without "Inspired by [Source](url)" attribution.
+        // inject_real_recipe_data() disabled — was destroying article content.
+        // Ingredients are enforced via prompt (AI gets full extracted list to copy).
         $content_type = $options['content_type'] ?? '';
-        $extracted_recipes = $job['extracted_recipes'] ?? [];
-        if ( $content_type === 'recipe' && ! empty( $extracted_recipes ) ) {
-            $markdown = self::inject_real_recipe_data( $markdown, $extracted_recipes );
-        }
-
-        // v1.5.127 — RECIPE SOURCE VALIDATION (safety net).
-        // Strip any recipe section that doesn't have "Inspired by [Source](url)".
         if ( $content_type === 'recipe' ) {
             $markdown = self::strip_unsourced_recipes( $markdown );
         }
