@@ -274,7 +274,7 @@ Auto-detected from any paragraph matching `"Quote text" - Name, Title` (short da
   - `### Ingredients` — bullet list (renders as amber ingredients box per §5.8)
   - `### Instructions` — numbered list (renders as step boxes per §5.9)
   - `### Storage` — paragraph with storage notes
-  - Attribution: "Adapted from [Source Name](url)"
+  - Attribution: "Inspired by [Source Name](url)" — links to the real source recipe from authority site (v1.5.123: recipes sourced via Tavily from PetMD, RSPCA, AKC etc. — never invented by AI)
 - **Multiple recipes:** Each recipe gets its OWN card. Cards are separated by `---` or next H2.
 - **Stats/citations injection:** SKIPPED inside recipe cards. Stats belong in the intro section before recipes.
 - **Schema:** Each recipe card generates a separate `@type: Recipe` JSON-LD schema with `recipeIngredient`, `recipeInstructions` (HowToStep with name + text + url), `prepTime`, `cookTime`, `recipeCuisine` (from country), `keywords`, `recipeCategory`, `nutrition.calories` (if stated), `image` (array of 3 URLs for Google's 1:1, 4:3, 16:9 ratios).

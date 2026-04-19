@@ -93,6 +93,15 @@
 
 **BANNED:** Hardcoded times/yields/ratings/cuisine/calories. If the content doesn't state a value, the field is OMITTED.
 
+**Recipe data sourcing (v1.5.123):**
+- During the research step, if content_type is `recipe`, Tavily searches for real recipes from authority sites (using the category + country authority domain list)
+- Query: `"keyword recipe ingredients instructions"` restricted to authority domains (e.g., petmd.com, rspca.org.au, akc.org for pet recipes)
+- Extracts title, URL, and raw page content (ingredients + steps) from top 3 results
+- This REAL recipe data is injected into the AI's research context with the instruction: "Base your recipes on these REAL ingredients and steps. Give each a creative unique name and rewrite the intro."
+- Each recipe ends with: "Inspired by [Source Name](url)" — proving it came from a real, verified source
+- The AI does NOT invent recipes from scratch — it adapts real recipes from credible sources
+- This is critical for pet food recipes where wrong ingredients could harm animals
+
 **Country → Cuisine mapping (40+ countries):**
 AU→Australian, US→American, GB→British, FR→French, IT→Italian, JP→Japanese, IN→Indian, MX→Mexican, TH→Thai, CN→Chinese, KR→Korean, ES→Spanish, DE→German, BR→Brazilian, GR→Greek, TR→Turkish, VN→Vietnamese, IE→Irish, NZ→New Zealand
 

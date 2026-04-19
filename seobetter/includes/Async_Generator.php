@@ -213,6 +213,34 @@ class Async_Generator {
                     'available'  => ! empty( $research['sonar_available'] ),
                 ];
 
+                // v1.5.123 — Recipe sourcing from real authority sites via Tavily.
+                // For recipe content type, search for real recipes on authority
+                // sites (PetMD, AKC, RSPCA, etc.) and extract ingredients + steps.
+                // AI then rewrites with unique name/intro but uses REAL ingredients.
+                // Prevents AI from inventing potentially harmful pet food recipes.
+                if ( ( $options['content_type'] ?? '' ) === 'recipe' ) {
+                    $tavily_recipes = Content_Injector::tavily_search_and_extract(
+                        $keyword . ' recipe ingredients instructions',
+                        $options['domain'] ?? 'food',
+                        $options['country'] ?? ''
+                    );
+                    $recipe_data_block = '';
+                    if ( ! empty( $tavily_recipes['results'] ) ) {
+                        $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources — use these as your base) ===\n";
+                        $recipe_data_block .= "IMPORTANT: Base your recipes on these REAL ingredients and steps. Give each a creative unique name and rewrite the intro, but keep the core ingredients and method the same. At the end of each recipe write: \"Inspired by [Source Name](source_url)\"\n\n";
+                        foreach ( array_slice( $tavily_recipes['results'], 0, 3 ) as $ri => $recipe_result ) {
+                            $raw = $recipe_result['raw_content'] ?? '';
+                            if ( strlen( $raw ) < 200 ) continue;
+                            // Extract ingredient-like lines
+                            $clean = preg_replace( '/\s+/', ' ', strip_tags( $raw ) );
+                            $recipe_data_block .= "Source " . ( $ri + 1 ) . ": " . ( $recipe_result['title'] ?? 'Unknown' ) . "\n";
+                            $recipe_data_block .= "URL: " . ( $recipe_result['url'] ?? '' ) . "\n";
+                            $recipe_data_block .= "Content excerpt: " . mb_substr( $clean, 0, 800 ) . "\n\n";
+                        }
+                        $job['results']['trends'] = ( $job['results']['trends'] ?? '' ) . $recipe_data_block;
+                    }
+                }
+
                 // Build the verified citation pool (real keyword-relevant URLs)
                 // v1.5.81 — pass Sonar citations as additional pool candidates
                 $pool = Citation_Pool::build(
@@ -414,7 +442,7 @@ class Async_Generator {
             'case_study' => ['sections' => 'Key Takeaways, Executive Summary, The Challenge, The Solution, Results and Metrics, Client Quote, FAQ, References', 'guidance' => 'Customer success story. Lead with the metric. Problem-solution-result structure. Include specific numbers. End with a direct quote from the client.', 'schema' => 'Article'],
             'interview' => ['sections' => 'Key Takeaways, Introduction (why this person), Short Bio, Q&A Pairs (5-10 questions), Closing Thoughts, References', 'guidance' => 'Q&A format. Questions should be bold H3 headings. Answers should feel natural and conversational. Include follow-up questions.', 'schema' => 'Article'],
             'faq_page' => ['sections' => 'Topic Introduction, 10-15 Question and Answer Pairs, References', 'guidance' => 'Collection of Q&A pairs. Questions phrased exactly as users search. Direct answers in the first sentence. Vary answer lengths.', 'schema' => 'FAQPage'],
-            'recipe' => ['sections' => 'Key Takeaways, Why This Matters (stats and context - NOT inside recipes), Quick Comparison Table, Recipe 1: [Creative Name] (with Ingredients + Instructions + Storage subsections), Recipe 2: [Creative Name] (same structure), Recipe 3: [Creative Name] (same structure), What Ingredients to Avoid (Safety), Pros and Cons, FAQ, References', 'guidance' => 'RECIPE CARD FORMAT. Write 3 distinct recipes on this topic. Each recipe MUST have: a creative unique name as the H2, then subsections: Ingredients (as a bullet list under ### Ingredients), Instructions (as a numbered list under ### Instructions), and Storage Notes. Include prep time, cook time, yield, AND approximate calories per serving at the top of each recipe in bold (e.g. **Prep Time:** 10 minutes | **Cook Time:** 20 minutes | **Yields:** 24 treats | **Calories:** 45 per treat). Put ALL statistics, expert quotes, and context in the intro section BEFORE the recipes - NEVER inside a recipe card. Each recipe should be a slight variation (different main ingredient or method). Cite the original source recipe at the end of each recipe as "Adapted from [Source Name](url)".', 'schema' => 'Recipe'],
+            'recipe' => ['sections' => 'Key Takeaways, Why This Matters (stats and context - NOT inside recipes), Quick Comparison Table, Recipe 1: [Creative Name] (with Ingredients + Instructions + Storage subsections), Recipe 2: [Creative Name] (same structure), Recipe 3: [Creative Name] (same structure), What Ingredients to Avoid (Safety), Pros and Cons, FAQ, References', 'guidance' => 'RECIPE CARD FORMAT. Write 3 distinct recipes on this topic. CRITICAL: If REAL RECIPE DATA is provided in the research data above, you MUST base your recipes on those real ingredients and steps — do NOT invent recipes from scratch. Give each recipe a creative unique name, rewrite the intro in your own words, and make slight variations (different spice, different cooking method) but keep the core ingredients from the verified source. Each recipe MUST have: a creative unique name as the H2, then subsections: Ingredients (as a bullet list under ### Ingredients), Instructions (as a numbered list under ### Instructions), and Storage Notes. Include prep time, cook time, yield, AND approximate calories per serving at the top of each recipe in bold (e.g. **Prep Time:** 10 minutes | **Cook Time:** 20 minutes | **Yields:** 24 treats | **Calories:** 45 per treat). Put ALL statistics, expert quotes, and context in the intro section BEFORE the recipes - NEVER inside a recipe card. At the end of each recipe write: "Inspired by [Source Name](source_url)" citing the original source.', 'schema' => 'Recipe'],
             'tech_article' => ['sections' => 'Key Takeaways, What You Will Build, Prerequisites, Setup, Code Walkthrough (with code blocks), Testing and Verification, Recap and Further Reading, FAQ, References', 'guidance' => 'Developer tutorial. Include code blocks. Explain each step. List prerequisites clearly. Test everything you recommend.', 'schema' => 'TechArticle'],
             'white_paper' => ['sections' => 'Executive Summary, Introduction and Problem Statement, Methodology, Findings, Analysis, Recommendations, Conclusion, References', 'guidance' => 'Authoritative research report. Data-driven. Formal tone. Every claim backed by evidence. Include charts/tables for data visualization.', 'schema' => 'Report'],
             'scholarly_article' => ['sections' => 'Abstract, Introduction, Literature Review, Methods, Results, Discussion, Conclusion, References', 'guidance' => 'Academic paper format. Formal academic tone. Cite all claims. Include methodology details. Discuss limitations.', 'schema' => 'ScholarlyArticle'],
