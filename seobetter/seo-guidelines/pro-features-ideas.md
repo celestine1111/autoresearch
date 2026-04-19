@@ -64,7 +64,93 @@
 - [ ] Keyword Cannibalization Detector
 - [ ] GEO Score column in Posts list (sortable)
 
-> **Internal linking — OUT OF SCOPE** (decision 2026-04-15). User will rely on an existing third-party WordPress internal linking plugin (e.g. Link Whisper, Internal Link Juicer, Rank Math internal linker) at save time. SEOBetter will not duplicate that functionality. AIOSEO's "no internal links" check is accepted as a cross-plugin concern, not a SEOBetter responsibility.
+> **Internal linking — REINSTATED as a Pro feature (2026-04-19).** Previously out of scope. Now planned as "Internal Links Intelligence" with AI-powered placement suggestions. See detailed spec below.
+
+### Content Freshness & Management Pro
+
+- [ ] **Content Freshness Analyzer** (requested 2026-04-19)
+
+  **What it does:** Analyzes every article from any blog, computes a freshness score, compares up to 3 blogs side-by-side, and generates a prioritized updating list based on traffic decline and content age.
+
+  **How it works with Serper + Firecrawl:**
+  - WordPress REST API / sitemap.xml to discover all posts with publish/modified dates
+  - Serper checks current Google ranking for each article's target keyword (ranking trend)
+  - Firecrawl scrapes competitor blogs via their sitemaps for comparison mode
+  - Freshness score formula: based on age, last modified date, keyword ranking trend, traffic decline estimate
+
+  **UI:** New admin page `SEOBetter > Content Freshness` with:
+  - Single Domain: gauge score (0-100), total articles, avg age, fresh (<1yr), stale (>3yr), estimated organic traffic, high-priority count, top 10 oldest articles
+  - Compare Domains: side-by-side for up to 3 blogs (enter competitor URLs)
+  - Article Table: title, author, last updated, trend sparkline, peak traffic, current traffic, decline %, freshness score, priority badge (Critical/High/Medium/Low)
+  - Filters: min traffic threshold, sort by score/decline/age, search by title/URL
+
+  **Integration point:** New admin page registered in `seobetter.php::register_admin_pages()`. Data stored in `_seobetter_freshness_scan` option. Uses `cloud-api/api/research.js` Serper for ranking checks.
+
+  **WordPress plugin integrations:** MonsterInsights/GA4 (real traffic data), Jetpack Stats (traffic fallback), Google Search Console API (real impressions/clicks — Pro OAuth), Yoast/RankMath/AIOSEO (focus keyword for rank checking)
+
+  **Estimated effort:** ~15 hours
+  **Free-to-Pro gating:** Free: scan own site only, top 10 articles. Pro: compare 3 domains, full article list, export CSV, scheduled re-scans.
+
+- [ ] **Internal Links Intelligence** (requested 2026-04-19)
+
+  **What it does:** Ingests your sitemap, maps all existing internal links, prioritizes pages by opportunity, and gives AI-powered placement suggestions with ready-to-paste HTML snippets.
+
+  **How it works with Serper + Firecrawl:**
+  - Reads site's sitemap.xml to discover all pages (or uses WordPress post query)
+  - Firecrawl scrapes each page to extract existing internal links + page content
+  - AI analyzes content similarity between pages (TF-IDF or embedding-based)
+  - Generates placement suggestions: anchor text, original paragraph, rewritten paragraph with link, HTML snippet
+
+  **UI:** New admin page `SEOBetter > Internal Links` with 3 tabs:
+  - Setup: sitemap URL input, scan button, scan progress
+  - Dashboard: pages indexed, avg internal links, weak anchors, new posts needing links, last scan. Table: page title, published date, traffic, backlinks, inbound links count, priority score, "Recs" action button
+  - Recommendations: page URL analyzer, inbound count vs site average, status badge (Below Avg/Above Avg). Table: recommended pages with similarity %, inbound count, "Suggest Placement" button. Modal: suggested anchor text, original paragraph, rewritten paragraph with link highlighted in green, HTML snippet with copy button, AI reasoning
+
+  **WordPress plugin integrations:**
+  - WooCommerce (product pages as link targets, category pages for topical clustering)
+  - Yoast SEO (cornerstone content marking — prioritize linking TO cornerstone pages)
+  - RankMath (focus keyword data for anchor text optimization, internal link count in SEO analysis)
+  - AIOSEO (link suggestions data, focus keyword)
+  - Link Whisper (migration path — import existing link suggestions, offer as alternative)
+  - Internal Link Juicer (migration path — detect existing auto-linking rules)
+  - Redirection plugin (detect broken internal links, suggest replacements)
+  - MonsterInsights / GA4 (traffic data for page prioritization)
+  - Jetpack (stats for traffic-based priority)
+  - Elementor / Beaver Builder / Divi (parse page builder content for link injection)
+  - WP Sitemap plugins (XML sitemap discovery)
+  - TablePress (detect table content for contextual linking)
+
+  **Integration point:** New admin page in `seobetter.php`. Link data stored in custom table `{prefix}seobetter_internal_links`. Uses Firecrawl `/api/scrape` for page content extraction.
+
+  **Estimated effort:** ~25 hours
+  **Free-to-Pro gating:** Free: scan up to 50 pages, 5 suggestions per page. Pro: unlimited pages, unlimited suggestions, scheduled rescans, WooCommerce integration, export.
+
+- [ ] **Auto Content Updater** (requested 2026-04-19)
+
+  **What it does:** Finds outdated statistics, recommends product mentions, identifies topic gaps from top-ranking competitors, and generates new sections in your writing style. You approve every suggestion before anything changes.
+
+  **How it works with Serper + Firecrawl:**
+  - Firecrawl scrapes the article to analyze current content
+  - Serper searches for current data on the article's keyword
+  - Firecrawl scrapes top 5 ranking competitors for the keyword
+  - AI compares: finds outdated stats (year references, stale claims), missing topics, new product mentions
+  - Generates suggested changes with diff view (red = remove, green = add)
+
+  **UI:** New admin page `SEOBetter > Content Updater` with 7-step wizard:
+  1. Enter URL — paste article URL + optional update context (e.g. "mention new integration")
+  2. Review Content — AI highlights current article with age indicators
+  3. Update Claims — finds time-sensitive statistics, outdated years, stale facts. Each has approve/reject toggle
+  4. Add Products — recommends relevant product/tool mentions based on current SERP results
+  5. Fill Topic Gaps — competitor analysis identifies missing H2 sections. Priority badges: Critical (top 3 competitors all cover it), Significant (2 cover it), Nice-to-have. Each gap shows: proposed H2, placement point, estimated word count, generated content preview
+  6. Review Draft — side-by-side diff view (original left, updated right). Changes highlighted in red (removed) and green (added). Approve/reject per change
+  7. Complete — apply approved changes to the WordPress post
+
+  **WordPress plugin integrations:** Same as Content Freshness (GSC, analytics plugins for traffic data), plus WooCommerce (recommend own products), Easy Digital Downloads (recommend own downloads)
+
+  **Integration point:** New admin page in `seobetter.php`. Uses Serper + Firecrawl pipeline on Vercel. Changes stored as pending drafts in `_seobetter_update_suggestions` post meta until approved.
+
+  **Estimated effort:** ~30 hours
+  **Free-to-Pro gating:** Free: 3 updates per month, steps 1-3 only (claims update). Pro: unlimited, all 7 steps including topic gaps and product mentions, batch update multiple articles.
 
 ### Advanced Pro
 - [ ] Unlimited AI provider connections

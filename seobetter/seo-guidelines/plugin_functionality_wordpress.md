@@ -711,7 +711,22 @@ Shows in the Post tab of the right sidebar with `initialOpen: true`:
 **Data source:** `GET /seobetter/v1/analyze/{post_id}` REST endpoint
 **Pro detection:** `window.seobetterData.isPro` via `wp_localize_script`
 
-### 11.3 Toolbar Score Badge (DOM injection)
+### 11.3 Rich Results Preview (v1.5.133)
+
+Collapsible panel in the sidebar showing how the article will appear in Google search results.
+
+**Sections:**
+1. **SERP Preview Card** — breadcrumb trail, title (blue link), description snippet, FAQ dropdown preview, Recipe star rating preview
+2. **Active Rich Result Types** — checkmarks for each detected schema type (Recipe card, FAQ dropdowns, Breadcrumb trail, Speakable, ItemList carousel, Review stars)
+3. **Schema Impact Estimate** — research-backed statistics (Searchmetrics, Ahrefs, Princeton GEO study, FirstPageSage) showing expected CTR/visibility boost from active schemas
+4. **Validation** — error/warning count from schema analysis, valid/invalid badge
+5. **Google Rich Results Test link** — opens in new tab with post URL pre-filled
+
+**Data source:** `rich_preview` object from `GET /seobetter/v1/analyze/{post_id}` — includes `rich_types[]`, `impact_stats[]`, `validation{}`, `breadcrumbs[]`, `title`, `description`, `url`
+
+**File:** `assets/js/editor-sidebar.js` — `renderRichPreview()` function
+
+### 11.4 Toolbar Score Badge (DOM injection)
 
 Colored pill badge injected into `.edit-post-header__settings` (next to Save button):
 - 📊 icon + score/100 text

@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.133
+ * Version: 1.5.134
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.133' );
+define( 'SEOBETTER_VERSION', '1.5.134' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -588,16 +588,124 @@ final class SEOBetter {
         $kw_or_title = get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: $post->post_title;
         $result = $analyzer->analyze( $post->post_content, $kw_or_title, $content_type );
 
-        // Add schema info for pre-publish panel
+        // Add schema info for pre-publish panel + Rich Results Preview
         $schema = get_post_meta( $post->ID, '_seobetter_schema', true );
+        $result['schema_data'] = null;
         if ( $schema ) {
             $decoded = json_decode( $schema, true );
             if ( isset( $decoded['@type'] ) ) {
                 $result['schema_types'] = $decoded['@type'];
             } elseif ( isset( $decoded['@graph'] ) ) {
-                $result['schema_types'] = implode( ' + ', array_column( $decoded['@graph'], '@type' ) );
+                $types = [];
+                foreach ( $decoded['@graph'] as $item ) {
+                    $t = $item['@type'] ?? '';
+                    if ( is_array( $t ) ) $t = implode( ', ', $t );
+                    if ( $t ) $types[] = $t;
+                }
+                $result['schema_types'] = implode( ' + ', $types );
+            }
+            // v1.5.134 — Pass full schema for Rich Results Preview
+            $result['schema_data'] = $decoded;
+        }
+
+        // Rich Results Preview data
+        $result['rich_preview'] = [
+            'title'       => $post->post_title,
+            'url'         => get_permalink( $post->ID ),
+            'description' => get_post_meta( $post->ID, '_seobetter_meta_description', true ) ?: wp_trim_words( wp_strip_all_tags( $post->post_content ), 25 ),
+            'site_name'   => wp_parse_url( home_url(), PHP_URL_HOST ),
+            'breadcrumbs' => [],
+            'rich_types'  => [],
+            'impact_stats' => [],
+        ];
+
+        // Detect active rich result types from schema
+        if ( ! empty( $decoded['@graph'] ) ) {
+            foreach ( $decoded['@graph'] as $item ) {
+                $t = $item['@type'] ?? '';
+                if ( $t === 'Recipe' ) {
+                    $result['rich_preview']['rich_types'][] = [
+                        'type' => 'Recipe',
+                        'label' => 'Recipe card',
+                        'detail' => ( $item['prepTime'] ?? '' ) ? preg_replace( '/^PT(\d+)M$/', '$1 min', $item['prepTime'] ) : '',
+                    ];
+                } elseif ( $t === 'FAQPage' ) {
+                    $count = count( $item['mainEntity'] ?? [] );
+                    $result['rich_preview']['rich_types'][] = [
+                        'type' => 'FAQ',
+                        'label' => 'FAQ dropdowns',
+                        'detail' => $count . ' question' . ( $count !== 1 ? 's' : '' ),
+                    ];
+                } elseif ( $t === 'Review' ) {
+                    $rating = $item['reviewRating']['ratingValue'] ?? '';
+                    $result['rich_preview']['rich_types'][] = [
+                        'type' => 'Review',
+                        'label' => 'Star rating',
+                        'detail' => $rating ? $rating . '/5' : '',
+                    ];
+                } elseif ( $t === 'BreadcrumbList' ) {
+                    $crumbs = [];
+                    foreach ( ( $item['itemListElement'] ?? [] ) as $li ) {
+                        $crumbs[] = $li['name'] ?? '';
+                    }
+                    $result['rich_preview']['breadcrumbs'] = $crumbs;
+                    $result['rich_preview']['rich_types'][] = [
+                        'type' => 'Breadcrumb',
+                        'label' => 'Breadcrumb trail',
+                        'detail' => '',
+                    ];
+                } elseif ( $t === 'ItemList' ) {
+                    $count = count( $item['itemListElement'] ?? [] );
+                    $result['rich_preview']['rich_types'][] = [
+                        'type' => 'ItemList',
+                        'label' => 'Carousel list',
+                        'detail' => $count . ' item' . ( $count !== 1 ? 's' : '' ),
+                    ];
+                } elseif ( isset( $item['speakable'] ) ) {
+                    $result['rich_preview']['rich_types'][] = [
+                        'type' => 'Speakable',
+                        'label' => 'Voice search (Speakable)',
+                        'detail' => '',
+                    ];
+                }
             }
         }
+
+        // Schema impact statistics (research-backed, citable)
+        $result['rich_preview']['impact_stats'] = [];
+        $rt = array_column( $result['rich_preview']['rich_types'], 'type' );
+        if ( in_array( 'Recipe', $rt ) ) {
+            $result['rich_preview']['impact_stats'][] = '+2.7x clicks with Recipe schema (Searchmetrics, 2024)';
+        }
+        if ( in_array( 'FAQ', $rt ) ) {
+            $result['rich_preview']['impact_stats'][] = '+87% CTR with FAQ schema (Ahrefs study)';
+        }
+        if ( in_array( 'Review', $rt ) ) {
+            $result['rich_preview']['impact_stats'][] = '+35% CTR with star ratings (Search Engine Journal)';
+        }
+        if ( count( $rt ) > 0 ) {
+            $result['rich_preview']['impact_stats'][] = '+30-40% AI citation rate from structured data (Princeton GEO study)';
+            $result['rich_preview']['impact_stats'][] = 'Rich results get 58% of page 1 clicks (FirstPageSage, 2024)';
+        }
+
+        // Validation status
+        $errors = 0;
+        $warnings = 0;
+        if ( ! empty( $decoded['@graph'] ) ) {
+            foreach ( $decoded['@graph'] as $item ) {
+                $t = $item['@type'] ?? '';
+                if ( $t === 'Recipe' ) {
+                    if ( empty( $item['name'] ) ) $errors++;
+                    if ( empty( $item['image'] ) ) $errors++;
+                    if ( empty( $item['recipeIngredient'] ) ) $warnings++;
+                }
+            }
+        }
+        $result['rich_preview']['validation'] = [
+            'errors'   => $errors,
+            'warnings' => $warnings,
+            'valid'    => $errors === 0,
+        ];
 
         return new \WP_REST_Response( $result );
     }

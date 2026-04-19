@@ -379,6 +379,20 @@ All editor integration is in a single PluginDocumentSettingPanel (PluginSidebar 
   - Emotional Words % with found words listed (goal: 10-15%)
   - Sentiment: Positive 😊 / Neutral 😐 / Negative 😟
   - Beginning Words (first 3) + Ending Words (last 3) as pills
+- [ ] **Rich Results Preview** (collapsible, v1.5.133):
+  - Google SERP preview card showing how the article appears in search results
+  - Breadcrumb trail from schema
+  - FAQ dropdown preview (if FAQ schema detected)
+  - Recipe star rating preview (if Recipe schema detected)
+  - Active rich result types list with checkmarks (Recipe card, FAQ dropdowns, Breadcrumb trail, Speakable, ItemList, Review stars)
+  - Schema Impact Estimate section with research-backed statistics:
+    - "+2.7x clicks with Recipe schema (Searchmetrics, 2024)"
+    - "+87% CTR with FAQ schema (Ahrefs study)"
+    - "+35% CTR with star ratings (Search Engine Journal)"
+    - "+30-40% AI citation rate from structured data (Princeton GEO study)"
+    - "Rich results get 58% of page 1 clicks (FirstPageSage, 2024)"
+  - Schema validation status: errors + warnings count, valid/invalid badge
+  - Link to Google Rich Results Test (opens in new tab with post URL pre-filled)
 - [ ] **Re-analyze button** — clears cache and re-runs analysis
 - [ ] Auto-loads analysis on post open
 

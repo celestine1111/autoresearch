@@ -16,6 +16,37 @@
 
 ---
 
+## v1.5.134 — Rich Results Preview panel in Gutenberg sidebar
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Changes
+
+- **Rich Results Preview panel** — `assets/js/editor-sidebar.js::renderRichPreview()` line ~262
+  - Collapsible panel showing Google SERP preview with breadcrumbs, title, description
+  - Shows FAQ dropdown and Recipe star previews when those schemas are active
+  - Lists all active rich result types with checkmarks
+  - Schema Impact Estimate with research-backed statistics (Searchmetrics, Ahrefs, Princeton, FirstPageSage)
+  - Schema validation status (errors + warnings count)
+  - Direct link to Google Rich Results Test with URL pre-filled
+  - `Verify:` `grep -n 'renderRichPreview' assets/js/editor-sidebar.js`
+  - `Verified by user:` UNTESTED
+
+- **Analyze endpoint extended** — `seobetter.php::rest_analyze()` line ~591
+  - Returns `rich_preview` object with: title, url, description, site_name, breadcrumbs, rich_types[], impact_stats[], validation{}
+  - Returns full `schema_data` for advanced inspection
+  - Detects Recipe, FAQ, Review, BreadcrumbList, ItemList, Speakable from @graph
+  - Research-backed impact stats shown per detected schema type
+  - `Verify:` `grep -n 'rich_preview' seobetter.php`
+  - `Verified by user:` UNTESTED
+
+### Guidelines updated
+- `plugin_UX.md` §8 — added Rich Results Preview checklist
+- `plugin_functionality_wordpress.md` §11.3 — added Rich Results Preview section
+
+---
+
 ## v1.5.133 — Serper + Firecrawl research pipeline (replaces Sonar)
 
 **Date:** 2026-04-19

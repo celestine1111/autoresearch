@@ -165,6 +165,9 @@
         var expanded = useState(false);
         var showHL = expanded[0];
         var setShowHL = expanded[1];
+        var rpState = useState(false);
+        var showRP = rpState[0];
+        var setShowRP = rpState[1];
 
         // Inject toolbar badge
         useEffect(function() {
@@ -248,6 +251,9 @@
                 ) : null
             ) : null,
 
+            // Rich Results Preview (v1.5.133)
+            data.rich_preview ? renderRichPreview(data.rich_preview, showRP, setShowRP) : null,
+
             // Re-analyze
             el('div', { style: { marginTop: 8, borderTop: '1px solid #f3f4f6', paddingTop: 8 } },
                 el(Button, {
@@ -256,6 +262,86 @@
                     style: { width: '100%', justifyContent: 'center', fontSize: 12 }
                 }, 'Re-analyze')
             )
+        );
+    }
+
+    // ============================================================
+    // Rich Results Preview (v1.5.133)
+    // ============================================================
+    function renderRichPreview(rp, show, setShow) {
+        var typeCount = (rp.rich_types || []).length;
+        var validIcon = rp.validation && rp.validation.valid ? '✅' : '⚠️';
+        var validText = rp.validation ? (rp.validation.errors + ' errors, ' + rp.validation.warnings + ' warnings') : '';
+
+        return el('div', { style: { borderTop: '1px solid #f3f4f6', marginTop: 6, paddingTop: 6 } },
+            el('div', {
+                style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
+                onClick: function() { setShow(!show); }
+            },
+                el('span', null, '🔍 Rich Results Preview'),
+                el('span', { style: { fontSize: 11, color: '#9ca3af' } }, show ? '▲' : '▼')
+            ),
+            show ? el('div', { style: { marginTop: 8 } },
+                // SERP Preview card
+                el('div', { style: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, marginBottom: 10 } },
+                    el('div', { style: { fontSize: 10, color: '#70757a', fontFamily: 'Arial, sans-serif', marginBottom: 2 } },
+                        (rp.breadcrumbs && rp.breadcrumbs.length > 0) ? rp.breadcrumbs.join(' > ') : rp.site_name
+                    ),
+                    el('div', { style: { fontSize: 16, color: '#1a0dab', fontFamily: 'Arial, sans-serif', fontWeight: 400, lineHeight: '1.3', marginBottom: 2, cursor: 'pointer' } },
+                        rp.title || 'Untitled'
+                    ),
+                    el('div', { style: { fontSize: 12, color: '#4d5156', fontFamily: 'Arial, sans-serif', lineHeight: '1.4' } },
+                        (rp.description || '').substring(0, 160) + (rp.description && rp.description.length > 160 ? '...' : '')
+                    ),
+                    // FAQ dropdowns preview
+                    (rp.rich_types || []).some(function(t) { return t.type === 'FAQ'; }) ?
+                        el('div', { style: { marginTop: 6, borderTop: '1px solid #e8eaed', paddingTop: 6 } },
+                            el('div', { style: { fontSize: 12, color: '#1a73e8', fontFamily: 'Arial, sans-serif' } }, '▼ People also ask')
+                        ) : null,
+                    // Recipe preview
+                    (rp.rich_types || []).some(function(t) { return t.type === 'Recipe'; }) ?
+                        el('div', { style: { marginTop: 4, fontSize: 11, color: '#70757a', fontFamily: 'Arial, sans-serif' } },
+                            '⭐⭐⭐⭐⭐ · ' + ((rp.rich_types || []).find(function(t) { return t.type === 'Recipe'; }) || {}).detail
+                        ) : null
+                ),
+
+                // Schema types active
+                el('div', { style: { fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 } },
+                    typeCount + ' rich result type' + (typeCount !== 1 ? 's' : '') + ' active:'
+                ),
+                el('div', { style: { marginBottom: 8 } },
+                    (rp.rich_types || []).map(function(rt, i) {
+                        return el('div', { key: i, style: { display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', fontSize: 12 } },
+                            el('span', { style: { color: '#22c55e' } }, '✓'),
+                            el('span', { style: { color: '#374151' } }, rt.label),
+                            rt.detail ? el('span', { style: { color: '#9ca3af', fontSize: 11 } }, '(' + rt.detail + ')') : null
+                        );
+                    })
+                ),
+
+                // Impact estimates
+                (rp.impact_stats || []).length > 0 ? el('div', { style: { marginBottom: 8 } },
+                    el('div', { style: { fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 } }, 'Schema Impact Estimate:'),
+                    (rp.impact_stats || []).map(function(s, i) {
+                        return el('div', { key: i, style: { fontSize: 11, color: '#6b7280', padding: '1px 0' } }, '📊 ' + s);
+                    })
+                ) : null,
+
+                // Validation
+                el('div', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 0', borderTop: '1px solid #f3f4f6', marginTop: 4, paddingTop: 6 } },
+                    el('span', null, validIcon),
+                    el('span', { style: { color: rp.validation && rp.validation.valid ? '#22c55e' : '#ef4444' } },
+                        rp.validation && rp.validation.valid ? 'Schema valid' : 'Schema has issues'
+                    ),
+                    el('span', { style: { color: '#9ca3af', fontSize: 11 } }, '(' + validText + ')')
+                ),
+                el('a', {
+                    href: 'https://search.google.com/test/rich-results?url=' + encodeURIComponent(rp.url || ''),
+                    target: '_blank',
+                    rel: 'noopener',
+                    style: { display: 'block', fontSize: 11, color: '#764ba2', marginTop: 4 }
+                }, '🔗 Test in Google Rich Results Test →')
+            ) : null
         );
     }
 
