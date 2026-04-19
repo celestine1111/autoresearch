@@ -651,21 +651,23 @@ class Schema_Generator {
                 $reviewed_extra['servesCuisine'] = ucfirst( $cuisine[1] );
             }
         }
-        // Book detection — requires books category OR strong book-specific signals
-        // (NOT just "author" or "published" which appear in many non-book articles)
-        elseif ( in_array( $category, [ 'books' ], true )
-            || preg_match( '/\b(novel|memoir|autobiography|biography|paperback|hardcover|ebook|kindle|isbn|book review|bestseller|chapter[s]?\s+\d+)\b/i', $text ) ) {
-            $reviewed_type = 'Book';
-            if ( preg_match( '/\bauthor[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $ba ) ) {
-                $reviewed_extra['author'] = [ '@type' => 'Person', 'name' => $ba[1] ];
-            }
-        }
-        // Movie / TV detection
+        // Movie / TV detection — MUST come before Book because movies about
+        // biographies/novels will match both, and "movie" in title/keyword is the
+        // strongest signal for what the user is actually reviewing.
         elseif ( in_array( $category, [ 'entertainment' ], true )
-            || preg_match( '/\b(movie|film|cinema|director|starring|cast|imdb|rotten tomatoes|box office|screenplay|netflix|disney|streaming)\b/i', $text ) ) {
+            || preg_match( '/\b(movie|film|cinema|director|starring|cast|imdb|rotten tomatoes|box office|screenplay|netflix|disney|streaming|oscar|academy award|theater|theatre)\b/i', $text ) ) {
             $reviewed_type = 'Movie';
             if ( preg_match( '/\bdirector[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $dir ) ) {
                 $reviewed_extra['director'] = [ '@type' => 'Person', 'name' => $dir[1] ];
+            }
+        }
+        // Book detection — requires books category OR strong book-specific signals.
+        // Placed AFTER Movie so "Oppenheimer movie review" doesn't match on "biography".
+        elseif ( in_array( $category, [ 'books' ], true )
+            || preg_match( '/\b(novel|memoir|autobiography|paperback|hardcover|ebook|kindle|isbn|book review|bestseller|chapter[s]?\s+\d+)\b/i', $text ) ) {
+            $reviewed_type = 'Book';
+            if ( preg_match( '/\bauthor[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i', $text, $ba ) ) {
+                $reviewed_extra['author'] = [ '@type' => 'Person', 'name' => $ba[1] ];
             }
         }
         // Video Game detection
@@ -688,9 +690,10 @@ class Schema_Generator {
                 $reviewed_extra['provider'] = [ '@type' => 'Organization', 'name' => trim( $prov[1] ) ];
             }
         }
-        // Event
-        elseif ( preg_match( '/\b(event|conference|concert|festival|show|summit|expo|workshop|meetup|hackathon)\b/i', $text )
-            && preg_match( '/\b(january|february|march|april|may|june|july|august|september|october|november|december|20\d{2})\b/i', $text ) ) {
+        // Event — requires specific event words (NOT "show" which matches dog shows, TV shows, etc.)
+        // Must also have a date pattern, not just a year in the title
+        elseif ( preg_match( '/\b(conference|concert|festival|summit|expo|hackathon|meetup|symposium|trade show|convention)\b/i', $text )
+            && preg_match( '/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}/i', $text ) ) {
             $reviewed_type = 'Event';
         }
 
@@ -791,13 +794,14 @@ class Schema_Generator {
         }
 
         // ── Pros/Cons as positiveNotes/negativeNotes ──
-        // v1.5.136 — More lenient regex: the Pros/Cons lists are wrapped in styled
-        // divs by Content_Formatter, so we look for the heading then find the nearest
-        // list items within the next 2000 chars (handles any wrapper divs between).
+        // v1.5.136 — Multiple extraction strategies:
+        // 1. Separate H3 Pros / H3 Cons headings
+        // 2. Combined H2 "Pros and Cons" with styled boxes (Content_Formatter output)
+        // 3. Green/red styled boxes detected by background color
         $pros = [];
         $cons = [];
 
-        // Find Pros heading, then extract all <li> items until next H2/H3 or Cons heading
+        // Strategy 1: H3 "Pros" heading
         if ( preg_match( '/<h[2-4][^>]*>\s*Pros\s*<\/h[2-4]>(.*?)(?=<h[2-4]|$)/is', $content, $pros_match ) ) {
             preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $pros_match[1], $li );
             foreach ( $li[1] as $item ) {
@@ -810,6 +814,47 @@ class Schema_Generator {
             foreach ( $li[1] as $item ) {
                 $t = trim( wp_strip_all_tags( $item ) );
                 if ( strlen( $t ) > 3 ) $cons[] = $t;
+            }
+        }
+
+        // Strategy 2: Styled boxes — green (#f0fdf4) for pros, red (#fef2f2) for cons
+        if ( empty( $pros ) ) {
+            if ( preg_match( '/<div[^>]*background\s*:\s*#f0fdf4[^>]*>(.*?)<\/div>/is', $content, $pm ) ) {
+                preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $pm[1], $li );
+                foreach ( $li[1] as $item ) {
+                    $t = trim( wp_strip_all_tags( $item ) );
+                    if ( strlen( $t ) > 3 ) $pros[] = $t;
+                }
+            }
+        }
+        if ( empty( $cons ) ) {
+            if ( preg_match( '/<div[^>]*background\s*:\s*#fef2f2[^>]*>(.*?)<\/div>/is', $content, $cm ) ) {
+                preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $cm[1], $li );
+                foreach ( $li[1] as $item ) {
+                    $t = trim( wp_strip_all_tags( $item ) );
+                    if ( strlen( $t ) > 3 ) $cons[] = $t;
+                }
+            }
+        }
+
+        // Strategy 3: "Pros and Cons" H2 with all list items split by PROS/CONS labels
+        if ( empty( $pros ) && empty( $cons ) ) {
+            if ( preg_match( '/<h2[^>]*>[^<]*Pros\s*(?:and|&amp;|&)\s*Cons[^<]*<\/h2>(.*?)(?=<h2|$)/is', $content, $pc ) ) {
+                $section = $pc[1];
+                // Split at the CONS divider (red box or heading)
+                $parts = preg_split( '/<div[^>]*#fef2f2|<[^>]*>\s*Cons\s*<\//is', $section, 2 );
+                if ( count( $parts ) >= 2 ) {
+                    preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $parts[0], $li );
+                    foreach ( $li[1] as $item ) {
+                        $t = trim( wp_strip_all_tags( $item ) );
+                        if ( strlen( $t ) > 3 ) $pros[] = $t;
+                    }
+                    preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $parts[1], $li );
+                    foreach ( $li[1] as $item ) {
+                        $t = trim( wp_strip_all_tags( $item ) );
+                        if ( strlen( $t ) > 3 ) $cons[] = $t;
+                    }
+                }
             }
         }
         if ( ! empty( $pros ) ) {
