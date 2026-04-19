@@ -286,21 +286,26 @@ class Async_Generator {
                         $usable_recipe_count = count( $extracted_recipes );
 
                         if ( $usable_recipe_count > 0 ) {
-                            $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources) ===\n";
-                            $recipe_data_block .= "You have {$usable_recipe_count} real recipe source(s). Write EXACTLY {$usable_recipe_count} recipe(s).\n";
-                            $recipe_data_block .= "YOU DO NOT WRITE INGREDIENTS OR INSTRUCTIONS — those are auto-injected from the real source after you write.\n";
-                            $recipe_data_block .= "For each recipe, write ONLY: (1) a creative unique H2 name, (2) a 2-3 sentence intro, (3) storage notes.\n";
-                            $recipe_data_block .= "Use these placeholders EXACTLY where the real data will be injected:\n";
-                            $recipe_data_block .= "  ### Ingredients\n  [REAL_INGREDIENTS_N]\n  ### Instructions\n  [REAL_INSTRUCTIONS_N]\n";
+                            $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources — use these as your base) ===\n";
+                            $recipe_data_block .= "You have {$usable_recipe_count} real recipe source(s) below. Write EXACTLY {$usable_recipe_count} recipe(s) — one per source.\n";
+                            $recipe_data_block .= "ABSOLUTE RULE: Do NOT invent any recipe. Copy the EXACT ingredients and quantities from each source below. Do NOT add, remove, substitute, or change any ingredient or measurement.\n";
+                            $recipe_data_block .= "What you CAN change: (1) Give each recipe a creative unique NAME. (2) Rewrite the intro in your own words. (3) Rephrase instruction wording (same steps, different phrasing). (4) Keep temperatures and times exactly as stated.\n";
                             $recipe_data_block .= "At the end of EACH recipe write: \"Inspired by [Source Name](source_url)\"\n\n";
 
                             foreach ( $extracted_recipes as $ri => $rec ) {
                                 $n = $ri + 1;
                                 $recipe_data_block .= "--- Source {$n}: {$rec['source_title']} ---\n";
                                 $recipe_data_block .= "URL: {$rec['source_url']}\n";
-                                $recipe_data_block .= "Ingredients ({$n}): " . implode( ' | ', array_slice( $rec['ingredients'], 0, 5 ) ) . ( count( $rec['ingredients'] ) > 5 ? '...' : '' ) . "\n";
+                                // Give AI the FULL ingredient list so it can copy them
+                                $recipe_data_block .= "INGREDIENTS (copy these EXACTLY):\n";
+                                foreach ( $rec['ingredients'] as $ing ) {
+                                    $recipe_data_block .= "  - {$ing}\n";
+                                }
                                 if ( ! empty( $rec['instructions'] ) ) {
-                                    $recipe_data_block .= "Steps ({$n}): " . count( $rec['instructions'] ) . " steps\n";
+                                    $recipe_data_block .= "INSTRUCTIONS (rephrase wording but keep same steps):\n";
+                                    foreach ( array_slice( $rec['instructions'], 0, 10 ) as $si => $step ) {
+                                        $recipe_data_block .= "  " . ( $si + 1 ) . ". {$step}\n";
+                                    }
                                 }
                                 if ( ! empty( $rec['prep_time'] ) ) $recipe_data_block .= "Prep: {$rec['prep_time']} min\n";
                                 if ( ! empty( $rec['cook_time'] ) ) $recipe_data_block .= "Cook: {$rec['cook_time']} min\n";
@@ -618,17 +623,10 @@ class Async_Generator {
 
         $guidance = "RECIPE CARD FORMAT. Write EXACTLY {$count} recipe(s) — one per real source provided in the research data above. "
             . "ABSOLUTE RULE: Every recipe MUST come from the REAL RECIPE DATA sources. Do NOT invent any recipe. "
-            . "IMPORTANT: You do NOT write ingredients or instructions — those are auto-injected from the verified source. "
-            . "For each recipe, use this EXACT structure:\n"
-            . "## Recipe N: [Your Creative Name]\n"
-            . "[2-3 sentence intro in your own words]\n\n"
-            . "### Ingredients\n[REAL_INGREDIENTS_N]\n\n"
-            . "### Instructions\n[REAL_INSTRUCTIONS_N]\n\n"
-            . "### Storage Notes\n[Write 1-2 sentences about storage]\n\n"
-            . "Inspired by [Source Name](source_url)\n\n"
-            . "Replace N with the recipe number (1, 2, 3). The [REAL_INGREDIENTS_N] and [REAL_INSTRUCTIONS_N] placeholders will be replaced with real data from the source website. "
+            . "Copy the EXACT ingredients and quantities listed under each source's INGREDIENTS section. Do NOT change, add, or remove any ingredient. "
+            . "Each recipe MUST have: a creative unique name as the H2, then subsections: Ingredients (as a bullet list under ### Ingredients), Instructions (as a numbered list under ### Instructions), and Storage Notes. "
             . "Put ALL statistics, expert quotes, and context in the intro section BEFORE the recipes - NEVER inside a recipe card. "
-            . 'Every recipe MUST end with "Inspired by [Source Name](source_url)" using the real source name and URL from the research data.';
+            . 'At the end of EACH recipe write: "Inspired by [Source Name](source_url)" citing the original source. Every recipe MUST have this attribution line.';
 
         return [
             'sections' => $sections,
