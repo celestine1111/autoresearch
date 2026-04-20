@@ -16,10 +16,29 @@
 
 ---
 
-## v1.5.168 — Fix bracketed reference linking + center code blocks + Wikipedia URL fix
+## v1.5.169 — Fix nested-paren reference linking on lines with existing links
 
 **Date:** 2026-04-20
 **Commit:** `[pending]`
+
+### Changes
+
+- **Remove aggressive line-skip in pass 2** — `seobetter.php::linkify_bracketed_references()` line ~2428
+  - Old code: `if ( str_contains( $line, '](http' ) && balanced ) continue;`
+  - This skipped the ENTIRE LINE if any reference was already linked, preventing nested-paren references on the same line from being processed
+  - Example: `text ([RSPCA](url)). More text (Python API Tutorial (Beginner's Guide) | Moesif Blog).`
+  - Pass 1 linked `(RSPCA)` → line now has `](http` → pass 2 SKIPPED the whole line → nested-paren ref stayed unlinked
+  - Fix: removed the line-level skip. Each paren group is individually checked for `http` and `](` already, so line-level skip was redundant AND harmful.
+
+**Verify:** `grep -n 'REMOVED the old' seobetter.php` → line ~2430
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.168 — Fix bracketed reference linking + center code blocks + Wikipedia URL fix
+
+**Date:** 2026-04-20
+**Commit:** `6cc2a96`
 
 ### Changes
 
