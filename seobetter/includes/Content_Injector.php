@@ -2734,8 +2734,11 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 5: Simplify Readability (AI rewrite) ----
+        // v1.5.152 — Skipped in citations_only mode. Also runs BEFORE citations
+        // in full mode would be ideal, but changing step order is risky. Instead,
+        // after readability rewrite, re-run linkify to restore any stripped links.
         $read_score = $scores['readability']['score'] ?? 0;
-        if ( $read_score < 70 ) {
+        if ( $read_score < 70 && ! $citations_only ) {
             try {
                 $result = self::simplify_readability( $markdown );
                 if ( $result['success'] ) {
