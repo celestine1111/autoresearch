@@ -3447,21 +3447,33 @@ Based ONLY on the actual page content above, extract a JSON object with exactly 
 {
   "quotes": [
     {"text": "exact sentence from the pages above", "source": "Website Name", "url": "page URL where it appears"},
-    (2-4 entries. ONLY sentences that appear VERBATIM in the pages above. Include the exact URL.)
+    (2-4 entries. Pick sentences that state facts, opinions, or recommendations. Must appear in the pages above.)
   ],
   "statistics": [
     "65% of dog owners prefer grain-free options (Pet Food Industry Association, 2025)",
-    (3-5 entries. ONLY numbers/percentages that appear in the pages above, with source names.)
+    (3-5 entries. Numbers, percentages, dollar amounts, years, rankings, ratings, counts — ANY measurable fact from the pages. Include source name.)
   ],
   "table_data": {
-    "columns": ["Name", "Key Feature", "Best For"],
-    "rows": [["Real Item", "Real feature from pages", "Real use case"]],
-    (ONLY if comparison data exists in the pages above. Otherwise set to null.)
+    "columns": ["Aspect", "Option A", "Option B"],
+    "rows": [
+      ["Best for", "small apps", "large APIs"],
+      ["Speed", "moderate", "very fast"],
+      ["Learning curve", "easy", "moderate"]
+    ]
   }
 }
 
+TABLE RULES (IMPORTANT — read carefully):
+- Build a comparison table from the page content even if the pages don't have a pre-formatted table.
+- Read the prose and extract comparison points. Example: if a page says "Flask is simpler but FastAPI supports async natively", that becomes a row: ["Async support", "No", "Built-in"].
+- For non-comparison topics (how-to guides, health articles, tutorials), build an overview table instead:
+  columns: ["Aspect", "Key Finding", "Source"]
+  rows: extract 3-5 key factual points from different pages, one per row.
+- You MUST return table_data with at least 3 rows. Only return null if the pages contain absolutely no factual claims to tabulate.
+- Every cell must come from the page content. Never invent data.
+
 CRITICAL: Extract ONLY information that actually appears in the page content above.
-Do NOT add any data from your training knowledge. If a field has no matches, use an empty array.
+Do NOT add any data from your training knowledge.
 Return ONLY the JSON object. No markdown fences.`;
 
   try {
