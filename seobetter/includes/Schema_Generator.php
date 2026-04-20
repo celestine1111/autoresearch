@@ -22,21 +22,74 @@ class Schema_Generator {
     private array $_multi_recipes = [];
 
     /**
-     * v1.5.126 — Get author name from post, with email-as-display-name fallback.
+     * v1.5.139 — Get author name, with SEOBetter settings override.
+     * Priority: SEOBetter author_name setting > WP display_name > site name.
      * Google policy: author.name must be a real name, never an email address.
-     * If display_name looks like an email, fall back to site name.
      */
     private function get_author_name( \WP_Post $post ): string {
+        // v1.5.139 — Use SEOBetter author bio settings first
+        $s = get_option( 'seobetter_settings', [] );
+        if ( ! empty( $s['author_name'] ) ) {
+            return $s['author_name'];
+        }
         $author = get_userdata( $post->post_author );
         if ( $author && $author->display_name ) {
             $name = $author->display_name;
-            // If display_name IS an email address, use site name instead
             if ( is_email( $name ) ) {
                 return get_bloginfo( 'name' ) ?: 'Author';
             }
             return $name;
         }
         return get_bloginfo( 'name' ) ?: 'Author';
+    }
+
+    /**
+     * v1.5.139 — Build full Person schema from SEOBetter author settings.
+     * Includes sameAs, jobTitle, description, image, worksFor, knowsAbout
+     * per Google's E-E-A-T guidelines and Schema.org/Person spec.
+     */
+    private function build_author_schema( \WP_Post $post ): array {
+        $s = get_option( 'seobetter_settings', [] );
+
+        $person = [
+            '@type' => 'Person',
+            'name'  => $this->get_author_name( $post ),
+            'url'   => get_author_posts_url( $post->post_author ),
+        ];
+
+        // From SEOBetter settings
+        if ( ! empty( $s['author_title'] ) ) {
+            $person['jobTitle'] = $s['author_title'];
+        }
+        if ( ! empty( $s['author_bio'] ) ) {
+            $person['description'] = $s['author_bio'];
+        }
+        if ( ! empty( $s['author_image'] ) ) {
+            $person['image'] = $s['author_image'];
+        }
+        if ( ! empty( $s['author_credentials'] ) ) {
+            $person['knowsAbout'] = $s['author_credentials'];
+        }
+
+        // worksFor = the site
+        $person['worksFor'] = [
+            '@type' => 'Organization',
+            'name'  => get_bloginfo( 'name' ),
+            'url'   => home_url(),
+        ];
+
+        // sameAs — all configured social profiles
+        $same_as = [];
+        foreach ( [ 'author_linkedin', 'author_twitter', 'author_facebook', 'author_instagram', 'author_youtube', 'author_website' ] as $key ) {
+            if ( ! empty( $s[ $key ] ) ) {
+                $same_as[] = $s[ $key ];
+            }
+        }
+        if ( ! empty( $same_as ) ) {
+            $person['sameAs'] = $same_as;
+        }
+
+        return $person;
     }
 
     /**
@@ -305,10 +358,8 @@ class Schema_Generator {
             'description'   => wp_trim_words( wp_strip_all_tags( $post->post_content ), 30 ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
-            'author'        => [
-                '@type' => 'Person',
-                'name'  => $this->get_author_name( $post ),
-            ],
+            // v1.5.139 — Full Person schema with E-E-A-T fields
+            'author'        => $this->build_author_schema( $post ),
             'publisher'     => [
                 '@type' => 'Organization',
                 'name'  => get_bloginfo( 'name' ),
@@ -787,11 +838,8 @@ class Schema_Generator {
             'description'   => wp_trim_words( $text, 30 ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
-            'author'        => [
-                '@type' => 'Person',
-                'name'  => $this->get_author_name( $post ),
-                'url'   => get_author_posts_url( $post->post_author ),
-            ],
+            // v1.5.139 — Full Person schema with E-E-A-T fields
+            'author'        => $this->build_author_schema( $post ),
             'publisher'     => [
                 '@type' => 'Organization',
                 'name'  => get_bloginfo( 'name' ),

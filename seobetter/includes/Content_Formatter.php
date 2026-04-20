@@ -55,6 +55,87 @@ class Content_Formatter {
     }
 
     /**
+     * v1.5.139 — Build author bio box for E-E-A-T.
+     * Reads from seobetter_settings and renders a styled bio card with
+     * headshot, name, title, credentials, bio text, and social media icons.
+     * Appended to every article's formatted output.
+     */
+    private static function build_author_bio( string $accent ): string {
+        $s = get_option( 'seobetter_settings', [] );
+        $name = $s['author_name'] ?? '';
+        if ( empty( $name ) ) return '';
+
+        $title       = $s['author_title'] ?? '';
+        $credentials = $s['author_credentials'] ?? '';
+        $bio         = $s['author_bio'] ?? '';
+        $image       = $s['author_image'] ?? '';
+        $experience  = $s['author_experience'] ?? '';
+
+        // Build social links
+        $socials = [];
+        $social_map = [
+            'author_linkedin'  => [ 'LinkedIn',  'M416 32H31.9C14.3 32 0 46.5 0 64.3v383.4C0 465.5 14.3 480 31.9 480H416c17.6 0 32-14.5 32-32.3V64.3c0-17.8-14.4-32.3-32-32.3zM135.4 416H69V202.2h66.5V416zm-33.2-243c-21.3 0-38.5-17.3-38.5-38.5S80.9 96 102.2 96c21.2 0 38.5 17.3 38.5 38.5 0 21.3-17.2 38.5-38.5 38.5zm282.1 243h-66.4V312c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9V416h-66.4V202.2h63.7v29.2h.9c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9V416z' ],
+            'author_twitter'   => [ 'X',         'M389.2 48h70.6L305.6 224.2 487 464H345L233.7 318.6 106.5 464H35.8L200.7 275.5 26.8 48H172.4L272.9 180.9 389.2 48zM364.4 421.8h39.1L151.1 88h-42L364.4 421.8z' ],
+            'author_facebook'  => [ 'Facebook',  'M512 256C512 114.6 397.4 0 256 0S0 114.6 0 256C0 376 82.7 476.8 194.2 504.5V334.2H141.4V256h52.8V222.3c0-87.1 39.4-127.5 125-127.5c16.2 0 44.2 3.2 55.7 6.4V172c-6-.6-16.5-1-29.6-1c-42 0-58.2 15.9-58.2 57.2V256h83.6l-14.4 78.2H287V510.1C413.8 494.8 512 386.9 512 256z' ],
+            'author_instagram' => [ 'Instagram', 'M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z' ],
+            'author_youtube'   => [ 'YouTube',   'M549.655 124.083c-6.281-23.65-24.787-42.276-48.284-48.597C458.781 64 288 64 288 64S117.22 64 74.629 75.486c-23.497 6.322-42.003 24.947-48.284 48.597-11.412 42.867-11.412 132.305-11.412 132.305s0 89.438 11.412 132.305c6.281 23.65 24.787 41.5 48.284 47.821C117.22 448 288 448 288 448s170.78 0 213.371-11.486c23.497-6.321 42.003-24.171 48.284-47.821 11.412-42.867 11.412-132.305 11.412-132.305s0-89.438-11.412-132.305zm-317.51 213.508V175.185l142.739 81.205-142.739 81.201z' ],
+        ];
+
+        foreach ( $social_map as $key => $info ) {
+            $url = $s[ $key ] ?? '';
+            if ( ! empty( $url ) ) {
+                $socials[] = '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener nofollow" title="' . esc_attr( $info[0] ) . '" style="color:#6b7280;transition:color 0.2s"><svg viewBox="0 0 512 512" width="18" height="18" fill="currentColor" style="display:block"><path d="' . $info[1] . '"/></svg></a>';
+            }
+        }
+        // Website link
+        $website = $s['author_website'] ?? '';
+        if ( ! empty( $website ) ) {
+            $socials[] = '<a href="' . esc_url( $website ) . '" target="_blank" rel="noopener" title="Website" style="color:#6b7280;transition:color 0.2s"><svg viewBox="0 0 512 512" width="18" height="18" fill="currentColor" style="display:block"><path d="M352 256c0 22.2-1.2 43.6-3.3 64H163.3c-2.2-20.4-3.3-41.8-3.3-64s1.2-43.6 3.3-64H348.7c2.2 20.4 3.3 41.8 3.3 64zm28.8-64H503.9c5.3 20.5 8.1 41.9 8.1 64s-2.8 43.5-8.1 64H380.8c2.1-20.6 3.2-42 3.2-64s-1.1-43.4-3.2-64zm112.6-32H376.7c-10-63.9-29.8-117.4-55.3-151.6C399.5 29.1 463.2 90.7 493.4 160zM195.6 8.4C170.1 42.6 150.3 96.1 140.3 160H8.6C38.8 90.7 102.5 29.1 195.6 8.4zM159.3 192c-2.1 20.4-3.3 41.8-3.3 64s1.2 43.4 3.3 64H8.1C2.8 299.5 0 278.1 0 256s2.8-43.5 8.1-64H159.3zm17.6 160c10 63.9 29.8 117.4 55.3 151.6C112.5 482.9 48.8 421.3 18.6 352H176.9zm178.5 0h158.3c-30.2 69.3-93.9 130.9-187 152.2 25.5-34.2 45.3-87.7 55.3-151.6z"/></svg></a>';
+        }
+
+        // Build the bio card HTML
+        $html = '<div style="display:flex;gap:1.25em;align-items:flex-start;background:#f8fafc !important;border:1px solid #e2e8f0;border-radius:12px;padding:1.5em;margin:2em 0 1em;color:#1e293b !important">';
+
+        // Headshot
+        if ( $image ) {
+            $html .= '<img src="' . esc_url( $image ) . '" alt="' . esc_attr( $name ) . '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;flex-shrink:0;border:3px solid ' . $accent . '" />';
+        }
+
+        $html .= '<div style="flex:1;min-width:0">';
+
+        // Name + credentials
+        $html .= '<div style="font-size:1em;font-weight:700;color:#0f172a !important;margin-bottom:0.15em">';
+        $html .= esc_html( $name );
+        if ( $credentials ) {
+            $html .= ' <span style="font-weight:400;color:#64748b !important;font-size:0.85em">' . esc_html( $credentials ) . '</span>';
+        }
+        $html .= '</div>';
+
+        // Title + experience
+        if ( $title || $experience ) {
+            $html .= '<div style="font-size:0.85em;color:#64748b !important;margin-bottom:0.5em">';
+            if ( $title ) $html .= esc_html( $title );
+            if ( $title && $experience ) $html .= ' - ';
+            if ( $experience ) $html .= esc_html( $experience );
+            $html .= '</div>';
+        }
+
+        // Bio text
+        if ( $bio ) {
+            $html .= '<div style="font-size:0.9em;color:#475569 !important;line-height:1.6;margin-bottom:0.5em">' . esc_html( $bio ) . '</div>';
+        }
+
+        // Social icons
+        if ( ! empty( $socials ) ) {
+            $html .= '<div style="display:flex;gap:0.6em;align-items:center;margin-top:0.5em">' . implode( '', $socials ) . '</div>';
+        }
+
+        $html .= '</div></div>';
+
+        return $html;
+    }
+
+    /**
      * v1.5.138 — Content type badge: distinct visual label per article type.
      * Each type gets a unique icon, color, and label so articles look different.
      * Follows research from authority publishers (NYT, Wirecutter, WikiHow, etc.)
@@ -824,6 +905,13 @@ class Content_Formatter {
         // v1.5.120 — Close any open recipe card at end of content
         if ( $in_recipe_card ) {
             $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+        }
+
+        // v1.5.139 — Author Bio box (E-E-A-T)
+        // Appended to every article if author bio is configured in settings.
+        $author_bio_html = self::build_author_bio( $accent );
+        if ( $author_bio_html ) {
+            $output[] = "<!-- wp:html -->\n{$author_bio_html}\n<!-- /wp:html -->";
         }
 
         return implode( "\n\n", $output );

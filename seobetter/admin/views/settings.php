@@ -60,6 +60,19 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
         'llms_txt_enabled'   => ! empty( $_POST['llms_txt_enabled'] ),
         'tavily_api_key'     => sanitize_text_field( $_POST['tavily_api_key'] ?? '' ),
         'pexels_api_key'     => sanitize_text_field( $_POST['pexels_api_key'] ?? '' ),
+        // v1.5.139 — Author Bio (E-E-A-T)
+        'author_name'        => sanitize_text_field( $_POST['author_name'] ?? '' ),
+        'author_title'       => sanitize_text_field( $_POST['author_title'] ?? '' ),
+        'author_bio'         => sanitize_textarea_field( $_POST['author_bio'] ?? '' ),
+        'author_image'       => esc_url_raw( $_POST['author_image'] ?? '' ),
+        'author_linkedin'    => esc_url_raw( $_POST['author_linkedin'] ?? '' ),
+        'author_twitter'     => esc_url_raw( $_POST['author_twitter'] ?? '' ),
+        'author_facebook'    => esc_url_raw( $_POST['author_facebook'] ?? '' ),
+        'author_instagram'   => esc_url_raw( $_POST['author_instagram'] ?? '' ),
+        'author_youtube'     => esc_url_raw( $_POST['author_youtube'] ?? '' ),
+        'author_website'     => esc_url_raw( $_POST['author_website'] ?? '' ),
+        'author_credentials' => sanitize_text_field( $_POST['author_credentials'] ?? '' ),
+        'author_experience'  => sanitize_text_field( $_POST['author_experience'] ?? '' ),
     ] );
     update_option( 'seobetter_settings', $settings );
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'seobetter' ) . '</p></div>';
@@ -330,6 +343,87 @@ $settings = get_option( 'seobetter_settings', [] );
                 </tr>
             </table>
             <?php submit_button( __( 'Save Settings', 'seobetter' ), 'primary', 'seobetter_save_settings' ); ?>
+        </form>
+    </div>
+
+    <!-- Author Bio / E-E-A-T (v1.5.139) -->
+    <div class="seobetter-card" style="margin-bottom:20px">
+        <h2><?php esc_html_e( 'Author Bio (E-E-A-T)', 'seobetter' ); ?></h2>
+        <p class="description" style="margin-bottom:16px">
+            <?php esc_html_e( 'Configure your author profile for Google E-E-A-T (Experience, Expertise, Authoritativeness, Trust). This bio is appended to every article and included in Person schema markup. Essential for YMYL topics (health, finance).', 'seobetter' ); ?>
+        </p>
+        <form method="post">
+            <?php wp_nonce_field( 'seobetter_settings_nonce' ); ?>
+            <?php
+            // Preserve all existing settings so this form doesn't wipe them
+            foreach ( $settings as $k => $v ) {
+                if ( is_array( $v ) ) continue;
+                if ( in_array( $k, [ 'author_name', 'author_title', 'author_bio', 'author_image', 'author_linkedin', 'author_twitter', 'author_facebook', 'author_instagram', 'author_youtube', 'author_website', 'author_credentials', 'author_experience' ], true ) ) continue;
+                echo '<input type="hidden" name="' . esc_attr( $k ) . '" value="' . esc_attr( $v ) . '" />';
+            }
+            // Preserve array settings
+            foreach ( ( $settings['geo_engines'] ?? [] ) as $ge ) {
+                echo '<input type="hidden" name="geo_engines[]" value="' . esc_attr( $ge ) . '" />';
+            }
+            ?>
+            <table class="form-table">
+                <tr>
+                    <th><label for="author_name"><?php esc_html_e( 'Full Name', 'seobetter' ); ?> <span style="color:#ef4444">*</span></label></th>
+                    <td>
+                        <input type="text" name="author_name" id="author_name" value="<?php echo esc_attr( $settings['author_name'] ?? '' ); ?>" class="regular-text" placeholder="e.g. Sarah Chen" />
+                        <p class="description"><?php esc_html_e( 'Your real name. Never use "staff" or "admin" — Google penalizes anonymous content.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="author_title"><?php esc_html_e( 'Job Title', 'seobetter' ); ?></label></th>
+                    <td>
+                        <input type="text" name="author_title" id="author_title" value="<?php echo esc_attr( $settings['author_title'] ?? '' ); ?>" class="regular-text" placeholder="e.g. Senior Veterinary Nutritionist" />
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="author_credentials"><?php esc_html_e( 'Credentials', 'seobetter' ); ?></label></th>
+                    <td>
+                        <input type="text" name="author_credentials" id="author_credentials" value="<?php echo esc_attr( $settings['author_credentials'] ?? '' ); ?>" class="regular-text" placeholder="e.g. DVM, MSc Animal Nutrition" />
+                        <p class="description"><?php esc_html_e( 'Degrees, certifications, awards. Shown after your name.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="author_experience"><?php esc_html_e( 'Experience', 'seobetter' ); ?></label></th>
+                    <td>
+                        <input type="text" name="author_experience" id="author_experience" value="<?php echo esc_attr( $settings['author_experience'] ?? '' ); ?>" class="regular-text" placeholder="e.g. 12 years in veterinary practice" />
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="author_bio"><?php esc_html_e( 'Bio (100-200 words)', 'seobetter' ); ?></label></th>
+                    <td>
+                        <textarea name="author_bio" id="author_bio" rows="4" class="large-text" placeholder="Write in third person. e.g. Sarah Chen is a veterinary nutritionist with over 12 years of experience..."><?php echo esc_textarea( $settings['author_bio'] ?? '' ); ?></textarea>
+                        <p class="description"><?php esc_html_e( 'Third person, professional tone. Explain why you are qualified to write about your topics.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="author_image"><?php esc_html_e( 'Headshot URL', 'seobetter' ); ?></label></th>
+                    <td>
+                        <input type="url" name="author_image" id="author_image" value="<?php echo esc_attr( $settings['author_image'] ?? '' ); ?>" class="regular-text" placeholder="https://example.com/photo.jpg" />
+                        <button type="button" class="button" onclick="var frame=wp.media({title:'Select Author Photo',multiple:false});frame.on('select',function(){var a=frame.state().get('selection').first().toJSON();document.getElementById('author_image').value=a.url});frame.open()"><?php esc_html_e( 'Upload', 'seobetter' ); ?></button>
+                        <p class="description"><?php esc_html_e( 'Professional photo. Use the same photo across all your profiles for Google entity recognition.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Social Profiles', 'seobetter' ); ?></th>
+                    <td>
+                        <div style="display:grid;grid-template-columns:100px 1fr;gap:8px;align-items:center;max-width:500px">
+                            <label>LinkedIn</label><input type="url" name="author_linkedin" value="<?php echo esc_attr( $settings['author_linkedin'] ?? '' ); ?>" class="regular-text" placeholder="https://linkedin.com/in/username" />
+                            <label>X / Twitter</label><input type="url" name="author_twitter" value="<?php echo esc_attr( $settings['author_twitter'] ?? '' ); ?>" class="regular-text" placeholder="https://x.com/username" />
+                            <label>Facebook</label><input type="url" name="author_facebook" value="<?php echo esc_attr( $settings['author_facebook'] ?? '' ); ?>" class="regular-text" placeholder="https://facebook.com/username" />
+                            <label>Instagram</label><input type="url" name="author_instagram" value="<?php echo esc_attr( $settings['author_instagram'] ?? '' ); ?>" class="regular-text" placeholder="https://instagram.com/username" />
+                            <label>YouTube</label><input type="url" name="author_youtube" value="<?php echo esc_attr( $settings['author_youtube'] ?? '' ); ?>" class="regular-text" placeholder="https://youtube.com/@channel" />
+                            <label>Website</label><input type="url" name="author_website" value="<?php echo esc_attr( $settings['author_website'] ?? '' ); ?>" class="regular-text" placeholder="https://yourwebsite.com" />
+                        </div>
+                        <p class="description" style="margin-top:8px"><?php esc_html_e( 'Link to your real profiles. Google uses sameAs links to build your Knowledge Graph entity.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button( __( 'Save Author Bio', 'seobetter' ), 'primary', 'seobetter_save_settings' ); ?>
         </form>
     </div>
 
