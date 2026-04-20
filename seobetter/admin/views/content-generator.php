@@ -827,11 +827,17 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             // v1.5.67 — reset the applied-fixes set on every fresh generation
             // so buttons start clickable on a new article.
             window._seobetterAppliedFixes = {};
-            renderResult(res);
-        }).catch(function() {
+            try { renderResult(res); } catch(renderErr) {
+                console.error('SEOBetter renderResult crash:', renderErr);
+                stopTimer();
+                errorEl.style.display = 'block';
+                errorMsg.textContent = 'Render error: ' + (renderErr.message || renderErr);
+            }
+        }).catch(function(err) {
+            console.error('SEOBetter fetchResult error:', err);
             stopTimer();
             errorEl.style.display = 'block';
-            errorMsg.textContent = 'Failed to load results.';
+            errorMsg.textContent = 'Failed to load results: ' + (err.message || err);
         });
     }
 
@@ -1014,20 +1020,20 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
 
             // Build checks: green for passing, amber for failing
             var geoChecks = [];
-            if (c.citations) geoChecks.push({label:'Citations', detail: c.citations.count + ' inline links', pass: c.citations.score >= 80 || c.citations.count >= 3});
-            if (c.expert_quotes) geoChecks.push({label:'Expert Quotes', detail: c.expert_quotes.count + ' quotes', pass: c.expert_quotes.score >= 80 || c.expert_quotes.count >= 2});
-            if (c.factual_density) geoChecks.push({label:'Statistics', detail: c.factual_density.score >= 70 ? 'sufficient data points' : 'add more numbers', pass: c.factual_density.score >= 70});
-            if (c.tables) geoChecks.push({label:'Comparison Table', detail: c.tables.count > 0 ? c.tables.count + ' table(s)' : 'consider adding for +30% AI citation', pass: c.tables.count > 0});
-            if (c.readability) geoChecks.push({label:'Readability', detail: 'Grade ' + Math.round(c.readability.flesch_grade || 0), pass: c.readability.score >= 70});
-            if (c.section_openings) geoChecks.push({label:'Section Openings', detail: c.section_openings.score >= 70 ? '40-60 word openers' : 'some sections need longer openers', pass: c.section_openings.score >= 70});
-            if (c.freshness) geoChecks.push({label:'Freshness', detail: c.freshness.score >= 100 ? 'date included' : 'add Last Updated date', pass: c.freshness.score >= 100});
+            if (c.citations) geoChecks.push({label:'Citations', detail: (c.citations.count||0) + ' inline links', pass: (c.citations.score||0) >= 80 || (c.citations.count||0) >= 3});
+            if (c.expert_quotes) geoChecks.push({label:'Expert Quotes', detail: (c.expert_quotes.count||0) + ' quotes', pass: (c.expert_quotes.score||0) >= 80 || (c.expert_quotes.count||0) >= 2});
+            if (c.factual_density) geoChecks.push({label:'Statistics', detail: (c.factual_density.score||0) >= 70 ? 'sufficient data points' : 'add more numbers', pass: (c.factual_density.score||0) >= 70});
+            if (c.tables) geoChecks.push({label:'Comparison Table', detail: (c.tables.count||0) > 0 ? (c.tables.count||0) + ' table(s)' : 'consider adding for +30% AI citation', pass: (c.tables.count||0) > 0});
+            if (c.readability) geoChecks.push({label:'Readability', detail: 'Grade ' + Math.round(c.readability.flesch_grade || 0), pass: (c.readability.score||0) >= 70});
+            if (c.section_openings) geoChecks.push({label:'Section Openings', detail: (c.section_openings.score||0) >= 70 ? '40-60 word openers' : 'some sections need longer openers', pass: (c.section_openings.score||0) >= 70});
+            if (c.freshness) geoChecks.push({label:'Freshness', detail: (c.freshness.score||0) >= 100 ? 'date included' : 'add Last Updated date', pass: (c.freshness.score||0) >= 100});
 
             // Keyword density — special handling
-            var kdVal = c.keyword_density ? c.keyword_density.density : 0;
+            var kdVal = (c.keyword_density && typeof c.keyword_density.density === 'number') ? c.keyword_density.density : 0;
             if (c.keyword_density) geoChecks.push({label:'Keyword Density', detail: kdVal.toFixed(1) + '%', pass: kdVal >= 0.8 && kdVal <= 2.5});
 
             // E-E-A-T
-            if (c.core_eeat) geoChecks.push({label:'E-E-A-T Signals', detail: c.core_eeat.score >= 70 ? 'passing' : 'needs improvement', pass: c.core_eeat.score >= 70});
+            if (c.core_eeat) geoChecks.push({label:'E-E-A-T Signals', detail: (c.core_eeat.score||0) >= 70 ? 'passing' : 'needs improvement', pass: (c.core_eeat.score||0) >= 70});
 
             var passCount = geoChecks.filter(function(g){return g.pass}).length;
             h += '<p style="margin:0 0 10px;font-size:12px;color:#6b7280">' + passCount + '/' + geoChecks.length + ' checks passing</p>';

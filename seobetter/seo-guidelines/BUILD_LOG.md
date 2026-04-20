@@ -16,10 +16,36 @@
 
 ---
 
+## v1.5.163 — Fix "Failed to load results" JS crash + show real error messages
+
+**Date:** 2026-04-20
+**Commit:** `[pending]`
+
+### Changes
+
+- **Show real error on render crash** — `admin/views/content-generator.php::fetchResult()` line ~830
+  - `.catch(function() {` was swallowing all errors — both network failures AND JS crashes inside renderResult()
+  - Now logs to console.error AND shows the actual error message to the user
+  - `renderResult(res)` wrapped in try/catch that shows "Render error: {message}" instead of generic "Failed to load results"
+
+- **Fix kdVal.toFixed() potential crash** — `admin/views/content-generator.php::renderResult()` line ~1032
+  - `c.keyword_density.density` could be undefined, making `kdVal.toFixed(1)` throw TypeError
+  - Fixed with `typeof c.keyword_density.density === 'number'` guard, defaulting to 0
+
+- **Null-safety on all GEO Summary checks** — lines ~1023-1036
+  - Added `||0` fallback on every `.score`, `.count` property access in the GEO Optimization Summary panel
+  - Prevents crashes when GEO_Analyzer returns a check object with missing sub-properties
+
+**Verify:** `grep -n 'SEOBetter renderResult crash' admin/views/content-generator.php` → line ~832
+**Verify:** `grep -n "typeof c.keyword_density.density" admin/views/content-generator.php` → line ~1032
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.162 — Fix PHP ParseError in enforce_geo_requirements (unclosed brace)
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `ffb2186`
 
 ### Changes
 
