@@ -16,10 +16,34 @@
 
 ---
 
-## v1.5.164 — PHP readability enforcement (grade 12 → grade 8-9 without AI)
+## v1.5.165 — Remove fake fallback table and FAQ generators
 
 **Date:** 2026-04-20
 **Commit:** `[pending]`
+
+### Changes
+
+- **Remove fallback table generator** — `includes/Async_Generator.php::enforce_geo_requirements()` line ~1639
+  - The "Source B" fallback built a table from H2 headings with every row saying "Covered in detail in this article"
+  - This produced nonsense content visible on published articles (e.g. jwum.com/veterinarian-career-insights)
+  - Now: only Source A (real Serper/Sonar table_data from research) can generate a table. No research data = no table.
+  - A missing table is better than a fake table — per external-links-policy.md "data must be verifiable"
+
+- **Remove fallback FAQ generator** — `includes/Async_Generator.php::enforce_geo_requirements()` line ~1660
+  - The fallback generated boilerplate answers like "This refers to the main topic covered in this article"
+  - Circular, useless content that makes the plugin look bad
+  - Now: the AI prompt already asks for FAQ in all 21 content types. If the AI generates one, it's kept. If not, no fake FAQ is injected.
+
+**Verify:** `grep -n 'Covered in detail' includes/Async_Generator.php` → should return NO matches
+**Verify:** `grep -n 'refers to the main topic' includes/Async_Generator.php` → should return NO matches
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.164 — PHP readability enforcement (grade 12 → grade 8-9 without AI)
+
+**Date:** 2026-04-20
+**Commit:** `9554c80`
 
 ### Changes
 

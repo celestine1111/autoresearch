@@ -1636,31 +1636,9 @@ class Async_Generator {
                     $table .= '| ' . implode( ' | ', array_slice( $cells, 0, count( $cols ) ) ) . " |\n";
                 }
             }
-            // Source B: FALLBACK — build a summary table from the article's H2 sections
-            // This guarantees a table even when research returns no table_data
-            else {
-                $h2s = [];
-                preg_match_all( '/^##\s+(.+)$/m', $markdown, $h2_matches );
-                foreach ( $h2_matches[1] as $h ) {
-                    $h = trim( $h );
-                    // Skip structural sections
-                    if ( preg_match( '/^(key\s*takeaway|reference|pros|cons|faq|frequently|quick\s*comparison)/i', $h ) ) continue;
-                    if ( strlen( $h ) > 5 && strlen( $h ) < 60 ) $h2s[] = $h;
-                }
-
-                if ( count( $h2s ) >= 3 ) {
-                    $kw_short = preg_replace( '/\b(best|top|how\s+to|guide|tips|review|in\s+20\d{2})\b/i', '', $keyword );
-                    $kw_short = trim( preg_replace( '/\s+/', ' ', $kw_short ) );
-
-                    $table = "\n\n## Quick Comparison\n\n";
-                    $table .= "| Aspect | Key Insight | Relevance |\n";
-                    $table .= "| --- | --- | --- |\n";
-                    foreach ( array_slice( $h2s, 0, 5 ) as $i => $h ) {
-                        $relevance = $i === 0 ? 'High' : ( $i <= 2 ? 'Medium' : 'Useful' );
-                        $table .= "| {$h} | Covered in detail in this article | {$relevance} |\n";
-                    }
-                }
-            }
+            // Source B: No fallback. If research returned no table_data, skip.
+            // A fake table with "Covered in detail in this article" is worse
+            // than no table. Per external-links-policy.md: data must be verifiable.
 
             // Insert the table before FAQ/References/Pros
             if ( $table ) {
@@ -1679,48 +1657,12 @@ class Async_Generator {
             }
         }
 
-        // ── 2. ENFORCE FAQ SECTION ──
-        // Per SEO-GEO §1: FAQ boosts AI extraction and E-E-A-T
-        // Skip for faq_page (already IS an FAQ) and recipe
-        $has_faq = (bool) preg_match( '/##\s*(FAQ|Frequently\s*Asked)/i', $markdown );
-        $faq_exempt = [ 'faq_page', 'recipe', 'live_blog' ];
-        if ( ! $has_faq && ! in_array( $content_type, $faq_exempt, true ) ) {
-            // Generate 3 FAQ items from the article content
-            $text = wp_strip_all_tags( $markdown );
-            $h2s = [];
-            preg_match_all( '/^##\s+(.+)$/m', $markdown, $h2_matches );
-            foreach ( $h2_matches[1] as $h ) {
-                $h = trim( $h );
-                if ( ! preg_match( '/^(key\s*takeaway|reference|pros|cons|source)/i', $h ) && strlen( $h ) > 10 ) {
-                    $h2s[] = $h;
-                }
-            }
-
-            $faq = "\n\n## Frequently Asked Questions\n\n";
-
-            // Build FAQ from H2 headings — turn them into questions
-            $kw_lower = strtolower( $keyword );
-            $kw_short = preg_replace( '/\b(best|top|how\s+to|guide|tips|review|in\s+20\d{2})\b/i', '', $keyword );
-            $kw_short = trim( preg_replace( '/\s+/', ' ', $kw_short ) );
-
-            $faq_items = [
-                "### What is {$kw_short}?\n\n" . ucfirst( $kw_short ) . " refers to the main topic covered in this article. " . ( ! empty( $h2s[0] ) ? "Key aspects include {$h2s[0]}." : '' ) . "\n",
-                "### Why is {$kw_short} important in " . wp_date( 'Y' ) . "?\n\nIn " . wp_date( 'Y' ) . ", {$kw_short} has become increasingly relevant due to changing market conditions, new research, and evolving best practices.\n",
-                "### How do I get started with {$kw_short}?\n\nStart by understanding the fundamentals covered in this guide. " . ( ! empty( $h2s[1] ) ? "Focus on {$h2s[1]} as your first step." : 'Focus on one area at a time and build from there.' ) . "\n",
-            ];
-
-            foreach ( $faq_items as $item ) {
-                $faq .= $item . "\n";
-            }
-
-            // Insert before References
-            $ref_pos = stripos( $markdown, '## References' );
-            if ( $ref_pos !== false ) {
-                $markdown = substr( $markdown, 0, $ref_pos ) . $faq . "\n" . substr( $markdown, $ref_pos );
-            } else {
-                $markdown .= $faq;
-            }
-        }
+        // ── 2. FAQ ──
+        // The AI prompt already includes FAQ in the section list for all 21 content types.
+        // If the AI generated one, great. If not, we do NOT inject a fake PHP-generated
+        // FAQ with boilerplate answers like "This refers to the main topic covered in
+        // this article." A fake FAQ is worse than no FAQ — it makes the plugin look bad
+        // and violates the "data must be verifiable" principle.
 
         // ── 3. ENFORCE KEYWORD DENSITY ──
         // Per SEO-GEO §1: keyword stuffing -9% visibility
