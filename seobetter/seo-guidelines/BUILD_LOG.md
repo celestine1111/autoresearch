@@ -16,10 +16,36 @@
 
 ---
 
-## v1.5.163 — Fix "Failed to load results" JS crash + show real error messages
+## v1.5.164 — PHP readability enforcement (grade 12 → grade 8-9 without AI)
 
 **Date:** 2026-04-20
 **Commit:** `[pending]`
+
+### Changes
+
+- **PHP readability simplifier** — `includes/Async_Generator.php::simplify_readability_php()` line ~1773
+  - Called from `enforce_geo_requirements()` as section 4 (after table, FAQ, keyword density)
+  - **Phase A**: 25 multi-word phrase swaps ("in order to" → "to", "due to the fact that" → "because", etc.)
+  - **Phase B**: 40+ single word swaps ("utilize" → "use", "facilitate" → "help", "approximately" → "about", etc.)
+  - **Phase C**: Sentence splitting — sentences > 22 words split at natural break points:
+    - Semicolons → period
+    - Em/en dashes → period
+    - ", which/where/while/although/however/but" → new sentence
+    - ", and [Capital]" → new sentence
+  - Only split if both halves ≥ 6 words (avoids tiny fragments)
+  - Skips headings, tables, lists, blockquotes, image markdown
+  - No AI calls — runs in milliseconds
+  - Expected improvement: FK grade drops 2-4 points (grade 12 → grade 8-9)
+
+**Verify:** `grep -n 'simplify_readability_php' includes/Async_Generator.php` → method at ~1773, called at ~1770
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.163 — Fix "Failed to load results" JS crash + show real error messages
+
+**Date:** 2026-04-20
+**Commit:** `ec21954`
 
 ### Changes
 

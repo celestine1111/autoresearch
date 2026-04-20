@@ -333,7 +333,7 @@ Separate endpoint from the main `/api/research` used for generation. Pulls real 
 | 3-N. **Sections** | Each section generated individually with: heading, keyword rules, content type guidance, tone guidance, research data, humanizer rules |
 | N+1. **Headlines** | AI generates 5 title variations scored by SEO criteria |
 | N+2. **Meta** | AI generates SEO title + meta description |
-| N+3. **Assemble** | Markdown assembled, images inserted, formatted to HTML, GEO scored |
+| N+3. **Assemble** | Markdown assembled, images inserted, citations injected, GEO enforced (table/FAQ/keyword density/readability), formatted to HTML, GEO scored |
 
 ### 2.2 System Prompt (Applied to Every Section)
 

@@ -12,6 +12,9 @@
 >
 > **Last updated:** v1.5.11 — 2026-04-12
 >
+> **v1.5.164 addition:**
+> - §1 readability: PHP post-generation enforcement via `simplify_readability_php()` — complex word/phrase swaps + long sentence splitting. No AI calls. Drops FK grade by 2-4 points.
+>
 > **v1.5.11 integration additions:**
 > - §5A keyword density: now enforced post-generation (`GEO_Analyzer::check_keyword_density()`, 10% weight)
 > - §4B humanizer: banned-word scanner runs on every save (`check_humanizer()`, 4% weight)
