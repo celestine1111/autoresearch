@@ -3360,9 +3360,6 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
 
   const serperData = await serperResp.json();
   const organicResults = serperData?.organic || [];
-  // v1.5.170 — Capture PAA + related searches from Serper (previously discarded)
-  const peopleAlsoAsk = Array.isArray(serperData?.peopleAlsoAsk) ? serperData.peopleAlsoAsk : [];
-  const relatedSearches = Array.isArray(serperData?.relatedSearches) ? serperData.relatedSearches : [];
 
   if (organicResults.length === 0) return null;
 
@@ -3411,22 +3408,13 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
     .map(r => r.status === 'fulfilled' ? r.value : null)
     .filter(Boolean);
 
-  // DEBUG: diagnostic info about each pipeline step
-  const _debug = {
-    firecrawl_urls_attempted: urlsToScrape.length,
-    firecrawl_pages_scraped: scrapeResults.length,
-    firecrawl_pages_titles: scrapeResults.map(p => p.title || p.url).slice(0, 5),
-    has_openrouter_key: !!OPENROUTER_KEY,
-    extraction_model: EXTRACTION_MODEL,
-  };
-
   if (scrapeResults.length === 0) {
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug: { ..._debug, stopped_at: 'firecrawl_empty' } };
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
   }
 
   // --- Step 3: LLM extraction from scraped content ---
   if (!OPENROUTER_KEY) {
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug: { ..._debug, stopped_at: 'no_openrouter_key' } };
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
   }
 
   // Build context from scraped pages (truncate each to ~2000 chars)
@@ -3435,8 +3423,6 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
     const truncated = page.markdown.slice(0, 2000);
     context += `\n=== Page: ${page.title} (${page.url}) ===\n${truncated}\n`;
   }
-  _debug.context_length = context.length;
-  _debug.context_preview = context.slice(0, 500);
 
   const countryHint = country ? ` Target audience is in ${country}. Prefer sources from ${country} when available.` : '';
 
@@ -3493,38 +3479,27 @@ Return ONLY the JSON object. No markdown fences.`;
     });
 
     if (!llmResp.ok) {
-      _debug.stopped_at = 'llm_http_error_' + llmResp.status;
-      return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug };
+      return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
     }
 
     const llmData = await llmResp.json();
     let content = llmData?.choices?.[0]?.message?.content || '';
-    _debug.llm_raw_length = content.length;
-    _debug.llm_raw_preview = content.slice(0, 300);
     if (!content) {
-      _debug.stopped_at = 'llm_empty_content';
-      return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug };
+      return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
     }
 
     content = content.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '').trim();
     const parsed = JSON.parse(content);
-    _debug.stopped_at = 'success';
-    _debug.parsed_keys = Object.keys(parsed);
 
     return {
       citations: serperCitations,
       quotes: Array.isArray(parsed.quotes) ? parsed.quotes : [],
       statistics: Array.isArray(parsed.statistics) ? parsed.statistics : [],
       table_data: parsed.table_data && typeof parsed.table_data === 'object' ? parsed.table_data : null,
-      peopleAlsoAsk,
-      relatedSearches,
-      _debug,
     };
   } catch (err) {
     console.error('LLM extraction error (non-fatal):', err.message);
-    _debug.stopped_at = 'llm_exception';
-    _debug.error = err.message;
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug };
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
   }
 }
 
@@ -4053,16 +4028,6 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
     sonar_quotes: tavilyQuotes || [], // v1.5.95: real quotes from Tavily page content
     sonar_statistics: sonarData?.statistics || [],
     sonar_table_data: sonarData?.table_data || null,
-    // DEBUG: extraction model used for this request
-    extraction_model: sonarData ? (process.env.EXTRACTION_MODEL || 'openai/gpt-4.1-mini') : 'none',
-
-    // v1.5.170 — PAA + related searches from Serper (previously discarded)
-    // DEBUG: passing through raw to verify data quality before building tables
-    serper_paa: sonarData?.peopleAlsoAsk || [],
-    serper_related: sonarData?.relatedSearches || [],
-
-    // DEBUG: pipeline diagnostics (remove after testing)
-    _extraction_debug: sonarData?._debug || null,
 
     searched_at: now.toISOString(),
   };

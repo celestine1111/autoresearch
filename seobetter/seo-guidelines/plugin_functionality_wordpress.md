@@ -40,13 +40,13 @@
 |---|---|---|---|
 | **Search** | Serper (Google SERP) | Searches Google → 8-10 real URLs with titles and snippets | $0.001/search |
 | **Scrape** | Firecrawl | Scrapes top 5 URLs → clean markdown (no nav, ads, sidebars) | $0.001/page |
-| **Extract** | OpenRouter (Llama 3.1 8B) | Extracts quotes, stats, table data from REAL page text | $0.001/call |
+| **Extract** | OpenRouter (GPT-4.1-mini) | Extracts quotes, stats, comparison tables from REAL page text. Builds tables from prose comparisons even when pages don't have pre-formatted tables. | $0.003/call |
 
 **Why this replaces Sonar:** Sonar is an AI that searches and synthesizes — it hallucinates URLs, invents quotes, makes up statistics. The new pipeline gives the extraction LLM ACTUAL page content to read, so every quote is a real sentence from a real page, every stat has a real source, every URL is from Google.
 
 **Return shape:** Identical to Sonar — `{citations, quotes, statistics, table_data}`. No PHP changes needed.
 
-**Env vars (Vercel):** `SERPER_API_KEY`, `FIRECRAWL_API_KEY`, `EXTRACTION_MODEL` (optional, default `meta-llama/llama-3.1-8b-instant`)
+**Env vars (Vercel):** `SERPER_API_KEY`, `FIRECRAWL_API_KEY`, `EXTRACTION_MODEL` (optional, default `openai/gpt-4.1-mini`)
 
 **Recipe pipeline (v1.5.133):** After Tavily finds recipe URLs, PHP calls `/api/scrape` to get clean Firecrawl markdown. `extract_recipe_from_raw()` works much better on clean structured markdown than on messy Tavily raw HTML.
 

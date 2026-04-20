@@ -16,10 +16,40 @@
 
 ---
 
+## v1.5.170 — GPT-4.1-mini extraction + real comparison tables from research data
+
+**Date:** 2026-04-21
+**Commit:** `[pending]`
+
+### Changes
+
+- **Extraction model upgrade** — `cloud-api/api/research.js::fetchSerperFirecrawlResearch()` line ~3337
+  - Switched default from `meta-llama/llama-3.1-8b-instant` to `openai/gpt-4.1-mini`
+  - Llama returned empty statistics, quotes, and null table_data for 100% of test queries
+  - GPT-4.1-mini extracts real structured data: comparison tables, statistics, quotes
+  - Cost increase: ~$0.002/article ($0.003 vs $0.001)
+
+- **Extraction prompt rewrite** — `cloud-api/api/research.js` line ~3443
+  - Old prompt said "ONLY if comparison data exists, otherwise null" → table_data was null 95% of the time
+  - New prompt instructs LLM to extract comparison points from prose text
+  - For comparison keywords: builds "Aspect / Option A / Option B" tables
+  - For all other keywords: builds "Aspect / Key Finding / Source" overview tables
+  - Must return at least 3 rows (only null if zero factual claims)
+  - Statistics broadened from "numbers/percentages only" to "any measurable fact"
+
+- **Debug cleanup** — removed all `_debug`, `peopleAlsoAsk`, `relatedSearches`, `extraction_model` debug fields
+  - PAA data tested but too sparse (0-1 entries per query) — not viable for tables
+
+**Verify:** `grep -n 'gpt-4.1-mini' cloud-api/api/research.js` → default model at ~3337
+**Verify:** `grep -n 'TABLE RULES' cloud-api/api/research.js` → new extraction prompt at ~3466
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.169 — Fix nested-paren reference linking on lines with existing links
 
 **Date:** 2026-04-20
-**Commit:** `[pending]`
+**Commit:** `56b1bda`
 
 ### Changes
 
