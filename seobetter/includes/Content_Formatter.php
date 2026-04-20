@@ -607,7 +607,7 @@ class Content_Formatter {
                         $mic_svg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
                         $output[] = "<!-- wp:html -->\n"
                             . '<div style="display:flex !important;align-items:flex-start !important;gap:12px !important;'
-                            . 'padding:16px 20px !important;margin:24px 0 0 !important;'
+                            . 'padding:16px 20px !important;margin:24px auto 0 !important;max-width:100% !important;'
                             . 'background:linear-gradient(135deg, #f0fdf4, #dcfce7) !important;'
                             . 'border-left:4px solid #22c55e !important;border-radius:0 12px 12px 0 !important;'
                             . 'box-shadow:0 1px 4px rgba(34,197,94,0.1) !important">'
@@ -620,7 +620,7 @@ class Content_Formatter {
                             . "</div>\n<!-- /wp:html -->";
                         // Open answer wrapper — will be closed at next Q or next H2
                         $output[] = "<!-- wp:html -->\n"
-                            . '<div style="padding:16px 20px 16px 64px !important;margin:0 0 16px !important;'
+                            . '<div style="padding:16px 20px 16px 64px !important;margin:0 auto 16px !important;max-width:100% !important;'
                             . 'border-left:4px solid #e5e7eb !important;border-radius:0 0 12px 0 !important;'
                             . 'background:#fafafa !important;position:relative !important">'
                             . '<span style="position:absolute;left:20px;top:16px;display:inline-flex;align-items:center;'
