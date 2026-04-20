@@ -1008,7 +1008,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         // v1.5.155 — GEO Optimization Summary. Shows what passed (green) and
         // what's missing (amber). No action button — article is optimized at
         // generation time. This is informational guidance only.
-        {
+        if (c) {
             h += '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">';
             h += '<h3 style="margin:0 0 12px;font-size:16px;font-weight:700">GEO Optimization Summary</h3>';
 
