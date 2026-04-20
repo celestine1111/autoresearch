@@ -1660,6 +1660,36 @@ class Async_Generator {
             $markdown = Content_Injector::strip_unlinked_quotes( $markdown );
         }
 
+        // v1.5.156 — Strip API/junk links from preview. Previously validate_outbound_links
+        // only ran at save time, so API endpoints (earthquake.usgs.gov, api.census.gov)
+        // showed in the preview. Now strip them at generation time too.
+        // Per external-links-policy.md: hard-fail rules apply regardless of pool.
+        $markdown = preg_replace_callback(
+            '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/',
+            function ( $m ) use ( $citation_pool ) {
+                $url  = $m[2];
+                $text = $m[1];
+                $host = wp_parse_url( $url, PHP_URL_HOST ) ?: '';
+                $path = wp_parse_url( $url, PHP_URL_PATH ) ?: '';
+
+                // Hard-fail: DOI, API hosts, data endpoints, raw files
+                if ( preg_match( '/^(doi\.org|dx\.doi\.org|earthquake\.usgs\.gov|api\.census\.gov|data\.bls\.gov|api\.worldbank\.org|api\.stlouisfed\.org)$/i', $host ) ) return $text;
+                if ( preg_match( '#\.(json|xml|csv)$|/query$|/search$|fdsnws|/api/v\d#i', $path ) ) return $text;
+                if ( preg_match( '/(^|\.)api\.|-api\.|\.herokuapp\.com$/i', $host ) ) return $text;
+                if ( preg_match( '#/api/|/v[1-9]/|/graphql|/rest/|/swagger#i', $url ) ) return $text;
+
+                // Hard-fail: homepage only (no path)
+                $trimmed = trim( $path, '/' );
+                if ( $trimmed === '' || $trimmed === 'index.html' ) return $text;
+
+                // Hard-fail: anchor text is API/dataset name
+                if ( preg_match( '/\b(api|endpoint|dataset|sdk|webhook)\b/i', $text ) ) return $text;
+
+                return $m[0]; // keep the link
+            },
+            $markdown
+        );
+
         // v1.5.111 — Run full cleanup on initial generation output.
         // Previously cleanup_ai_markdown() only ran in optimize/inject-fix,
         // so initial articles had long dashes (em/en-dash) and emoji.
