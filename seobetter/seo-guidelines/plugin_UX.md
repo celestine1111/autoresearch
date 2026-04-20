@@ -125,32 +125,15 @@ Both ring variants (SVG-based in content-generator, div-bordered in CSS class fo
 - **High priority** — red left border, light red background, shown expanded
 - **Medium priority** — amber left border, collapsible `<details>` with count
 
-### 3.4 Analyze & Improve Panel (REQUIRED) — SINGLE BUTTON SYSTEM (v1.5.83+)
+### 3.4 Suggestions Panel (v1.5.154 — replaces Optimize button)
 
-#### Before optimization: "⚡ Optimize All" button + compact fix summary
-- **Header:** "Analyze & Improve" title + improvement count + potential points
-- **One button:** "⚡ Optimize All" — gradient purple (`#764ba2` → `#667eea`), 40px height, right-aligned
-- **Fix summary:** compact pill badges below the button showing what will be fixed (e.g. "Citations +10", "Table +5", "Readability +10") — NO individual action buttons
-- **Progress bar:** 6px shimmer bar fills through 7 steps with labels + elapsed timer
-- **Behavior:** single click runs ALL fixes via `POST /seobetter/v1/optimize-all`:
-  1. ONE Perplexity Sonar call (server-side, Ben's key) for citations, quotes, stats, table
-  2. Sequential injection of all 4 research categories
-  3. AI readability simplification (user's model)
-  4. AI keyword density optimization (user's model, only if > 1.5%)
-  5. Single format/score pass at the end
+**v1.5.154:** The Optimize All button was REMOVED. Articles are now fully optimized at generation time — citations, stats, quotes, readability all handled in the generation pipeline. No second pass needed.
 
-#### After optimization: green summary panel
-- **Header:** "Article Optimized" with green checkmark icon
-- **Summary message:** what the optimize_all endpoint returned (e.g. "6 fixes applied (powered by Perplexity Sonar)")
-- **Step detail pills:** green rounded badges for each step that ran, with specific details:
-  - "✓ Citations: 5 citations added with inline anchor links"
-  - "✓ Expert Quotes: 2 real quotes inserted from Sonar"
-  - "✓ Comparison Table: 5 rows × 3 columns (real data from Sonar)"
-  - "✓ Statistics: 4 real stats added from Sonar"
-  - "✓ Readability: Simplified 3 sections: Grade 12.9 → 8.6"
-  - "✓ Keyword Density: 7.1% → 4.69%"
-- **Sonar badge:** "Powered by Perplexity Sonar — real research data" in purple
-- **No individual buttons** — the panel is purely informational after optimization
+#### Suggestions panel (informational only, no action button)
+- **Header:** "Suggestions" title + improvement count
+- **Compact pill badges:** show areas the user could improve manually or by regenerating
+- **No button** — the panel is purely informational guidance
+- **Why removed:** The optimization step was stripping citations it just added (readability rewrite removed markdown links), causing articles to lose references. Single-pass generation produces better, more consistent results.
 
 ### 3.4B Places Validator Debug Panel (v1.5.27, REQUIRED for local-intent keywords)
 Color-coded banner rendered above the content preview in the result view when `res.places_validator.is_local_intent === true`. Three states:

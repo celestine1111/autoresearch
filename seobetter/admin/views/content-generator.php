@@ -1005,18 +1005,11 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             }
         }
 
-        // v1.5.141 — Content-type-aware optimization.
-        // Full: Blog Post, How-To, Listicle, Review, Comparison, Buying Guide, Ultimate Guide
-        // Citations only: News, Case Study, Tech Article, White Paper, Opinion, Scholarly, Sponsored
-        // Hidden: Recipe, FAQ, Interview, Press Release, Personal Essay, Glossary, Live Blog
-        var optCt = (document.querySelector('#sb-content-type') || document.querySelector('[name="content_type"]') || {}).value || 'blog_post';
-        var optHidden = ['recipe','faq_page','interview','press_release','personal_essay','glossary_definition','live_blog'];
-        var optCitationsOnly = ['news_article','case_study','tech_article','white_paper','opinion','scholarly_article','sponsored'];
-        var optMode = optHidden.indexOf(optCt) !== -1 ? 'hidden' : (optCitationsOnly.indexOf(optCt) !== -1 ? 'citations_only' : 'full');
-
-        // v1.5.83 — Single "Optimize All" button replaces individual fix buttons.
-        // Shows a summary of what needs fixing + one button to fix everything.
-        if (fixes.length > 0 && optMode !== 'hidden') {
+        // v1.5.154 — Optimize button REMOVED. Article is optimized at generation time.
+        // The GEO score, suggestions, and fix cards are still shown as informational
+        // guidance — the user applies them manually or regenerates with different settings.
+        // The Analyze & Improve section now shows suggestions only (no action button).
+        if (fixes.length > 0) {
             window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
             var optimizeAllDone = window._seobetterAppliedFixes._optimize_all;
             var totalImpact = fixes.reduce(function(sum, f) { return sum + parseInt(f.impact) }, 0);
@@ -1042,27 +1035,13 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     h += '<div style="font-size:11px;color:#764ba2;margin-top:4px">Powered by Perplexity Sonar — real research data</div>';
                 }
             } else {
-                // Not yet optimized — show button + what will be fixed
-                h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
-                h += '<div><h3 style="margin:0;font-size:16px;font-weight:700">Analyze &amp; Improve</h3>';
-                h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">' + fixes.length + ' improvements found — potential <strong>+' + totalImpact + ' points</strong></p></div>';
-                var optLabel = optMode === 'citations_only' ? '&#128279; Add Citations' : '&#9889; Optimize All';
-                h += '<button type="button" id="sb-optimize-all" data-opt-mode="' + optMode + '" class="button" style="height:40px;font-size:13px;padding:0 24px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;letter-spacing:0.02em;transition:all 0.2s ease">' + optLabel + '</button>';
+                // v1.5.154 — Suggestions panel (no button). Article is optimized at generation time.
+                h += '<div style="margin-bottom:16px">';
+                h += '<h3 style="margin:0;font-size:16px;font-weight:700">Suggestions</h3>';
+                h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">' + fixes.length + ' areas to improve manually or regenerate with different settings</p>';
                 h += '</div>';
 
-                // Progress panel (hidden until clicked)
-                h += '<div id="sb-optimize-progress" style="display:none;margin-bottom:16px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">';
-                h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-                h += '<span id="sb-opt-step-label" style="font-size:13px;font-weight:600;color:#1e293b">Starting optimization...</span>';
-                h += '<span id="sb-opt-timer" style="font-size:12px;color:#6b7280;font-variant-numeric:tabular-nums">0s</span>';
-                h += '</div>';
-                h += '<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">';
-                h += '<div id="sb-opt-bar" style="height:100%;width:0%;border-radius:3px;transition:width 0.5s cubic-bezier(0.4,0,0.2,1)"></div>';
-                h += '</div>';
-                h += '<div id="sb-opt-steps-detail" style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.6"></div>';
-                h += '</div>';
-
-                // Summary of what will be fixed (compact pills, not individual buttons)
+                // Summary of suggestions (compact pills)
                 h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
                 fixes.forEach(function(fix) {
                     h += '<span style="font-size:11px;padding:4px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;color:#64748b">';

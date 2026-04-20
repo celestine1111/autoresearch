@@ -158,6 +158,11 @@ class Content_Injector {
      * Uses a round-robin assignment: each citation pool entry gets used
      * once before any is reused. Skips Key Takeaways, FAQ, References.
      */
+    // v1.5.154 — Public alias for generation-time citation injection
+    public static function inject_named_source_links_public( string $markdown, array $pool, int $max_links ): string {
+        return self::inject_named_source_links( $markdown, $pool, $max_links );
+    }
+
     private static function inject_named_source_links( string $markdown, array $pool, int $max_links ): string {
         if ( $max_links <= 0 || empty( $pool ) ) return $markdown;
 

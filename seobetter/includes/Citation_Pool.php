@@ -199,19 +199,23 @@ class Citation_Pool {
             return "\n\nAVAILABLE CITATIONS: None — the research pipeline found no keyword-relevant articles for this topic. Use plain-text attributions only (e.g. 'According to a 2026 RSPCA report'). Do NOT output any [text](url) markdown links.\n";
         }
 
-        $lines = [ "\n\nAVAILABLE CITATIONS (use ONLY these exact URLs for any hyperlinks you output):" ];
+        // v1.5.154 — Strengthened citation prompt. The article must be complete
+        // on first generation with inline citations. No second-pass optimization.
+        $count = count( $pool );
+        $lines = [ "\n\nAVAILABLE CITATIONS — {$count} verified sources (use these URLs for inline links):" ];
         foreach ( $pool as $entry ) {
             $title = $entry['title'] ?: $entry['source_name'];
-            $lines[] = "- [{$title}]({$entry['url']}) — {$entry['source_name']}";
+            $lines[] = "- [{$title}]({$entry['url']})";
         }
-        $lines[] = "\nRULES for these citations:";
-        $lines[] = "- Any hyperlink you output must be character-for-character identical to one of the URLs above";
-        $lines[] = "- Match the citation to the claim — don't cite a random pool URL just because it's available";
-        $lines[] = "- You CAN reuse the same URL multiple times if you reference the same source in different sections";
-        $lines[] = "- Every time you mention a source by name, make it a clickable link — do NOT write plain-text source names without linking them";
-        $lines[] = "- If a claim isn't supported by any URL in the pool, use a plain-text attribution instead (no link)";
-        $lines[] = "- DO NOT output a References section — the plugin builds it automatically from the citations you used in the body";
-        $lines[] = "- Zero hyperlinks + good plain-text attributions is a PASS. Hallucinated URLs are a FAIL.\n";
+        $lines[] = "\nCITATION RULES (CRITICAL — articles with more citations rank higher):";
+        $lines[] = "1. AIM FOR 1 CITATION PER 200 WORDS. A 1500-word article needs 7+ inline links.";
+        $lines[] = "2. FORMAT: Use markdown links inline — \"according to [Source Name](url)\" or \"([Source Name](url))\" at end of sentence.";
+        $lines[] = "3. NEVER write a source name in parentheses without linking it. WRONG: (Source Name). RIGHT: ([Source Name](url)).";
+        $lines[] = "4. REUSE the same URL in multiple sections when referencing the same source.";
+        $lines[] = "5. Link EVERY statistic, study, organization, or expert mention to the most relevant URL above.";
+        $lines[] = "6. DO NOT output a References section — the plugin builds it automatically.";
+        $lines[] = "7. DO NOT invent URLs. Only use the exact URLs listed above.";
+        $lines[] = "8. Spread citations across ALL sections — not just the introduction.\n";
 
         return implode( "\n", $lines );
     }

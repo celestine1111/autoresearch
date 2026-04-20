@@ -1600,9 +1600,15 @@ class Async_Generator {
         // footer". Now the preview matches the saved draft.
         $citation_pool = $job['results']['citation_pool'] ?? [];
 
-        // v1.5.151 — Convert bracketed/parenthetical text references to links
-        // BEFORE building References section. Runs for ALL article types.
+        // v1.5.154 — Full citation injection at generation time.
+        // Previously this only ran when user clicked "Optimize All" button.
+        // Now the article is complete on first generation — no second pass needed.
         if ( ! empty( $citation_pool ) ) {
+            // 1. Inject named source links after factual sentences
+            $max_links = max( 3, (int) ( str_word_count( wp_strip_all_tags( $markdown ) ) / 200 ) );
+            $markdown = Content_Injector::inject_named_source_links_public( $markdown, $citation_pool, $max_links );
+
+            // 2. Convert bracketed/parenthetical text references to links
             $markdown = \SEOBetter::linkify_bracketed_references( $markdown, $citation_pool );
         }
 
