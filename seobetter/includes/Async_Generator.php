@@ -1599,6 +1599,13 @@ class Async_Generator {
         // design looks good but no external links and no citations at
         // footer". Now the preview matches the saved draft.
         $citation_pool = $job['results']['citation_pool'] ?? [];
+
+        // v1.5.151 — Convert bracketed/parenthetical text references to links
+        // BEFORE building References section. Runs for ALL article types.
+        if ( ! empty( $citation_pool ) ) {
+            $markdown = \SEOBetter::linkify_bracketed_references( $markdown, $citation_pool );
+        }
+
         if ( ! empty( $citation_pool ) ) {
             $markdown = Citation_Pool::append_references_section( $markdown, $citation_pool );
         }
