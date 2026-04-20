@@ -3356,6 +3356,13 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
   }
 
   const serperData = await serperResp.json();
+  // v1.5.170 — DEBUG: Log ALL top-level keys Serper returns so we can see
+  // what data is available (peopleAlsoAsk, knowledgeGraph, relatedSearches, etc.)
+  console.log('[Serper DEBUG] Top-level keys:', Object.keys(serperData));
+  console.log('[Serper DEBUG] peopleAlsoAsk count:', (serperData?.peopleAlsoAsk || []).length);
+  console.log('[Serper DEBUG] peopleAlsoAsk data:', JSON.stringify(serperData?.peopleAlsoAsk || [], null, 2));
+  console.log('[Serper DEBUG] relatedSearches:', JSON.stringify(serperData?.relatedSearches || [], null, 2));
+  console.log('[Serper DEBUG] knowledgeGraph keys:', serperData?.knowledgeGraph ? Object.keys(serperData.knowledgeGraph) : 'none');
   const organicResults = serperData?.organic || [];
 
   if (organicResults.length === 0) return null;
