@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.142
+ * Version: 1.5.143
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.142' );
+define( 'SEOBETTER_VERSION', '1.5.143' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -65,7 +65,7 @@ final class SEOBetter {
         add_action( 'wp_head', [ $this, 'output_social_meta' ], 2 );
         add_action( 'wp_head', [ $this, 'output_ai_meta' ], 3 );
         add_action( 'save_post', [ $this, 'analyze_on_save' ], 20, 2 );
-        // v1.5.142 — Regenerate inline schema when post is published.
+        // v1.5.143 — Regenerate inline schema when post is published.
         // Draft schema uses ?p=ID URLs; publishing gives pretty permalinks.
         add_action( 'transition_post_status', [ $this, 'update_schema_on_publish' ], 20, 3 );
         add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
@@ -353,7 +353,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.142 — Regenerate schema with correct permalink when post is published.
+     * v1.5.143 — Regenerate schema with correct permalink when post is published.
      * Schema generated at draft time uses ?p=ID URLs. On publish, WordPress
      * assigns a pretty permalink (e.g. /best-dog-food-australia/). This hook
      * regenerates the JSON-LD in both post_content and post meta so all URLs
@@ -671,7 +671,7 @@ final class SEOBetter {
                 }
                 $result['schema_types'] = implode( ' + ', $types );
             }
-            // v1.5.142 — Pass full schema for Rich Results Preview
+            // v1.5.143 — Pass full schema for Rich Results Preview
             $result['schema_data'] = $decoded;
         }
 
@@ -1343,7 +1343,7 @@ final class SEOBetter {
             $markdown = self::cleanup_ai_markdown( $markdown );
         }
 
-        // v1.5.142 — Convert bracketed text references to real links.
+        // v1.5.143 — Convert bracketed text references to real links.
         // The AI often writes [Source Name] or (Source Name) as plain text
         // instead of [Source Name](url). Match these against the Citation Pool
         // and convert to clickable markdown links.
@@ -1755,7 +1755,7 @@ final class SEOBetter {
         //    content (not a code block), convert to a list item.
         $md = preg_replace( '/^[ \t]{4,}(?!```)([\w"\'(].+)$/m', '- $1', $md );
 
-        // 5. v1.5.142 — Strip academic/Crossref junk text from AI output.
+        // 5. v1.5.143 — Strip academic/Crossref junk text from AI output.
         //    The AI sometimes writes about academic papers from Crossref data
         //    even when DOI URLs are blocked. Remove sentences referencing:
         //    - "cited X times" (Crossref citation counts)
@@ -1795,7 +1795,7 @@ final class SEOBetter {
 
         $domain  = sanitize_text_field( $request->get_param( 'domain' ) ?? '' );
         $country = sanitize_text_field( $request->get_param( 'country' ) ?? '' );
-        // v1.5.142 — Content-type-aware optimization mode
+        // v1.5.143 — Content-type-aware optimization mode
         $optimize_mode = sanitize_text_field( $request->get_param( 'optimize_mode' ) ?? 'full' );
         $result  = SEOBetter\Content_Injector::optimize_all( $markdown, $keyword, $existing_pool, $scores, $sonar_data, $domain, $country, $optimize_mode );
 
@@ -2284,7 +2284,7 @@ final class SEOBetter {
      * Strip or validate all outbound links in the article.
      *
     /**
-     * v1.5.142 — Convert bracketed text references into real markdown links.
+     * v1.5.143 — Convert bracketed text references into real markdown links.
      *
      * The AI often writes [Source Name] or (Source Name) as plain text brackets
      * without a URL. This method matches the text inside brackets against the
@@ -2453,11 +2453,11 @@ final class SEOBetter {
 
             // Hard-fail rules (apply regardless of pool membership)
             //
-            // v1.5.142 — Block DOI/academic URLs (often 404, not reader-friendly)
+            // v1.5.143 — Block DOI/academic URLs (often 404, not reader-friendly)
             if ( preg_match( '/^(doi\.org|dx\.doi\.org)$/i', $host ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
-            // v1.5.142 — Block raw data file URLs (.json, .xml, .csv)
+            // v1.5.143 — Block raw data file URLs (.json, .xml, .csv)
             if ( preg_match( '#\.(json|xml|csv)$#i', $path ?? '' ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
@@ -2945,7 +2945,7 @@ final class SEOBetter {
             if ( $title === '' ) {
                 $title = $src ?: 'Source';
             }
-            // v1.5.142 — Sanitize title for markdown link safety.
+            // v1.5.143 — Sanitize title for markdown link safety.
             // Titles with [ ] break markdown link syntax: [title with [brackets]](url)
             // becomes a nested link that the formatter splits incorrectly.
             $title = str_replace( [ '[', ']' ], '', $title );
@@ -3576,9 +3576,10 @@ final class SEOBetter {
                 <?php endif; ?>
             </div>
 
-            <!-- Rich Results Tab (v1.5.142) -->
+            <!-- Rich Results Tab (v1.5.143) -->
             <div class="sb-meta-panel" data-panel="richresults" style="padding:20px;display:none">
                 <?php
+                try {
                 $schema_raw = get_post_meta( $post->ID, '_seobetter_schema', true );
                 $schema_decoded = $schema_raw ? json_decode( $schema_raw, true ) : null;
                 $graph = $schema_decoded['@graph'] ?? [];
@@ -3814,6 +3815,9 @@ final class SEOBetter {
 
                     <div style="margin-top:10px">
                         <a href="https://search.google.com/test/rich-results?url=<?php echo urlencode( get_permalink( $post->ID ) ); ?>" target="_blank" rel="noopener" style="font-size:12px;color:#764ba2;text-decoration:none">&#128279; Test in Google Rich Results Test &rarr;</a>
+                        <?php if ( $post->post_status !== 'publish' ) : ?>
+                            <div style="font-size:11px;color:#9ca3af;margin-top:4px">Publish the post first — Google can only test published URLs.</div>
+                        <?php endif; ?>
                         <span style="margin:0 6px;color:#d1d5db">|</span>
                         <a href="https://validator.schema.org/#url=<?php echo urlencode( get_permalink( $post->ID ) ); ?>" target="_blank" rel="noopener" style="font-size:12px;color:#764ba2;text-decoration:none">&#128279; Schema.org Validator &rarr;</a>
                     </div>
@@ -3831,6 +3835,11 @@ final class SEOBetter {
                 </div>
 
                 <?php endif; ?>
+                <?php } catch ( \Throwable $e ) { ?>
+                    <div style="text-align:center;padding:20px;color:#9ca3af;font-size:13px">
+                        Rich Results data unavailable. Save the post to generate schema.
+                    </div>
+                <?php } ?>
             </div>
         </div>
 

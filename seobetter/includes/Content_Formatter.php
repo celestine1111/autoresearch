@@ -508,6 +508,11 @@ class Content_Formatter {
                     // with its own "References" eyebrow. Without this suppress,
                     // the output would show two References headers stacked.
                     if ( $level === 2 && preg_match( '/^(references|sources|bibliography|further\s*reading|citations)\s*$/i', $text ) ) {
+                        // v1.5.142 — Close any open recipe card before References
+                        if ( $in_recipe_card ) {
+                            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                            $in_recipe_card = false;
+                        }
                         // Check next section — if it's an ordered list, the
                         // list handler will emit the styled References block.
                         // Skip emitting the H2 so we don't double up.
@@ -523,7 +528,7 @@ class Content_Formatter {
                     $is_recipe_heading = false;
                     if ( ( $options['content_type'] ?? '' ) === 'recipe' ) {
                         // In recipe articles, any H2 that's NOT a generic section is likely a recipe
-                        $is_recipe_heading = ! preg_match( '/^(key\s*takeaway|why\s*this|quick\s*comparison|what\s*ingredient|pros|cons|faq|frequently|reference|safety)/i', $text );
+                        $is_recipe_heading = ! preg_match( '/^(key\s*takeaway|why\s*(this|homemade|making)|quick\s*comparison|what\s*(ingredient|to)|pros|cons|faq|frequently|reference|sources|bibliography|safety|cite)/i', $text );
                     }
 
                     // Close previous recipe card if open
