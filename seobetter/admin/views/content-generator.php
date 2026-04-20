@@ -710,9 +710,18 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
         if (lsi.length) {
             document.querySelector('[name="lsi_keywords"]').value = lsi.join(', ');
         }
-        var srcLabel = (d.sources ? d.sources.google_suggest : 0) + ' from Google Suggest, ' + (d.sources ? d.sources.datamuse : 0) + ' from Datamuse';
-        st.textContent = 'Added ' + sec.length + ' secondary + ' + lsi.length + ' LSI (' + srcLabel + ')';
-        setTimeout(function() { st.textContent = ''; }, 6000);
+        // v1.5.173 — Auto-fill Target Audience from Serper domain analysis
+        var aud = (d.keywords && d.keywords.audience) || '';
+        var audField = document.querySelector('[name="audience"]');
+        if (aud && audField && !audField.value.trim()) {
+            audField.value = aud;
+        }
+        var serperCount = (d.sources && d.sources.serper) || 0;
+        var srcLabel = serperCount > 0
+            ? serperCount + ' from Google SERP, ' + (d.sources ? d.sources.google_suggest : 0) + ' from Suggest'
+            : (d.sources ? d.sources.google_suggest : 0) + ' from Google Suggest, ' + (d.sources ? d.sources.datamuse : 0) + ' from Datamuse';
+        st.textContent = 'Added ' + sec.length + ' secondary + ' + lsi.length + ' LSI' + (aud ? ' + audience' : '') + ' (' + srcLabel + ')';
+        setTimeout(function() { st.textContent = ''; }, 8000);
     }).catch(function(e) {
         btn.disabled = false;
         st.textContent = 'Error: ' + (e && e.message ? e.message : 'network');

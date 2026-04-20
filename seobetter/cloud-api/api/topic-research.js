@@ -57,12 +57,14 @@ export default async function handler(req, res) {
     // the overlap filter in buildKeywordSets. We run BOTH the full niche
     // AND the core topic in parallel and merge the results, so if the
     // long-tail does have any completions we still capture them.
-    const [suggestLong, suggestCore, datamuse, wiki, reddit] = await Promise.all([
+    const [suggestLong, suggestCore, datamuse, wiki, reddit, serperData] = await Promise.all([
       fetchGoogleSuggest(niche, gl),
       (niche !== coreTopic) ? fetchGoogleSuggest(coreTopic, gl) : Promise.resolve([]),
       fetchDatamuse(coreTopic),
       fetchWikipedia(niche),
       fetchReddit(niche),
+      // v1.5.173 — Serper-powered keyword extraction (if key available)
+      fetchSerperKeywords(niche, gl),
     ]);
     // Merge core-topic suggestions into the main list, deduped
     const suggest = [...suggestLong];
@@ -73,13 +75,40 @@ export default async function handler(req, res) {
     // Build topic candidates with scoring
     const topics = buildTopics(niche, suggest, datamuse, wiki, reddit);
 
-    // v1.5.22 — extract short keyword phrases for the Auto-suggest button
-    // in admin/views/content-generator.php. The button used to call
-    // /api/generate (LLM) with a strict-format prompt + fragile regex parser
-    // that frequently failed silently when Llama wrapped its output in
-    // markdown. Now Auto-suggest reads these arrays directly — real data
-    // from Google Suggest + Datamuse + Wikipedia, no LLM hallucination.
+    // v1.5.173 — Build keywords from Serper titles + snippets (high quality)
+    // then merge with existing Google Suggest + Datamuse results as fallback.
     const keywords = buildKeywordSets(niche, suggest, datamuse, wiki);
+
+    // v1.5.173 — Serper-extracted keywords override when available
+    if (serperData && serperData.secondary.length > 0) {
+      // Merge Serper secondary into front of list (higher quality)
+      const merged = [...serperData.secondary];
+      const mergedSet = new Set(merged.map(s => s.toLowerCase()));
+      for (const s of keywords.secondary) {
+        if (!mergedSet.has(s.toLowerCase())) {
+          merged.push(s);
+          mergedSet.add(s.toLowerCase());
+        }
+      }
+      keywords.secondary = merged.slice(0, 7);
+      keywords.secondary_string = keywords.secondary.join(', ');
+    }
+    if (serperData && serperData.lsi.length > 0) {
+      const merged = [...serperData.lsi];
+      const mergedSet = new Set(merged.map(s => s.toLowerCase()));
+      for (const s of keywords.lsi) {
+        if (!mergedSet.has(s.toLowerCase())) {
+          merged.push(s);
+          mergedSet.add(s.toLowerCase());
+        }
+      }
+      keywords.lsi = merged.slice(0, 10);
+      keywords.lsi_string = keywords.lsi.join(', ');
+    }
+    // v1.5.173 — Target audience suggestion from Serper source analysis
+    if (serperData && serperData.audience) {
+      keywords.audience = serperData.audience;
+    }
 
     return res.status(200).json({
       success: true,
@@ -91,6 +120,7 @@ export default async function handler(req, res) {
         datamuse: datamuse.length,
         wikipedia: wiki.length,
         reddit: reddit.length,
+        serper: serperData ? serperData.citation_count : 0,
       },
     });
   } catch (err) {
@@ -389,6 +419,145 @@ async function fetchReddit(query) {
 // the secondary_keywords + lsi_keywords fields directly. The LLM path
 // (/api/generate with strict-format prompt) was unreliable because Llama
 // wrapped output in markdown, breaking the client-side regex parser.
+// ============================================================
+// v1.5.173 — Serper-powered keyword extraction
+// Calls Serper (Google SERP), extracts secondary keywords from
+// page titles, LSI terms from snippets, and audience from domains.
+// ============================================================
+async function fetchSerperKeywords(keyword, gl = '') {
+  const SERPER_KEY = process.env.SERPER_API_KEY;
+  if (!SERPER_KEY) return null;
+
+  try {
+    const body = { q: keyword, num: 10 };
+    if (gl) body.gl = gl;
+
+    const resp = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: { 'X-API-KEY': SERPER_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const results = data?.organic || [];
+    if (results.length === 0) return null;
+
+    const kwLower = keyword.toLowerCase();
+    const kwWords = new Set(kwLower.split(/\s+/).filter(w => w.length >= 3));
+    // Stop words to filter out of extracted phrases
+    const STOP = new Set(['the','and','for','with','from','are','you','can','how','why','what',
+      'when','where','who','this','that','your','our','their','its','has','have','had',
+      'was','were','been','being','will','would','could','should','does','did','not',
+      'but','about','into','over','after','before','between','under','above','more',
+      'most','just','also','than','then','very','much','each','every','some','any',
+      'all','both','few','many','such','only','same','other','like','best','top',
+      'new','2024','2025','2026','2027','complete','ultimate','guide','review',
+      'tips','list','everything','need','know','must','revealed','simple','steps']);
+
+    // --- Extract secondary keywords from titles ---
+    // Titles of top-ranking pages contain the exact phrases competitors target
+    const secondary = [];
+    const seenSec = new Set();
+    for (const r of results) {
+      const title = (r.title || '').toLowerCase();
+      if (!title) continue;
+      // Remove site name suffix ("... - Website Name" or "| Website Name")
+      const cleaned = title.replace(/\s*[-|]\s*[^-|]+$/, '').trim();
+      if (cleaned === kwLower || cleaned.length < 8) continue;
+      // Extract 2-4 word phrases from the title that aren't the keyword itself
+      const words = cleaned.split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w));
+      // Build 2-3 word ngrams
+      for (let i = 0; i < words.length - 1; i++) {
+        const bigram = words[i] + ' ' + words[i+1];
+        if (seenSec.has(bigram) || kwLower.includes(bigram)) continue;
+        // Must share at least one word with the keyword (relevance check)
+        if (!kwWords.has(words[i]) && !kwWords.has(words[i+1])) continue;
+        seenSec.add(bigram);
+        secondary.push(bigram);
+      }
+      if (words.length >= 3) {
+        for (let i = 0; i < words.length - 2; i++) {
+          const trigram = words[i] + ' ' + words[i+1] + ' ' + words[i+2];
+          if (seenSec.has(trigram) || kwLower.includes(trigram)) continue;
+          if (!kwWords.has(words[i]) && !kwWords.has(words[i+1]) && !kwWords.has(words[i+2])) continue;
+          seenSec.add(trigram);
+          secondary.push(trigram);
+        }
+      }
+    }
+
+    // --- Extract LSI keywords from snippets ---
+    // Snippets contain semantic terms that Google associates with this topic
+    const lsi = [];
+    const seenLsi = new Set();
+    const allSnippetText = results.map(r => (r.snippet || '').toLowerCase()).join(' ');
+    const snippetWords = allSnippetText.split(/[^a-z0-9]+/).filter(w => w.length >= 4);
+    // Count word frequency across all snippets
+    const freq = {};
+    for (const w of snippetWords) {
+      if (STOP.has(w) || kwWords.has(w)) continue;
+      freq[w] = (freq[w] || 0) + 1;
+    }
+    // Sort by frequency, take top terms that appear 2+ times
+    const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+    for (const [word, count] of sorted) {
+      if (count < 2) break;
+      if (seenLsi.has(word) || seenSec.has(word)) continue;
+      seenLsi.add(word);
+      lsi.push(word);
+      if (lsi.length >= 10) break;
+    }
+
+    // --- Infer target audience from source domains ---
+    const domains = results.map(r => {
+      try { return new URL(r.link).hostname.replace('www.', ''); } catch { return ''; }
+    }).filter(Boolean);
+
+    let audience = '';
+    const domainStr = domains.join(' ');
+    // Audience inference rules based on which sites rank for this keyword
+    if (/reddit\.com/.test(domainStr) && /r\/(react|javascript|webdev|programming|learnprogramming)/i.test(results.map(r => r.link).join(' '))) {
+      audience = 'developers and programmers';
+    } else if (/reddit\.com/.test(domainStr) && /r\/(small.*business|entrepreneur|startup)/i.test(results.map(r => r.link).join(' '))) {
+      audience = 'small business owners and entrepreneurs';
+    } else if (/aarp\.org|healthline\.com|webmd\.com|mayoclinic\.org|health\.harvard/.test(domainStr)) {
+      audience = 'health-conscious adults seeking evidence-based information';
+    } else if (/salesforce|hubspot|mailchimp|linkedin\.com/.test(domainStr)) {
+      audience = 'business owners and marketing professionals';
+    } else if (/allrecipes|foodnetwork|bbcgoodfood|taste\.com/.test(domainStr)) {
+      audience = 'home cooks looking for reliable recipes';
+    } else if (/zerotomastery|freecodecamp|codecademy|realpython|dev\.to/.test(domainStr)) {
+      audience = 'beginner to intermediate developers learning new skills';
+    } else if (/wirecutter|rtings|tomsguide|techradar|pcmag/.test(domainStr)) {
+      audience = 'buyers researching products before purchase';
+    } else if (/investopedia|nerdwallet|bankrate|forbes\.com/.test(domainStr)) {
+      audience = 'people making financial decisions';
+    }
+    // Fallback: check snippet language for audience hints
+    if (!audience) {
+      const snippets = allSnippetText;
+      if (/beginner|getting started|learn|tutorial|step.by.step/.test(snippets)) {
+        audience = 'beginners looking for practical guidance';
+      } else if (/business|company|brand|marketing|strategy/.test(snippets)) {
+        audience = 'business professionals and decision makers';
+      } else if (/\byour health\b|patient|symptom|treatment|doctor/.test(snippets)) {
+        audience = 'people researching health topics';
+      }
+    }
+
+    return {
+      secondary: secondary.slice(0, 7),
+      lsi: lsi.slice(0, 10),
+      audience,
+      citation_count: results.length,
+    };
+  } catch (err) {
+    console.error('Serper keyword extraction error (non-fatal):', err.message);
+    return null;
+  }
+}
+
 function buildKeywordSets(niche, suggest, datamuse, wiki) {
   const nicheLower = (niche || '').toLowerCase().trim();
   const seen = new Set([ nicheLower ]);

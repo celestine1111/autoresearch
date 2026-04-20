@@ -17,7 +17,7 @@
 | Field | Type | Name/ID | Required | Notes |
 |---|---|---|---|---|
 | Primary Keyword | text input | `primary_keyword` | YES | Target keyword for the article |
-| Auto-suggest | button | `seobetter-auto-keywords` | — | Populates secondary + LSI keywords from real Google Suggest + Datamuse (v1.5.22). v1.5.25: when both providers return zero (normal for ultra-long-tail keywords like "what's the best gelato shops in lucignano italy 2026"), the status shows a blue ℹ️ info message telling the user it's safe to leave the field empty — the AI pulls variations from the research pool during generation. |
+| Auto-suggest | button | `seobetter-auto-keywords` | — | v1.5.173: Populates secondary keywords from **Serper Google SERP titles** (what competitors target), LSI keywords from **Serper snippet frequency analysis**, and **Target Audience** from source domain analysis. Falls back to Google Suggest + Datamuse when Serper key not available. Auto-fills audience field if empty. |
 | Secondary Keywords | text input | `secondary_keywords` | no | Comma-separated related phrases |
 | LSI / Semantic Keywords | text input | `lsi_keywords` | no | Comma-separated semantic terms |
 

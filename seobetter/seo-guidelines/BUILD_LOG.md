@@ -16,10 +16,38 @@
 
 ---
 
-## v1.5.172 — Fix recipe schema + "the this" keyword density bug
+## v1.5.173 — Serper-powered Auto-suggest (replaces Google Suggest + Datamuse trash)
 
 **Date:** 2026-04-21
 **Commit:** `[pending]`
+
+### Changes
+
+- **Serper keyword extraction** — `cloud-api/api/topic-research.js::fetchSerperKeywords()` (new function, ~120 lines)
+  - Calls Serper Google SERP API with the user's keyword
+  - Extracts secondary keywords from top-ranking page **titles** (2-3 word n-grams that competitors target)
+  - Extracts LSI keywords from **snippets** (high-frequency semantic terms across 8 Google results)
+  - Infers **target audience** from source domains (Reddit subreddits, AARP, Salesforce, dev sites, etc.)
+  - Merges with existing Google Suggest + Datamuse results (Serper takes priority, others fill gaps)
+  - Zero extra cost — Serper is $0.001/call, already used in research pipeline
+
+- **Auto-fill Target Audience** — `admin/views/content-generator.php` line ~713
+  - The audience field auto-fills when Auto-suggest returns a `keywords.audience` value
+  - Only fills if the field is currently empty (doesn't overwrite user input)
+  - Status message updated to show "8 from Google SERP" instead of "from Datamuse"
+
+- **Fallback preserved** — Google Suggest + Datamuse still run in parallel. If Serper key is not set, the old behavior continues unchanged.
+
+**Verify:** `grep -n 'fetchSerperKeywords' cloud-api/api/topic-research.js` → function definition + call
+**Verify:** `grep -n 'keywords.audience' admin/views/content-generator.php` → audience auto-fill
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.172 — Fix recipe schema + "the this" keyword density bug
+
+**Date:** 2026-04-21
+**Commit:** `269509b`
 
 ### Changes
 
