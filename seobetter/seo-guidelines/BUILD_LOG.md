@@ -16,10 +16,37 @@
 
 ---
 
-## v1.5.170 — GPT-4.1-mini extraction + real comparison tables from research data
+## v1.5.171 — FAQ answers optimized for AI citation extraction
 
 **Date:** 2026-04-21
 **Commit:** `[pending]`
+
+### Changes
+
+- **FAQ prompt rewrite for AI citation** — `includes/Async_Generator.php::generate_section()` FAQ branch line ~1076
+  - Answer length: 60-80 words per answer (was 45-55 per Q+A combined — too short for AI citation)
+  - Rule 1: First sentence = direct answer (AI models extract first sentence preferentially)
+  - Rule 2: Data point in EVERY answer (was "at least one" — now every answer must have a number/date/source)
+  - Rule 3: Self-contained answers (no "as mentioned above" — AI extracts individual Q&A pairs)
+  - Max tokens increased from 900 to 1200 to accommodate longer answers
+  - Total section: 350-450 words (was 200-280)
+
+- **Critical HTML rules verified for AI extraction** (all confirmed existing, no code change needed):
+  - H3 headings for questions — `parse_markdown()` generates heading sections ✓
+  - Answer in `<p>` tags directly after heading — `format_hybrid()` renders paragraphs ✓
+  - No `<details>` or accordion anywhere — Content_Formatter has zero `<details>` tags ✓
+  - JSON-LD text matches visible HTML — `Schema_Generator::generate_faq_schema()` reads from `post_content` ✓
+
+**Verify:** `grep -n 'FIRST SENTENCE = DIRECT ANSWER' includes/Async_Generator.php` → FAQ prompt rule
+**Verify:** `grep -n 'DATA POINT IN EVERY ANSWER' includes/Async_Generator.php` → FAQ prompt rule
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.170 — GPT-4.1-mini extraction + real comparison tables from research data
+
+**Date:** 2026-04-21
+**Commit:** `627550c`
 
 ### Changes
 

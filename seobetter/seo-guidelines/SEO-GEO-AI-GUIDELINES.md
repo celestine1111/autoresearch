@@ -1150,7 +1150,7 @@ Add `speakable` property to Article schema to mark content as voice-assistant-fr
 ### Content Blocks Optimized for Voice
 1. **Definition blocks** — "X is [definition]." → perfect for "What is X?" queries
 2. **Step-by-step blocks** — numbered lists → perfect for "How do I X?" queries
-3. **FAQ blocks** — question + 40-60 word answer → directly read by assistants
+3. **FAQ blocks** — question + 60-80 word answer with data point in first sentence → directly cited by AI search engines (v1.5.171: optimized for Google AI Overviews, Perplexity, ChatGPT extraction)
 4. **Key Takeaways** — bullet summaries → read as quick answers
 
 ---

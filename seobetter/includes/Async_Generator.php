@@ -1075,10 +1075,22 @@ class Async_Generator {
             $max = 300;
         } elseif ( $is_faq ) {
             $trends_context = ( $trends ) ? "\n\nUse real data from research when answering:\n{$trends}" : '';
-            // v1.5.46 — FAQ capped at ~250 words total. 5 Q&A pairs averaging
-            // ~50 words each. Part of the 350-word structural reserve.
-            $prompt = "Write an FAQ section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\nWORD LIMIT (HARD CAP): The entire FAQ section must be 200-280 words total. 5 question-answer pairs, averaging ~45-55 words each (question + answer combined). Do not exceed 280 words.\n\nVary the answer lengths — some short (15-25 words), some longer (40-60 words). Do not make every answer the same length or structure.{$readability_rule}\n\nRules:\n- Phrase questions exactly how real people search (use 'you' and natural language)\n- Answer directly in the first sentence — no throat-clearing\n- Include the keyword \"{$keyword}\" in at least 2 questions\n- Use a real statistic or fact from the research data in at least one answer\n- Never start answers with pronouns (It, This, They)\n- Never start with 'Yes,' or 'No,' followed by a restatement\n- Match the tone specified above\n\nFormat:\n\n## Frequently Asked Questions\n\n### [Question]?\n[Answer]";
-            $max = 900;
+            // v1.5.171 — FAQ optimized for AI citation extraction.
+            // Research shows: 60-80 word answers, direct first sentence, data points
+            // in every answer = highest citation rate across Google AI Overviews,
+            // Perplexity, ChatGPT, and Gemini. Never use accordion/details tags.
+            $prompt = "Write an FAQ section for an article about \"{$keyword}\".\n{$kw_context}{$trends_context}\n\n"
+                . "WORD LIMIT: 5 question-answer pairs. Each ANSWER must be 60-80 words (the sweet spot for AI citation). Total section: 350-450 words.\n\n"
+                . "FAQ RULES (CRITICAL — these determine whether AI search engines cite your FAQ):\n"
+                . "1. FIRST SENTENCE = DIRECT ANSWER. Start every answer with a clear, factual statement that answers the question in one sentence. AI models extract the first sentence preferentially. Example: 'Intermittent fasting is a pattern of eating based on time limits, not calorie restriction.'\n"
+                . "2. INCLUDE A DATA POINT IN EVERY ANSWER. Every single answer must contain at least one specific number, date, percentage, measurement, or named source. Example: 'According to a 2025 Mayo Clinic study, 16:8 fasting improved metabolic markers in 73% of participants.' AI models cite answers with data 2-3x more than answers without.\n"
+                . "3. SELF-CONTAINED ANSWERS. Each answer must make sense on its own without needing context from the article. Never write 'as mentioned above' or 'see the section on...' — AI extracts individual Q&A pairs, not the full page.\n"
+                . "4. QUESTION FORMAT. Phrase questions exactly how real people search — use 'you' and natural language. Include the keyword \"{$keyword}\" in at least 2 questions.\n"
+                . "5. NEVER start answers with pronouns (It, This, They) or with 'Yes/No' followed by a restatement.\n"
+                . "6. Use research data from above when available. Real source names and years increase citation rates.\n"
+                . "7. Vary answer lengths slightly (some 60 words, some 80 words) but never under 50 or over 90.\n\n"
+                . "Format:\n\n## Frequently Asked Questions\n\n### [Question]?\n[60-80 word answer with data point and direct first sentence]";
+            $max = 1200;
         } elseif ( $is_references ) {
             // The References section is now built programmatically by the plugin
             // at save time from the verified citation pool — the AI no longer

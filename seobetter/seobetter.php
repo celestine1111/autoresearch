@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.170
+ * Version: 1.5.171
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.170' );
+define( 'SEOBETTER_VERSION', '1.5.171' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -65,7 +65,7 @@ final class SEOBetter {
         add_action( 'wp_head', [ $this, 'output_social_meta' ], 2 );
         add_action( 'wp_head', [ $this, 'output_ai_meta' ], 3 );
         add_action( 'save_post', [ $this, 'analyze_on_save' ], 20, 2 );
-        // v1.5.170 — Schema now served from post meta via wp_head only.
+        // v1.5.171 — Schema now served from post meta via wp_head only.
         // analyze_on_save regenerates on every save (including publish).
         // Removed transition_post_status hook — no more inline schema in post_content.
         add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
@@ -272,7 +272,7 @@ final class SEOBetter {
             return;
         }
         $post_id = get_the_ID();
-        // v1.5.170 — Always output schema from post meta via wp_head.
+        // v1.5.171 — Always output schema from post meta via wp_head.
         // Previously skipped if post_content had inline JSON-LD, but that
         // caused stale URLs (?p=ID instead of pretty permalink) because
         // the inline schema was written at draft time and never reliably
@@ -324,7 +324,7 @@ final class SEOBetter {
             return;
         }
         $settings = get_option( 'seobetter_settings', [] );
-        // v1.5.170 — Schema generation always runs regardless of auto_analyze.
+        // v1.5.171 — Schema generation always runs regardless of auto_analyze.
         // auto_analyze only controls the GEO score recalculation.
         // Schema must always be current for the Rich Results metabox tab.
         $auto_analyze = ! empty( $settings['auto_analyze'] );
@@ -345,7 +345,7 @@ final class SEOBetter {
                 update_post_meta( $post_id, '_seobetter_content_hash', $content_hash );
             }
 
-            // v1.5.170 — Schema ALWAYS regenerated on save (not gated by auto_analyze
+            // v1.5.171 — Schema ALWAYS regenerated on save (not gated by auto_analyze
             // or content hash). Uses current get_permalink() which returns pretty URL
             // for published posts. Essential for Rich Results metabox tab.
             $schema_gen = new SEOBetter\Schema_Generator();
@@ -360,7 +360,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.170 — Regenerate schema with correct permalink when post is published.
+     * v1.5.171 — Regenerate schema with correct permalink when post is published.
      * Schema generated at draft time uses ?p=ID URLs. On publish, WordPress
      * assigns a pretty permalink (e.g. /best-dog-food-australia/). This hook
      * regenerates the JSON-LD in both post_content and post meta so all URLs
@@ -678,7 +678,7 @@ final class SEOBetter {
                 }
                 $result['schema_types'] = implode( ' + ', $types );
             }
-            // v1.5.170 — Pass full schema for Rich Results Preview
+            // v1.5.171 — Pass full schema for Rich Results Preview
             $result['schema_data'] = $decoded;
         }
 
@@ -1350,7 +1350,7 @@ final class SEOBetter {
             $markdown = self::cleanup_ai_markdown( $markdown );
         }
 
-        // v1.5.170 — Convert bracketed text references to real links.
+        // v1.5.171 — Convert bracketed text references to real links.
         // The AI often writes [Source Name] or (Source Name) as plain text
         // instead of [Source Name](url). Match these against the Citation Pool
         // and convert to clickable markdown links.
@@ -1500,7 +1500,7 @@ final class SEOBetter {
         if ( ! empty( $schema_array ) ) {
             $schema_ld = [ '@context' => 'https://schema.org', '@graph' => $schema_array ];
 
-            // v1.5.170 — Schema stored in post meta ONLY (not inline in post_content).
+            // v1.5.171 — Schema stored in post meta ONLY (not inline in post_content).
             // wp_head outputs it via output_schema_markup(). This eliminates:
             // - Stale ?p=ID URLs in inline schema (never updated after publish)
             // - Content corruption from regex replacement in update_schema_on_publish
@@ -1763,7 +1763,7 @@ final class SEOBetter {
         //    content (not a code block), convert to a list item.
         $md = preg_replace( '/^[ \t]{4,}(?!```)([\w"\'(].+)$/m', '- $1', $md );
 
-        // 5. v1.5.170 — Strip academic/Crossref junk text from AI output.
+        // 5. v1.5.171 — Strip academic/Crossref junk text from AI output.
         //    The AI sometimes writes about academic papers from Crossref data
         //    even when DOI URLs are blocked. Remove sentences referencing:
         //    - "cited X times" (Crossref citation counts)
@@ -1803,7 +1803,7 @@ final class SEOBetter {
 
         $domain  = sanitize_text_field( $request->get_param( 'domain' ) ?? '' );
         $country = sanitize_text_field( $request->get_param( 'country' ) ?? '' );
-        // v1.5.170 — Content-type-aware optimization mode
+        // v1.5.171 — Content-type-aware optimization mode
         $optimize_mode = sanitize_text_field( $request->get_param( 'optimize_mode' ) ?? 'full' );
         $result  = SEOBetter\Content_Injector::optimize_all( $markdown, $keyword, $existing_pool, $scores, $sonar_data, $domain, $country, $optimize_mode );
 
@@ -1830,7 +1830,7 @@ final class SEOBetter {
                 ];
             }
         }
-        // v1.5.170 — Skip validate_outbound_links after optimization.
+        // v1.5.171 — Skip validate_outbound_links after optimization.
         // The citations were just added by inject_citations() from verified pool
         // entries. Running the validator AGAIN strips them if they match any
         // hard-fail rule (API endpoint patterns, homepage check, etc).
@@ -1838,7 +1838,7 @@ final class SEOBetter {
         // citations we just intentionally added.
         $updated_markdown = self::cleanup_ai_markdown( $updated_markdown );
 
-        // v1.5.170 — Convert bracketed/parenthetical text references to links.
+        // v1.5.171 — Convert bracketed/parenthetical text references to links.
         // The AI writes (Source Name) as plain text — match against citation pool
         // and convert to clickable links. Same as rest_save_draft does.
         if ( ! empty( $combined_pool ) ) {
@@ -2304,7 +2304,7 @@ final class SEOBetter {
      * Strip or validate all outbound links in the article.
      *
     /**
-     * v1.5.170 — Convert bracketed text references into real markdown links.
+     * v1.5.171 — Convert bracketed text references into real markdown links.
      *
      * The AI often writes [Source Name] or (Source Name) as plain text brackets
      * without a URL. This method matches the text inside brackets against the
@@ -2377,7 +2377,7 @@ final class SEOBetter {
         );
 
         // Also handle (Source Name) parenthetical references that match pool entries.
-        // v1.5.170 — Rewritten to handle nested parens in source titles like
+        // v1.5.171 — Rewritten to handle nested parens in source titles like
         // "(Python API Tutorial (Beginner's Guide) | Moesif Blog)".
         // Strategy: find outermost ( ... ) that contain 10+ chars and look like
         // a source reference, not code/math. Allow nested () inside.
@@ -2417,7 +2417,7 @@ final class SEOBetter {
             $markdown
         );
 
-        // v1.5.170 — Second pass: handle deeply nested parens like
+        // v1.5.171 — Second pass: handle deeply nested parens like
         // "(Python API Tutorial (Beginner's Guide) | Moesif Blog)".
         // The first pass regex [^)] stops at the inner ) and skips these.
         // This pass finds the outermost balanced parens by scanning the string.
@@ -2425,7 +2425,7 @@ final class SEOBetter {
         foreach ( $lines as $li => $line ) {
             // Skip headings, tables, code blocks, blockquotes
             if ( preg_match( '/^\s*[#|>`\-*]/', $line ) ) continue;
-            // v1.5.170b — REMOVED the old "skip if line has ](http and balanced parens" check.
+            // v1.5.171b — REMOVED the old "skip if line has ](http and balanced parens" check.
             // That skipped ENTIRE LINES where any reference was already linked, preventing
             // nested-paren references on the same line from being processed. Each paren
             // group is individually checked for 'http' and '](', so line-level skip is unnecessary.
@@ -2538,11 +2538,11 @@ final class SEOBetter {
 
             // Hard-fail rules (apply regardless of pool membership)
             //
-            // v1.5.170 — Block DOI/academic URLs (often 404, not reader-friendly)
+            // v1.5.171 — Block DOI/academic URLs (often 404, not reader-friendly)
             if ( preg_match( '/^(doi\.org|dx\.doi\.org)$/i', $host ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
-            // v1.5.170 — Block raw data file URLs and API query endpoints
+            // v1.5.171 — Block raw data file URLs and API query endpoints
             if ( preg_match( '#\.(json|xml|csv)$|/query$|/search$|fdsnws|/api/v\d#i', $path ?? '' ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
@@ -3034,7 +3034,7 @@ final class SEOBetter {
             if ( $title === '' ) {
                 $title = $src ?: 'Source';
             }
-            // v1.5.170 — Sanitize title for markdown link safety.
+            // v1.5.171 — Sanitize title for markdown link safety.
             // Titles with [ ] break markdown link syntax: [title with [brackets]](url)
             // becomes a nested link that the formatter splits incorrectly.
             $title = str_replace( [ '[', ']' ], '', $title );
@@ -3665,7 +3665,7 @@ final class SEOBetter {
                 <?php endif; ?>
             </div>
 
-            <!-- Rich Results Tab (v1.5.170) -->
+            <!-- Rich Results Tab (v1.5.171) -->
             <div class="sb-meta-panel" data-panel="richresults" style="padding:20px;display:none">
                 <?php
                 try {

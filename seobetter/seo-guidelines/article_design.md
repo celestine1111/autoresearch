@@ -756,7 +756,9 @@ Every generated article MUST have:
 - [ ] `<h1>` with article title (not title-case-corrupted)
 - [ ] `*Last Updated: Month Year*` small italic paragraph immediately after H1
 - [ ] `## Key Takeaways` section with 3–5 bullets, rendered as styled `wp:html` block (purple left-border gradient)
-- [ ] `## Frequently Asked Questions` section with 5 Q&A pairs (H3 questions + paragraph answers)
+- [ ] `## Frequently Asked Questions` section with 5 Q&A pairs (H3 questions + `<p>` answers, 60-80 words each, data point in every answer, direct answer in first sentence — optimized for AI citation extraction v1.5.171)
+- [ ] FAQ answers are ALWAYS visible — never in `<details>`, accordion, or JS-toggled containers
+- [ ] FAQ JSON-LD text matches visible HTML text exactly
 - [ ] Semantic HTML throughout (article, headings, p, ul, ol, table, figure)
 
 **Typography & styling**
