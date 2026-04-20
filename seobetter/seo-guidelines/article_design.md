@@ -713,7 +713,7 @@ Every content type gets a **type badge** — a colored pill at the top of the ar
 | buying_guide | &#128722; Buying Guide | Green (#ecfdf5) | Pick pills ("Our Pick"), product cards |
 | news_article | &#128240; News | Blue (#eff6ff) | Dateline, "Updated" timestamp, minimal chrome |
 | opinion | &#128172; Opinion | Red (#fef2f2) | Large author photo, editorial stance |
-| interview | &#127908; Interview / Q&A | Green (#f0fdf4) | Speaker labels (Q:/A:), alternating styling |
+| interview | &#127908; Interview / Q&A | Green (#f0fdf4) | **Q cards** (green gradient bg, green left border, green Q circle, microphone SVG) + **A blocks** (gray bg, gray left border, gray A circle, indented at 64px). H3 questions ending in `?` trigger Q/A styling. Auto-closed at next H2 or end of article. |
 | case_study | &#128200; Case Study | Indigo (#eff6ff) | Large stat numbers, Challenge/Solution/Results |
 | tech_article | &#128187; Technical Article | Slate (#f1f5f9) | Code blocks + copy, warning banners |
 | white_paper | &#128196; White Paper | Gray (#f8fafc) | Executive summary box, formal numbering |

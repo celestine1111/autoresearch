@@ -496,6 +496,10 @@ class Content_Formatter {
         // articles don't end up with 8+ visual-noise stat cards
         $stat_count = 0;
 
+        // v1.5.166 — Interview Q&A styling state
+        $is_interview    = ( $options['content_type'] ?? '' ) === 'interview';
+        $in_qa_answer    = false; // true after a Q heading, until next heading
+
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
 
@@ -545,6 +549,11 @@ class Content_Formatter {
 
                     // v1.5.18 — apply accent color to H2 headings
                     if ( $level === 2 ) {
+                        // Close any open Q&A answer block
+                        if ( $in_qa_answer ) {
+                            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                            $in_qa_answer = false;
+                        }
                         $hex = $accent;
                         $output[] = '<!-- wp:heading {"style":{"color":{"text":"' . esc_attr( $hex ) . '"}}} -->';
                         $output[] = '<h2 class="wp-block-heading has-text-color" style="color:' . esc_attr( $hex ) . '">' . $text . '</h2>';
@@ -553,7 +562,44 @@ class Content_Formatter {
                         $output[] = '<!-- wp:heading {"level":1} -->';
                         $output[] = "<h1 class=\"wp-block-heading\">{$text}</h1>";
                         $output[] = '<!-- /wp:heading -->';
+                    } elseif ( $is_interview && $level === 3 && preg_match( '/\?\s*$/', $text ) ) {
+                        // v1.5.166 — Interview Q&A: H3 questions get a styled Q card
+                        // Close previous answer block if open
+                        if ( $in_qa_answer ) {
+                            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                            $in_qa_answer = false;
+                        }
+                        // Microphone SVG icon
+                        $mic_svg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+                        $output[] = "<!-- wp:html -->\n"
+                            . '<div style="display:flex !important;align-items:flex-start !important;gap:12px !important;'
+                            . 'padding:16px 20px !important;margin:24px 0 0 !important;'
+                            . 'background:linear-gradient(135deg, #f0fdf4, #dcfce7) !important;'
+                            . 'border-left:4px solid #22c55e !important;border-radius:0 12px 12px 0 !important;'
+                            . 'box-shadow:0 1px 4px rgba(34,197,94,0.1) !important">'
+                            . '<span style="display:inline-flex;align-items:center;justify-content:center;'
+                            . 'width:32px;height:32px;min-width:32px;border-radius:50%;'
+                            . 'background:#22c55e;color:#fff;font-weight:800;font-size:14px;margin-top:2px">Q</span>'
+                            . '<h3 style="margin:0 !important;padding:0 !important;font-size:1.1em !important;'
+                            . 'font-weight:700 !important;color:#166534 !important;line-height:1.4 !important">'
+                            . $text . '</h3>'
+                            . "</div>\n<!-- /wp:html -->";
+                        // Open answer wrapper — will be closed at next Q or next H2
+                        $output[] = "<!-- wp:html -->\n"
+                            . '<div style="padding:16px 20px 16px 64px !important;margin:0 0 16px !important;'
+                            . 'border-left:4px solid #e5e7eb !important;border-radius:0 0 12px 0 !important;'
+                            . 'background:#fafafa !important;position:relative !important">'
+                            . '<span style="position:absolute;left:20px;top:16px;display:inline-flex;align-items:center;'
+                            . 'justify-content:center;width:32px;height:32px;border-radius:50%;'
+                            . 'background:#e5e7eb;color:#374151;font-weight:800;font-size:14px">A</span>'
+                            . "\n<!-- /wp:html -->";
+                        $in_qa_answer = true;
                     } else {
+                        // Close Q&A answer if a non-question H3 appears
+                        if ( $in_qa_answer && $level === 3 ) {
+                            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                            $in_qa_answer = false;
+                        }
                         $output[] = "<!-- wp:heading {\"level\":{$level}} -->";
                         $output[] = "<h{$level} class=\"wp-block-heading\">{$text}</h{$level}>";
                         $output[] = '<!-- /wp:heading -->';
@@ -911,6 +957,11 @@ class Content_Formatter {
 
         // v1.5.120 — Close any open recipe card at end of content
         if ( $in_recipe_card ) {
+            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+        }
+
+        // v1.5.166 — Close any open interview Q&A answer block
+        if ( $in_qa_answer ) {
             $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
         }
 

@@ -16,10 +16,41 @@
 
 ---
 
-## v1.5.165 — Remove fake fallback table and FAQ generators
+## v1.5.166 — Interview Q&A visual styling (green Q cards + gray A blocks)
 
 **Date:** 2026-04-20
 **Commit:** `[pending]`
+
+### Changes
+
+- **Interview Q&A card styling** — `includes/Content_Formatter.php::format_hybrid()` line ~558
+  - When content_type is `interview`, H3 headings ending in `?` render as styled Q cards:
+    - Green gradient background (#f0fdf4 → #dcfce7)
+    - 4px green left border (#22c55e)
+    - Green circle with white "Q" letter (32px round badge)
+    - Microphone SVG icon
+    - Question text in dark green (#166534), 700 weight
+  - Answer paragraphs following Q cards render inside an A block:
+    - Light gray background (#fafafa)
+    - 4px gray left border (#e5e7eb)
+    - Gray circle with dark "A" letter (32px round badge)
+    - Content indented 64px to align past the A badge
+  - Q&A blocks auto-close at the next Q heading, next H2, or end of article
+  - Non-question H3s (no trailing `?`) render normally
+  - Only affects `interview` content type — all other types unchanged
+
+- **State tracking** — `$is_interview` and `$in_qa_answer` flags added alongside existing `$in_recipe_card`
+  - Close open answer block at H2 boundaries and at end of output (line ~967)
+
+**Verify:** `grep -n 'in_qa_answer' includes/Content_Formatter.php` → defined ~500, set true ~585, closed ~967
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.165 — Remove fake fallback table and FAQ generators
+
+**Date:** 2026-04-20
+**Commit:** `ef14de2`
 
 ### Changes
 
