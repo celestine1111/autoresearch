@@ -1005,51 +1005,43 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             }
         }
 
-        // v1.5.154 — Optimize button REMOVED. Article is optimized at generation time.
-        // The GEO score, suggestions, and fix cards are still shown as informational
-        // guidance — the user applies them manually or regenerates with different settings.
-        // The Analyze & Improve section now shows suggestions only (no action button).
-        if (fixes.length > 0) {
-            window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
-            var optimizeAllDone = window._seobetterAppliedFixes._optimize_all;
-            var totalImpact = fixes.reduce(function(sum, f) { return sum + parseInt(f.impact) }, 0);
-
+        // v1.5.155 — GEO Optimization Summary. Shows what passed (green) and
+        // what's missing (amber). No action button — article is optimized at
+        // generation time. This is informational guidance only.
+        {
             h += '<div style="padding:20px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">';
+            h += '<h3 style="margin:0 0 12px;font-size:16px;font-weight:700">GEO Optimization Summary</h3>';
 
-            if (optimizeAllDone) {
-                // Already optimized — show green summary
-                h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
-                h += '<span class="dashicons dashicons-yes-alt" style="color:#22c55e;font-size:24px;width:24px;height:24px"></span>';
-                h += '<div><h3 style="margin:0;font-size:16px;font-weight:700;color:#166534">Article Optimized</h3>';
-                h += '<p style="margin:4px 0 0;font-size:12px;color:#166534">' + esc(optimizeAllDone.message || 'All fixes applied') + '</p></div>';
-                h += '</div>';
-                // Show what was done
-                if (optimizeAllDone.steps_run && optimizeAllDone.steps_run.length) {
-                    h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
-                    optimizeAllDone.steps_run.forEach(function(step) {
-                        h += '<span style="font-size:11px;padding:3px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;color:#166534">✓ ' + esc(step) + '</span>';
-                    });
-                    h += '</div>';
-                }
-                if (optimizeAllDone.sonar_used) {
-                    h += '<div style="font-size:11px;color:#764ba2;margin-top:4px">Powered by Perplexity Sonar — real research data</div>';
-                }
-            } else {
-                // v1.5.154 — Suggestions panel (no button). Article is optimized at generation time.
-                h += '<div style="margin-bottom:16px">';
-                h += '<h3 style="margin:0;font-size:16px;font-weight:700">Suggestions</h3>';
-                h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">' + fixes.length + ' areas to improve manually or regenerate with different settings</p>';
-                h += '</div>';
+            // Build checks: green for passing, amber for failing
+            var geoChecks = [];
+            if (c.citations) geoChecks.push({label:'Citations', detail: c.citations.count + ' inline links', pass: c.citations.score >= 80 || c.citations.count >= 3});
+            if (c.expert_quotes) geoChecks.push({label:'Expert Quotes', detail: c.expert_quotes.count + ' quotes', pass: c.expert_quotes.score >= 80 || c.expert_quotes.count >= 2});
+            if (c.factual_density) geoChecks.push({label:'Statistics', detail: c.factual_density.score >= 70 ? 'sufficient data points' : 'add more numbers', pass: c.factual_density.score >= 70});
+            if (c.tables) geoChecks.push({label:'Comparison Table', detail: c.tables.count > 0 ? c.tables.count + ' table(s)' : 'consider adding for +30% AI citation', pass: c.tables.count > 0});
+            if (c.readability) geoChecks.push({label:'Readability', detail: 'Grade ' + Math.round(c.readability.flesch_grade || 0), pass: c.readability.score >= 70});
+            if (c.section_openings) geoChecks.push({label:'Section Openings', detail: c.section_openings.score >= 70 ? '40-60 word openers' : 'some sections need longer openers', pass: c.section_openings.score >= 70});
+            if (c.freshness) geoChecks.push({label:'Freshness', detail: c.freshness.score >= 100 ? 'date included' : 'add Last Updated date', pass: c.freshness.score >= 100});
 
-                // Summary of suggestions (compact pills)
-                h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
-                fixes.forEach(function(fix) {
-                    h += '<span style="font-size:11px;padding:4px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;color:#64748b">';
-                    h += '<span class="dashicons dashicons-' + fix.icon + '" style="font-size:13px;width:13px;height:13px;vertical-align:-2px;margin-right:3px;color:#764ba2"></span>';
-                    h += fix.label + ' <span style="color:#22c55e;font-weight:600">' + fix.impact + '</span></span>';
-                });
-                h += '</div>';
-            }
+            // Keyword density — special handling
+            var kdVal = c.keyword_density ? c.keyword_density.density : 0;
+            if (c.keyword_density) geoChecks.push({label:'Keyword Density', detail: kdVal.toFixed(1) + '%', pass: kdVal >= 0.8 && kdVal <= 2.5});
+
+            // E-E-A-T
+            if (c.core_eeat) geoChecks.push({label:'E-E-A-T Signals', detail: c.core_eeat.score >= 70 ? 'passing' : 'needs improvement', pass: c.core_eeat.score >= 70});
+
+            var passCount = geoChecks.filter(function(g){return g.pass}).length;
+            h += '<p style="margin:0 0 10px;font-size:12px;color:#6b7280">' + passCount + '/' + geoChecks.length + ' checks passing</p>';
+
+            h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+            geoChecks.forEach(function(chk) {
+                var bg = chk.pass ? '#f0fdf4' : '#fffbeb';
+                var border = chk.pass ? '#bbf7d0' : '#fde68a';
+                var color = chk.pass ? '#166534' : '#92400e';
+                var icon = chk.pass ? '&#10003;' : '&#9888;';
+                h += '<span style="font-size:11px;padding:4px 10px;background:'+bg+';border:1px solid '+border+';border-radius:12px;color:'+color+'">';
+                h += icon + ' ' + chk.label + ' <span style="font-weight:400;opacity:0.8">' + chk.detail + '</span></span>';
+            });
+            h += '</div>';
             h += '</div>';
         }
 
