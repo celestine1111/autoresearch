@@ -16,10 +16,30 @@
 
 ---
 
-## v1.5.173 — Serper-powered Auto-suggest (replaces Google Suggest + Datamuse trash)
+## v1.5.174 — Fix false local-intent detection ("AI in healthcare" ≠ local business)
 
 **Date:** 2026-04-21
 **Commit:** `[pending]`
+
+### Changes
+
+- **Fix detectLocalIntent false positives** — `cloud-api/api/research.js::detectLocalIntent()` line ~684
+  - Pattern 1 `(.+?) in (.+)` matched ANY keyword with "in" followed by a capitalized word
+  - "artificial intelligence in Healthcare interview" → falsely detected as local intent
+  - Location = "Healthcare interview", business = "artificial intelligence" → Places waterfall ran, found 0, triggered places_insufficient warning
+  - Fix: added NON_LOCATION_WORDS blocklist (100+ common nouns that follow "in" but aren't places)
+  - "AI in healthcare" → NOT local. "pizza shops in Melbourne" → still correctly local.
+  - Applied to ALL 4 detection patterns (Pattern 1-4)
+
+**Verify:** `grep -n 'NON_LOCATION_WORDS' cloud-api/api/research.js` → blocklist definition + checks
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.173 — Serper-powered Auto-suggest (replaces Google Suggest + Datamuse trash)
+
+**Date:** 2026-04-21
+**Commit:** `a818870`
 
 ### Changes
 

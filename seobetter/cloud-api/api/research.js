@@ -685,29 +685,50 @@ function detectLocalIntent(keyword) {
   if (!keyword || typeof keyword !== 'string') return { isLocal: false, location: null, businessHint: '' };
   const kw = keyword.trim();
 
-  // Pattern 1: "X in Y" or "X in Y Country" (e.g. "gelato shops in Lucignano Italy")
+  // v1.5.174 — Non-location words that follow "in" but are NOT places.
+  // "artificial intelligence in healthcare" → NOT local
+  // "trends in web development" → NOT local
+  // "best pizza shops in Melbourne" → YES local
+  const NON_LOCATION_WORDS = /^(healthcare|education|business|marketing|technology|science|medicine|finance|development|engineering|psychology|research|industry|management|practice|training|cooking|fashion|design|music|sports|fitness|politics|agriculture|manufacturing|construction|hospitality|retail|security|communication|entertainment|journalism|photography|architecture|law|government|history|philosophy|society|culture|art|literature|math|biology|chemistry|physics|economics|nutrition|wellness|beauty|gaming|crypto|blockchain|software|hardware|data|cloud|mobile|web|digital|social|content|email|seo|api|programming|coding|python|javascript|react|docker|ai|artificial|machine|learning|deep|natural|interview|tutorial|guide|comparison|review|article|essay|report|analysis|strategy|planning|tips|ideas|trends|insights|career|workplace|office|home|life|world|modern|today|2024|2025|2026|2027)\b/i;
+
+  // Pattern 1: "X in Y" — but Y must look like a place, not a generic noun
   let m = kw.match(/^(.+?)\s+in\s+([A-Z][\w\s,'-]+?)(?:\s+(\d{4}))?$/i);
   if (m) {
-    return { isLocal: true, location: m[2].trim(), businessHint: m[1].trim() };
+    const possibleLocation = m[2].trim();
+    // Reject if the "location" is actually a non-location word
+    if (NON_LOCATION_WORDS.test(possibleLocation)) {
+      // Not local — "in healthcare", "in education", etc.
+    } else {
+      return { isLocal: true, location: possibleLocation, businessHint: m[1].trim() };
+    }
   }
 
   // Pattern 2: "best X in Y" / "top X near Y" (year suffix optional)
   m = kw.match(/^(?:best|top|greatest|finest)\s+(.+?)\s+(?:in|near|around)\s+([A-Z][\w\s,'-]+?)(?:\s+(\d{4}))?$/i);
   if (m) {
-    return { isLocal: true, location: m[2].trim(), businessHint: m[1].trim() };
+    const possibleLocation = m[2].trim();
+    if (NON_LOCATION_WORDS.test(possibleLocation)) {
+      // Not local
+    } else {
+      return { isLocal: true, location: possibleLocation, businessHint: m[1].trim() };
+    }
   }
 
   // Pattern 3: "X near me" / "X nearby" / "local X"
   if (/\b(?:near\s*me|nearby|local)\b/i.test(kw)) {
-    // No explicit location — caller needs to resolve via IP or fall back
     const businessHint = kw.replace(/\b(?:near\s*me|nearby|local|best|top)\b/gi, '').trim();
     return { isLocal: true, location: null, businessHint };
   }
 
-  // Pattern 4: "what's the best X in Y" (handles the user's tested keyword form)
+  // Pattern 4: "what's the best X in Y"
   m = kw.match(/^(?:what'?s?|which|where)\s+(?:is|are)?\s*(?:the\s+)?(?:best|top)\s+(.+?)\s+(?:in|near|around|at)\s+([A-Z][\w\s,'-]+?)(?:\s+(\d{4}))?$/i);
   if (m) {
-    return { isLocal: true, location: m[2].trim(), businessHint: m[1].trim() };
+    const possibleLocation = m[2].trim();
+    if (NON_LOCATION_WORDS.test(possibleLocation)) {
+      // Not local
+    } else {
+      return { isLocal: true, location: possibleLocation, businessHint: m[1].trim() };
+    }
   }
 
   return { isLocal: false, location: null, businessHint: '' };
