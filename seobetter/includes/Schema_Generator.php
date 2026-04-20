@@ -570,16 +570,28 @@ class Schema_Generator {
                 }
 
                 // Extract instructions from <ol> lists — with name + text + url per step
+                // v1.5.172 — Skip <ol> lists that are References/Sources (citations polluting steps)
                 $instructions = [];
                 preg_match_all( '/<ol[^>]*>(.*?)<\/ol>/is', $body, $ol_matches );
                 $step_num = 0;
                 foreach ( $ol_matches[1] as $ol ) {
+                    // Skip reference/citation lists (contain URLs or "Source" text)
+                    if ( preg_match( '/<a\s+[^>]*href=["\']https?:\/\//i', $ol ) && substr_count( $ol, '<li' ) >= 2 ) {
+                        $link_count = preg_match_all( '/href=["\']https?:\/\//', $ol );
+                        $li_count = preg_match_all( '/<li/', $ol );
+                        // If most items have links, this is a References list, not instructions
+                        if ( $link_count >= $li_count * 0.6 ) continue;
+                    }
                     preg_match_all( '/<li[^>]*>(.*?)<\/li>/is', $ol, $li_matches );
                     foreach ( $li_matches[1] as $li ) {
                         $step_text = trim( wp_strip_all_tags( $li ) );
                         if ( strlen( $step_text ) < 10 ) continue;
                         // Skip ingredient-like items
                         if ( preg_match( '/^\d+\s*(cup|tbsp|tsp|gram|ml|oz|lb|kg)\b/i', $step_text ) ) continue;
+                        // v1.5.172 — Skip source citations that leaked into instructions
+                        // Catches: "1Healing Chicken Bone Broth - Source Name", "2www.allrecipes.com"
+                        if ( preg_match( '/^\d*\s*(https?:\/\/|www\.)/i', $step_text ) ) continue;
+                        if ( preg_match( '/^\d+[A-Z].*\s[-–—]\s/', $step_text ) && strlen( $step_text ) < 80 ) continue;
                         $step_num++;
                         $step = [
                             '@type' => 'HowToStep',
@@ -603,6 +615,11 @@ class Schema_Generator {
                 if ( preg_match( '/cook(?:ing)?\s*(?:time)?[\s:]*(\d+)\s*(?:min|minute|mins)/i', $body_text, $cook ) ) {
                     $recipe['cookTime'] = 'PT' . $cook[1] . 'M';
                 }
+                // v1.5.172 — Also detect hours (e.g. "Cook on Low for 24-48 hours")
+                if ( empty( $recipe['cookTime'] ) && preg_match( '/(?:cook|simmer|slow\s*cook|braise)\b.*?(\d+)[\s-]*(?:to\s*(\d+)\s*)?(?:hour|hr)s?/i', $body_text, $cook_hr ) ) {
+                    $hours = $cook_hr[2] ?? $cook_hr[1]; // Use upper bound if range
+                    $recipe['cookTime'] = 'PT' . $hours . 'H';
+                }
                 if ( preg_match( '/total\s*(?:time)?[\s:]*(\d+)\s*(?:min|minute|mins)/i', $body_text, $total ) ) {
                     $recipe['totalTime'] = 'PT' . $total[1] . 'M';
                 }
@@ -618,9 +635,13 @@ class Schema_Generator {
                     $recipe['recipeYield'] = $yield2[1] . ' servings';
                 }
 
-                // v1.5.145 — Broadened category detection for bread/baking
-                if ( preg_match( '/\b(treat|snack|meal|drink|dessert|breakfast|dinner|lunch|side dish|appetizer|main course|biscuit|bread|cake|pastry|pie|soup|salad|sauce|dip|smoothie|cocktail)\b/i', $body_text, $cat ) ) {
+                // v1.5.172 — Broadened category detection + broth/stock/stew
+                if ( preg_match( '/\b(treat|snack|meal|drink|dessert|breakfast|dinner|lunch|side dish|appetizer|main course|biscuit|bread|cake|pastry|pie|soup|broth|stock|stew|salad|sauce|dip|smoothie|cocktail)\b/i', $body_text, $cat ) ) {
                     $recipe['recipeCategory'] = ucfirst( strtolower( $cat[1] ) );
+                }
+                // v1.5.172 — Fallback: try heading for category
+                if ( empty( $recipe['recipeCategory'] ) && preg_match( '/\b(soup|broth|stock|stew|cake|bread|pie|salad|smoothie|cocktail|snack|treat|meal)\b/i', $heading, $hcat ) ) {
+                    $recipe['recipeCategory'] = ucfirst( strtolower( $hcat[1] ) );
                 }
 
                 // v1.5.122 — Nutrition extraction (only if stated in content)

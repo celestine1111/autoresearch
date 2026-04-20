@@ -16,10 +16,41 @@
 
 ---
 
-## v1.5.171 — FAQ answers optimized for AI citation extraction
+## v1.5.172 — Fix recipe schema + "the this" keyword density bug
 
 **Date:** 2026-04-21
 **Commit:** `[pending]`
+
+### Changes
+
+- **Fix references polluting recipeInstructions** — `includes/Schema_Generator.php::build_recipe()` line ~572
+  - `<ol>` lists containing source citations (URLs, "Source Name — Website") were being treated as cooking instructions
+  - Added: skip `<ol>` if 60%+ of `<li>` items contain external links (= References section)
+  - Added: skip `<li>` items matching `^\d*\s*(https://|www\.)` or `^\d+[A-Z].*—` (citation patterns)
+  - Fixes Google Rich Results validator error on recipe articles
+
+- **Add hour-based cookTime detection** — `includes/Schema_Generator.php::build_recipe()` line ~606
+  - Old regex only matched minutes. Bone broth "Cook on Low for 24-48 hours" returned cookTime: PT30M (wrong)
+  - New: also matches "simmer/cook/slow cook X hours", uses upper bound of range (PT48H)
+
+- **Add broth/stock/stew to recipeCategory detection** — line ~635
+  - "broth", "stock", "stew" were missing from category regex
+  - Also added heading-based fallback: if body text has no match, check the H2 heading
+
+- **Fix "the this" keyword density bug** — `includes/Async_Generator.php::enforce_geo_requirements()` line ~1703
+  - Old: replaced keyword with "this" → created "the this" / "a this" artifacts
+  - New: context-aware replacement. If preceded by "the/a/an", replaces entire phrase with "it". Otherwise replaces keyword with "this topic".
+
+**Verify:** `grep -n 'link_count.*li_count' includes/Schema_Generator.php` → reference list skip at ~580
+**Verify:** `grep -n 'count_art' includes/Async_Generator.php` → context-aware keyword replacement
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.171 — FAQ answers optimized for AI citation extraction
+
+**Date:** 2026-04-21
+**Commit:** `dc000e9`
 
 ### Changes
 

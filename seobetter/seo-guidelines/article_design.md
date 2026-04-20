@@ -283,7 +283,7 @@ Auto-detected from any paragraph matching `"Quote text" - Name, Title` (short da
   3. **Layer 3 (post-generation strip):** `strip_unsourced_recipes()` runs on the assembled article and removes any recipe section that lacks "Inspired by [Source Name](url)" with a real URL. This is the hard gate — even if the AI ignores the prompt, the recipe is removed before the user sees it.
 - **Multiple recipes:** Each recipe gets its OWN card. Cards are separated by `---` or next H2.
 - **Stats/citations injection:** SKIPPED inside recipe cards. Stats belong in the intro section before recipes.
-- **Schema:** Each recipe card generates a separate `@type: Recipe` JSON-LD schema with `recipeIngredient`, `recipeInstructions` (HowToStep with name + text + url), `prepTime`, `cookTime`, `recipeCuisine` (from country), `keywords`, `recipeCategory`, `nutrition.calories` (if stated), `image` (array of 3 URLs for Google's 1:1, 4:3, 16:9 ratios).
+- **Schema:** Each recipe card generates a separate `@type: Recipe` JSON-LD schema with `recipeIngredient`, `recipeInstructions` (HowToStep with name + text + url — v1.5.172: references/citations filtered out), `prepTime`, `cookTime` (v1.5.172: supports hours for slow-cook recipes), `recipeCuisine` (from country), `keywords`, `recipeCategory` (v1.5.172: added broth/stock/stew + heading fallback), `nutrition.calories` (if stated), `image` (array of 3 URLs for Google's 1:1, 4:3, 16:9 ratios).
 - **Source:** `Content_Formatter.php::format_hybrid()` heading branch — Recipe card detection
 
 ### 5.12 Definition Box (`v1.5.14+`)

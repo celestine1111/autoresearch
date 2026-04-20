@@ -1701,13 +1701,28 @@ class Async_Generator {
 
                     $line_lower = strtolower( $lines[ $i ] );
                     if ( strpos( $line_lower, $kw_lower ) !== false ) {
-                        // Replace with "this topic" or "it" — simple pronoun swap
-                        $lines[ $i ] = preg_replace(
-                            '/' . preg_quote( $keyword, '/' ) . '/i',
-                            'this',
+                        // v1.5.172 — Context-aware keyword replacement.
+                        // Old: replaced keyword with "this" → created "the this" artifacts.
+                        // New: if preceded by "the/a/an", replace whole phrase including article.
+                        $kw_escaped = preg_quote( $keyword, '/' );
+                        $line_new = preg_replace(
+                            '/\b(the|a|an)\s+' . $kw_escaped . '\b/i',
+                            'it',
                             $lines[ $i ],
-                            1
+                            1,
+                            $count_art
                         );
+                        if ( $count_art > 0 ) {
+                            $lines[ $i ] = $line_new;
+                        } else {
+                            // No article prefix — replace keyword alone with "this topic"
+                            $lines[ $i ] = preg_replace(
+                                '/\b' . $kw_escaped . '\b/i',
+                                'this topic',
+                                $lines[ $i ],
+                                1
+                            );
+                        }
                         $replaced++;
                     }
                 }
