@@ -2515,8 +2515,9 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 1: Citations ----
+        // v1.5.147 — In citations_only mode, always run citations regardless of score
         $cit_score = $scores['citations']['score'] ?? 0;
-        if ( $cit_score < 80 ) {
+        if ( $cit_score < 80 || $citations_only ) {
             try {
                 // Merge Sonar URLs into the existing pool
                 $merged_pool = $existing_pool;
