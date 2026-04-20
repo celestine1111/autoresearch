@@ -16,10 +16,42 @@
 
 ---
 
-## v1.5.166 — Interview Q&A visual styling (green Q cards + gray A blocks)
+## v1.5.167 — Code block styling + fenced code block parsing
 
 **Date:** 2026-04-20
 **Commit:** `[pending]`
+
+### Changes
+
+- **Fenced code block parsing** — `includes/Content_Formatter.php::parse_markdown()` line ~215
+  - Added `$in_code_block`, `$code_block_lang`, `$code_block_lines` state tracking
+  - Detects opening/closing ``` (and ~~~) fences
+  - Extracts language hint from opening fence (e.g. ```bash, ```dockerfile)
+  - Emits `code_block` section type with language and content
+  - Previously: fenced code blocks fell through as paragraph text, WordPress wptexturize converted backticks to curly quotes, language hint appeared as visible text
+
+- **Code block rendering** — `includes/Content_Formatter.php::format_hybrid()` line ~990
+  - Dark terminal-style rendering: #0f172a body, #1e293b header bar
+  - Header bar: macOS-style traffic light dots (red/yellow/green), terminal SVG icon, language label
+  - 28+ language labels auto-detected (bash, python, dockerfile, javascript, php, go, rust, etc.)
+  - Monospace font stack: Fira Code → JetBrains Mono → Source Code Pro → Consolas
+  - Proper `<pre><code>` markup with overflow-x:auto, 12px border-radius, box-shadow
+  - Wrapped in wp:html block so WordPress doesn't mangle the formatting
+
+- **Inline code styling** — `includes/Content_Formatter.php::inline_markdown()` line ~1195
+  - Previously: bare `<code>$1</code>` with zero styling
+  - Now: dark pill (`background:#1e293b;color:#e2e8f0;padding:2px 6px;border-radius:4px;font-family:monospace`)
+
+**Verify:** `grep -n 'code_block' includes/Content_Formatter.php` → parse at ~215, render at ~990
+**Verify:** `grep -n 'Fira Code' includes/Content_Formatter.php` → inline code and block code both reference it
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.166 — Interview Q&A visual styling (green Q cards + gray A blocks)
+
+**Date:** 2026-04-20
+**Commit:** `06cc36b`
 
 ### Changes
 

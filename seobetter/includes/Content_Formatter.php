@@ -211,8 +211,39 @@ class Content_Formatter {
         $in_blockquote = false;
         $quote_lines = [];
         $in_faq = false;
+        $in_code_block = false;
+        $code_block_lang = '';
+        $code_block_lines = [];
 
         foreach ( $lines as $line ) {
+            // v1.5.166 — Fenced code block detection (``` or ~~~)
+            if ( preg_match( '/^(`{3,}|~{3,})(.*)$/', trim( $line ), $fence_match ) ) {
+                if ( ! $in_code_block ) {
+                    // Opening fence — flush pending content, start collecting
+                    if ( ! empty( $current['content'] ) ) {
+                        $sections[] = [ 'type' => 'paragraph', 'content' => implode( "\n", $current['content'] ) ];
+                        $current['content'] = [];
+                    }
+                    $in_code_block = true;
+                    $code_block_lang = trim( $fence_match[2] );
+                    $code_block_lines = [];
+                } else {
+                    // Closing fence — emit code block section
+                    $sections[] = [
+                        'type'     => 'code_block',
+                        'language' => $code_block_lang,
+                        'content'  => implode( "\n", $code_block_lines ),
+                    ];
+                    $in_code_block = false;
+                    $code_block_lang = '';
+                    $code_block_lines = [];
+                }
+                continue;
+            }
+            if ( $in_code_block ) {
+                $code_block_lines[] = $line; // Preserve exact whitespace
+                continue;
+            }
             $trimmed = trim( $line );
 
             // Empty line — flush current
@@ -336,6 +367,9 @@ class Content_Formatter {
         }
 
         // Flush remaining
+        if ( $in_code_block && ! empty( $code_block_lines ) ) {
+            $sections[] = [ 'type' => 'code_block', 'language' => $code_block_lang, 'content' => implode( "\n", $code_block_lines ) ];
+        }
         if ( $in_table && ! empty( $table_rows ) ) {
             $sections[] = [ 'type' => 'table', 'rows' => $table_rows ];
         }
@@ -952,6 +986,59 @@ class Content_Formatter {
                     $output[] = "<figure class=\"wp-block-image aligncenter size-large\"><img src=\"{$url}\" alt=\"{$alt}\"/></figure>";
                     $output[] = '<!-- /wp:image -->';
                     break;
+
+                // v1.5.166 — Styled code blocks (fenced ``` blocks)
+                case 'code_block':
+                    $lang = esc_attr( $section['language'] ?? '' );
+                    $code = esc_html( $section['content'] );
+
+                    // Language label mapping
+                    $lang_labels = [
+                        'bash' => 'Bash', 'sh' => 'Shell', 'shell' => 'Shell',
+                        'dockerfile' => 'Dockerfile', 'docker' => 'Docker',
+                        'python' => 'Python', 'py' => 'Python',
+                        'javascript' => 'JavaScript', 'js' => 'JavaScript',
+                        'typescript' => 'TypeScript', 'ts' => 'TypeScript',
+                        'php' => 'PHP', 'html' => 'HTML', 'css' => 'CSS',
+                        'json' => 'JSON', 'yaml' => 'YAML', 'yml' => 'YAML',
+                        'sql' => 'SQL', 'go' => 'Go', 'rust' => 'Rust',
+                        'java' => 'Java', 'ruby' => 'Ruby', 'rb' => 'Ruby',
+                        'c' => 'C', 'cpp' => 'C++', 'csharp' => 'C#', 'cs' => 'C#',
+                        'swift' => 'Swift', 'kotlin' => 'Kotlin',
+                        'xml' => 'XML', 'toml' => 'TOML', 'ini' => 'INI',
+                        'nginx' => 'Nginx', 'apache' => 'Apache',
+                    ];
+                    $label = $lang_labels[ strtolower( $lang ) ] ?? ( $lang ? ucfirst( $lang ) : 'Code' );
+
+                    // Terminal icon SVG
+                    $terminal_svg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+
+                    $html = '<div style="margin:1.5em 0 !important;border-radius:12px !important;overflow:hidden !important;'
+                        . 'box-shadow:0 4px 12px rgba(0,0,0,0.15) !important;border:1px solid #334155 !important">'
+                        // Header bar with language label + traffic light dots
+                        . '<div style="display:flex !important;align-items:center !important;gap:8px !important;'
+                        . 'padding:8px 16px !important;background:#1e293b !important;border-bottom:1px solid #334155 !important">'
+                        . '<span style="display:flex;gap:6px">'
+                        . '<span style="width:10px;height:10px;border-radius:50%;background:#ef4444"></span>'
+                        . '<span style="width:10px;height:10px;border-radius:50%;background:#f59e0b"></span>'
+                        . '<span style="width:10px;height:10px;border-radius:50%;background:#22c55e"></span>'
+                        . '</span>'
+                        . '<span style="flex:1"></span>'
+                        . $terminal_svg
+                        . '<span style="font-size:11px !important;color:#94a3b8 !important;font-weight:600 !important;'
+                        . 'text-transform:uppercase !important;letter-spacing:0.08em !important">' . esc_html( $label ) . '</span>'
+                        . '</div>'
+                        // Code body — dark bg, monospace font
+                        . '<pre style="margin:0 !important;padding:16px 20px !important;background:#0f172a !important;'
+                        . 'color:#e2e8f0 !important;overflow-x:auto !important;font-size:0.85em !important;'
+                        . 'line-height:1.6 !important;tab-size:4 !important">'
+                        . '<code style="font-family:\'Fira Code\',\'JetBrains Mono\',\'Source Code Pro\',Consolas,\'Courier New\',monospace !important;'
+                        . 'color:#e2e8f0 !important;background:transparent !important;padding:0 !important;'
+                        . 'font-size:inherit !important;border:none !important">'
+                        . $code
+                        . '</code></pre></div>';
+                    $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                    break;
             }
         }
 
@@ -1155,8 +1242,13 @@ class Content_Formatter {
             },
             $text
         );
-        // Inline code
-        $text = preg_replace( '/`([^`]+)`/', '<code>$1</code>', $text );
+        // Inline code — styled with dark bg, monospace font
+        $text = preg_replace(
+            '/`([^`]+)`/',
+            '<code style="background:#1e293b;color:#e2e8f0;padding:2px 6px;border-radius:4px;'
+            . 'font-family:\'Fira Code\',Consolas,\'Courier New\',monospace;font-size:0.88em">$1</code>',
+            $text
+        );
 
         return $text;
     }
