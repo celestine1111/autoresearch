@@ -1013,7 +1013,7 @@ class Content_Formatter {
                     // Terminal icon SVG
                     $terminal_svg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
 
-                    $html = '<div style="margin:1.5em 0 !important;border-radius:12px !important;overflow:hidden !important;'
+                    $html = '<div style="margin:1.5em auto !important;max-width:100% !important;border-radius:12px !important;overflow:hidden !important;'
                         . 'box-shadow:0 4px 12px rgba(0,0,0,0.15) !important;border:1px solid #334155 !important">'
                         // Header bar with language label + traffic light dots
                         . '<div style="display:flex !important;align-items:center !important;gap:8px !important;'
@@ -1139,7 +1139,7 @@ class Content_Formatter {
         $css .= ".{$uid} a:hover{text-decoration-thickness:2px}";
         $css .= ".{$uid} hr{border:none;border-top:2px solid #e5e7eb;margin:2.5em 0}";
         $css .= ".{$uid} img,.{$uid} figure img{max-width:100%;height:auto;border-radius:8px;margin:1.5em auto;display:block}";
-        $css .= ".{$uid} code{background:#f3f4f6;padding:0.15em 0.4em;border-radius:4px;font-size:0.9em;color:#374151 !important}";
+        $css .= ".{$uid} code{background:#1e293b;color:#e2e8f0 !important;padding:2px 6px;border-radius:4px;font-size:0.88em;font-family:'Fira Code',Consolas,'Courier New',monospace}";
         // Drop-cap and dark-mode rules removed in v1.5.20.
         $css .= "</style>";
 
@@ -1225,8 +1225,11 @@ class Content_Formatter {
         // SEO-GEO-AI-GUIDELINES §11 (Internal Linking Rules) and article_design.md.
         // Internal links (same host as the site) keep bare <a> tags.
         $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+        // v1.5.168 — Allow balanced parens in URLs for Wikipedia etc.
+        // e.g. [Python](https://en.wikipedia.org/wiki/Python_(programming_language))
+        // Old pattern [^)]+ stopped at the inner ), breaking the URL.
         $text = preg_replace_callback(
-            '/(?<!!)\[([^\]]+)\]\(([^)]+)\)/',
+            '/(?<!!)\[([^\]]+)\]\(((?:[^()\s]|\([^)]*\))+)\)/',
             function ( $m ) use ( $site_host ) {
                 $anchor = $m[1];
                 $url    = $m[2];

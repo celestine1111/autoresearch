@@ -16,10 +16,39 @@
 
 ---
 
-## v1.5.167 — Code block styling + fenced code block parsing
+## v1.5.168 — Fix bracketed reference linking + center code blocks + Wikipedia URL fix
 
 **Date:** 2026-04-20
 **Commit:** `[pending]`
+
+### Changes
+
+- **Fix parenthetical reference linking** — `seobetter.php::linkify_bracketed_references()` line ~2383
+  - Old regex `[^()]` rejected source names with inner parens like "(Python API Tutorial (Beginner's Guide) | Moesif Blog)"
+  - New: two-pass approach. Pass 1 uses `[^)]` for simple parens. Pass 2 walks the string character-by-character to find balanced outermost parens with nesting.
+  - Handles: "(US Census Bureau)", "(Python (programming language))", "(Source (Subtitle) | Blog)"
+
+- **Center code blocks** — `includes/Content_Formatter.php::format_hybrid()` code_block case line ~1016
+  - Changed `margin:1.5em 0` to `margin:1.5em auto` so code blocks center within content area
+
+- **Fix Wikipedia URL parsing** — `includes/Content_Formatter.php::inline_markdown()` line ~1229
+  - Old pattern `([^)]+)` stopped at first `)` in URL, breaking `Python_(programming_language)`
+  - New pattern `((?:[^()\s]|\([^)]*\))+)` allows balanced parens in URLs
+
+- **Dark inline code CSS** — `includes/Content_Formatter.php::format_classic()` line ~1142
+  - Classic CSS `<code>` rule now matches inline_markdown's dark pill styling
+  - `background:#1e293b;color:#e2e8f0` instead of old `background:#f3f4f6;color:#374151`
+
+**Verify:** `grep -n 'depth.*\$depth' seobetter.php` → nested paren walker at ~2432
+**Verify:** `grep -n 'margin:1.5em auto' includes/Content_Formatter.php` → centered code blocks
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.167 — Code block styling + fenced code block parsing
+
+**Date:** 2026-04-20
+**Commit:** `edc128d`
 
 ### Changes
 
