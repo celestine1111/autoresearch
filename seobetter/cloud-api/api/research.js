@@ -3334,7 +3334,10 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
   const SERPER_KEY = process.env.SERPER_API_KEY;
   const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY;
   const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
-  const EXTRACTION_MODEL = process.env.EXTRACTION_MODEL || 'meta-llama/llama-3.1-8b-instant';
+  // v1.5.170 — TEST: Using gpt-4.1-mini for extraction instead of llama-3.1-8b
+  // Llama returned empty statistics, empty quotes, null table_data for every test.
+  // Testing whether a stronger model actually extracts structured data.
+  const EXTRACTION_MODEL = process.env.EXTRACTION_MODEL || 'openai/gpt-4.1-mini';
 
   // --- Step 1: Serper search ---
   const countryMap = { AU: 'au', US: 'us', GB: 'uk', CA: 'ca', NZ: 'nz', IE: 'ie', IN: 'in', DE: 'de', FR: 'fr', JP: 'jp', BR: 'br', MX: 'mx', ES: 'es', IT: 'it', KR: 'kr', NL: 'nl', SE: 'se' };
@@ -4021,6 +4024,8 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
     sonar_quotes: tavilyQuotes || [], // v1.5.95: real quotes from Tavily page content
     sonar_statistics: sonarData?.statistics || [],
     sonar_table_data: sonarData?.table_data || null,
+    // DEBUG: extraction model used for this request
+    extraction_model: sonarData ? (process.env.EXTRACTION_MODEL || 'openai/gpt-4.1-mini') : 'none',
 
     // v1.5.170 — PAA + related searches from Serper (previously discarded)
     // DEBUG: passing through raw to verify data quality before building tables
