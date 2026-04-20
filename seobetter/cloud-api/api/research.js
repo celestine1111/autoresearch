@@ -3411,15 +3411,22 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
     .map(r => r.status === 'fulfilled' ? r.value : null)
     .filter(Boolean);
 
+  // DEBUG: diagnostic info about each pipeline step
+  const _debug = {
+    firecrawl_urls_attempted: urlsToScrape.length,
+    firecrawl_pages_scraped: scrapeResults.length,
+    firecrawl_pages_titles: scrapeResults.map(p => p.title || p.url).slice(0, 5),
+    has_openrouter_key: !!OPENROUTER_KEY,
+    extraction_model: EXTRACTION_MODEL,
+  };
+
   if (scrapeResults.length === 0) {
-    // Firecrawl got nothing — return Serper citations only (still real URLs)
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug: { ..._debug, stopped_at: 'firecrawl_empty' } };
   }
 
   // --- Step 3: LLM extraction from scraped content ---
   if (!OPENROUTER_KEY) {
-    // No LLM key — return just the citations from Serper
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug: { ..._debug, stopped_at: 'no_openrouter_key' } };
   }
 
   // Build context from scraped pages (truncate each to ~2000 chars)
@@ -3428,6 +3435,8 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
     const truncated = page.markdown.slice(0, 2000);
     context += `\n=== Page: ${page.title} (${page.url}) ===\n${truncated}\n`;
   }
+  _debug.context_length = context.length;
+  _debug.context_preview = context.slice(0, 500);
 
   const countryHint = country ? ` Target audience is in ${country}. Prefer sources from ${country} when available.` : '';
 
@@ -3472,17 +3481,23 @@ Return ONLY the JSON object. No markdown fences.`;
     });
 
     if (!llmResp.ok) {
-      return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
+      _debug.stopped_at = 'llm_http_error_' + llmResp.status;
+      return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug };
     }
 
     const llmData = await llmResp.json();
     let content = llmData?.choices?.[0]?.message?.content || '';
+    _debug.llm_raw_length = content.length;
+    _debug.llm_raw_preview = content.slice(0, 300);
     if (!content) {
-      return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
+      _debug.stopped_at = 'llm_empty_content';
+      return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug };
     }
 
     content = content.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '').trim();
     const parsed = JSON.parse(content);
+    _debug.stopped_at = 'success';
+    _debug.parsed_keys = Object.keys(parsed);
 
     return {
       citations: serperCitations,
@@ -3491,11 +3506,13 @@ Return ONLY the JSON object. No markdown fences.`;
       table_data: parsed.table_data && typeof parsed.table_data === 'object' ? parsed.table_data : null,
       peopleAlsoAsk,
       relatedSearches,
+      _debug,
     };
   } catch (err) {
     console.error('LLM extraction error (non-fatal):', err.message);
-    // Still return the real Serper citations even if extraction fails
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
+    _debug.stopped_at = 'llm_exception';
+    _debug.error = err.message;
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches, _debug };
   }
 }
 
@@ -4031,6 +4048,9 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
     // DEBUG: passing through raw to verify data quality before building tables
     serper_paa: sonarData?.peopleAlsoAsk || [],
     serper_related: sonarData?.relatedSearches || [],
+
+    // DEBUG: pipeline diagnostics (remove after testing)
+    _extraction_debug: sonarData?._debug || null,
 
     searched_at: now.toISOString(),
   };
