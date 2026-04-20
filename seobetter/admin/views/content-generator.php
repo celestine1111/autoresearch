@@ -1231,7 +1231,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             sponsored: "Update the disclosure with your actual sponsor name. Replace the CTA with the sponsor's real link.",
             live_blog: "Add real timestamps as events happen. Pin the most important updates to Key Moments."
         };
-        var ct = (form.querySelector('[name="content_type"]') || form.querySelector('#sb-content-type') || {}).value || 'blog_post';
+        var ct = (document.querySelector('#sb-content-type') || document.querySelector('[name="content_type"]') || {}).value || 'blog_post';
         var tip = tipMap[ct] || tipMap.blog_post;
         h += '<div style="margin-top:12px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#166534;display:flex;align-items:flex-start;gap:8px">';
         h += '<span style="font-size:16px;flex-shrink:0">&#128161;</span>';
