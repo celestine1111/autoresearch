@@ -1005,9 +1005,18 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             }
         }
 
+        // v1.5.141 — Content-type-aware optimization.
+        // Full: Blog Post, How-To, Listicle, Review, Comparison, Buying Guide, Ultimate Guide
+        // Citations only: News, Case Study, Tech Article, White Paper, Opinion, Scholarly, Sponsored
+        // Hidden: Recipe, FAQ, Interview, Press Release, Personal Essay, Glossary, Live Blog
+        var optCt = (document.querySelector('#sb-content-type') || document.querySelector('[name="content_type"]') || {}).value || 'blog_post';
+        var optHidden = ['recipe','faq_page','interview','press_release','personal_essay','glossary_definition','live_blog'];
+        var optCitationsOnly = ['news_article','case_study','tech_article','white_paper','opinion','scholarly_article','sponsored'];
+        var optMode = optHidden.indexOf(optCt) !== -1 ? 'hidden' : (optCitationsOnly.indexOf(optCt) !== -1 ? 'citations_only' : 'full');
+
         // v1.5.83 — Single "Optimize All" button replaces individual fix buttons.
         // Shows a summary of what needs fixing + one button to fix everything.
-        if (fixes.length > 0) {
+        if (fixes.length > 0 && optMode !== 'hidden') {
             window._seobetterAppliedFixes = window._seobetterAppliedFixes || {};
             var optimizeAllDone = window._seobetterAppliedFixes._optimize_all;
             var totalImpact = fixes.reduce(function(sum, f) { return sum + parseInt(f.impact) }, 0);
@@ -1037,7 +1046,8 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                 h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
                 h += '<div><h3 style="margin:0;font-size:16px;font-weight:700">Analyze &amp; Improve</h3>';
                 h += '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">' + fixes.length + ' improvements found — potential <strong>+' + totalImpact + ' points</strong></p></div>';
-                h += '<button type="button" id="sb-optimize-all" class="button" style="height:40px;font-size:13px;padding:0 24px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;letter-spacing:0.02em;transition:all 0.2s ease">&#9889; Optimize All</button>';
+                var optLabel = optMode === 'citations_only' ? '&#128279; Add Citations' : '&#9889; Optimize All';
+                h += '<button type="button" id="sb-optimize-all" data-opt-mode="' + optMode + '" class="button" style="height:40px;font-size:13px;padding:0 24px;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;letter-spacing:0.02em;transition:all 0.2s ease">' + optLabel + '</button>';
                 h += '</div>';
 
                 // Progress panel (hidden until clicked)
@@ -1512,6 +1522,8 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                 var checksForApi = {};
                 if (draft.checks) checksForApi = draft.checks;
 
+                // v1.5.141 — Pass optimize mode so backend skips irrelevant steps
+                var btnOptMode = (document.getElementById('sb-optimize-all') || {}).getAttribute('data-opt-mode') || 'full';
                 api('optimize-all', 'POST', {
                     markdown: draft.markdown,
                     keyword: draft.keyword,
@@ -1521,7 +1533,8 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     sonar_data: draft.sonar_data || null,
                     domain: draft.domain || '',
                     content_type: draft.content_type || 'blog_post',
-                    country: draft.country || ''
+                    country: draft.country || '',
+                    optimize_mode: btnOptMode
                 }).then(function(result) {
                     clearInterval(stepInterval);
                     var elapsed = Math.round((Date.now() - startTime) / 1000);

@@ -2487,15 +2487,16 @@ Return ONLY the Markdown table, nothing else.";
         array  $scores = [],
         ?array $sonar_data = null,
         string $domain = '',
-        string $country = ''
+        string $country = '',
+        string $optimize_mode = 'full'
     ): array {
-        // v1.5.99 — increased from 120 to 300. Buying Guide + Comparison articles
-        // (2000+ words) were timing out at 120s due to multi-step optimization +
-        // Pass 3 URL verification. 300s gives enough headroom.
+        // v1.5.99 — increased from 120 to 300.
         @set_time_limit( 300 );
 
         $steps_run     = [];
         $steps_skipped = [];
+        // v1.5.141 — citations_only mode skips quotes, stats, tables, FAQ
+        $citations_only = ( $optimize_mode === 'citations_only' );
         $sonar_used    = false;
 
         // ---- Step 0: Sonar research data ----
@@ -2547,26 +2548,29 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 2: Expert Quotes ----
-        // v1.5.94 — SCRAPED ONLY. Strip hallucinated quotes first, then
-        // insert ONLY real scraped quotes with verified URLs. No fallback
-        // to any LLM. If scraper found 0 quotes, step is skipped.
+        // v1.5.141 — Skipped in citations_only mode (News, Case Study, Tech, etc.)
         $markdown = self::strip_unlinked_quotes( $markdown );
 
-        try {
-            $result = self::inject_quotes( $markdown, $keyword, $sonar, $domain, $country );
-            if ( $result['success'] ) {
-                $markdown = $result['content'];
-                $steps_run[] = 'Expert Quotes: ' . ( $result['added'] ?? 'added' );
-            } else {
-                $steps_skipped[] = 'quotes: ' . ( $result['error'] ?? 'no verifiable quotes found' );
+        if ( ! $citations_only ) {
+            try {
+                $result = self::inject_quotes( $markdown, $keyword, $sonar, $domain, $country );
+                if ( $result['success'] ) {
+                    $markdown = $result['content'];
+                    $steps_run[] = 'Expert Quotes: ' . ( $result['added'] ?? 'added' );
+                } else {
+                    $steps_skipped[] = 'quotes: ' . ( $result['error'] ?? 'no verifiable quotes found' );
+                }
+            } catch ( \Throwable $e ) {
+                $steps_skipped[] = 'quotes: ' . $e->getMessage();
             }
-        } catch ( \Throwable $e ) {
-            $steps_skipped[] = 'quotes: ' . $e->getMessage();
+        } else {
+            $steps_skipped[] = 'quotes: skipped (citations-only mode)';
         }
 
         // ---- Step 3: Statistics ----
+        // v1.5.141 — Skipped in citations_only mode
         $stat_score = $scores['factual_density']['score'] ?? 0;
-        if ( $stat_score < 70 ) {
+        if ( $stat_score < 70 && ! $citations_only ) {
             try {
                 if ( $sonar && ! empty( $sonar['statistics'] ) ) {
                     // v1.5.105 — Filter out irrelevant junk stats before insertion.
@@ -2624,8 +2628,9 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 4: Comparison Table ----
+        // v1.5.141 — Skipped in citations_only mode
         $table_score = $scores['tables']['score'] ?? 0;
-        if ( $table_score < 50 ) {
+        if ( $table_score < 50 && ! $citations_only ) {
             try {
                 if ( $sonar && ! empty( $sonar['table_data']['columns'] ) && ! empty( $sonar['table_data']['rows'] ) ) {
                     // Build markdown table from Sonar data
@@ -2685,11 +2690,9 @@ Return ONLY the Markdown table, nothing else.";
         }
 
         // ---- Step 4c: FAQ Section (if missing) ----
-        // v1.5.104 — CORE-EEAT C05 flags "missing FAQ section". If the AI
-        // didn't generate one, add 3-5 FAQ items based on the keyword.
-        // Skip for faq_page content type (already IS an FAQ).
+        // v1.5.141 — Skipped in citations_only mode
         $has_faq = preg_match( '/##\s*(FAQ|Frequently\s*Asked)/i', $markdown );
-        if ( ! $has_faq ) {
+        if ( ! $has_faq && ! $citations_only ) {
             try {
                 $faq_block = "\n\n## Frequently Asked Questions\n\n";
                 if ( $sonar && ! empty( $sonar['faq'] ) ) {
