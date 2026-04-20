@@ -707,8 +707,34 @@ class Async_Generator {
             'sponsored' => ['sections' => 'Sponsorship Disclosure, Introduction, Body, Sponsor Call to Action, FAQ, References', 'guidance' => 'Paid content. MUST include clear disclosure at the top. Balance informational value with sponsor messaging. Be transparent.', 'schema' => 'AdvertiserContentArticle'],
         ];
 
-        // Shared SEO + humanizer rules appended to all content type guidance
-        $shared = ' CRITICAL RULES FOR ALL TYPES: Include 3+ statistics per 1000 words (+40% AI visibility). Include 2+ expert quotes with full attribution (+41% visibility). Include 5+ inline citations as clickable Markdown links using ONLY URLs from the research data (+30% visibility). NEVER invent URLs or page paths — if you mention an organization without a URL from research data, link to their homepage domain only. Every outgoing link must lead to a real page, not a 404. Include a "## Pros and Cons" section with bullet lists for Pros and Cons (this auto-styles into colored boxes). Follow humanizer rules: no AI words (delve, leverage, pivotal, tapestry, landscape), vary sentence rhythm, write like a knowledgeable human with opinions. Apply E-E-A-T: show experience, expertise, authority, and trustworthiness appropriate to this content type.';
+        // v1.5.154 — Shared SEO + humanizer + readability + structure rules.
+        // These produce articles that score 80+ on first generation without
+        // needing a second optimization pass.
+        $shared = ' CRITICAL RULES FOR ALL TYPES:'
+            // Readability (grade 6-8 target)
+            . ' READABILITY: Write at grade 6-8 reading level. Use short sentences (15-20 words max). Use simple words — "use" not "utilize", "help" not "facilitate", "show" not "demonstrate". Break long paragraphs into 2-3 sentences. No academic jargon unless the content type requires it.'
+            // Section structure
+            . ' SECTION OPENINGS: Start EVERY H2/H3 section with a 40-60 word paragraph that directly answers the heading question. This is the optimal length for AI extraction. Do NOT start sections with background context — answer first, explain second.'
+            // Keyword density
+            . ' KEYWORD DENSITY: Use the focus keyword naturally 1-2 times per section. Do NOT repeat it in every sentence — that is keyword stuffing which REDUCES visibility by 9%. Use synonyms and variations instead (e.g. for "dog food" use "pet nutrition", "canine diet", "kibble").'
+            // Citations
+            . ' CITATIONS: Include inline citations as clickable Markdown links using ONLY URLs from the AVAILABLE CITATIONS list. Aim for 1 citation per 200 words. Link every source mention.'
+            // Statistics
+            . ' STATISTICS: Include 3+ real statistics per 1000 words with source attribution (+40% AI visibility).'
+            // Expert quotes
+            . ' QUOTES: Include 2+ expert quotes with full name and organization (+41% visibility).'
+            // Comparison table
+            . ' TABLE: Include at least one comparison or data table. LLMs are 30-40% more likely to cite content with tables.'
+            // FAQ section
+            . ' FAQ: Include a "## Frequently Asked Questions" section with 3-5 Q&A pairs. Questions should end with ? and be phrased as users search.'
+            // Pros and Cons
+            . ' PROS/CONS: Include a "## Pros and Cons" section with bullet lists (auto-styles into colored boxes).'
+            // Humanizer
+            . ' HUMANIZER: No AI words (delve, leverage, pivotal, tapestry, landscape, multifaceted, comprehensive, utilizing, aforementioned). Vary sentence rhythm. Write like a knowledgeable human with opinions, not a textbook.'
+            // E-E-A-T
+            . ' E-E-A-T: Show experience (first-hand testing), expertise (specific knowledge), authority (cite real sources), trustworthiness (honest pros/cons, no fake claims).'
+            // URLs
+            . ' NEVER invent URLs. Only use URLs from the AVAILABLE CITATIONS list. If mentioning an organization without a URL, do NOT link it.';
 
         $template = $templates[ $content_type ] ?? $templates['blog_post'];
         $template['guidance'] .= $shared;
