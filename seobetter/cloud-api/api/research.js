@@ -3356,14 +3356,10 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
   }
 
   const serperData = await serperResp.json();
-  // v1.5.170 — DEBUG: Log ALL top-level keys Serper returns so we can see
-  // what data is available (peopleAlsoAsk, knowledgeGraph, relatedSearches, etc.)
-  console.log('[Serper DEBUG] Top-level keys:', Object.keys(serperData));
-  console.log('[Serper DEBUG] peopleAlsoAsk count:', (serperData?.peopleAlsoAsk || []).length);
-  console.log('[Serper DEBUG] peopleAlsoAsk data:', JSON.stringify(serperData?.peopleAlsoAsk || [], null, 2));
-  console.log('[Serper DEBUG] relatedSearches:', JSON.stringify(serperData?.relatedSearches || [], null, 2));
-  console.log('[Serper DEBUG] knowledgeGraph keys:', serperData?.knowledgeGraph ? Object.keys(serperData.knowledgeGraph) : 'none');
   const organicResults = serperData?.organic || [];
+  // v1.5.170 — Capture PAA + related searches from Serper (previously discarded)
+  const peopleAlsoAsk = Array.isArray(serperData?.peopleAlsoAsk) ? serperData.peopleAlsoAsk : [];
+  const relatedSearches = Array.isArray(serperData?.relatedSearches) ? serperData.relatedSearches : [];
 
   if (organicResults.length === 0) return null;
 
@@ -3414,13 +3410,13 @@ async function fetchSerperFirecrawlResearch(keyword, country = '') {
 
   if (scrapeResults.length === 0) {
     // Firecrawl got nothing — return Serper citations only (still real URLs)
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
   }
 
   // --- Step 3: LLM extraction from scraped content ---
   if (!OPENROUTER_KEY) {
     // No LLM key — return just the citations from Serper
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
   }
 
   // Build context from scraped pages (truncate each to ~2000 chars)
@@ -3473,13 +3469,13 @@ Return ONLY the JSON object. No markdown fences.`;
     });
 
     if (!llmResp.ok) {
-      return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+      return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
     }
 
     const llmData = await llmResp.json();
     let content = llmData?.choices?.[0]?.message?.content || '';
     if (!content) {
-      return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+      return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
     }
 
     content = content.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '').trim();
@@ -3490,11 +3486,13 @@ Return ONLY the JSON object. No markdown fences.`;
       quotes: Array.isArray(parsed.quotes) ? parsed.quotes : [],
       statistics: Array.isArray(parsed.statistics) ? parsed.statistics : [],
       table_data: parsed.table_data && typeof parsed.table_data === 'object' ? parsed.table_data : null,
+      peopleAlsoAsk,
+      relatedSearches,
     };
   } catch (err) {
     console.error('LLM extraction error (non-fatal):', err.message);
     // Still return the real Serper citations even if extraction fails
-    return { citations: serperCitations, quotes: [], statistics: [], table_data: null };
+    return { citations: serperCitations, quotes: [], statistics: [], table_data: null, peopleAlsoAsk, relatedSearches };
   }
 }
 
@@ -4023,6 +4021,11 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
     sonar_quotes: tavilyQuotes || [], // v1.5.95: real quotes from Tavily page content
     sonar_statistics: sonarData?.statistics || [],
     sonar_table_data: sonarData?.table_data || null,
+
+    // v1.5.170 — PAA + related searches from Serper (previously discarded)
+    // DEBUG: passing through raw to verify data quality before building tables
+    serper_paa: sonarData?.peopleAlsoAsk || [],
+    serper_related: sonarData?.relatedSearches || [],
 
     searched_at: now.toISOString(),
   };
