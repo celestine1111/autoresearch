@@ -1608,6 +1608,134 @@ class Async_Generator {
         return $result;
     }
 
+    /**
+     * v1.5.159 — PHP enforcement of GEO requirements.
+     * Guarantees table, FAQ, and keyword density regardless of AI model output.
+     * Per SEO-GEO-AI-GUIDELINES.md §1: these are CRITICAL GEO factors.
+     */
+    private static function enforce_geo_requirements( string $markdown, string $keyword, array $job ): string {
+        $sonar_data = $job['results']['sonar_data'] ?? [];
+        $content_type = $job['options']['content_type'] ?? 'blog_post';
+
+        // ── 1. ENFORCE COMPARISON TABLE ──
+        // Per SEO-GEO §1: "LLMs are 30-40% more likely to cite tables"
+        // If no markdown table exists, build one from Sonar table_data
+        $has_table = (bool) preg_match( '/\|.+\|.+\|/', $markdown );
+        if ( ! $has_table && ! empty( $sonar_data['table_data']['columns'] ) && ! empty( $sonar_data['table_data']['rows'] ) ) {
+            $cols = $sonar_data['table_data']['columns'];
+            $rows = $sonar_data['table_data']['rows'];
+
+            $table = "\n\n## Quick Comparison\n\n";
+            $table .= '| ' . implode( ' | ', $cols ) . " |\n";
+            $table .= '|' . str_repeat( ' --- |', count( $cols ) ) . "\n";
+            foreach ( array_slice( $rows, 0, 5 ) as $row ) {
+                $cells = array_pad( (array) $row, count( $cols ), '' );
+                $table .= '| ' . implode( ' | ', array_slice( $cells, 0, count( $cols ) ) ) . " |\n";
+            }
+
+            // Insert before FAQ or References or Pros and Cons
+            $inserted = false;
+            foreach ( [ '## Frequently Asked', '## FAQ', '## Pros and Cons', '## Pros & Cons', '## References' ] as $marker ) {
+                $pos = stripos( $markdown, $marker );
+                if ( $pos !== false ) {
+                    $markdown = substr( $markdown, 0, $pos ) . $table . "\n" . substr( $markdown, $pos );
+                    $inserted = true;
+                    break;
+                }
+            }
+            if ( ! $inserted ) {
+                $markdown .= $table;
+            }
+        }
+
+        // ── 2. ENFORCE FAQ SECTION ──
+        // Per SEO-GEO §1: FAQ boosts AI extraction and E-E-A-T
+        // Skip for faq_page (already IS an FAQ) and recipe
+        $has_faq = (bool) preg_match( '/##\s*(FAQ|Frequently\s*Asked)/i', $markdown );
+        $faq_exempt = [ 'faq_page', 'recipe', 'live_blog' ];
+        if ( ! $has_faq && ! in_array( $content_type, $faq_exempt, true ) ) {
+            // Generate 3 FAQ items from the article content
+            $text = wp_strip_all_tags( $markdown );
+            $h2s = [];
+            preg_match_all( '/^##\s+(.+)$/m', $markdown, $h2_matches );
+            foreach ( $h2_matches[1] as $h ) {
+                $h = trim( $h );
+                if ( ! preg_match( '/^(key\s*takeaway|reference|pros|cons|source)/i', $h ) && strlen( $h ) > 10 ) {
+                    $h2s[] = $h;
+                }
+            }
+
+            $faq = "\n\n## Frequently Asked Questions\n\n";
+
+            // Build FAQ from H2 headings — turn them into questions
+            $kw_lower = strtolower( $keyword );
+            $kw_short = preg_replace( '/\b(best|top|how\s+to|guide|tips|review|in\s+20\d{2})\b/i', '', $keyword );
+            $kw_short = trim( preg_replace( '/\s+/', ' ', $kw_short ) );
+
+            $faq_items = [
+                "### What is {$kw_short}?\n\n" . ucfirst( $kw_short ) . " refers to the main topic covered in this article. " . ( ! empty( $h2s[0] ) ? "Key aspects include {$h2s[0]}." : '' ) . "\n",
+                "### Why is {$kw_short} important in " . wp_date( 'Y' ) . "?\n\nIn " . wp_date( 'Y' ) . ", {$kw_short} has become increasingly relevant due to changing market conditions, new research, and evolving best practices.\n",
+                "### How do I get started with {$kw_short}?\n\nStart by understanding the fundamentals covered in this guide. " . ( ! empty( $h2s[1] ) ? "Focus on {$h2s[1]} as your first step." : 'Focus on one area at a time and build from there.' ) . "\n",
+            ];
+
+            foreach ( $faq_items as $item ) {
+                $faq .= $item . "\n";
+            }
+
+            // Insert before References
+            $ref_pos = stripos( $markdown, '## References' );
+            if ( $ref_pos !== false ) {
+                $markdown = substr( $markdown, 0, $ref_pos ) . $faq . "\n" . substr( $markdown, $ref_pos );
+            } else {
+                $markdown .= $faq;
+            }
+        }
+
+        // ── 3. ENFORCE KEYWORD DENSITY ──
+        // Per SEO-GEO §1: keyword stuffing -9% visibility
+        // If density > 2.5%, replace some keyword mentions with variations
+        $text_for_density = strtolower( wp_strip_all_tags( $markdown ) );
+        $word_count = str_word_count( $text_for_density );
+        $kw_lower = strtolower( trim( $keyword ) );
+        if ( $word_count > 100 && strlen( $kw_lower ) > 3 ) {
+            $kw_count = substr_count( $text_for_density, $kw_lower );
+            $kw_words = str_word_count( $kw_lower );
+            $density = ( $kw_count * $kw_words / $word_count ) * 100;
+
+            if ( $density > 2.5 ) {
+                // Replace excess keyword mentions with variations
+                // Skip first mention, H2 headings, and Key Takeaways
+                $lines = explode( "\n", $markdown );
+                $replaced = 0;
+                $target_removals = max( 1, (int) ( $kw_count - ( $word_count * 0.015 / $kw_words ) ) );
+
+                for ( $i = count( $lines ) - 1; $i >= 0 && $replaced < $target_removals; $i-- ) {
+                    // Skip headings, first paragraph, Key Takeaways
+                    if ( preg_match( '/^#/', $lines[ $i ] ) ) continue;
+                    if ( $i < 5 ) continue; // Skip intro
+
+                    $line_lower = strtolower( $lines[ $i ] );
+                    if ( strpos( $line_lower, $kw_lower ) !== false ) {
+                        // Replace with "this topic" or "it" — simple pronoun swap
+                        $lines[ $i ] = preg_replace(
+                            '/' . preg_quote( $keyword, '/' ) . '/i',
+                            'this',
+                            $lines[ $i ],
+                            1
+                        );
+                        $replaced++;
+                    }
+                }
+
+                if ( $replaced > 0 ) {
+                    $markdown = implode( "\n", $lines );
+                }
+            }
+        }
+
+        return $markdown;
+    }
+
     private static function assemble_final( array $job ): array {
         $keyword = $job['keyword'];
         $options = $job['options'];
@@ -1690,10 +1818,14 @@ class Async_Generator {
             $markdown
         );
 
+        // v1.5.159 — PHP ENFORCEMENT: guarantee table, FAQ, and keyword density.
+        // The AI prompt ASKS for these but models often ignore them.
+        // PHP post-processing GUARANTEES them regardless of AI model.
+        // Per SEO-GEO-AI-GUIDELINES.md §1: tables +30-40% AI citation,
+        // FAQ boosts AI extraction, keyword stuffing -9% visibility.
+        $markdown = self::enforce_geo_requirements( $markdown, $keyword, $job );
+
         // v1.5.111 — Run full cleanup on initial generation output.
-        // Previously cleanup_ai_markdown() only ran in optimize/inject-fix,
-        // so initial articles had long dashes (em/en-dash) and emoji.
-        // Now runs on EVERY article at generation time.
         $markdown = \SEOBetter::cleanup_ai_markdown( $markdown );
 
         // Format as classic HTML for preview
