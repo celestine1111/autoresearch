@@ -16,6 +16,24 @@
 
 ---
 
+## v1.5.162 — Fix PHP ParseError in enforce_geo_requirements (unclosed brace)
+
+**Date:** 2026-04-19
+**Commit:** `[pending]`
+
+### Changes
+
+- **Fix PHP syntax error** — `includes/Async_Generator.php::enforce_geo_requirements()` line ~1676
+  - The table enforcement fallback code was missing two closing braces
+  - `if ( ! $inserted )` and `if ( $table )` blocks were left open
+  - This caused "unexpected token private" at line 1769 (start of assemble_final)
+  - Fix: added proper `}` closers at indent levels 4 and 3
+
+**Verify:** `grep -n 'if ( ! $inserted )' includes/Async_Generator.php` → line 1676, followed by `}` on 1678, `}` on 1679, `}` on 1680
+**Verified by user:** UNTESTED
+
+---
+
 ## v1.5.138 — Content type visual differentiation: badges + personalization tips
 
 **Date:** 2026-04-20

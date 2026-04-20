@@ -1619,32 +1619,63 @@ class Async_Generator {
 
         // ── 1. ENFORCE COMPARISON TABLE ──
         // Per SEO-GEO §1: "LLMs are 30-40% more likely to cite tables"
-        // If no markdown table exists, build one from Sonar table_data
+        // Per article_design.md §5.7: styled table with accent header + zebra striping
         $has_table = (bool) preg_match( '/\|.+\|.+\|/', $markdown );
-        if ( ! $has_table && ! empty( $sonar_data['table_data']['columns'] ) && ! empty( $sonar_data['table_data']['rows'] ) ) {
-            $cols = $sonar_data['table_data']['columns'];
-            $rows = $sonar_data['table_data']['rows'];
+        if ( ! $has_table ) {
+            $table = '';
 
-            $table = "\n\n## Quick Comparison\n\n";
-            $table .= '| ' . implode( ' | ', $cols ) . " |\n";
-            $table .= '|' . str_repeat( ' --- |', count( $cols ) ) . "\n";
-            foreach ( array_slice( $rows, 0, 5 ) as $row ) {
-                $cells = array_pad( (array) $row, count( $cols ), '' );
-                $table .= '| ' . implode( ' | ', array_slice( $cells, 0, count( $cols ) ) ) . " |\n";
-            }
-
-            // Insert before FAQ or References or Pros and Cons
-            $inserted = false;
-            foreach ( [ '## Frequently Asked', '## FAQ', '## Pros and Cons', '## Pros & Cons', '## References' ] as $marker ) {
-                $pos = stripos( $markdown, $marker );
-                if ( $pos !== false ) {
-                    $markdown = substr( $markdown, 0, $pos ) . $table . "\n" . substr( $markdown, $pos );
-                    $inserted = true;
-                    break;
+            // Source A: Sonar/Serper table_data from research
+            if ( ! empty( $sonar_data['table_data']['columns'] ) && ! empty( $sonar_data['table_data']['rows'] ) ) {
+                $cols = $sonar_data['table_data']['columns'];
+                $rows = $sonar_data['table_data']['rows'];
+                $table = "\n\n## Quick Comparison\n\n";
+                $table .= '| ' . implode( ' | ', $cols ) . " |\n";
+                $table .= '|' . str_repeat( ' --- |', count( $cols ) ) . "\n";
+                foreach ( array_slice( $rows, 0, 5 ) as $row ) {
+                    $cells = array_pad( (array) $row, count( $cols ), '' );
+                    $table .= '| ' . implode( ' | ', array_slice( $cells, 0, count( $cols ) ) ) . " |\n";
                 }
             }
-            if ( ! $inserted ) {
-                $markdown .= $table;
+            // Source B: FALLBACK — build a summary table from the article's H2 sections
+            // This guarantees a table even when research returns no table_data
+            else {
+                $h2s = [];
+                preg_match_all( '/^##\s+(.+)$/m', $markdown, $h2_matches );
+                foreach ( $h2_matches[1] as $h ) {
+                    $h = trim( $h );
+                    // Skip structural sections
+                    if ( preg_match( '/^(key\s*takeaway|reference|pros|cons|faq|frequently|quick\s*comparison)/i', $h ) ) continue;
+                    if ( strlen( $h ) > 5 && strlen( $h ) < 60 ) $h2s[] = $h;
+                }
+
+                if ( count( $h2s ) >= 3 ) {
+                    $kw_short = preg_replace( '/\b(best|top|how\s+to|guide|tips|review|in\s+20\d{2})\b/i', '', $keyword );
+                    $kw_short = trim( preg_replace( '/\s+/', ' ', $kw_short ) );
+
+                    $table = "\n\n## Quick Comparison\n\n";
+                    $table .= "| Aspect | Key Insight | Relevance |\n";
+                    $table .= "| --- | --- | --- |\n";
+                    foreach ( array_slice( $h2s, 0, 5 ) as $i => $h ) {
+                        $relevance = $i === 0 ? 'High' : ( $i <= 2 ? 'Medium' : 'Useful' );
+                        $table .= "| {$h} | Covered in detail in this article | {$relevance} |\n";
+                    }
+                }
+            }
+
+            // Insert the table before FAQ/References/Pros
+            if ( $table ) {
+                $inserted = false;
+                foreach ( [ '## Frequently Asked', '## FAQ', '## Pros and Cons', '## Pros & Cons', '## References' ] as $marker ) {
+                    $pos = stripos( $markdown, $marker );
+                    if ( $pos !== false ) {
+                        $markdown = substr( $markdown, 0, $pos ) . $table . "\n" . substr( $markdown, $pos );
+                        $inserted = true;
+                        break;
+                    }
+                }
+                if ( ! $inserted ) {
+                    $markdown .= $table;
+                }
             }
         }
 
