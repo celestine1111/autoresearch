@@ -1612,8 +1612,14 @@ class Async_Generator {
             $markdown = self::strip_unsourced_recipes( $markdown );
         }
 
-        // v1.5.90 — Strip hallucinated attributed quotes BEFORE formatting.
-        $markdown = Content_Injector::strip_unlinked_quotes( $markdown );
+        // v1.5.146 — Strip hallucinated attributed quotes BEFORE formatting.
+        // Skip for content types where unlinked quotes are EXPECTED structural content:
+        // Case Study (client testimonials), Interview (speaker quotes), Press Release
+        // (executive quotes), Personal Essay (personal narrative quotes).
+        $quote_exempt = [ 'case_study', 'interview', 'press_release', 'personal_essay', 'opinion' ];
+        if ( ! in_array( $content_type, $quote_exempt, true ) ) {
+            $markdown = Content_Injector::strip_unlinked_quotes( $markdown );
+        }
 
         // v1.5.111 — Run full cleanup on initial generation output.
         // Previously cleanup_ai_markdown() only ran in optimize/inject-fix,
