@@ -422,7 +422,7 @@ class Schema_Generator {
                     $steps[] = [
                         '@type'    => 'HowToStep',
                         'position' => $position++,
-                        'name'     => wp_trim_words( $step_text, 8, '' ),
+                        'name'     => wp_trim_words( $step_text, 10, '' ),
                         'text'     => $step_text,
                     ];
                 }
@@ -467,10 +467,8 @@ class Schema_Generator {
         $keyword   = get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: '';
         $country   = get_post_meta( $post->ID, '_seobetter_country', true ) ?: '';
 
-        $author_data = [
-            '@type' => 'Person',
-            'name'  => $this->get_author_name( $post ),
-        ];
+        // v1.5.145 — Full Person schema with E-E-A-T fields for recipes too
+        $author_data = $this->safe_build_author( $post );
 
         // Map country code to cuisine name
         $cuisine_map = [
@@ -553,9 +551,14 @@ class Schema_Generator {
                     foreach ( $li_matches[1] as $li ) {
                         $item = trim( wp_strip_all_tags( $li ) );
                         if ( strlen( $item ) > 2 && strlen( $item ) < 200 ) {
-                            // v1.5.137 — Skip nutritional data (macros, calories)
-                            // "10g Fat", "41g Carbs", "3g Protein" are NOT ingredients
-                            if ( preg_match( '/^\d+[gm]?\s*(fat|carbs?|protein|calories|cal|kcal|sodium|fiber|fibre|sugar|cholesterol|saturated)\s*$/i', $item ) ) continue;
+                            // v1.5.145 — Skip nutritional data (macros, calories, minerals)
+                            // Catches: "135 Calories (per serving)", "237mg Sodium", "3g Protein",
+                            // "41g Carbs", "2mg Iron", "79mg Potassium", "Total Sugars" etc.
+                            if ( preg_match( '/^\d+\s*(g|mg|mcg|kcal|cal|%)?\s*(fat|carbs?|protein|calories?|cal|kcal|sodium|fiber|fibre|sugar|cholesterol|saturated|iron|calcium|potassium|vitamin|total\s+fat|total\s+sugar|trans\s+fat|dietary\s+fiber)/i', $item ) ) continue;
+                            if ( preg_match( '/\b(calories?|kcal)\s*(\(|per\s)/i', $item ) ) continue;
+                            if ( preg_match( '/^(total\s+)?(fat|carbs?|protein|sodium|sugar|fiber)\b/i', $item ) ) continue;
+                            // Skip "Nutrition Facts", "Per Serving", "Servings:" headers
+                            if ( preg_match( '/^(nutrition|per\s+serving|serving\s+size|daily\s+value)/i', $item ) ) continue;
                             // Skip pure numbers or very short items like "N/A"
                             if ( preg_match( '/^[\d\s.,%]+$/', $item ) ) continue;
                             $ingredients[] = $item;
@@ -580,7 +583,7 @@ class Schema_Generator {
                         $step_num++;
                         $step = [
                             '@type' => 'HowToStep',
-                            'name'  => wp_trim_words( $step_text, 5, '' ),
+                            'name'  => wp_trim_words( $step_text, 10, '' ),
                             'text'  => $step_text,
                             'url'   => $permalink . '#step' . $recipe_num . '-' . $step_num,
                         ];
@@ -592,21 +595,31 @@ class Schema_Generator {
                 }
 
                 // Extract times from this section's text
-                if ( preg_match( '/prep(?:aration)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $body_text, $prep ) ) {
+                // v1.5.145 — Broadened time extraction patterns
+                // Matches: "Prep Time: 10 minutes", "Prep: 10 min", "Prep 10 mins", "Prep time 10 minutes"
+                if ( preg_match( '/prep(?:aration)?\s*(?:time)?[\s:]*(\d+)\s*(?:min|minute|mins)/i', $body_text, $prep ) ) {
                     $recipe['prepTime'] = 'PT' . $prep[1] . 'M';
                 }
-                if ( preg_match( '/cook(?:ing)?\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $body_text, $cook ) ) {
+                if ( preg_match( '/cook(?:ing)?\s*(?:time)?[\s:]*(\d+)\s*(?:min|minute|mins)/i', $body_text, $cook ) ) {
                     $recipe['cookTime'] = 'PT' . $cook[1] . 'M';
                 }
-                if ( preg_match( '/total\s*(?:time)?[\s:]+(\d+)\s*(?:min|minute)/i', $body_text, $total ) ) {
+                if ( preg_match( '/total\s*(?:time)?[\s:]*(\d+)\s*(?:min|minute|mins)/i', $body_text, $total ) ) {
                     $recipe['totalTime'] = 'PT' . $total[1] . 'M';
                 }
-                if ( preg_match( '/(?:yield|serve|serving|makes)[\s:]+(\d+\s*(?:serving|piece|treat|cookie|batch|portion)[s]?)/i', $body_text, $yield ) ) {
+                // Also try "X minutes" near "bake" or "oven" if no explicit times found
+                if ( empty( $recipe['cookTime'] ) && preg_match( '/(?:bake|oven|roast)\b.*?(\d+)[\s-]*(?:to\s*\d+\s*)?(?:min|minute|mins)/i', $body_text, $bake ) ) {
+                    $recipe['cookTime'] = 'PT' . $bake[1] . 'M';
+                }
+                if ( preg_match( '/(?:yield|serve|serving|makes|portion)[\s:]*(\d+\s*(?:serving|piece|treat|cookie|batch|portion|loaf|loaves|slice|roll)[s]?)/i', $body_text, $yield ) ) {
                     $recipe['recipeYield'] = $yield[1];
                 }
+                // Also try "serves X" or "makes X"
+                if ( empty( $recipe['recipeYield'] ) && preg_match( '/(?:serves|makes|yields?)\s*[\s:]*(\d+)/i', $body_text, $yield2 ) ) {
+                    $recipe['recipeYield'] = $yield2[1] . ' servings';
+                }
 
-                // Extract category from content context
-                if ( preg_match( '/\b(treat|snack|meal|drink|dessert|breakfast|dinner|lunch|side dish|appetizer|main course|biscuit)\b/i', $body_text, $cat ) ) {
+                // v1.5.145 — Broadened category detection for bread/baking
+                if ( preg_match( '/\b(treat|snack|meal|drink|dessert|breakfast|dinner|lunch|side dish|appetizer|main course|biscuit|bread|cake|pastry|pie|soup|salad|sauce|dip|smoothie|cocktail)\b/i', $body_text, $cat ) ) {
                     $recipe['recipeCategory'] = ucfirst( strtolower( $cat[1] ) );
                 }
 
