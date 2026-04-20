@@ -482,12 +482,14 @@ class Content_Formatter {
         $more_inserted = false;
 
         // v1.5.138 — Content type header badge + type-specific intro styling.
-        // Each article type gets a distinct visual badge at the top so the reader
-        // immediately knows what kind of content this is (Review, News, Interview, etc.)
-        $content_type = $options['content_type'] ?? '';
-        $type_badge = self::get_type_badge( $content_type, $accent );
-        if ( $type_badge ) {
-            $output[] = "<!-- wp:html -->\n{$type_badge}\n<!-- /wp:html -->";
+        try {
+            $content_type = $options['content_type'] ?? '';
+            $type_badge = self::get_type_badge( $content_type, $accent );
+            if ( $type_badge ) {
+                $output[] = "<!-- wp:html -->\n{$type_badge}\n<!-- /wp:html -->";
+            }
+        } catch ( \Throwable $e ) {
+            // Non-fatal — don't crash article formatting
         }
         $in_recipe_card = false; // v1.5.120 — track recipe card wrapper state
         // v1.5.20 — cap stat callouts at 3 per article so percent-heavy
@@ -908,10 +910,13 @@ class Content_Formatter {
         }
 
         // v1.5.139 — Author Bio box (E-E-A-T)
-        // Appended to every article if author bio is configured in settings.
-        $author_bio_html = self::build_author_bio( $accent );
-        if ( $author_bio_html ) {
-            $output[] = "<!-- wp:html -->\n{$author_bio_html}\n<!-- /wp:html -->";
+        try {
+            $author_bio_html = self::build_author_bio( $accent );
+            if ( $author_bio_html ) {
+                $output[] = "<!-- wp:html -->\n{$author_bio_html}\n<!-- /wp:html -->";
+            }
+        } catch ( \Throwable $e ) {
+            // Non-fatal — don't crash article formatting
         }
 
         return implode( "\n\n", $output );

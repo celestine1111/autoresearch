@@ -48,6 +48,14 @@ class Schema_Generator {
      * Includes sameAs, jobTitle, description, image, worksFor, knowsAbout
      * per Google's E-E-A-T guidelines and Schema.org/Person spec.
      */
+    private function safe_build_author( \WP_Post $post ): array {
+        try {
+            return $this->build_author_schema( $post );
+        } catch ( \Throwable $e ) {
+            return [ '@type' => 'Person', 'name' => $this->get_author_name( $post ) ];
+        }
+    }
+
     private function build_author_schema( \WP_Post $post ): array {
         $s = get_option( 'seobetter_settings', [] );
 
@@ -358,8 +366,7 @@ class Schema_Generator {
             'description'   => wp_trim_words( wp_strip_all_tags( $post->post_content ), 30 ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
-            // v1.5.139 — Full Person schema with E-E-A-T fields
-            'author'        => $this->build_author_schema( $post ),
+            'author'        => $this->safe_build_author( $post ),
             'publisher'     => [
                 '@type' => 'Organization',
                 'name'  => get_bloginfo( 'name' ),
@@ -838,8 +845,7 @@ class Schema_Generator {
             'description'   => wp_trim_words( $text, 30 ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
-            // v1.5.139 — Full Person schema with E-E-A-T fields
-            'author'        => $this->build_author_schema( $post ),
+            'author'        => $this->safe_build_author( $post ),
             'publisher'     => [
                 '@type' => 'Organization',
                 'name'  => get_bloginfo( 'name' ),
