@@ -1292,11 +1292,20 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             var selectedHL = document.querySelector('[name="async_headline"]:checked');
             if (selectedHL) draft.title = selectedHL.value;
 
+            // v1.5.182 — Strip large fields that save-draft doesn't need.
+            // sonar_data can be 50KB+ and is only used by inject-fix buttons.
+            // Sending it with every save causes "Request failed" on hosts with
+            // low post_max_size (Hostinger, shared hosting).
+            var saveDraft = Object.assign({}, draft);
+            delete saveDraft.sonar_data;
+            delete saveDraft.places;
+            delete saveDraft.framework;
+
             // Get selected post type
             var postTypeSelect = document.getElementById('seobetter-post-type');
             draft.post_type = postTypeSelect ? postTypeSelect.value : 'post';
 
-            api('save-draft', 'POST', draft).then(function(r) {
+            api('save-draft', 'POST', saveDraft).then(function(r) {
                 if (r.success) {
                     btn.textContent = 'Saved!';
                     btn.style.background = '#059669';
@@ -1312,10 +1321,11 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     statusEl.textContent = 'Error: ' + (r.error || 'Failed to save.');
                     statusEl.style.color = '#ef4444';
                 }
-            }).catch(function() {
+            }).catch(function(err) {
+                console.error('SEOBetter save-draft error:', err);
                 btn.disabled = false;
                 btn.textContent = 'Save as WordPress Draft';
-                statusEl.textContent = 'Error: Request failed.';
+                statusEl.textContent = 'Error: ' + (err.message || 'Request failed — article may be too large for your server. Try a shorter word count.');
                 statusEl.style.color = '#ef4444';
             });
         });

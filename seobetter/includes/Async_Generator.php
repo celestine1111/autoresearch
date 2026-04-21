@@ -2378,7 +2378,7 @@ RICH FORMATTING (use these patterns naturally — the plugin auto-styles them in
 - For safety or risk warnings, start with 'Warning:' (only when truly relevant — never force one)
 - For one interesting fact per article, start a paragraph with 'Did you know?' followed by the fact (max 1 per article)
 - When you introduce a technical term for the first time, format the definition on its own paragraph as: **Term**: explanation here. (1-2 per article)
-- For ONE key insight per major section, write the whole sentence as a single bold line on its own paragraph: **This is the most important point in this section.** (1 per H2 section, max 2 per article)
+- For ONE key insight per major section, write a specific factual sentence as a single bold line on its own paragraph. Example: **Dogs fed raw diets showed 40% fewer vet visits in the first year.** The bold sentence MUST contain a real fact or number from the article — NEVER write generic text like "This is the most important point". (1 per H2 section, max 2 per article)
 - NEVER invent expert quotes with fabricated names like \"Dr. X, Title at Organization\". Only quote text that appears verbatim in the RESEARCH DATA above. If no real quotes exist in the research data, write plain prose instead — do not make up people.
 - Use H2 headings 'Key Takeaways', 'Pros and Cons', 'What You'll Need', or 'Key Insights' verbatim where they fit naturally — these auto-style the following list into colored boxes
 - Statistics with numbers ('78% of dogs prefer X', '3 out of 5 owners report...') are auto pulled-out into stat callouts — write them naturally inside paragraphs
