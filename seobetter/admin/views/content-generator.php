@@ -170,6 +170,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                                 <option value="2500" <?php selected( $_POST['word_count'] ?? '', '2500' ); ?>>2,500 — Comprehensive guide</option>
                                 <option value="3000" <?php selected( $_POST['word_count'] ?? '', '3000' ); ?>>3,000 — Definitive guide</option>
                             </select>
+                            <div id="sb-wc-hint" class="sb-help" style="display:none;margin-top:4px;font-size:11px;color:#6b7280"></div>
                         </div>
                         <div class="sb-field">
                             <label>Tone</label>
@@ -631,36 +632,67 @@ window.sbSuggestTopics = function(btn) {
 };
 
 // Content type auto-adjust (tone + word count)
+// v1.5.183 — Content type presets with recommended word count + minimum floor.
+// Minimums based on GEO requirements: 2+ quotes, 5+ citations, 3+ stats/1000 words,
+// Key Takeaways, FAQ, table. Below the minimum, articles get truncated or lack
+// enough GEO elements for AI citation visibility.
+var SB_TYPE_PRESETS = {
+    blog_post:       {tone:'conversational', wc:'1500', min:1000, label:'Blog Post'},
+    news_article:    {tone:'journalistic',   wc:'1000', min:800,  label:'News Article'},
+    opinion:         {tone:'authoritative',  wc:'1500', min:1000, label:'Opinion'},
+    how_to:          {tone:'educational',    wc:'2000', min:1000, label:'How-To Guide'},
+    listicle:        {tone:'conversational', wc:'2000', min:1500, label:'Listicle'},
+    review:          {tone:'authoritative',  wc:'1500', min:1000, label:'Review'},
+    comparison:      {tone:'authoritative',  wc:'2000', min:1500, label:'Comparison'},
+    buying_guide:    {tone:'authoritative',  wc:'2500', min:1500, label:'Buying Guide'},
+    pillar_guide:    {tone:'authoritative',  wc:'3000', min:2000, label:'Pillar Guide'},
+    case_study:      {tone:'professional',   wc:'2000', min:1500, label:'Case Study'},
+    interview:       {tone:'conversational', wc:'1500', min:1000, label:'Interview'},
+    faq_page:        {tone:'educational',    wc:'1500', min:1000, label:'FAQ Page'},
+    recipe:          {tone:'conversational', wc:'1500', min:800,  label:'Recipe'},
+    tech_article:    {tone:'educational',    wc:'2000', min:1500, label:'Tech Article'},
+    white_paper:     {tone:'professional',   wc:'3000', min:2000, label:'White Paper'},
+    scholarly_article:{tone:'professional',  wc:'3000', min:2000, label:'Scholarly Article'},
+    live_blog:       {tone:'journalistic',   wc:'1000', min:800,  label:'Live Blog'},
+    press_release:   {tone:'professional',   wc:'800',  min:500,  label:'Press Release'},
+    personal_essay:  {tone:'conversational', wc:'1500', min:1000, label:'Personal Essay'},
+    glossary_definition:{tone:'educational', wc:'1000', min:500,  label:'Glossary'},
+    sponsored:       {tone:'conversational', wc:'1000', min:800,  label:'Sponsored'},
+};
 function sbContentTypeChanged(type) {
     var toneEl = document.querySelector('[name="tone"]');
     var wcEl = document.querySelector('[name="word_count"]');
-    var presets = {
-        blog_post:      {tone:'conversational',wc:'1500'},
-        news_article:   {tone:'journalistic',wc:'1000'},
-        opinion:        {tone:'authoritative',wc:'1500'},
-        how_to:         {tone:'educational',wc:'2000'},
-        listicle:       {tone:'conversational',wc:'2000'},
-        review:         {tone:'authoritative',wc:'1500'},
-        comparison:     {tone:'authoritative',wc:'2000'},
-        buying_guide:   {tone:'authoritative',wc:'2500'},
-        pillar_guide:   {tone:'authoritative',wc:'3000'},
-        case_study:     {tone:'professional',wc:'1500'},
-        interview:      {tone:'conversational',wc:'1500'},
-        faq_page:       {tone:'educational',wc:'1000'},
-        recipe:         {tone:'conversational',wc:'1000'},
-        tech_article:   {tone:'educational',wc:'2000'},
-        white_paper:    {tone:'professional',wc:'3000'},
-        scholarly_article:{tone:'professional',wc:'3000'},
-        live_blog:      {tone:'journalistic',wc:'1000'},
-        press_release:  {tone:'professional',wc:'800'},
-        personal_essay: {tone:'conversational',wc:'1500'},
-        glossary_definition:{tone:'educational',wc:'800'},
-        sponsored:      {tone:'conversational',wc:'1000'},
-    };
-    var p = presets[type];
+    var wcHint = document.getElementById('sb-wc-hint');
+    var p = SB_TYPE_PRESETS[type];
     if (p && toneEl && wcEl) {
         toneEl.value = p.tone;
         wcEl.value = p.wc;
+        // Show recommended minimum hint
+        if (wcHint) {
+            wcHint.innerHTML = 'Recommended: <strong>' + parseInt(p.wc).toLocaleString() + '+ words</strong> for ' + p.label + '. Minimum: ' + parseInt(p.min).toLocaleString() + ' words.';
+            wcHint.style.display = 'block';
+        }
+    }
+    // Enforce minimum — if user manually changes word count below floor
+    if (wcEl) {
+        wcEl.addEventListener('change', function() {
+            var pp = SB_TYPE_PRESETS[document.getElementById('sb-content-type').value];
+            if (pp && parseInt(this.value) < pp.min) {
+                // Find the next valid option at or above minimum
+                var opts = this.options;
+                for (var i = 0; i < opts.length; i++) {
+                    if (parseInt(opts[i].value) >= pp.min) {
+                        this.value = opts[i].value;
+                        break;
+                    }
+                }
+                if (wcHint) {
+                    wcHint.innerHTML = '&#9888; ' + pp.label + ' requires at least ' + pp.min.toLocaleString() + ' words for proper GEO optimization. Auto-adjusted.';
+                    wcHint.style.color = '#f59e0b';
+                    setTimeout(function() { wcHint.style.color = ''; }, 4000);
+                }
+            }
+        });
     }
 }
 

@@ -55,6 +55,27 @@ class Async_Generator {
         }
 
         $word_count = absint( $params['word_count'] ?? 2000 );
+
+        // v1.5.183 — Enforce minimum word count per content type.
+        // Prevents truncated articles when users select too few words
+        // for complex content types (e.g. 800-word white papers).
+        $content_type = sanitize_text_field( $params['content_type'] ?? 'blog_post' );
+        $min_words = [
+            'white_paper' => 2000, 'scholarly_article' => 2000, 'pillar_guide' => 2000,
+            'case_study' => 1500, 'tech_article' => 1500, 'comparison' => 1500,
+            'buying_guide' => 1500, 'listicle' => 1500,
+            'blog_post' => 1000, 'how_to' => 1000, 'review' => 1000,
+            'opinion' => 1000, 'interview' => 1000, 'faq_page' => 1000,
+            'personal_essay' => 1000,
+            'news_article' => 800, 'recipe' => 800, 'live_blog' => 800,
+            'sponsored' => 800,
+            'press_release' => 500, 'glossary_definition' => 500,
+        ];
+        $floor = $min_words[ $content_type ] ?? 800;
+        if ( $word_count < $floor ) {
+            $word_count = $floor;
+        }
+
         // Content sections + takeaways + FAQ + references
         $content_sections = max( 3, min( 8, round( $word_count / 400 ) ) );
         $num_sections = $content_sections + 3;
