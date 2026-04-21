@@ -716,11 +716,30 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
         if (aud && audField && !audField.value.trim()) {
             audField.value = aud;
         }
+        // v1.5.176 — Auto-select Category from Serper domain analysis
+        var cat = (d.keywords && d.keywords.category) || '';
+        var catField = document.querySelector('[name="domain"]');
+        if (cat && catField) {
+            // Only auto-select if user hasn't manually chosen (still on default "business" or empty)
+            var currentCat = catField.value;
+            if (!currentCat || currentCat === 'general' || currentCat === 'business') {
+                // Check the value exists in the dropdown
+                var optExists = catField.querySelector('option[value="' + cat + '"]');
+                if (optExists) {
+                    catField.value = cat;
+                }
+            }
+        }
         var serperCount = (d.sources && d.sources.serper) || 0;
         var srcLabel = serperCount > 0
             ? serperCount + ' from Google SERP, ' + (d.sources ? d.sources.google_suggest : 0) + ' from Suggest'
             : (d.sources ? d.sources.google_suggest : 0) + ' from Google Suggest, ' + (d.sources ? d.sources.datamuse : 0) + ' from Datamuse';
-        st.textContent = 'Added ' + sec.length + ' secondary + ' + lsi.length + ' LSI' + (aud ? ' + audience' : '') + ' (' + srcLabel + ')';
+        var autoFields = [];
+        if (sec.length) autoFields.push(sec.length + ' secondary');
+        if (lsi.length) autoFields.push(lsi.length + ' LSI');
+        if (aud) autoFields.push('audience');
+        if (cat) autoFields.push('category: ' + cat);
+        st.textContent = 'Added ' + autoFields.join(' + ') + ' (' + srcLabel + ')';
         setTimeout(function() { st.textContent = ''; }, 8000);
     }).catch(function(e) {
         btn.disabled = false;

@@ -546,10 +546,71 @@ async function fetchSerperKeywords(keyword, gl = '') {
       }
     }
 
+    // --- v1.5.176 — Auto-detect category from source domains + snippets ---
+    // Maps the top-ranking domains to the plugin's category dropdown values
+    let category = '';
+    const allLinks = results.map(r => r.link || '').join(' ').toLowerCase();
+    const snippetAndTitles = allSnippetText + ' ' + results.map(r => (r.title || '').toLowerCase()).join(' ');
+
+    // Domain-based detection (strongest signal)
+    if (/healthline|webmd|mayoclinic|health\.harvard|medlineplus|nih\.gov|clevelandclinic/.test(domainStr)) {
+      category = 'health';
+    } else if (/petmd|akc\.org|thesprucepets|rover\.com|vetstreet|vet\.cornell|rspca/.test(domainStr)) {
+      category = 'veterinary';
+    } else if (/github\.com|stackoverflow|dev\.to|realpython|freecodecamp|codecademy|digitalocean|medium\.com.*tech/.test(domainStr)) {
+      category = 'technology';
+    } else if (/investopedia|nerdwallet|bankrate|morningstar|bloomberg|cnbc\.com|wsj\.com/.test(domainStr)) {
+      category = 'finance';
+    } else if (/allrecipes|foodnetwork|bbcgoodfood|taste\.com|epicurious|seriouseats|bonappetit/.test(domainStr)) {
+      category = 'food';
+    } else if (/tripadvisor|lonelyplanet|booking\.com|skyscanner|travelandleisure|nomadicmatt/.test(domainStr)) {
+      category = 'travel';
+    } else if (/espn\.com|bleacherreport|sportsillustrated|nba\.com|nfl\.com|fifa\.com|bbc\.com\/sport/.test(domainStr)) {
+      category = 'sports';
+    } else if (/nasa\.gov|space\.com|nature\.com|sciencedirect|arxiv\.org|newscientist/.test(domainStr)) {
+      category = 'science';
+    } else if (/amazon\.com.*\/dp|shopify|ebay\.com|etsy\.com|woocommerce/.test(domainStr)) {
+      category = 'ecommerce';
+    } else if (/coindesk|coinmarketcap|coingecko|cointelegraph|binance|kraken/.test(domainStr)) {
+      category = 'cryptocurrency';
+    } else if (/hubspot|salesforce|shopify\.com\/blog|entrepreneur\.com|inc\.com|hbr\.org|forbes\.com\/business/.test(domainStr)) {
+      category = 'business';
+    } else if (/pcmag|tomsguide|techradar|wirecutter|rtings|cnet\.com|theverge/.test(domainStr)) {
+      category = 'technology';
+    } else if (/imdb|rottentomatoes|letterboxd|variety\.com|deadline\.com|hollywoodreporter/.test(domainStr)) {
+      category = 'entertainment';
+    } else if (/weather\.gov|accuweather|weather\.com|bom\.gov\.au|metoffice\.gov/.test(domainStr)) {
+      category = 'weather';
+    } else if (/gov\.uk|gov\.au|usa\.gov|congress\.gov|legislation|parliament/.test(domainStr)) {
+      category = 'government';
+    } else if (/coursera|edx\.org|khanacademy|university|\.edu\//.test(domainStr)) {
+      category = 'education';
+    }
+
+    // Fallback: snippet/title keyword detection
+    if (!category) {
+      if (/\b(recipe|cooking|ingredient|bake|roast|cuisine)\b/.test(snippetAndTitles)) {
+        category = 'food';
+      } else if (/\b(symptom|treatment|diagnosis|patient|clinical|therapy|medical)\b/.test(snippetAndTitles)) {
+        category = 'health';
+      } else if (/\b(framework|api|programming|developer|code|software|deploy)\b/.test(snippetAndTitles)) {
+        category = 'technology';
+      } else if (/\b(invest|stock|portfolio|mortgage|interest rate|retirement)\b/.test(snippetAndTitles)) {
+        category = 'finance';
+      } else if (/\b(marketing|startup|revenue|roi|business strategy|b2b|saas)\b/.test(snippetAndTitles)) {
+        category = 'business';
+      } else if (/\b(hotel|flight|destination|travel|tourism|backpack|resort)\b/.test(snippetAndTitles)) {
+        category = 'travel';
+      } else if (/\b(veterinar|pet|dog|cat|puppy|kitten|breed|animal health)\b/.test(snippetAndTitles)) {
+        category = 'veterinary';
+      }
+    }
+
     return {
       secondary: secondary.slice(0, 7),
       lsi: lsi.slice(0, 10),
       audience,
+      category,
       citation_count: results.length,
     };
   } catch (err) {
