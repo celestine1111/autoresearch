@@ -727,8 +727,9 @@ class Async_Generator {
             . ' TABLE: Include at least one comparison or data table. LLMs are 30-40% more likely to cite content with tables.'
             // FAQ section
             . ' FAQ: Include a "## Frequently Asked Questions" section with 3-5 Q&A pairs. Questions should end with ? and be phrased as users search.'
-            // Pros and Cons
-            . ' PROS/CONS: Include a "## Pros and Cons" section with bullet lists (auto-styles into colored boxes).'
+            // Pros and Cons — only for types that use it (NOT white_paper, scholarly, press_release, personal_essay)
+            . ( in_array( $content_type, [ 'white_paper', 'scholarly_article', 'press_release', 'personal_essay', 'live_blog', 'glossary_definition', 'interview' ], true )
+                ? '' : ' PROS/CONS: Include a "## Pros and Cons" section with bullet lists (auto-styles into colored boxes).' )
             // Humanizer
             . ' HUMANIZER: No AI words (delve, leverage, pivotal, tapestry, landscape, multifaceted, comprehensive, utilizing, aforementioned). Vary sentence rhythm. Write like a knowledgeable human with opinions, not a textbook.'
             // E-E-A-T

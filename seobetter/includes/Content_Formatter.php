@@ -601,7 +601,7 @@ class Content_Formatter {
 
                         // v1.5.177 — White Paper: formal section numbering + Executive Summary box
                         if ( $is_white_paper ) {
-                            $is_structural = preg_match( '/^(key\s*takeaway|reference|sources|bibliography|faq|frequently|quick\s*comparison)/i', $text );
+                            $is_structural = preg_match( '/^(key\s*takeaway|reference|sources|bibliography|faq|frequently|quick\s*comparison|pros|cons)/i', $text );
                             $is_exec = preg_match( '/executive\s*summary/i', $text );
 
                             if ( $is_exec ) {
