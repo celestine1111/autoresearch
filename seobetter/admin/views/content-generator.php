@@ -1324,18 +1324,29 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             var selectedHL = document.querySelector('[name="async_headline"]:checked');
             if (selectedHL) draft.title = selectedHL.value;
 
-            // v1.5.182 — Strip large fields that save-draft doesn't need.
-            // sonar_data can be 50KB+ and is only used by inject-fix buttons.
-            // Sending it with every save causes "Request failed" on hosts with
-            // low post_max_size (Hostinger, shared hosting).
-            var saveDraft = Object.assign({}, draft);
-            delete saveDraft.sonar_data;
-            delete saveDraft.places;
-            delete saveDraft.framework;
-
             // Get selected post type
             var postTypeSelect = document.getElementById('seobetter-post-type');
             draft.post_type = postTypeSelect ? postTypeSelect.value : 'post';
+
+            // v1.5.184 — Minimize save payload to prevent PHP crash on shared hosting.
+            // A 2000-word white paper produces ~100KB of HTML in 'content' + ~20KB markdown.
+            // Hostinger's post_max_size is often 8MB but the REST API nonce/timeout can fail
+            // on large payloads. The save endpoint re-formats markdown via format_hybrid()
+            // anyway, so we only need to send markdown + metadata, not the preview HTML.
+            var saveDraft = {
+                title: draft.title || '',
+                markdown: draft.markdown || '',
+                accent_color: draft.accent_color || '#764ba2',
+                keyword: draft.keyword || '',
+                content_type: draft.content_type || 'blog_post',
+                domain: draft.domain || '',
+                country: draft.country || '',
+                meta_title: draft.meta_title || '',
+                meta_description: draft.meta_description || '',
+                og_title: draft.og_title || '',
+                citation_pool: draft.citation_pool || [],
+                post_type: draft.post_type || 'post',
+            };
 
             api('save-draft', 'POST', saveDraft).then(function(r) {
                 if (r.success) {
