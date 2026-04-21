@@ -578,7 +578,7 @@ async function fetchSerperKeywords(keyword, gl = '') {
     // --- v1.5.176 — Auto-detect category from source domains + snippets ---
     // Maps the top-ranking domains to the plugin's category dropdown values
     let category = '';
-    const allLinks = results.map(r => r.link || '').join(' ').toLowerCase();
+    // allLinks already declared above in audience detection
     const snippetAndTitles = allSnippetText + ' ' + results.map(r => (r.title || '').toLowerCase()).join(' ');
 
     // Domain-based detection (strongest signal)
