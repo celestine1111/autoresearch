@@ -16,10 +16,36 @@
 
 ---
 
-## v1.5.177 — White Paper visual styling (Executive Summary box + section numbering)
+## v1.5.181 — Wire up Bulk Generator + remove 4 empty menu items
 
 **Date:** 2026-04-21
 **Commit:** `[pending]`
+
+### Changes
+
+- **Remove 4 empty menu items** — `seobetter.php::register_admin_menu()` line ~137
+  - Removed: Content Brief (redundant with auto-generation), Citation Tracker, Link Suggestions, Cannibalization
+  - All 4 were UI shells with no backend. Render methods kept for future re-activation.
+  - Menu now: Generate Content, Bulk Generate, Settings (3 focused items)
+
+- **Wire Bulk Generator to Async_Generator pipeline** — `includes/Bulk_Generator.php::process_next()` line ~151
+  - Old: called `AI_Content_Generator::generate()` (legacy synchronous single-shot generator)
+  - New: calls `Async_Generator::start_job()` → `process_step()` loop → `get_result()`
+  - Bulk articles now get the SAME quality as single articles: Serper+Firecrawl research, GPT-4.1-mini extraction, tables, FAQ optimization, citation pool, readability enforcement, hybrid formatting
+  - Post meta saved: `_seobetter_focus_keyword`, `_seobetter_geo_score`, `_seobetter_content_type`
+  - Supports CSV columns: keyword, secondary_keywords, word_count, tone, domain, content_type, country
+  - Response includes `edit_url`, `progress`, `items` with URLs for the JS polling UI
+
+**Verify:** `grep -n 'Async_Generator::start_job' includes/Bulk_Generator.php` → line ~163
+**Verify:** `grep -n 'Content Brief' seobetter.php` → should be in comments only, not in add_submenu_page
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.177 — White Paper visual styling (Executive Summary box + section numbering)
+
+**Date:** 2026-04-21
+**Commit:** `a474393`
 
 ### Changes
 

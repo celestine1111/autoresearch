@@ -48,6 +48,8 @@ class Bulk_Generator {
                 'word_count'         => absint( $data['word_count'] ?? 2000 ) ?: 2000,
                 'tone'               => sanitize_text_field( $data['tone'] ?? 'authoritative' ),
                 'domain'             => sanitize_text_field( $data['domain'] ?? 'general' ),
+                'content_type'       => sanitize_text_field( $data['content_type'] ?? 'blog_post' ),
+                'country'            => sanitize_text_field( $data['country'] ?? '' ),
             ];
         }
 
@@ -91,8 +93,11 @@ class Bulk_Generator {
                 'word_count'         => $kw['word_count'] ?? $defaults['word_count'] ?? 2000,
                 'tone'               => $kw['tone'] ?? $defaults['tone'] ?? 'authoritative',
                 'domain'             => $kw['domain'] ?? $defaults['domain'] ?? 'general',
+                'content_type'       => $kw['content_type'] ?? $defaults['content_type'] ?? 'blog_post',
+                'country'            => $kw['country'] ?? $defaults['country'] ?? '',
                 'status'             => 'pending',
                 'post_id'            => null,
+                'post_title'         => null,
                 'geo_score'          => null,
                 'error'              => null,
             ];
@@ -149,31 +154,80 @@ class Bulk_Generator {
         $item = $batch['items'][ $next_index ];
 
         try {
-            $generator = new AI_Content_Generator();
+            // v1.5.181 — Use Async_Generator pipeline (same as single article generation).
+            // This gives bulk articles the full Serper+Firecrawl research, tables,
+            // FAQ optimization, citation pool, readability enforcement, etc.
             $secondary = array_filter( array_map( 'trim', explode( ',', $item['secondary_keywords'] ) ) );
 
-            $result = $generator->generate( $item['keyword'], [
+            // Step 1: Start the job
+            $start = Async_Generator::start_job( [
+                'primary_keyword'    => $item['keyword'],
+                'secondary_keywords' => implode( ', ', $secondary ),
                 'word_count'         => $item['word_count'],
-                'tone'               => $item['tone'],
-                'domain'             => $item['domain'],
-                'secondary_keywords' => $secondary,
-                'editor_mode'        => 'classic',
+                'tone'               => $item['tone'] ?? 'authoritative',
+                'domain'             => $item['domain'] ?? 'general',
+                'content_type'       => $item['content_type'] ?? 'blog_post',
+                'accent_color'       => '#764ba2',
+                'country'            => $item['country'] ?? '',
             ] );
 
-            if ( ! empty( $result['success'] ) ) {
-                // Format as Gutenberg for draft
-                $formatter = new Content_Formatter();
-                $gutenberg_content = $formatter->format( $result['markdown'] ?? '', 'gutenberg', [] );
+            if ( empty( $start['success'] ) ) {
+                throw new \RuntimeException( $start['error'] ?? 'Failed to start job.' );
+            }
 
+            $job_id = $start['job_id'];
+
+            // Step 2: Run all steps sequentially (no polling — synchronous)
+            $max_steps = 30; // Safety cap
+            for ( $step = 0; $step < $max_steps; $step++ ) {
+                $step_result = Async_Generator::process_step( $job_id );
+                if ( ! empty( $step_result['done'] ) ) break;
+                if ( ! empty( $step_result['error'] ) && empty( $step_result['can_retry'] ) ) {
+                    throw new \RuntimeException( $step_result['error'] );
+                }
+            }
+
+            // Step 3: Get the final result
+            $result = Async_Generator::get_result( $job_id );
+
+            if ( ! empty( $result['success'] ) ) {
+                // Use rest_save_draft logic: format hybrid, validate links, build references
+                $plugin = \SEOBetter::get_instance();
+                $markdown = $result['markdown'] ?? '';
+                $content_html = $result['content'] ?? '';
+                $accent = '#764ba2';
+
+                // Format as hybrid for Gutenberg
+                if ( ! empty( $markdown ) ) {
+                    $markdown = \SEOBetter::cleanup_ai_markdown( $markdown );
+                    $combined_pool = $result['citation_pool'] ?? [];
+                    if ( ! empty( $combined_pool ) ) {
+                        $markdown = \SEOBetter::linkify_bracketed_references( $markdown, $combined_pool );
+                    }
+                    $formatter = new Content_Formatter();
+                    $content_html = $formatter->format( $markdown, 'hybrid', [
+                        'accent_color' => $accent,
+                        'content_type' => $item['content_type'] ?? 'blog_post',
+                    ] );
+                }
+
+                $post_title = $result['headlines'][0] ?? ucwords( $item['keyword'] );
                 $post_id = wp_insert_post( [
-                    'post_title'   => $result['headlines'][0] ?? ucwords( $item['keyword'] ),
-                    'post_content' => $gutenberg_content ?: $result['content'],
+                    'post_title'   => $post_title,
+                    'post_content' => $content_html,
                     'post_status'  => 'draft',
                     'post_type'    => 'post',
                 ] );
 
+                if ( $post_id && ! is_wp_error( $post_id ) ) {
+                    update_post_meta( $post_id, '_seobetter_focus_keyword', $item['keyword'] );
+                    update_post_meta( $post_id, '_seobetter_geo_score', $result['geo_score'] ?? 0 );
+                    update_post_meta( $post_id, '_seobetter_content_type', $item['content_type'] ?? 'blog_post' );
+                }
+
                 $batch['items'][ $next_index ]['status'] = 'completed';
                 $batch['items'][ $next_index ]['post_id'] = $post_id;
+                $batch['items'][ $next_index ]['post_title'] = $post_title;
                 $batch['items'][ $next_index ]['geo_score'] = $result['geo_score'] ?? 0;
                 $batch['completed']++;
             } else {
@@ -195,13 +249,22 @@ class Bulk_Generator {
 
         update_option( self::OPTION_PREFIX . $batch_id, $batch, false );
 
+        // Add edit_url to items for the JS table update
+        $progress = round( ( $batch['completed'] + $batch['failed'] ) / max( 1, $batch['total'] ) * 100 );
+        $items_with_urls = array_map( function ( $it ) {
+            if ( ! empty( $it['post_id'] ) ) {
+                $it['edit_url'] = get_edit_post_link( $it['post_id'], 'raw' );
+            }
+            return $it;
+        }, $batch['items'] );
+
         return [
             'success'   => true,
             'done'      => $pending === 0,
-            'processed' => $batch['items'][ $next_index ],
-            'index'     => $next_index,
+            'status'    => $batch['status'],
+            'progress'  => $progress,
+            'items'     => $items_with_urls,
             'remaining' => $pending,
-            'batch'     => $batch,
         ];
     }
 
