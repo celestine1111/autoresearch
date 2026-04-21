@@ -514,35 +514,64 @@ async function fetchSerperKeywords(keyword, gl = '') {
       try { return new URL(r.link).hostname.replace('www.', ''); } catch { return ''; }
     }).filter(Boolean);
 
+    // v1.5.180 — Audience detection: snippet-first approach.
+    // Domain-only matching was too coarse (LinkedIn → "marketing professionals"
+    // even for AI-in-healthcare articles). Now analyzes WHAT the content says,
+    // not just WHERE it's published.
     let audience = '';
     const domainStr = domains.join(' ');
-    // Audience inference rules based on which sites rank for this keyword
-    if (/reddit\.com/.test(domainStr) && /r\/(react|javascript|webdev|programming|learnprogramming)/i.test(results.map(r => r.link).join(' '))) {
-      audience = 'developers and programmers';
-    } else if (/reddit\.com/.test(domainStr) && /r\/(small.*business|entrepreneur|startup)/i.test(results.map(r => r.link).join(' '))) {
-      audience = 'small business owners and entrepreneurs';
-    } else if (/aarp\.org|healthline\.com|webmd\.com|mayoclinic\.org|health\.harvard/.test(domainStr)) {
-      audience = 'health-conscious adults seeking evidence-based information';
-    } else if (/salesforce|hubspot|mailchimp|linkedin\.com/.test(domainStr)) {
-      audience = 'business owners and marketing professionals';
-    } else if (/allrecipes|foodnetwork|bbcgoodfood|taste\.com/.test(domainStr)) {
+    const allLinks = results.map(r => r.link || '').join(' ').toLowerCase();
+    const kwLowerAud = keyword.toLowerCase();
+
+    // Step 1: Check keyword + snippet content together (most accurate)
+    const snippetsForAud = allSnippetText + ' ' + kwLowerAud;
+
+    if (/\b(healthcare|medical|clinical|patient|diagnosis|treatment|hospital)\b/.test(snippetsForAud) && /\b(ai|artificial intelligence|machine learning|deep learning)\b/.test(snippetsForAud)) {
+      audience = 'healthcare professionals and researchers exploring AI applications';
+    } else if (/\b(healthcare|medical|clinical|patient|diagnosis|nhs|doctor|nurse)\b/.test(snippetsForAud)) {
+      audience = 'healthcare professionals and patients seeking medical information';
+    } else if (/\b(developer|programming|code|api|framework|deploy|github|stack)\b/.test(snippetsForAud)) {
+      if (/\b(beginner|learn|tutorial|getting started|introduction)\b/.test(snippetsForAud)) {
+        audience = 'beginner to intermediate developers learning new skills';
+      } else {
+        audience = 'developers and software engineers';
+      }
+    } else if (/\b(recipe|cooking|ingredient|bake|cuisine|dish)\b/.test(snippetsForAud)) {
       audience = 'home cooks looking for reliable recipes';
-    } else if (/zerotomastery|freecodecamp|codecademy|realpython|dev\.to/.test(domainStr)) {
-      audience = 'beginner to intermediate developers learning new skills';
-    } else if (/wirecutter|rtings|tomsguide|techradar|pcmag/.test(domainStr)) {
-      audience = 'buyers researching products before purchase';
-    } else if (/investopedia|nerdwallet|bankrate|forbes\.com/.test(domainStr)) {
+    } else if (/\b(invest|stock|portfolio|mortgage|retirement|savings)\b/.test(snippetsForAud)) {
       audience = 'people making financial decisions';
+    } else if (/\b(pet|dog|cat|veterinar|puppy|kitten|breed)\b/.test(snippetsForAud)) {
+      audience = 'pet owners seeking health and care advice';
+    } else if (/\b(travel|hotel|flight|destination|tourism|backpack)\b/.test(snippetsForAud)) {
+      audience = 'travelers planning trips and experiences';
+    } else if (/\b(crypto|bitcoin|ethereum|blockchain|defi|nft)\b/.test(snippetsForAud)) {
+      audience = 'crypto investors and blockchain enthusiasts';
     }
-    // Fallback: check snippet language for audience hints
+
+    // Step 2: Domain-based detection (only if snippet detection missed)
     if (!audience) {
-      const snippets = allSnippetText;
-      if (/beginner|getting started|learn|tutorial|step.by.step/.test(snippets)) {
-        audience = 'beginners looking for practical guidance';
-      } else if (/business|company|brand|marketing|strategy/.test(snippets)) {
+      if (/aarp\.org|healthline\.com|webmd\.com|mayoclinic\.org|health\.harvard/.test(domainStr)) {
+        audience = 'health-conscious adults seeking evidence-based information';
+      } else if (/zerotomastery|freecodecamp|codecademy|realpython|dev\.to/.test(domainStr)) {
+        audience = 'beginner to intermediate developers learning new skills';
+      } else if (/wirecutter|rtings|tomsguide|techradar|pcmag/.test(domainStr)) {
+        audience = 'buyers researching products before purchase';
+      } else if (/investopedia|nerdwallet|bankrate/.test(domainStr)) {
+        audience = 'people making financial decisions';
+      } else if (/allrecipes|foodnetwork|bbcgoodfood|taste\.com/.test(domainStr)) {
+        audience = 'home cooks looking for reliable recipes';
+      } else if (/salesforce|hubspot|mailchimp/.test(domainStr)) {
+        audience = 'business owners and marketing professionals';
+      }
+      // Note: linkedin.com removed as standalone trigger — it's too generic
+    }
+
+    // Step 3: Broad snippet fallback
+    if (!audience) {
+      if (/\bbusiness|company|brand|marketing|strategy|revenue\b/.test(snippetsForAud)) {
         audience = 'business professionals and decision makers';
-      } else if (/\byour health\b|patient|symptom|treatment|doctor/.test(snippets)) {
-        audience = 'people researching health topics';
+      } else if (/\bbeginner|getting started|learn|tutorial\b/.test(snippetsForAud)) {
+        audience = 'beginners looking for practical guidance';
       }
     }
 
