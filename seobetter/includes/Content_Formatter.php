@@ -534,6 +534,11 @@ class Content_Formatter {
         $is_interview    = ( $options['content_type'] ?? '' ) === 'interview';
         $in_qa_answer    = false; // true after a Q heading, until next heading
 
+        // v1.5.177 — White Paper styling state
+        $is_white_paper  = ( $options['content_type'] ?? '' ) === 'white_paper';
+        $wp_section_num  = 0; // auto-incrementing section counter for formal numbering
+        $in_exec_summary = false; // true after Executive Summary heading, until next H2
+
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
 
@@ -588,10 +593,59 @@ class Content_Formatter {
                             $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
                             $in_qa_answer = false;
                         }
-                        $hex = $accent;
-                        $output[] = '<!-- wp:heading {"style":{"color":{"text":"' . esc_attr( $hex ) . '"}}} -->';
-                        $output[] = '<h2 class="wp-block-heading has-text-color" style="color:' . esc_attr( $hex ) . '">' . $text . '</h2>';
-                        $output[] = '<!-- /wp:heading -->';
+                        // v1.5.177 — Close Executive Summary box if open
+                        if ( $in_exec_summary ) {
+                            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                            $in_exec_summary = false;
+                        }
+
+                        // v1.5.177 — White Paper: formal section numbering + Executive Summary box
+                        if ( $is_white_paper ) {
+                            $is_structural = preg_match( '/^(key\s*takeaway|reference|sources|bibliography|faq|frequently|quick\s*comparison)/i', $text );
+                            $is_exec = preg_match( '/executive\s*summary/i', $text );
+
+                            if ( $is_exec ) {
+                                // Executive Summary heading with document icon
+                                $doc_svg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+                                $output[] = "<!-- wp:html -->\n"
+                                    . '<div style="display:flex !important;align-items:center !important;gap:10px !important;'
+                                    . 'padding:14px 20px !important;margin:24px auto 0 !important;max-width:100% !important;'
+                                    . 'background:#1e293b !important;color:#f1f5f9 !important;'
+                                    . 'border-radius:12px 12px 0 0 !important">'
+                                    . $doc_svg
+                                    . '<h2 style="margin:0 !important;padding:0 !important;font-size:1.2em !important;'
+                                    . 'font-weight:700 !important;color:#f1f5f9 !important;letter-spacing:0.02em !important;'
+                                    . 'text-transform:uppercase !important">Executive Summary</h2>'
+                                    . "</div>\n<!-- /wp:html -->";
+                                // Open the Executive Summary content box
+                                $output[] = "<!-- wp:html -->\n"
+                                    . '<div style="padding:20px 24px !important;margin:0 auto 24px !important;max-width:100% !important;'
+                                    . 'background:#f8fafc !important;border:1px solid #cbd5e1 !important;'
+                                    . 'border-top:none !important;border-radius:0 0 12px 12px !important;'
+                                    . 'font-size:1.05em !important;line-height:1.7 !important;color:#334155 !important">'
+                                    . "\n<!-- /wp:html -->";
+                                $in_exec_summary = true;
+                            } elseif ( ! $is_structural ) {
+                                // Regular white paper section — add formal section number
+                                $wp_section_num++;
+                                $numbered_text = "Section {$wp_section_num}: {$text}";
+                                $output[] = '<!-- wp:heading {"style":{"color":{"text":"#334155"}}} -->';
+                                $output[] = '<h2 class="wp-block-heading has-text-color" style="color:#334155">' . $numbered_text . '</h2>';
+                                $output[] = '<!-- /wp:heading -->';
+                            } else {
+                                // Structural sections (Key Takeaways, FAQ, References) — no numbering, keep accent
+                                $hex = $accent;
+                                $output[] = '<!-- wp:heading {"style":{"color":{"text":"' . esc_attr( $hex ) . '"}}} -->';
+                                $output[] = '<h2 class="wp-block-heading has-text-color" style="color:' . esc_attr( $hex ) . '">' . $text . '</h2>';
+                                $output[] = '<!-- /wp:heading -->';
+                            }
+                        } else {
+                            // All other content types — standard accent color heading
+                            $hex = $accent;
+                            $output[] = '<!-- wp:heading {"style":{"color":{"text":"' . esc_attr( $hex ) . '"}}} -->';
+                            $output[] = '<h2 class="wp-block-heading has-text-color" style="color:' . esc_attr( $hex ) . '">' . $text . '</h2>';
+                            $output[] = '<!-- /wp:heading -->';
+                        }
                     } elseif ( $level === 1 ) {
                         $output[] = '<!-- wp:heading {"level":1} -->';
                         $output[] = "<h1 class=\"wp-block-heading\">{$text}</h1>";
@@ -1049,6 +1103,11 @@ class Content_Formatter {
 
         // v1.5.166 — Close any open interview Q&A answer block
         if ( $in_qa_answer ) {
+            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+        }
+
+        // v1.5.177 — Close any open Executive Summary box
+        if ( $in_exec_summary ) {
             $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
         }
 

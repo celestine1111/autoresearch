@@ -16,10 +16,41 @@
 
 ---
 
-## v1.5.174 — Fix false local-intent detection ("AI in healthcare" ≠ local business)
+## v1.5.177 — White Paper visual styling (Executive Summary box + section numbering)
 
 **Date:** 2026-04-21
 **Commit:** `[pending]`
+
+### Changes
+
+- **Executive Summary styled box** — `includes/Content_Formatter.php::format_hybrid()` line ~597
+  - When content_type is `white_paper` and H2 matches "Executive Summary":
+    - Dark slate header bar (#1e293b) with document SVG icon + uppercase label
+    - Light gray content body (#f8fafc) with slate border (#cbd5e1)
+    - Rounded corners (12px top on header, 12px bottom on body)
+    - Auto-closed at next H2 or end of article
+  - Matches professional white paper aesthetic (McKinsey, Deloitte, HBR style)
+
+- **Formal section numbering** — same location
+  - H2 headings auto-prefixed: "Section 1: Introduction", "Section 2: Methodology", etc.
+  - Counter `$wp_section_num` increments per non-structural H2
+  - Skips: Key Takeaways, FAQ, References, Sources (no numbering on structural sections)
+  - Body section headings use formal gray (#334155) instead of accent color
+
+- **State tracking** — `$is_white_paper`, `$wp_section_num`, `$in_exec_summary` flags
+  - Pattern matches Interview ($is_interview) and Recipe ($in_recipe_card) approach
+  - Exec Summary box closed at next H2 boundary and at end of article (line ~1110)
+
+**Verify:** `grep -n 'in_exec_summary' includes/Content_Formatter.php` → defined, opened, closed
+**Verify:** `grep -n 'wp_section_num' includes/Content_Formatter.php` → counter + numbering
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.174 — Fix false local-intent detection ("AI in healthcare" ≠ local business)
+
+**Date:** 2026-04-21
+**Commit:** `d2f5876`
 
 ### Changes
 
