@@ -843,9 +843,15 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         return fetch(url, opts).then(function(r) { return r.json(); });
     }
 
+    // v1.5.185 — retry counter for 429/network errors
+    var retryCount = 0;
+    var maxRetries = 5;
+
     function processNext() {
         errorEl.style.display = 'none';
-        api('generate/step', 'POST', { job_id: jobId }).then(function(res) {
+        // v1.5.185 — batch=3 so server processes up to 3 sections per call
+        api('generate/step', 'POST', { job_id: jobId, batch: 3 }).then(function(res) {
+            retryCount = 0; // Reset on success
             if (!res.success && res.error) {
                 errorEl.style.display = 'block';
                 errorMsg.textContent = res.error;
@@ -864,8 +870,16 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                 processNext();
             }
         }).catch(function(err) {
-            errorEl.style.display = 'block';
-            errorMsg.textContent = 'Request failed — click Retry to continue';
+            // v1.5.185 — Auto-retry on 429/network error with exponential backoff
+            retryCount++;
+            if (retryCount <= maxRetries) {
+                var waitSeconds = Math.min(30, 3 * Math.pow(2, retryCount - 1)); // 3s, 6s, 12s, 24s, 30s
+                label.textContent = 'Server busy — retrying in ' + waitSeconds + 's (attempt ' + retryCount + '/' + maxRetries + ')...';
+                setTimeout(processNext, waitSeconds * 1000);
+            } else {
+                errorEl.style.display = 'block';
+                errorMsg.textContent = 'Server rate limit reached after ' + maxRetries + ' retries. Wait 2 minutes and click Retry. If this keeps happening, your hosting may need upgrading to VPS.';
+            }
         });
     }
 
