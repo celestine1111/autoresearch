@@ -19,7 +19,7 @@
 ## v1.5.206d-fix2 — Multilingual auto-suggest (LSI keywords + Target Audience in target language)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `84a1dba`
 
 ### Why this patch exists
 
