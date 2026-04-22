@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.190
+ * Version: 1.5.191
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.190' );
+define( 'SEOBETTER_VERSION', '1.5.191' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1373,20 +1373,35 @@ final class SEOBetter {
             $markdown = self::cleanup_ai_markdown( $markdown );
         }
 
-        // v1.5.190 — Convert bracketed text references to real links.
-        // The AI often writes [Source Name] or (Source Name) as plain text
-        // instead of [Source Name](url). Match these against the Citation Pool
-        // and convert to clickable markdown links.
-        if ( ! empty( $markdown ) && ! empty( $combined_pool ) ) {
-            $markdown = self::linkify_bracketed_references( $markdown, $combined_pool );
-        }
-
         // Validate all outbound URLs in markdown before formatting.
         // The combined pool is the primary allow-list — any URL in the pool
         // is citable, any URL not in the pool falls back to the static
         // whitelist and Pass 3 content verification.
+        //
+        // v1.5.191 — Order swap: validate FIRST, linkify AFTER.
+        // Previously linkify ran before validate, so Pass 4 dedup
+        // (which strips repeated URL occurrences) was stripping the links
+        // linkify had just added to plain-text source mentions like
+        // `(Wolters Kluwer)` appearing 3x in the article. The user expects
+        // every `(Source)` reference to be clickable — that's a different
+        // UX from Pass 4's original target (AI spamming the same inline
+        // markdown link 3x). By running linkify AFTER dedup, Pass 4 still
+        // removes AI-written duplicates, and linkify then adds links to
+        // every surviving plain-text source mention in the body.
         if ( ! empty( $markdown ) ) {
             $markdown = $this->validate_outbound_links( $markdown, $combined_pool );
+        }
+
+        // v1.5.191 — Linkify plain-text source references AFTER validation.
+        // Matches [Source Name] or (Source Name) plain-text brackets against
+        // the Citation Pool and converts them to real markdown links. Runs
+        // after Pass 4 dedup so it can add links every source mention (not
+        // just the first occurrence per URL).
+        if ( ! empty( $markdown ) && ! empty( $combined_pool ) ) {
+            $markdown = self::linkify_bracketed_references( $markdown, $combined_pool );
+        }
+
+        if ( ! empty( $markdown ) ) {
             // Append auto-generated References section for pool URLs the
             // article body actually cited
             $markdown = $this->append_references_section( $markdown, $combined_pool );
@@ -3071,6 +3086,15 @@ final class SEOBetter {
             // Titles with [ ] break markdown link syntax: [title with [brackets]](url)
             // becomes a nested link that the formatter splits incorrectly.
             $title = str_replace( [ '[', ']' ], '', $title );
+            // v1.5.191 — Collapse all whitespace (incl. newlines) and strip
+            // backslashes. Bluesky/Reddit pool titles can contain literal
+            // newlines from multi-line post bodies; a `\n` inside `[title](url)`
+            // splits the markdown link across paragraphs, producing broken
+            // output like `<li>6. [Title-part-1</li>` + `<p>Title-part-2](url)`.
+            // Stripping backslashes also prevents any pre-escaped `\[` / `\]`
+            // from surviving into the emitted markdown.
+            $title = str_replace( '\\', '', $title );
+            $title = preg_replace( '/\s+/', ' ', trim( $title ) );
             // Truncate excessively long titles (some Bluesky/Reddit titles are 200+ chars)
             if ( mb_strlen( $title ) > 80 ) {
                 $title = mb_substr( $title, 0, 77 ) . '...';

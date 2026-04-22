@@ -7,7 +7,7 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-19
+> **Last updated:** 2026-04-22
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
@@ -16,10 +16,117 @@
 
 ---
 
+## v1.5.191 — Every `(Source)` reference clickable + fix broken Bluesky reference item
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Fixed
+
+- **Pipeline swap: linkify runs AFTER validate** — `seobetter.php::rest_save_draft()` line **1376–1404**
+  - Before: `cleanup → linkify → validate(Pass 4 dedup) → append_references` — Pass 4 dedup stripped the links `linkify_bracketed_references()` had just added, so 2nd/3rd occurrences of a source (e.g. `(Wolters Kluwer)` appearing 3x in different paragraphs) stayed unlinked.
+  - After: `cleanup → validate(Pass 4 dedup) → linkify → append_references` — dedup strips AI-written inline spam first; linkify then adds pool-matched links to every plain-text `(Source)` mention. Every surviving `(Source)` reference becomes clickable.
+  - Source of truth: `external-links-policy.md` §6B was updated with the new order and the rationale.
+  - Verify: `grep -n 'v1.5.191 — Order swap: validate FIRST' seobetter/seobetter.php` → expect line ~**1381**
+  - Verify: `grep -n 'v1.5.191 — Linkify plain-text source references AFTER validation' seobetter/seobetter.php` → expect line ~**1395**
+
+- **Reference item titles: collapse whitespace + strip backslashes** — `seobetter.php::append_references_section()` line **~3089**
+  - Bluesky/Reddit pool titles can contain literal `\n` (multi-line post bodies). The emitted `"6. [title-with-\n-inside](url)"` markdown was split across paragraphs by the parser, producing `<li>6. [title-part-1</li>` + `<p>title-part-2](url)`. User saw this as item #6 `[AI vs Jobs 2026: Your Career at Risk or Full of Opportunities` followed by `Artificial Intell](https://bsky.app/...)` in a stray paragraph below the References box.
+  - Fix: `str_replace('\\', '', $title)` then `preg_replace('/\s+/', ' ', trim($title))` — collapses all whitespace (including newlines) to single spaces and strips any pre-escaped backslashes before truncation and emit.
+  - Verify: `grep -n "v1.5.191 — Collapse all whitespace" seobetter/seobetter.php`
+
+### Why this matches user expectation
+
+The live test article `how-to-use-artificial-intelligence-in-healthcare-2026-for-success/` showed:
+- `(Wolters Kluwer)` cited 4x — first linked, next 3 unlinked
+- `(Artificial intelligence in healthcare)` cited 5x — first linked, rest unlinked
+- `(Worldometers)` 2x — first linked, second unlinked
+- Reference item #6 visually broken
+
+The `(Source)` attribution pattern is a reader-UX feature (every claim traceable), not inline SEO spam. Pass 4's original target (`[dog food](wiki) ... [dog food](wiki) ... [dog food](wiki)` with identical rich anchor text) is different and still caught by running validate first.
+
+### Verified by user
+
+- UNTESTED
+
+---
+
+## v1.5.190 — Fix bracketed references not linking (3 root causes)
+
+**Date:** 2026-04-22
+**Commit:** `eb06f25`
+
+### Fixed
+
+- **Bare hostname lookup key** — `seobetter.php::linkify_bracketed_references()` line **2340** (lookup build at ~**2372**)
+  - Source names in the Citation Pool are stored with TLD (e.g. `healthline.com`), but the AI writes bare brand names in brackets (e.g. `(Healthline)`). The pool lookup missed them.
+  - Fix: for each pool entry, also register a bare-hostname key with `.com`, `.org`, `.net`, `.io`, `.dev`, `.co`, `.edu`, `.gov`, `.int`, `.info`, `.biz`, `.co.uk`, `.com.au`, `.co.nz`, `.com.br`, `.co.jp` stripped. `(Healthline)` now matches `healthline.com`.
+  - Verify: `grep -n 'bare = preg_replace' seobetter/seobetter.php`
+
+- **Partial match minimum lowered 12 → 5 chars** — same method, around line **2399**
+  - Old `strlen( $text_n ) > 12` skipped short source names like `RTINGS` (6 chars) or `AARP` (4 chars) before they could match.
+  - New: `strlen( $text_n ) > 4` — still rejects 1–4 char strings (noise) but allows real short brand names.
+  - Verify: `grep -n 'strlen( \$text_n ) > 4' seobetter/seobetter.php`
+
+- **Parenthetical regex minimum lowered 10 → 4 chars** — same method, line **2418**
+  - Old regex `/\(([^)]{10,150})\)/` rejected `(RTINGS)` (6 chars) before any lookup ran.
+  - New: `/\(([^)]{4,150})\)/` so short-brand parentheticals reach the lookup.
+  - Verify: `grep -n '{4,150}' seobetter/seobetter.php`
+
+### Root cause
+
+Three separate chokepoints were each enforcing a minimum string length that was larger than real-world short source names. Together they meant any source under ~10 chars (RTINGS, AARP, CNET, IEEE, NIH, CDC, etc.) was silently dropped even when the pool contained it.
+
+All three fixes are universal — no keyword/domain/content-type/model-specific logic.
+
+### Verified by user
+
+- UNTESTED
+
+---
+
+## v1.5.189 — Fix JS SyntaxError from undefined `$result` with WP_DEBUG
+
+**Date:** 2026-04-22
+**Commit:** `0dcd334`
+
+### Fixed
+
+- **Undefined `$result` guard** — `admin/views/content-generator.php` line **782**
+  - Old: `<?php if ( $result && $result['success'] ) : ?>` — `$result` is not defined on initial page load (legacy variable from v1.5.12).
+  - With `WP_DEBUG=true`, PHP emits an `Undefined variable` warning as HTML inside the `<script>` block, producing a JS `SyntaxError` that killed all scripts on the page (including Auto-suggest).
+  - New: `<?php if ( ! empty( $result ) && ! empty( $result['success'] ) ) : ?>` — suppresses the notice and behaves identically when `$result` is unset.
+  - Verify: `grep -n "! empty( \$result ) && ! empty( \$result\['success'\]" admin/views/content-generator.php`
+
+### Verified by user
+
+- UNTESTED
+
+---
+
+## v1.5.188 — Better error diagnostics for "Failed to load results"
+
+**Date:** 2026-04-22
+**Commit:** `427f977`
+
+### Changed
+
+- **`api()` fetch wrapper now validates response before parsing JSON** — `admin/views/content-generator.php` line **844**
+  - Before: `.then(function(r){ return r.json(); })` — if PHP crashed and returned an HTML error page, `r.json()` threw an opaque "Unexpected token <" and the UI just showed "Failed to load results".
+  - After: checks `r.ok` and `Content-Type`. Non-2xx responses log HTTP status + first 300 chars of body to the console; non-JSON 200 responses log the HTML preview and throw `Server returned HTML instead of JSON — check PHP error log`.
+  - Gives the user a real error message in the browser console and surfaces PHP fatals instead of hiding them.
+  - Verify: `grep -n 'Server returned HTML instead of JSON' admin/views/content-generator.php`
+
+### Verified by user
+
+- UNTESTED
+
+---
+
 ## v1.5.181 — Wire up Bulk Generator + remove 4 empty menu items
 
 **Date:** 2026-04-21
-**Commit:** `[pending]`
+**Commit:** `7badcb4`
 
 ### Changes
 

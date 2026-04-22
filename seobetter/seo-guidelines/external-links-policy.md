@@ -3,7 +3,7 @@
 > **Single source of truth** for how SEOBetter handles outbound URLs in generated articles.
 > If you change link behavior, UPDATE THIS FILE in the same commit.
 >
-> **Last updated:** v1.5.10 — 2026-04-12
+> **Last updated:** v1.5.191 — 2026-04-22
 
 ---
 
@@ -252,6 +252,27 @@ After the four whitelist/verification passes complete, `validate_outbound_links(
 **Applied to both:** markdown links `[text](url)` and HTML anchor tags `<a href="url">text</a>`. Image markdown `![alt](url)` is excluded via negative lookbehind `(?<!!)`.
 
 **Source:** [seobetter.php::validate_outbound_links()](../seobetter.php) Pass 4 block, immediately before the function returns.
+
+### v1.5.191 — Pipeline order relative to `linkify_bracketed_references()`
+
+Pass 4 dedup only applies to links the AI wrote itself. `linkify_bracketed_references()` (which converts plain-text `(Source)` / `[Source]` mentions into pool-matched markdown links) now runs **after** `validate_outbound_links()`, not before. This means:
+
+- **AI-written duplicate inline links** (`[dog food](wiki) ... [dog food](wiki) ... [dog food](wiki)`) → still stripped to 1 occurrence by Pass 4. The anti-spam intent is preserved.
+- **Plain-text source-attribution parentheticals** (`(Wolters Kluwer)` repeated across 3 paragraphs for 3 different claims) → every occurrence gets linkified after dedup has already run, so every `(Source)` in the body ends up clickable.
+
+Rationale: reader-attribution UX (`(Source)` after every claim) is different from inline citation spam. Readers *expect* every `(Source)` to link, and AI-citation crawlers *expect* each claim to be traceable — treating them both under one dedup rule stripped legitimate references. The v1.5.191 swap keeps Pass 4 for what it was actually designed to catch (AI spam) while letting linkify cover the attribution case.
+
+**Pipeline order in `rest_save_draft` (seobetter.php ~1376–1404):**
+
+```
+cleanup_ai_markdown
+  ↓
+validate_outbound_links  ← Pass 0–4, including dedup of AI's own links
+  ↓
+linkify_bracketed_references  ← adds links to plain-text (Source) mentions (after dedup)
+  ↓
+append_references_section  ← builds ## References from pool URLs the body cited
+```
 
 ---
 
