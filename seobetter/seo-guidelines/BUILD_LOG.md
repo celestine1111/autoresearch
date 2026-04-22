@@ -19,7 +19,7 @@
 ## v1.5.206d-fix3 — LSI overflow from Google Suggest + relaxed Wikipedia word-count for non-English
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `01696fa`
 
 ### Why this patch exists
 
