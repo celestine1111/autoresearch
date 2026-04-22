@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.196)
+> **Last updated:** 2026-04-22 (v1.5.197)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.197 — Clean schema description + exclude author social links from citation[]
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### User report (live Opinion article schema audit)
+
+User inspected `https://srv1608940.hstgr.cloud/should-university-be-free-in-australia-the-ultimate-debate/` schema and flagged two issues:
+
+1. **Polluted `description` field** — the schema's description read: *"💬 Opinion Opinion — this piece reflects the author's views, not objective reporting. Should University Be Free In Australia Last Updated: April 2026 Key Takeaways Key TakeawaysThe question of should…"* Every wp:html structural block's visible text was bleeding into the description.
+
+2. **`citation[]` polluted with author social profiles** — the last 6 entries of citation were LinkedIn / X / Facebook / Instagram / YouTube / personal website URLs from the author-bio block at the end of the article, not actual citations for article claims.
+
+### Root causes
+
+1. `build_article()` used `wp_trim_words( wp_strip_all_tags( $post->post_content ), 30 )`. `wp_strip_all_tags` removes HTML tags but KEEPS the visible text inside every element — including text inside wp:html structural blocks (type badge, Opinion disclosure bar, Key Takeaways callout, tables, author bio). All 30 "description words" ended up being chrome, never reaching the actual article prose.
+
+2. `extract_outbound_urls()` (added v1.5.192 for Opinion `citation`, reused v1.5.195 for press_release) collected every outbound URL in post content, including the author-bio block rendered by `Content_Formatter::build_author_bio()` which contains the author's sameAs socials.
+
+### Fixed
+
+- **Clean description helper** — `includes/Schema_Generator.php::build_clean_description()` new method line **~527**
+  - Strips every `<!-- wp:html --> ... <!-- /wp:html -->` block (removes badge, disclosure bar, Key Takeaways, tables, author bio, callouts, pull-quotes).
+  - Strips H1–H6 headings.
+  - Strips "Last Updated: Month YYYY" stamps.
+  - Strips remaining tags, collapses whitespace, then takes the first 30 words.
+  - Applied to every schema type via `build_article()` line **~366** — cleans descriptions across ALL 21 content types simultaneously.
+  - Verify: `grep -n 'build_clean_description' includes/Schema_Generator.php`
+
+- **Citation filter excludes author socials** — `includes/Schema_Generator.php::extract_outbound_urls()` line **~462**
+  - Before the dedup loop, builds an `$exclude` set from the 6 author social profile settings (`author_linkedin`, `author_twitter`, `author_facebook`, `author_instagram`, `author_youtube`, `author_website`), normalised the same way as candidate URLs.
+  - URLs matching the author's configured sameAs are skipped when building the citation array. They still appear correctly in `author.sameAs` (Person schema) — just not duplicated into article `citation[]`.
+  - Applies to Opinion (`OpinionNewsArticle.citation`) and Press Release (`NewsArticle.citation` for press_release) — both shipped in prior versions.
+  - Verify: `grep -n "skip author bio social links" includes/Schema_Generator.php`
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — pure post-processing, no keyword logic.
+2. **Works for ALL 21 content types?** YES — description fix applies to every schema type that uses `build_article()` (most types); citation filter applies to every type with a `citation[]` field.
+3. **Works for ALL AI models?** YES — schema generation is PHP-side, model-agnostic.
+
+### Not addressed (user config, not plugin bug)
+
+- `worksFor: "WordPress site"` / `publisher: "WordPress site"` — defaults from the site title. User should set a proper Site Title under Settings → General and proper author name + organisation in SEOBetter Settings → Author.
+- Author avatar URL `The-Supreme-Treat-Co-Cod-Stick-5-Range.jpg` — that's the image the user uploaded to SEOBetter Settings → Author Image. They can re-upload a proper headshot.
+
+### Verified by user
+
+- UNTESTED — regenerate the article, re-run Google Rich Results Test, expect a clean `description` starting with "The question of should…" (or similar) and a `citation[]` containing only article-body sources, no social profiles.
 
 ---
 

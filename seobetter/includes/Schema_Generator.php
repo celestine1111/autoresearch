@@ -363,7 +363,16 @@ class Schema_Generator {
             '@context'      => 'https://schema.org',
             '@type'         => $type,
             'headline'      => $post->post_title,
-            'description'   => wp_trim_words( wp_strip_all_tags( $post->post_content ), 30 ),
+            // v1.5.197 — clean the description: strip wp:html blocks
+            // (type badge, Opinion disclosure bar, callouts, author bio,
+            // tables) and all heading text before summarising. Previously
+            // wp_strip_all_tags kept the visible text of every structural
+            // element, producing descriptions like "💬 Opinion — this piece
+            // reflects the author's views... Should University Be Free In
+            // Australia Last Updated: April 2026 Key Takeaways ...". The
+            // helper returns a clean 30-word summary from the actual article
+            // prose only.
+            'description'   => $this->build_clean_description( $post->post_content ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
             'author'        => $this->safe_build_author( $post ),
@@ -448,7 +457,14 @@ class Schema_Generator {
      * or `<a href>` tags, deduplicates, filters to external (non-site) hosts.
      * Returns up to 20 URLs (schema size cap — more is diminishing returns).
      *
-     * @return string[] List of unique external URLs.
+     * v1.5.197 — Additionally excludes URLs that are configured as the
+     * author's `sameAs` social profiles in SEOBetter settings. These URLs
+     * are rendered in the author-bio block at the end of every article by
+     * Content_Formatter::build_author_bio(), but they are NOT citations
+     * for the article's claims — they belong in the Person schema's
+     * sameAs array, not the article's citation[] array.
+     *
+     * @return string[] List of unique external URLs, author social profiles removed.
      */
     private function extract_outbound_urls( string $content ): array {
         $urls = [];
@@ -462,19 +478,61 @@ class Schema_Generator {
         if ( empty( $urls ) ) return [];
 
         $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+
+        // v1.5.197 — Build exclusion set of the author's configured social
+        // profiles. Normalised the same way as candidate URLs so trailing
+        // slashes / query strings don't defeat the match.
+        $normalize = function ( string $u ): string {
+            return strtolower( rtrim( preg_replace( '/[?#].*$/', '', trim( $u ) ), '/' ) );
+        };
+        $exclude = [];
+        $s = get_option( 'seobetter_settings', [] );
+        foreach ( [ 'author_linkedin', 'author_twitter', 'author_facebook', 'author_instagram', 'author_youtube', 'author_website' ] as $key ) {
+            if ( ! empty( $s[ $key ] ) ) {
+                $exclude[ $normalize( $s[ $key ] ) ] = true;
+            }
+        }
+
         $seen = [];
         $out = [];
         foreach ( $urls as $u ) {
             $u = trim( $u, " \t\n\r\0\x0B\"'" );
             $host = wp_parse_url( $u, PHP_URL_HOST );
             if ( ! $host || $host === $site_host ) continue;
-            $key = strtolower( rtrim( preg_replace( '/[?#].*$/', '', $u ), '/' ) );
+            $key = $normalize( $u );
+            if ( isset( $exclude[ $key ] ) ) continue; // skip author bio social links
             if ( isset( $seen[ $key ] ) ) continue;
             $seen[ $key ] = true;
             $out[] = $u;
             if ( count( $out ) >= 20 ) break;
         }
         return $out;
+    }
+
+    /**
+     * v1.5.197 — Build a clean 30-word description from post content.
+     *
+     * Removes structural chrome that bloats the raw-text scrape (opinion
+     * disclosure bar, type badges, Key Takeaways box, tables, author bio,
+     * pull-quotes, callouts — anything inside a `<!-- wp:html -->` block),
+     * all H1-H6 headings, "Last Updated: …" lines, and Table-of-Contents
+     * patterns before summarising. Applies to every schema type emitted
+     * by build_article(), so this single fix cleans descriptions across
+     * all 21 content types.
+     */
+    private function build_clean_description( string $content ): string {
+        // 1. Strip every wp:html block (where badges, callouts, tables,
+        //    author bio, Opinion disclosure bar live). Greedy across newlines.
+        $clean = preg_replace( '/<!-- wp:html -->.*?<!-- \/wp:html -->/s', '', (string) $content );
+        // 2. Strip all heading elements (H1 often duplicates the title; H2
+        //    headings are structural, not article prose).
+        $clean = preg_replace( '/<h[1-6][^>]*>.*?<\/h[1-6]>/is', '', (string) $clean );
+        // 3. Strip "Last Updated: Month YYYY" style stamps.
+        $clean = preg_replace( '/Last Updated:?\s*[A-Za-z]+\s*\d{4}/i', '', (string) $clean );
+        // 4. Strip remaining tags and collapse whitespace.
+        $clean = wp_strip_all_tags( (string) $clean );
+        $clean = preg_replace( '/\s+/', ' ', trim( (string) $clean ) );
+        return wp_trim_words( $clean, 30 );
     }
 
     /**
