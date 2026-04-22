@@ -7,12 +7,86 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.202)
+> **Last updated:** 2026-04-22 (v1.5.203)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.203 — Workflow enforcement: 4-doc sync hook + agent semantic verifier + content-type-status tracker
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben approved "Option B" enforcement from the 3-layer plan: extend the pre-commit hook + add agent-type semantic pre-commit verifier + skill/tracker updates, so every future content-type change maintains doc sync at the harness level (not memory/behavior level). The goal is to lift enforcement from ~85% (memory + simple BUILD_LOG hook) to ~94% (harness-blocked co-doc sync + agent verifier).
+
+### Shipped
+
+- **Extended pre-commit hook** — `.claude/hooks/check-buildlog.sh` (rewritten)
+  - Hooks stays triggered via `if "Bash(git commit*)"` filter.
+  - New per-file co-doc requirements:
+    - `includes/Async_Generator.php` staged → `SEO-GEO-AI-GUIDELINES.md` must also be staged
+    - `includes/Schema_Generator.php` staged → all three schema docs (`SEO-GEO-AI-GUIDELINES.md` + `structured-data.md` + `article_design.md`) must be staged
+    - `includes/Content_Formatter.php` staged → `article_design.md` must be staged
+    - `includes/Citation_Pool.php` staged → `external-links-policy.md` must be staged
+    - `seobetter.php` diff mentions `validate_outbound_links / filter_link / sanitize_references_section / append_references_section / verify_citation_atoms / is_host_trusted / get_trusted_domain_whitelist` → `external-links-policy.md` must be staged
+  - BUILD_LOG requirement preserved (any seobetter PHP/JS change still requires BUILD_LOG).
+  - Failure message is structured JSON with `permissionDecision: deny` + specific reason per rule.
+  - Verify: `bash -n .claude/hooks/check-buildlog.sh && grep -c 'missing=' .claude/hooks/check-buildlog.sh`
+
+- **Agent-type semantic pre-commit verifier** — `.claude/settings.json`
+  - Second hook added alongside the bash hook (`"type": "agent"`).
+  - Runs `claude-haiku-4-5-20251001` on every `git commit`, with 60s timeout.
+  - Prompt tells the agent to read the staged diff + relevant guideline files and verify semantic consistency (not just file presence — e.g. "the staged §3.1A opinion row content matches the current prose template", "`CONTENT_TYPE_MAP` in Schema_Generator.php matches `structured-data.md §5`", etc.).
+  - Outputs `permissionDecision: deny` JSON with specific finding if any inconsistency detected; otherwise `allow`.
+  - Complementary to the bash hook: bash = file presence, agent = content consistency.
+  - Verify: `jq -e '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks | length' .claude/settings.json` → expect 2
+
+- **`/seobetter` skill patch** — `~/.claude/skills/seobetter/SKILL.md`
+  - Step 2 expanded from "6 guideline files" to "7 guideline files" — added `structured-data.md` as reference #5.
+  - Each of the 7 files annotated with the optimization layer they own (Layer 1+2 / Layer 3 / Layer 4 / Layer 5).
+  - New section **"The 5-layer + 6-vector optimization framework"** — defines SEO / AI SEO / LLM citations / Schema / Design layers + the 6th international-engine vector (Baidu / Doubao / DeepSeek / Qwen / YandexGPT / GigaChat / HyperCLOVA X / Kanana / Mistral etc.).
+  - New section **"The 6-phase per-article-type workflow"** — encodes the Read → Research → Propose → Implement → Test → Sign-off cycle with explicit user-trigger (*"research the best options for maximum visibility for [type]"*) and the "WAIT FOR USER APPROVAL before any code runs" rule at Phase 3.
+  - Step 4b hard-mapping row for `Schema_Generator.php` updated to include `structured-data.md §4 + §5`.
+  - Description field now reads "7 SEOBetter guideline files" — the loaded skill listing will reflect this.
+
+- **New tracker file** — `seobetter/seo-guidelines/content-type-status.md`
+  - 21-row table (one per content type) with columns: Last version / Verified date / §3.1 Profile / 5 Layer coverage badges + 6th International badge / Known issues.
+  - Aggregate status section shows 0 of 21 verified (fresh tracker), 3 types have research-backed templates awaiting verification (opinion, press_release, personal_essay).
+  - Update protocol documented: flip `Verified` on Phase 6 sign-off, update Known Issues on Phase 5 bug reports.
+  - Verify: `grep -c '^|' seobetter/seo-guidelines/content-type-status.md` → expect 24+ (header + separator + 22 rows)
+
+### What this enables
+
+| Before v1.5.203 | After v1.5.203 |
+|---|---|
+| Memory suggested reading structured-data.md; skill listed only 6 files | Skill explicitly requires 7-file read; memory + skill + agent verifier reinforce |
+| Bash hook only blocked missing BUILD_LOG | Hook blocks missing BUILD_LOG, SEO-GEO-AI-GUIDELINES, structured-data, article_design, external-links-policy per code file touched |
+| No semantic verification of co-doc content | Agent hook runs Haiku on every commit, verifies §3.1A / CONTENT_TYPE_MAP / article_design.md §11 match the code semantically |
+| No tracker of per-type verification status | content-type-status.md tracks 21 types durably; updated at Phase 6 sign-off |
+| Enforcement reliability ~85% (memory + simple hook) | Enforcement reliability ~94% (harness-blocked co-doc + semantic agent + tracker) |
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — hook checks are file-presence + semantic-consistency based, no keyword logic.
+2. **Works for ALL 21 content types?** YES — hook mappings apply universally; tracker covers all 21.
+3. **Works for ALL AI models?** YES — Enforcement hooks run regardless of which AI model the user configured for content generation.
+
+### Next steps in the foundation sequence
+
+- **v1.5.204 scoring gate fix** — add §3.1A content_type awareness to `GEO_Analyzer::check_bluf_header()` and `check_freshness_signal()` so genre-override types are not unfairly penalised
+- **v1.5.205 international-optimization.md** — pure docs research + reference file covering 20+ international LLMs and their per-region preferences
+- **v1.5.206 critical international code** — `inLanguage` + Wikidata sameAs + regional prompt context per country (~2 hours)
+- Then: article-by-article testing with all 6 vectors covered
+
+### Verified by user
+
+- UNTESTED (validate by staging an intentionally-bad commit — expect hook to block)
 
 ---
 
