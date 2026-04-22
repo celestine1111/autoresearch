@@ -19,7 +19,7 @@
 ## v1.5.206d-fix4 — Auto-suggest always clears stale Secondary/LSI fields
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `9b48b37`
 
 ### Why this patch exists
 
