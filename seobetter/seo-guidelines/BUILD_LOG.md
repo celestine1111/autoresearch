@@ -19,7 +19,7 @@
 ## v1.5.199 — Fix Press Release H2 structure + gate Quick Comparison enforcer
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `4a17ce9`
 
 ### User report
 
