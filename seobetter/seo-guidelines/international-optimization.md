@@ -473,16 +473,24 @@ All deferred from this pure-docs commit to the next. Tracked here so v1.5.206 ha
 - Update `external-links-policy.md §10`
 - Optionally gate: only trust region-specific domains when the article's target country matches (prevents English-default article citing TASS and Xinhua inappropriately). Implementation: filter whitelist by article country at runtime.
 
-### 8.5 GEO_Analyzer — Layer 6 scoring (new check)
+### 8.5 GEO_Analyzer — Layer 6 scoring — ✅ SHIPPED v1.5.206d
 
-- New check: "International signals" — verifies `inLanguage` matches article language, at least one regional citation present when country ≠ US, `sameAs` Wikidata present when article mentions notable entities
-- Weight: 6% (carved from existing checks or added as 15th check; decision in v1.5.206)
-- Update `SEO-GEO-AI-GUIDELINES.md §6` with the new rubric row
+- **New 15th check:** `international_signals` — scores 3 signals visible in post content:
+  1. Article language matches the target country's primary language (JP→ja, CN→zh, KR→ko, RU→ru, DE→de, FR→fr, ES→es, IT→it, BR→pt, SA/AE/EG→ar, IN→hi, MX/AR→es)
+  2. Localized freshness label in body (confirms v1.5.206d i18n path fired)
+  3. At least one regional authority citation domain matching the target country
+- **Country-gated + non-regressive:** only added when country is set and NOT Western-default (US/GB/AU/CA/NZ/IE). Existing 14 checks keep their weights for Western articles — total still sums to 100. Non-Western articles absorb the 15th check at weight 6, making the total 106 for those articles.
+- **File:** `includes/GEO_Analyzer.php::check_international_signals()` (~line 605-680)
+- **Language-aware helpers also shipped (fixes the "score of 31 on Japanese article" bug):**
+  - `count_words_lang()` — CJK (ja/zh/ko/th) use char-count ÷ 2 heuristic instead of str_word_count() returning 0
+  - `check_bluf_header()` — accepts localized Key Takeaways label
+  - `check_freshness_signal()` — accepts localized "Last Updated" label
+  - `check_section_openings()` — language-aware word counting
 
-### 8.6 Language-specific content enforcement
+### 8.6 Language-specific content enforcement — PARTIALLY SHIPPED v1.5.206d
 
-- When user selects target country, `Async_Generator.php` prompt must enforce: "Write the entire article in {{language}}. Do not use English phrases except for proper nouns or technical terms that have no equivalent."
-- Post-generation check: if >20% of content is not in the target language's script, fail the gate and regenerate
+- **Shipped:** the `LANGUAGE` rule in `Async_Generator::get_system_prompt()` now includes a `SECTION HEADING TRANSLATION` clause telling the AI to translate English section anchors (Key Takeaways, FAQ, References, Introduction, etc.) into the target language for reader-facing output. Plugin-rendered labels (References block header, Key Takeaways block header, Last Updated prefix) now use `Localized_Strings::get()` → `Content_Formatter.php` + `Content_Injector.php`.
+- **Deferred:** post-generation script-percentage gate + regeneration loop (complex; needs a scoring signal to know when to retry; can be a later enhancement).
 
 ---
 

@@ -552,16 +552,28 @@ Return ONLY the Markdown table, nothing else.";
 
     /**
      * Add freshness signal — prepends "Last Updated" line.
+     *
+     * v1.5.206d — Now language-aware. When $language is non-English, uses
+     * Localized_Strings for the label ("最終更新日" in Japanese, "Последнее
+     * обновление" in Russian, etc.) and Localized_Strings::month_year() for
+     * the date portion (e.g. "2026年4月" for Japanese instead of "April 2026").
+     * Also detects the localized label in the duplicate-check so repeated
+     * runs don't double-prepend.
      */
-    public static function inject_freshness( string $content ): array {
-        $date = wp_date( 'F Y' );
+    public static function inject_freshness( string $content, string $language = 'en' ): array {
+        $label = Localized_Strings::get( 'last_updated', $language );
+        $date  = Localized_Strings::month_year( $language );
 
-        // Don't add if already present
+        // Don't add if already present. Accept either the English pattern (for
+        // backward-compat with existing content) OR the localized label itself.
         if ( preg_match( '/last\s*updated/i', $content ) ) {
             return [ 'success' => true, 'content' => $content, 'added' => 'Already present', 'type' => 'freshness' ];
         }
+        if ( $language !== 'en' && $label && mb_stripos( $content, $label ) !== false ) {
+            return [ 'success' => true, 'content' => $content, 'added' => 'Already present', 'type' => 'freshness' ];
+        }
 
-        $injected = "Last Updated: {$date}\n\n" . $content;
+        $injected = "{$label}: {$date}\n\n" . $content;
 
         return [
             'success' => true,
@@ -2493,7 +2505,8 @@ Return ONLY the Markdown table, nothing else.";
         ?array $sonar_data = null,
         string $domain = '',
         string $country = '',
-        string $optimize_mode = 'full'
+        string $optimize_mode = 'full',
+        string $language = 'en'
     ): array {
         // v1.5.99 — increased from 120 to 300.
         @set_time_limit( 300 );
@@ -2688,7 +2701,9 @@ Return ONLY the Markdown table, nothing else.";
         // ---- Step 4b: Freshness Signal ----
         $fresh_score = $scores['freshness']['score'] ?? 0;
         if ( $fresh_score < 100 ) {
-            $result = self::inject_freshness( $markdown );
+            // v1.5.206d — pass article language so non-English articles get
+            // localized "Last Updated" label + localized month/year format.
+            $result = self::inject_freshness( $markdown, $language );
             if ( $result['success'] && $result['content'] !== $markdown ) {
                 $markdown = $result['content'];
                 $steps_run[] = 'Freshness: Added "Last Updated" date';

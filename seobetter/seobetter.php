@@ -339,7 +339,10 @@ final class SEOBetter {
                     $analyzer = new SEOBetter\GEO_Analyzer();
                     $kw_or_title = get_post_meta( $post_id, '_seobetter_focus_keyword', true ) ?: $post->post_title;
                     $content_type = get_post_meta( $post_id, '_seobetter_content_type', true ) ?: '';
-                    $score = $analyzer->analyze( $post->post_content, $kw_or_title, $content_type );
+                    // v1.5.206d — Layer 6 language/country context
+                    $lang_meta    = get_post_meta( $post_id, '_seobetter_language', true ) ?: 'en';
+                    $country_meta = get_post_meta( $post_id, '_seobetter_country', true ) ?: '';
+                    $score = $analyzer->analyze( $post->post_content, $kw_or_title, $content_type, $lang_meta, $country_meta );
                     update_post_meta( $post_id, '_seobetter_geo_score', $score );
                 }
                 update_post_meta( $post_id, '_seobetter_content_hash', $content_hash );
@@ -660,7 +663,10 @@ final class SEOBetter {
         // Prefer the saved focus keyword over the title so keyword-density
         // scoring (§5A) uses the actual keyword, not the headline text.
         $kw_or_title = get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: $post->post_title;
-        $result = $analyzer->analyze( $post->post_content, $kw_or_title, $content_type );
+        // v1.5.206d — Layer 6 language/country context for scoring
+        $lang_meta    = get_post_meta( $post->ID, '_seobetter_language', true ) ?: 'en';
+        $country_meta = get_post_meta( $post->ID, '_seobetter_country', true ) ?: '';
+        $result = $analyzer->analyze( $post->post_content, $kw_or_title, $content_type, $lang_meta, $country_meta );
 
         // Add schema info for pre-publish panel + Rich Results Preview
         $schema = get_post_meta( $post->ID, '_seobetter_schema', true );
@@ -1603,7 +1609,9 @@ final class SEOBetter {
                 $result = SEOBetter\Content_Injector::inject_table( $markdown, $keyword, $sonar_data );
                 break;
             case 'freshness':
-                $result = SEOBetter\Content_Injector::inject_freshness( $markdown );
+                // v1.5.206d — thread language for localized label + date
+                $fix_lang = sanitize_text_field( $request->get_param( 'language' ) ?? 'en' );
+                $result = SEOBetter\Content_Injector::inject_freshness( $markdown, $fix_lang );
                 break;
             case 'statistics':
                 $result = SEOBetter\Content_Injector::inject_statistics( $markdown, $keyword );
@@ -1742,7 +1750,14 @@ final class SEOBetter {
             'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
         ] );
         $analyzer = new SEOBetter\GEO_Analyzer();
-        $score = $analyzer->analyze( $hybrid_html, $keyword );
+        // v1.5.206d — thread language + country for Layer 6 awareness
+        $score = $analyzer->analyze(
+            $hybrid_html,
+            $keyword,
+            $request->get_param( 'content_type' ) ?? '',
+            sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
+            sanitize_text_field( $request->get_param( 'country' ) ?? '' )
+        );
 
         return new \WP_REST_Response( [
             'success'   => true,
@@ -1856,7 +1871,10 @@ final class SEOBetter {
         $country = sanitize_text_field( $request->get_param( 'country' ) ?? '' );
         // v1.5.190 — Content-type-aware optimization mode
         $optimize_mode = sanitize_text_field( $request->get_param( 'optimize_mode' ) ?? 'full' );
-        $result  = SEOBetter\Content_Injector::optimize_all( $markdown, $keyword, $existing_pool, $scores, $sonar_data, $domain, $country, $optimize_mode );
+        // v1.5.206d — pass article language so non-English optimization passes
+        // emit localized labels ("Last Updated" → "最終更新日", etc.).
+        $language = sanitize_text_field( $request->get_param( 'language' ) ?? 'en' );
+        $result  = SEOBetter\Content_Injector::optimize_all( $markdown, $keyword, $existing_pool, $scores, $sonar_data, $domain, $country, $optimize_mode, $language );
 
         if ( ! $result['success'] ) {
             return new \WP_REST_Response( $result, 400 );
@@ -1916,7 +1934,14 @@ final class SEOBetter {
             'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
         ] );
         $analyzer = new SEOBetter\GEO_Analyzer();
-        $score = $analyzer->analyze( $hybrid_html, $keyword );
+        // v1.5.206d — thread language + country for Layer 6 awareness
+        $score = $analyzer->analyze(
+            $hybrid_html,
+            $keyword,
+            $request->get_param( 'content_type' ) ?? '',
+            sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
+            sanitize_text_field( $request->get_param( 'country' ) ?? '' )
+        );
 
         return new \WP_REST_Response( [
             'success'       => true,
@@ -1950,7 +1975,10 @@ final class SEOBetter {
 
         // Re-score
         $analyzer = new SEOBetter\GEO_Analyzer();
-        $score = $analyzer->analyze( $html, $keyword );
+        // v1.5.206d — thread language + country for Layer 6 awareness
+        $rescore_lang    = sanitize_text_field( $request->get_param( 'language' ) ?? 'en' );
+        $rescore_country = sanitize_text_field( $request->get_param( 'country' ) ?? '' );
+        $score = $analyzer->analyze( $html, $keyword, $request->get_param( 'content_type' ) ?? '', $rescore_lang, $rescore_country );
 
         return new \WP_REST_Response( [
             'success'    => true,

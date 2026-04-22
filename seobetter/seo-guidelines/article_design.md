@@ -673,6 +673,10 @@ Each content type affects **three layers** of the generated article:
 2. **Styled block detection** — `Content_Formatter::format_hybrid()` applies different inline styles based on heading context
 3. **Schema output** — `Schema_Generator::generate()` in `includes/Schema_Generator.php` AND `build_aioseo_schema()` in `seobetter.php` emit different `@type` values and secondary schemas
 
+### Universal UI label localization (v1.5.206d) — `Localized_Strings`
+
+Plugin-rendered block labels (`References` and `Key Takeaways` block headers in `Content_Formatter::format_hybrid()`, `Last Updated:` prefix in `Content_Injector::inject_freshness()`) are now fetched via `Localized_Strings::get( $key, $language )` where `$language` is the article's language meta. 30+ languages pre-translated. Fallback chain: exact match → language family → English. When the article language is Japanese, the Key Takeaways block renders as `重要なポイント`, References as `参考文献`, and "Last Updated" becomes `最終更新日` with a `2026年4月`-pattern date. No matrix-per-content-type branching needed — all 21 types benefit automatically.
+
 ### Universal schema field (v1.5.206a) — `inLanguage`
 
 Top-level schemas whose `@type` accepts `inLanguage` per Schema.org (CreativeWork + Event descendants — Article/HowTo/Recipe/Review/FAQPage/ImageObject/etc.) are tagged with `inLanguage` (BCP-47). `BreadcrumbList`, `ItemList`, `LocalBusiness`, `DefinedTerm`, `Organization`, `Product` are **skipped** (schema.org doesn't define `inLanguage` on them — injecting causes validator warnings). Source of truth: `_seobetter_language` post meta → `get_locale()` (with `_` → `-`) → `'en'`. This is **not per-content-type** — no matrix branching — but the visual impact is nil (schema is invisible to readers). Full whitelist in `Schema_Generator::INLANGUAGE_ACCEPTED_TYPES`; full spec in `structured-data.md §4` and `international-optimization.md §4.1`.

@@ -603,6 +603,10 @@ CSS;
         $accent = $options['accent_color'] ?? '#764ba2';
         $para_count = 0;
         $more_inserted = false;
+        // v1.5.206d — Article language for localized block labels (References,
+        // Key Takeaways). Fallback: 'en' if missing. Scopes to this method
+        // so all downstream label renders can use Localized_Strings::get().
+        $article_lang = $options['language'] ?? 'en';
 
         // v1.5.138 — Content type header badge + type-specific intro styling.
         try {
@@ -1025,7 +1029,7 @@ CSS;
                         // plain Gutenberg ordered list which looked default.
                         $icon = $this->sb_icon( 'social', 18 );
                         $html = '<div style="background:#faf5ff !important;border:1px solid #e9d5ff;border-radius:12px;padding:1.5em 1.75em;margin:2em 0 1em;color:#1e293b !important">';
-                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:' . $accent . ' !important;margin-bottom:1em;display:flex;align-items:center">' . $icon . 'References</div>';
+                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:' . $accent . ' !important;margin-bottom:1em;display:flex;align-items:center">' . $icon . esc_html( Localized_Strings::get( 'references', $article_lang ) ) . '</div>';
                         $html .= '<ol style="list-style:none;counter-reset:sb-ref;padding:0;margin:0">';
                         $n = 1;
                         foreach ( $section['items'] as $item ) {
@@ -1042,7 +1046,7 @@ CSS;
                     } elseif ( $is_takeaways ) {
                         $icon = $this->sb_icon( 'takeaways', 18 );
                         $html = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0;color:' . $accent . '">';
-                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:' . $accent . ' !important;margin-bottom:0.6em;display:flex;align-items:center">' . $icon . 'Key Takeaways</div>';
+                        $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:' . $accent . ' !important;margin-bottom:0.6em;display:flex;align-items:center">' . $icon . esc_html( Localized_Strings::get( 'key_takeaways', $article_lang ) ) . '</div>';
                         $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
                         foreach ( $section['items'] as $item ) {
                             $html .= "<li style=\"margin-bottom:0.5em;color:#374151 !important\">{$item}</li>";

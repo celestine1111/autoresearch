@@ -7,12 +7,123 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206c)
+> **Last updated:** 2026-04-23 (v1.5.206d)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d — Layer 6 i18n + language-aware scoring + 15th International Signals check (piece 4 of 4)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+v1.5.206c shipped the regional prompt context injector so the AI *writes* with regional conventions. But Ben's Japanese ramen listicle test (2026-04-23) surfaced three follow-on bugs that needed fixing before Layer 6 is production-ready:
+
+1. **Score of 31** on a well-formed Japanese article — root cause: `GEO_Analyzer` is English-biased (str_word_count returns 0 for Japanese, BLUF regex looks for "key takeaways" English-only, freshness regex looks for "last updated" English-only).
+2. **"Last Updated: April 2026", "Key Takeaways", "References" appearing in English** inside the Japanese article body — root cause: `Content_Injector::inject_freshness()` and `Content_Formatter::format_hybrid()` hardcoded the labels.
+3. **"Introduction", "How We Chose" appearing in English as H2 headings** — root cause: Async_Generator prose templates pass section lists to the AI as English strings and the AI rendered them verbatim despite the LANGUAGE rule telling it to write in Japanese.
+
+v1.5.206d fixes all three in one coherent commit, plus adds the originally-planned 15th International Signals check (gated + non-regressive).
+
+### Shipped
+
+#### Part 1 — UI string localization
+
+- **`includes/Localized_Strings.php`** — NEW, ~170 lines. PSR-4 autoloaded. Public methods:
+  - `Localized_Strings::get( $key, $lang )` — returns translated label; keys `last_updated`, `key_takeaways`, `references`; 15+ languages per key. Fallback chain: exact match → language family (pt-BR → pt) → English.
+  - `Localized_Strings::month_year( $lang, ?$timestamp )` — returns locale-aware "Month Year" string. CJK produces `2026年4月`/`2026년 4월` patterns; 9 languages have localized month names; rest fall back to English "April 2026".
+
+- **`includes/Content_Formatter.php::format_hybrid()`** — two swaps:
+  - Line ~1028 — References block label → `Localized_Strings::get( 'references', $article_lang )`
+  - Line ~1045 — Key Takeaways block label → `Localized_Strings::get( 'key_takeaways', $article_lang )`
+  - Added `$article_lang = $options['language'] ?? 'en';` near top of method.
+
+- **`includes/Content_Injector.php`:**
+  - `inject_freshness()` — signature gains `$language = 'en'`. Uses `Localized_Strings::get('last_updated')` for the prefix label + `Localized_Strings::month_year()` for the date. Duplicate-check also detects localized label.
+  - `optimize_all()` — signature gains `$language = 'en'` as the ninth arg; threads it to `inject_freshness()`.
+
+- **`seobetter.php` REST endpoints** — `rest_inject_fix` case `freshness` and `rest_optimize_all` both thread the `language` request param through.
+
+#### Part 2 — AI heading translation
+
+- **`includes/Async_Generator.php::get_system_prompt()`** — the `LANGUAGE` rule now includes a `SECTION HEADING TRANSLATION` clause explicitly telling the AI: "The section list below is given in English as the structural contract. When you output the article, translate each H2/H3 section heading into {language} while preserving its structural role." Includes Japanese examples (重要なポイント for Key Takeaways, 序論 for Introduction, よくある質問 for FAQ, 参考文献 for References).
+  - **No prose-template changes needed** — the 21 content-type templates in `get_prose_template()` remain untouched. The AI translates the English anchors at output time.
+
+#### Part 3 — Language-aware GEO_Analyzer scoring
+
+- **`GEO_Analyzer::analyze()`** — signature gains `$language = 'en'` (4th arg) and `$country = ''` (5th arg). Both optional; backward-compatible for existing callers.
+
+- **`GEO_Analyzer::count_words_lang()`** — NEW private helper. CJK (ja/zh/ko/th) use `mb_strlen(stripped_text) / 2`; Latin scripts use `str_word_count()`. Replaces the English-only `str_word_count()` call in `analyze()`.
+
+- **`GEO_Analyzer::check_bluf_header()`** — now accepts optional `$language`. When language ≠ 'en', also matches the localized Key Takeaways label via `Localized_Strings::get()` inside the H2/H3 regex.
+
+- **`GEO_Analyzer::check_section_openings()`** — now accepts optional `$language`; replaces `str_word_count()` with `count_words_lang()`.
+
+- **`GEO_Analyzer::check_freshness_signal()`** — now accepts optional `$language`. When language ≠ 'en' and English regex misses, falls back to `mb_stripos()` for the localized label.
+
+- **`GEO_Analyzer::check_international_signals()`** — NEW. 15th weighted check. Scores 3 signals: (1) article language matches target country's primary language, (2) localized freshness label present in body, (3) at least one regional authority citation matches the target country's domain set (19 countries mapped).
+
+- **Weighting** — country-gated addition. If country is set AND not in [US, GB, AU, CA, NZ, IE], the check is added to `$checks` with weight 6. Weighted-score loop uses `array_sum($weights)` as divisor, so the math works for both 14-check (100 total) and 15-check (106 total) rubrics without changes. **Zero regression for Western-default articles — their rubric is byte-identical to v1.5.204.**
+
+#### Part 4 — All `analyze()` call sites threaded
+
+Updated 5 call sites in `seobetter.php` (lines 345, 669, 1754, 1938, 1981) + 1 site in `Async_Generator.php` (line 2150) to pass language + country. Secondary paths (Content_Refresher, Content_Ranking_Framework, AI_Content_Generator) still work backward-compatibly on the 3-arg signature.
+
+### Doc sync (same commit — 4-doc parity per pre-commit hook)
+
+- **`seo-guidelines/SEO-GEO-AI-GUIDELINES.md §6`** — added 15th row "International Signals" + new "Language-aware scoring (v1.5.206d)" subsection with per-check language-fix table.
+- **`seo-guidelines/international-optimization.md §8.5`** — flipped from "planned" to "✅ SHIPPED v1.5.206d" with full signal breakdown.
+- **`seo-guidelines/international-optimization.md §8.6`** — flipped to "PARTIALLY SHIPPED v1.5.206d" with what's in / what's deferred.
+- **BUILD_LOG** — this entry.
+
+### Safety posture
+
+- **Zero regression for Western-default articles** — `$language === 'en'` early-returns in every language-aware helper before any localization logic runs. US/UK/AU articles get byte-identical scoring to v1.5.204.
+- **Additive-only for UI labels** — `Localized_Strings::get()` falls back to English for unknown keys or languages. If the plugin ever ships with an untranslated label in a new language, it just outputs English (same as pre-v1.5.206d).
+- **Backward-compatible signatures** — every method that gained a `$language` / `$country` param has it defaulted to `'en'` / `''`, so any caller not yet updated still works.
+- **Translation quality** — 15 languages × 3 UI labels drawn from Wikipedia equivalents and major publisher style guides. Not machine translation. Extending to more languages is a 1-line edit per entry in the translation table.
+
+### Verify
+
+```bash
+# 1. Localized_Strings helper shipped with expected langs
+grep -c "'ja' " /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php
+# Expect: at least 3
+
+# 2. Content_Formatter uses the helper
+grep -n "Localized_Strings::get" /Users/ben/Documents/autoresearch/seobetter/includes/Content_Formatter.php
+
+# 3. Content_Injector inject_freshness signature has language
+grep -n "public static function inject_freshness" /Users/ben/Documents/autoresearch/seobetter/includes/Content_Injector.php
+
+# 4. GEO_Analyzer has the helpers + 15th check
+grep -n "count_words_lang\|check_international_signals" /Users/ben/Documents/autoresearch/seobetter/includes/GEO_Analyzer.php
+
+# 5. analyze() call sites threaded with language+country
+grep -n "analyzer->analyze" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+
+# 6. Async_Generator language rule includes heading-translation clause
+grep -n "SECTION HEADING TRANSLATION" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+```
+
+### Verified by user
+
+UNTESTED — Ben to re-run the Japanese ramen test. Expected deltas vs pre-v1.5.206d Japanese generation:
+1. **Score should rise substantially** (31 → 70+ range) — language-aware word counts + localized freshness detection + new 15th check all credit the article correctly.
+2. **No more English leaks in body** — "Last Updated", "Key Takeaways", "References" labels appear in Japanese.
+3. **AI-generated H2 headings translated** — "Introduction", "How We Chose", "FAQ", "References" rendered in Japanese by the AI.
+4. **Rich Results Test still passes** — schema unchanged, only label strings differ.
+5. **Regression check** — same US/English article from v1.5.206a test regens with identical score + layout.
+
+### Next
+
+Layer 6 foundation is now COMPLETE. All four pieces shipped (206a inLanguage schema, 206b regional whitelist, 206c regional prompt, 206d i18n + language-aware scoring + 15th check). Next work is per-article-type testing starting with Opinion (flagged UNTESTED post-v1.5.196).
 
 ---
 

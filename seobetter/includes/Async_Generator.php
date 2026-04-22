@@ -2145,9 +2145,9 @@ class Async_Generator {
             $html = Places_Link_Injector::inject( $html, $places_pool );
         }
 
-        // GEO score — pass content type so scorer adjusts checks
+        // GEO score — pass content type + language + country (v1.5.206d Layer 6)
         $analyzer = new GEO_Analyzer();
-        $score = $analyzer->analyze( $html, $keyword, $options['content_type'] ?? '' );
+        $score = $analyzer->analyze( $html, $keyword, $options['content_type'] ?? '', $options['language'] ?? 'en', $options['country'] ?? '' );
 
         // 5-Part Framework (§28) Phase 5 — Quality Gate on the assembled article
         $framework = new Content_Ranking_Framework();
@@ -2311,7 +2311,7 @@ class Async_Generator {
         // names + addresses for Lucignano gelaterie), the AI could drift
         // into Italian for Key Takeaways or FAQ sections despite the user
         // picking English. Explicit per-article language rule prevents drift.
-        $lang_rule = "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every H1, H2, H3, paragraph, bullet list, FAQ question, FAQ answer, Key Takeaways item, and reference description must be in {$lang_name}. Research data may contain terms or place names in other languages — translate or describe them in {$lang_name}, do NOT copy them in the source language. The primary keyword may be in any language but the article body text must be {$lang_name}. This rule is non-negotiable.";
+        $lang_rule = "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every H1, H2, H3, paragraph, bullet list, FAQ question, FAQ answer, Key Takeaways item, and reference description must be in {$lang_name}. Research data may contain terms or place names in other languages — translate or describe them in {$lang_name}, do NOT copy them in the source language. The primary keyword may be in any language but the article body text must be {$lang_name}. This rule is non-negotiable.\n\nSECTION HEADING TRANSLATION (v1.5.206d): The section list below (Key Takeaways, Introduction, How We Chose, Pros and Cons, FAQ, References, Conclusion, What You Will Need, Common Problems, Methodology, Findings, Abstract, Executive Summary, About, Overview, Quick Overview Table, etc.) is given in English as the structural contract. When you output the article, translate each H2/H3 section heading into {$lang_name} while preserving its structural role — e.g. for Japanese use '重要なポイント' for Key Takeaways, '序論' for Introduction, 'よくある質問' for FAQ, '参考文献' for References. The plugin detects these sections by structure (not literal English text), so translated headings are fully correct. Never output an English heading inside a non-English article.";
 
         // v1.5.206c — Regional prompt context (Layer 6 piece 3 of 4).
         // No-op for empty/US/GB/AU/CA/NZ/IE (Western-default — byte-identical

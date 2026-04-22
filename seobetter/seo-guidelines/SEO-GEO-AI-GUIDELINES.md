@@ -525,8 +525,23 @@ This is the scoring system used by `GEO_Analyzer.php`. Each check is weighted. *
 | **Keyword Density** ⭐ | **10%** | 0.5-1.5% density, ≥30% H2 coverage, keyword in first 150 chars | No keyword or 0% density or >2.5% stuffing |
 | **Humanizer** ⭐ | **4%** | Zero Tier-1 AI words, ≤2 Tier-2, no banned patterns | 4+ Tier-1 words |
 | **CORE-EEAT Lite** ⭐ | **5%** | 10/10 items pass (see §15B rubric) | 0/10 |
+| **International Signals** 🌐 | **6%** *(only when country ≠ US/GB/AU/CA/NZ/IE)* | Language matches country's primary language + localized freshness label present + at least one regional citation | All three signals missing |
 
 ⭐ = added in v1.5.11 (guideline §5A, §4B, §15B integration).
+🌐 = added in v1.5.206d (Layer 6 scoring — country-gated 15th check).
+
+### Language-aware scoring (v1.5.206d — Layer 6)
+
+Several of the 14 existing checks were English-biased and produced artificially low scores on non-English articles (the "Japanese article scoring 31 despite being well-formed" bug reported 2026-04-23). v1.5.206d fixes these:
+
+| Check | Language fix |
+|---|---|
+| `word_count` (used by many checks) | `count_words_lang()` — CJK (ja/zh/ko/th) use character-count ÷ 2 heuristic instead of `str_word_count()` returning 0 |
+| `bluf_header` | Accepts the localized Key Takeaways label (e.g. `重要なポイント`) in addition to English patterns |
+| `freshness_signal` | Accepts the localized "Last Updated" label (e.g. `最終更新日`) in addition to English regex |
+| `section_openings` | 40-60 word threshold now uses language-aware word count |
+
+**International Signals (15th check)** — only added to the rubric when the target country is set AND not in `[US, GB, AU, CA, NZ, IE]`. Western-default articles are byte-identical to the v1.5.204 rubric (total still sums to 100). Non-Western articles absorb the 15th check at 6% weight (total becomes 106 for those articles; the weighted-score loop handles normalisation via `array_sum($weights)` as the divisor).
 
 ### Per-type scoring gating (v1.5.204 — implemented)
 

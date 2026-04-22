@@ -51,10 +51,15 @@ class GEO_Analyzer {
      * @param string $content_type 21 content types affect which checks are relaxed.
      * @return array Analysis results with overall score and breakdown.
      */
-    public function analyze( string $content, string $keyword_or_title = '', string $content_type = '' ): array {
+    public function analyze( string $content, string $keyword_or_title = '', string $content_type = '', string $language = 'en', string $country = '' ): array {
         $text = wp_strip_all_tags( $content );
         $sections = $this->extract_sections( $content );
-        $word_count = str_word_count( $text );
+        // v1.5.206d — language-aware word count. CJK (ja/zh/ko) and Thai have
+        // no inter-word spaces; str_word_count() returns 0 on them and every
+        // downstream "word_count >= X" check fails. count_words_lang() uses
+        // character-count heuristic (~2 chars per word) for those scripts
+        // and falls back to str_word_count() for Latin-script languages.
+        $word_count = self::count_words_lang( $text, $language );
 
         // v1.5.204 — §3.1A Genre Override gating for structural checks.
         //
@@ -100,10 +105,10 @@ class GEO_Analyzer {
             'readability'      => $this->check_readability( $text ),
             'bluf_header'      => $skip_bluf
                 ? [ 'score' => 100, 'detail' => 'BLUF header check skipped — content type "' . $content_type . '" uses a §3.1A genre override (no Key Takeaways by design)' ]
-                : $this->check_bluf_header( $content ),
+                : $this->check_bluf_header( $content, $language ),
             'section_openings' => $skip_openers
                 ? [ 'score' => 100, 'detail' => 'Section opener check skipped — content type "' . $content_type . '" uses a §3.1A genre override (section form does not fit 40-60 word direct-answer pattern)', 'sections' => [] ]
-                : $this->check_section_openings( $sections ),
+                : $this->check_section_openings( $sections, $language ),
             'island_test'      => $this->check_island_test( $text ),
             'factual_density'  => $this->check_factual_density( $text, $word_count ),
             // v1.5.72 — pass raw HTML ($content) not stripped text ($text).
@@ -117,7 +122,7 @@ class GEO_Analyzer {
             'lists'            => $this->check_lists( $content ),
             'freshness'        => $skip_freshness
                 ? [ 'score' => 100, 'detail' => 'Freshness signal check skipped — content type "' . $content_type . '" uses a dateline or genre-appropriate signal instead of "Last Updated" (§3.1A genre override)' ]
-                : $this->check_freshness_signal( $content ),
+                : $this->check_freshness_signal( $content, $language ),
             'entity_usage'     => $this->check_entity_usage( $text ),
             // v1.5.11 additions — guideline §5A, §4B, §15B
             'keyword_density'  => $this->check_keyword_density( $content, $text, $keyword_or_title, $word_count ),
@@ -144,6 +149,21 @@ class GEO_Analyzer {
             'humanizer'        => 4,    // NEW — AI tell detection (§4B)
             'core_eeat'        => 5,    // NEW — E-E-A-T lite (§15B)
         ];
+
+        // v1.5.206d — 15th check: International signals (Layer 6).
+        // Country-gated + non-regressive: only added when country is set and
+        // NOT a Western-default market. When active, adds 6% weight from a
+        // new check without modifying the existing 14 weights — total grows
+        // to 106 and normalisation happens in the weighted_score loop
+        // (sum of weights becomes the divisor). Western-default / empty-country
+        // articles are byte-identical to the pre-v1.5.206d scoring rubric.
+        $western_default = [ 'US', 'GB', 'AU', 'CA', 'NZ', 'IE' ];
+        $country_upper   = strtoupper( trim( $country ) );
+        $international_active = $country_upper && ! in_array( $country_upper, $western_default, true );
+        if ( $international_active ) {
+            $checks['international_signals']  = $this->check_international_signals( $content, $language, $country_upper );
+            $weights['international_signals'] = 6;
+        }
 
         $weighted_score = 0;
         $total_weight = array_sum( $weights );
@@ -295,10 +315,42 @@ class GEO_Analyzer {
     }
 
     /**
-     * Check for BLUF (Bottom Line Up Front) header — Key Takeaways section.
+     * v1.5.206d — Language-aware word count helper.
+     *
+     * PHP's str_word_count() is Latin-script only and returns 0 for
+     * Japanese/Chinese/Korean/Thai text (which has no inter-word spaces).
+     * This helper uses a character-count heuristic for those scripts:
+     * ~2 chars per word is the standard CJK approximation used by WP's
+     * own wp_word_count (via WP_Multibyte_Patch) and major CJK editors.
      */
-    private function check_bluf_header( string $content ): array {
+    private static function count_words_lang( string $text, string $language = 'en' ): int {
+        $base = strtolower( substr( $language, 0, 2 ) );
+        if ( in_array( $base, [ 'ja', 'zh', 'ko', 'th' ], true ) ) {
+            $stripped = preg_replace( '/\s+/u', '', $text );
+            $chars    = mb_strlen( $stripped ?? '' );
+            return (int) round( $chars / 2 );
+        }
+        return str_word_count( $text );
+    }
+
+    /**
+     * Check for BLUF (Bottom Line Up Front) header — Key Takeaways section.
+     *
+     * v1.5.206d — language-aware. When $language ≠ 'en', also accept the
+     * localized Key Takeaways label (e.g. '重要なポイント' for Japanese,
+     * '핵심 요약' for Korean, 'Ключевые выводы' for Russian, etc.) inside
+     * the H2/H3 detection regex, not just the English patterns.
+     */
+    private function check_bluf_header( string $content, string $language = 'en' ): array {
         $has_bluf = (bool) preg_match( '/<h[2-3][^>]*>.*?(key\s*takeaway|summary|tldr|tl;dr|bottom\s*line)/is', $content );
+
+        if ( ! $has_bluf && $language !== 'en' ) {
+            $label = Localized_Strings::get( 'key_takeaways', $language );
+            if ( $label ) {
+                $escaped = preg_quote( $label, '/' );
+                $has_bluf = (bool) preg_match( '/<h[2-3][^>]*>.*?' . $escaped . '/isu', $content );
+            }
+        }
 
         if ( ! $has_bluf ) {
             // Check for a list within the first 500 chars
@@ -314,8 +366,12 @@ class GEO_Analyzer {
 
     /**
      * Check that each H2/H3 section opens with a 40-60 word paragraph.
+     *
+     * v1.5.206d — language-aware word count via count_words_lang() so
+     * Japanese/Chinese/Korean/Thai sections are measured by character
+     * heuristic instead of str_word_count() returning 0.
      */
-    private function check_section_openings( array $sections ): array {
+    private function check_section_openings( array $sections, string $language = 'en' ): array {
         if ( empty( $sections ) ) {
             return [ 'score' => 50, 'detail' => 'No H2/H3 sections found', 'sections' => [] ];
         }
@@ -324,7 +380,7 @@ class GEO_Analyzer {
         $details = [];
         foreach ( $sections as $section ) {
             $first_para = $section['first_paragraph'] ?? '';
-            $wc = str_word_count( $first_para );
+            $wc = self::count_words_lang( $first_para, $language );
             $pass = $wc >= self::SECTION_WORD_MIN && $wc <= self::SECTION_WORD_MAX;
             if ( $pass ) {
                 $passing++;
@@ -529,12 +585,136 @@ class GEO_Analyzer {
 
     /**
      * Check for freshness signal (Last Updated / dateModified).
+     *
+     * v1.5.206d — language-aware. When $language ≠ 'en', also accept the
+     * localized "Last Updated" label (e.g. '最終更新日' for Japanese,
+     * 'Последнее обновление' for Russian) — otherwise every international
+     * article scores 0 on freshness even when Content_Injector correctly
+     * prepended the translated label.
      */
-    private function check_freshness_signal( string $content ): array {
+    private function check_freshness_signal( string $content, string $language = 'en' ): array {
         $has_signal = (bool) preg_match( '/last\s*updated|date\s*modified|updated\s*on|published\s*on/i', $content );
+
+        if ( ! $has_signal && $language !== 'en' ) {
+            $label = Localized_Strings::get( 'last_updated', $language );
+            if ( $label && mb_stripos( $content, $label ) !== false ) {
+                $has_signal = true;
+            }
+        }
+
         return [
             'score'  => $has_signal ? 100 : 0,
             'detail' => $has_signal ? 'Freshness signal found' : 'No freshness signal (add "Last Updated: Month Year")',
+        ];
+    }
+
+    /**
+     * v1.5.206d — Layer 6 International Signals check (15th weighted check).
+     *
+     * Country-gated: only added to the rubric when the target country is
+     * set and NOT a Western-default market (US/GB/AU/CA/NZ/IE). Western-
+     * default articles never include this check — total weight stays 100.
+     *
+     * Scores 3 signals visible in the post content:
+     *   1. Article language matches the target country's primary language
+     *      (e.g. JP→ja, CN→zh, KR→ko, RU→ru, DE→de). If the user picked
+     *      Target Country = Japan but kept Language = English, signal 1
+     *      fails — that's valid guidance ("consider writing in Japanese for
+     *      full Baidu/Yandex/Naver retrieval eligibility").
+     *   2. Localized freshness label present — confirms the v1.5.206d
+     *      i18n path fired (Content_Injector emitted the translated
+     *      "Last Updated" label).
+     *   3. At least one regional authority citation matching the target
+     *      country — confirms the v1.5.206b whitelist let through a
+     *      region-appropriate source (Baidu Baike, TASS, Naver Knowledge,
+     *      etc.) or the ja.wikipedia.org / es.wikipedia.org family.
+     *
+     * Score: (signals_present / 3) × 100.
+     */
+    private function check_international_signals( string $content, string $language, string $country ): array {
+        $signals = [];
+        $country = strtoupper( trim( $country ) );
+
+        // Signal 1: language matches country's primary language.
+        $country_to_lang = [
+            'CN' => 'zh', 'TW' => 'zh', 'HK' => 'zh',
+            'JP' => 'ja',
+            'KR' => 'ko',
+            'RU' => 'ru', 'BY' => 'ru',
+            'DE' => 'de', 'AT' => 'de', 'CH' => 'de',
+            'FR' => 'fr', 'BE' => 'fr',
+            'ES' => 'es',
+            'IT' => 'it',
+            'BR' => 'pt', 'PT' => 'pt',
+            'IN' => 'hi',
+            'SA' => 'ar', 'AE' => 'ar', 'EG' => 'ar',
+            'MX' => 'es', 'AR' => 'es',
+        ];
+        $expected_lang = $country_to_lang[ $country ] ?? '';
+        $base_lang     = strtolower( substr( $language, 0, 2 ) );
+        $lang_match    = $expected_lang && $base_lang === $expected_lang;
+        if ( $lang_match ) {
+            $signals[] = 'language-match';
+        }
+
+        // Signal 2: localized freshness label in body (requires non-English language).
+        if ( $language !== 'en' ) {
+            $label = Localized_Strings::get( 'last_updated', $language );
+            if ( $label && mb_stripos( $content, $label ) !== false ) {
+                $signals[] = 'localized-freshness';
+            }
+        }
+
+        // Signal 3: at least one regional citation domain in outbound URLs.
+        $country_to_regional_hosts = [
+            'CN' => [ 'baidu.com', 'zhihu.com', 'zh.wikipedia.org', 'people.com.cn', 'xinhuanet.com', 'chinadaily.com.cn', '36kr.com' ],
+            'JP' => [ 'nhk.or.jp', 'asahi.com', 'mainichi.jp', 'nikkei.com', 'yomiuri.co.jp', 'ja.wikipedia.org', 'kotobank.jp', 'yahoo.co.jp', 'tabelog.com' ],
+            'KR' => [ 'ko.wikipedia.org', 'naver.com', 'chosun.com', 'donga.com', 'hani.co.kr', 'joongang.co.kr', 'yna.co.kr' ],
+            'RU' => [ 'ru.wikipedia.org', 'yandex.ru', 'ria.ru', 'tass.ru', 'rbc.ru', 'lenta.ru', 'habr.com' ],
+            'DE' => [ 'de.wikipedia.org', 'spiegel.de', 'faz.net', 'zeit.de', 'sueddeutsche.de', 'welt.de', 'tagesschau.de' ],
+            'AT' => [ 'de.wikipedia.org', 'derstandard.at', 'diepresse.com' ],
+            'CH' => [ 'de.wikipedia.org', 'nzz.ch', 'srf.ch' ],
+            'FR' => [ 'fr.wikipedia.org', 'lemonde.fr', 'lefigaro.fr', 'liberation.fr', 'leparisien.fr' ],
+            'BE' => [ 'fr.wikipedia.org', 'lemonde.fr', 'lesoir.be' ],
+            'ES' => [ 'es.wikipedia.org', 'elpais.com', 'elmundo.es' ],
+            'IT' => [ 'it.wikipedia.org', 'corriere.it', 'repubblica.it', 'lastampa.it' ],
+            'BR' => [ 'pt.wikipedia.org', 'globo.com', 'folha.uol.com.br', 'uol.com.br', 'estadao.com.br' ],
+            'PT' => [ 'pt.wikipedia.org', 'publico.pt', 'expresso.pt' ],
+            'IN' => [ 'hi.wikipedia.org', 'thehindu.com', 'indianexpress.com', 'timesofindia.indiatimes.com', 'ndtv.com' ],
+            'SA' => [ 'ar.wikipedia.org', 'aljazeera.net', 'alarabiya.net' ],
+            'AE' => [ 'ar.wikipedia.org', 'gulfnews.com', 'thenationalnews.com', 'aljazeera.net' ],
+            'EG' => [ 'ar.wikipedia.org', 'aljazeera.net', 'alarabiya.net' ],
+            'MX' => [ 'es.wikipedia.org', 'reforma.com', 'eluniversal.com.mx' ],
+            'AR' => [ 'es.wikipedia.org', 'clarin.com', 'lanacion.com.ar', 'infobae.com' ],
+        ];
+        $regional_hosts = $country_to_regional_hosts[ $country ] ?? [];
+        if ( $regional_hosts ) {
+            preg_match_all( '/href\s*=\s*["\']https?:\/\/([^\/"\']+)/i', $content, $host_matches );
+            $hosts = array_map( 'strtolower', $host_matches[1] ?? [] );
+            foreach ( $hosts as $host ) {
+                foreach ( $regional_hosts as $needle ) {
+                    if ( $host === $needle || substr( $host, - ( strlen( $needle ) + 1 ) ) === '.' . $needle ) {
+                        $signals[] = 'regional-citation';
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        // Total possible signals: 3 (lang-match, localized-freshness, regional-citation).
+        // Score proportionally.
+        $score  = (int) round( ( count( $signals ) / 3 ) * 100 );
+        $detail = sprintf(
+            'Country=%s, language=%s. Signals present: %s',
+            $country ?: '—',
+            $language,
+            empty( $signals ) ? 'none (regional citations / localized freshness / language-match missing)' : implode( ', ', $signals )
+        );
+
+        return [
+            'score'   => $score,
+            'signals' => $signals,
+            'detail'  => $detail,
         ];
     }
 
