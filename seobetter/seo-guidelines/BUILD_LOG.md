@@ -7,12 +7,55 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d)
+> **Last updated:** 2026-04-23 (v1.5.206d-fix)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d-fix — Forward `language` from JS to save-draft so Layer 6 actually fires
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben's German test (`beste-kaffeemaschinen-fur-zuhause-2026-ultimativer-kaufratgeber`) surfaced: schema `inLanguage` came out `"en-US"` and body labels stayed English (`Last Updated`, `Key Takeaways`, `References`, `FAQ`) even though the form had Language = German, Country = Germany.
+
+Root cause: the frontend JS (`admin/views/content-generator.php`) built `window._seobetterDraft` and the subsequent `save-draft` REST payload WITHOUT a `language` field. The REST handler `rest_save_draft` called `$request->get_param('language') ?? 'en'` which fell through to `'en'`, persisted `_seobetter_language` as nothing (the `if ( $language_param )` guard short-circuited), and downstream `Schema_Generator::get_in_language()` fell back to `get_locale()` → `en-US`.
+
+Every country/language combo other than US/English was broken at the save hop.
+
+### Fixed
+
+- **`admin/views/content-generator.php` line ~1275** — added `language: (document.querySelector('[name="language"]')||{}).value||'en'` to `window._seobetterDraft`.
+- **`admin/views/content-generator.php` line ~1390** — added `language: draft.language || 'en'` to the `saveDraft` payload POSTed to `/seobetter/v1/save-draft`.
+- **`includes/Bulk_Generator.php` line ~235** — added `update_post_meta` for `_seobetter_country` and `_seobetter_language` alongside the existing focus_keyword / geo_score / content_type saves, so bulk-generated articles also persist Layer 6 context.
+
+### Safety posture
+
+- Purely plumbing — no logic, no styling, no schema, no scoring changes.
+- Zero regression: when `language` is missing (old draft in browser cache, legacy flow), the fallback `|| 'en'` keeps existing US/English behavior intact.
+- Fix applies immediately to every future generation; existing posts that were saved pre-fix can be corrected by regenerating or by manually setting `_seobetter_language` post meta.
+
+### Verify
+
+```bash
+grep -n "v1.5.206d-fix" /Users/ben/Documents/autoresearch/seobetter/admin/views/content-generator.php
+grep -n "_seobetter_language" /Users/ben/Documents/autoresearch/seobetter/includes/Bulk_Generator.php
+```
+
+After re-running the German test:
+- Schema `Article` → `"inLanguage": "de"` (not `en-US`)
+- Body labels: `Zuletzt aktualisiert`, `Die wichtigsten Erkenntnisse`, `Quellen`
+- Date format: `April 2026` (in German; April is cognate so same spelling — use a different month keyword to see distinct names)
+
+### Verified by user
+
+UNTESTED — re-generate the German article or a fresh keyword with Country=Germany + Language=German. Expected: `inLanguage: de` on Article, German UI labels in body, score noticeably higher than the first German run.
 
 ---
 

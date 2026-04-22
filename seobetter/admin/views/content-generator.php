@@ -1273,6 +1273,11 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             content_type: (document.querySelector('[name="content_type"]')||{}).value||'blog_post',
             domain: (document.querySelector('[name="domain"]')||{}).value||'',
             country: (document.getElementById('sb-country-val')||{}).value||'',
+            // v1.5.206d-fix — forward language so rest_save_draft persists
+            // _seobetter_language post meta. Without this, schema inLanguage
+            // falls back to get_locale() (en-US), localized labels miss,
+            // and Layer 6 scoring signals fail.
+            language: (document.querySelector('[name="language"]')||{}).value||'en',
             meta_title: (res.meta && res.meta.title) || bestTitle || '',
             meta_description: (res.meta && res.meta.description) || '',
             og_title: (res.meta && res.meta.og_title) || bestTitle || '',
@@ -1383,6 +1388,10 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                 content_type: draft.content_type || 'blog_post',
                 domain: draft.domain || '',
                 country: draft.country || '',
+                // v1.5.206d-fix — forward language so rest_save_draft
+                // persists _seobetter_language post meta (needed for
+                // schema inLanguage, localized labels, Layer 6 scoring).
+                language: draft.language || 'en',
                 meta_title: draft.meta_title || '',
                 meta_description: draft.meta_description || '',
                 og_title: draft.og_title || '',

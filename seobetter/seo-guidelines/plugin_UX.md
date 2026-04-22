@@ -255,8 +255,10 @@ Form fields collected by JavaScript:
 
 Save Draft:
 → POST /seobetter/v1/save-draft with: title, markdown, content,
-   accent_color, keyword, content_type, meta_title, meta_description,
-   og_title, post_type
+   accent_color, keyword, content_type, domain, country, language
+   (v1.5.206d-fix — language added; required for Layer 6 schema
+   inLanguage, localized labels, regional scoring), meta_title,
+   meta_description, og_title, citation_pool, post_type
 → Formats markdown using format_hybrid() → native Gutenberg blocks
    + wp:html blocks for styled elements
 → Injects JSON-LD schema as wp:html block at end of post_content

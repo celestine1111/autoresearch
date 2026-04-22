@@ -232,6 +232,15 @@ class Bulk_Generator {
                     update_post_meta( $post_id, '_seobetter_focus_keyword', $item['keyword'] );
                     update_post_meta( $post_id, '_seobetter_geo_score', $result['geo_score'] ?? 0 );
                     update_post_meta( $post_id, '_seobetter_content_type', $item['content_type'] ?? 'blog_post' );
+                    // v1.5.206d-fix — persist country + language for Layer 6
+                    // (schema inLanguage, localized labels, regional context
+                    // on subsequent regenerations).
+                    if ( ! empty( $item['country'] ) ) {
+                        update_post_meta( $post_id, '_seobetter_country', sanitize_text_field( $item['country'] ) );
+                    }
+                    if ( ! empty( $item['language'] ) ) {
+                        update_post_meta( $post_id, '_seobetter_language', sanitize_text_field( $item['language'] ) );
+                    }
                 }
 
                 $batch['items'][ $next_index ]['status'] = 'completed';
