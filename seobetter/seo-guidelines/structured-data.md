@@ -80,6 +80,16 @@
 
 ## 4. REQUIRED AND RECOMMENDED FIELDS PER TYPE
 
+### Universal — `inLanguage` on every top-level schema (v1.5.206a)
+
+Every top-level schema emitted by `Schema_Generator::generate()` and the legacy `build_aioseo_schema()` path is tagged with `inLanguage` (BCP-47 code: `en`, `en-US`, `zh-CN`, `ja`, `ko`, `ru`, `de`, `fr`, `es`, `pt-BR`, etc.).
+
+- **Source of truth:** `_seobetter_language` post meta (saved from the `language` request param at save time).
+- **Fallback chain:** `_seobetter_language` meta → `get_locale()` (converted `_` → `-`) → `'en'`.
+- **Anchor:** `Schema_Generator::get_in_language()` + the injection loop in `Schema_Generator::generate()` post-processor (after `unset( $s['@context'] )`).
+- **Legacy path:** `seobetter.php::populate_aioseo()` injects `inLanguage` into every entry of `$schema_data` before wrapping in `@graph`.
+- **Additive guarantee:** never overwrites an `inLanguage` that a specific builder has already set; never touches other fields.
+
 ### Article / BlogPosting / NewsArticle
 **Required:** NONE (all recommended)
 **Recommended:**
@@ -91,6 +101,7 @@
   - `author.name` — name only (no email, no titles, no "posted by")
   - `author.url` — author page or social profile
 - `publisher` — Organization with name and url
+- `inLanguage` — BCP-47 language code (v1.5.206a — injected universally by Schema_Generator::generate() post-processor; see "Universal" note above)
 
 ### Recipe (v1.5.121 — Google-exact format)
 

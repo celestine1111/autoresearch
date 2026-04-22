@@ -22,6 +22,25 @@ class Schema_Generator {
     private array $_multi_recipes = [];
 
     /**
+     * v1.5.206a — Resolve article language as BCP-47 code for schema inLanguage.
+     *
+     * Priority: user-selected `_seobetter_language` post meta > WordPress locale > 'en'.
+     * Converts WP locale ('en_US') to BCP-47 ('en-US') by replacing '_' with '-'.
+     * Additive: injected into every top-level schema via generate() post-processor.
+     */
+    private function get_in_language( \WP_Post $post ): string {
+        $lang = get_post_meta( $post->ID, '_seobetter_language', true );
+        if ( $lang && is_string( $lang ) ) {
+            return str_replace( '_', '-', sanitize_text_field( $lang ) );
+        }
+        $locale = get_locale();
+        if ( $locale ) {
+            return str_replace( '_', '-', $locale );
+        }
+        return 'en';
+    }
+
+    /**
      * v1.5.139 — Get author name, with SEOBetter settings override.
      * Priority: SEOBetter author_name setting > WP display_name > site name.
      * Google policy: author.name must be a real name, never an email address.
@@ -292,9 +311,17 @@ class Schema_Generator {
         $schemas[] = $this->generate_breadcrumb_schema( $post );
 
         // Strip @context from individual schemas (caller wraps in single @graph)
+        // v1.5.206a — Inject inLanguage (BCP-47) into every top-level schema.
+        // Additive: only sets inLanguage when the builder hasn't already set one.
+        // Never overwrites existing values, never removes other fields.
+        $in_language = $this->get_in_language( $post );
         foreach ( $schemas as &$s ) {
             unset( $s['@context'] );
+            if ( is_array( $s ) && ! isset( $s['inLanguage'] ) ) {
+                $s['inLanguage'] = $in_language;
+            }
         }
+        unset( $s );
 
         // v1.5.126 — Sanitize all string values in schema to prevent broken JSON.
         // WordPress wptexturize() converts escaped \" to unescaped smart quotes

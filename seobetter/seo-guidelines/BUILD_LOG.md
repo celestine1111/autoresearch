@@ -7,12 +7,83 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.205)
+> **Last updated:** 2026-04-22 (v1.5.206a)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206a — Schema `inLanguage` on every top-level schema (Layer 6 — piece 1 of 4)
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Layer 6 (International) requires every schema block to declare its language as a BCP-47 code so that Baidu, Yandex, Naver, ChatGPT, Perplexity, HyperCLOVA X, Doubao, and other regional retrieval engines can identify regional relevance. Per `international-optimization.md §4.1`, `inLanguage` is **required on every top-level schema** — not optional.
+
+v1.5.206 ships as four sub-commits (a/b/c/d) so any piece can be reverted cleanly. **This is piece `a` — schema `inLanguage` — the safest piece because it's a pure-additive field.**
+
+### Safety posture
+
+- **Additive-only:** never overwrites an `inLanguage` set by a specific builder (none currently set one, but if a future builder does, it wins).
+- **Country-agnostic:** this piece fires on every article, US/English or otherwise — but when language defaults to `en`, the emitted field is `"inLanguage": "en"` which is already the assumed default for every existing article.
+- **No behavior change for existing US/English articles:** Rich Results Test, AIOSEO, RankMath, Yoast all treat an explicit `inLanguage: en` identically to an absent `inLanguage` (which they assumed to be English).
+- **No prompt changes, no scoring changes, no CSS changes.**
+
+### Shipped
+
+- **`Schema_Generator::get_in_language()`** — new helper, `includes/Schema_Generator.php` line **~24-43**
+  - Reads `_seobetter_language` post meta → falls back to `get_locale()` (with `_` → `-` conversion) → final fallback `'en'`
+  - Returns BCP-47 string
+
+- **`Schema_Generator::generate()` post-processor** — `includes/Schema_Generator.php` line **~305-318** (inside `foreach ( $schemas as &$s )`)
+  - Resolves language once per `generate()` call
+  - Injects `inLanguage` into every top-level schema entry that doesn't already have one
+  - Runs after `unset( $s['@context'] )` so BreadcrumbList, ItemList, FAQPage, LocalBusiness, VideoObject, SoftwareApplication, Event, ImageObject, ProfilePage, Course, Movie, Book, Dataset, Product, Organization, QAPage, ClaimReview, JobPosting, VacationRental, DefinedTerm, Review, Recipe, HowTo, Article/BlogPosting/NewsArticle/OpinionNewsArticle/ScholarlyArticle/TechArticle ALL get tagged in a single pass.
+
+- **Legacy `populate_aioseo()` path** — `seobetter.php` line **~1990-1999** (just before wrap in `@graph`)
+  - Mirrors the same resolution chain inline (post meta → locale → 'en') then loops `$schema_data` and sets `inLanguage` on each entry missing it.
+  - Covers the code path that doesn't go through `Schema_Generator::generate()` (active when `populate_aioseo()` is invoked directly; still called from `$this->build_aioseo_schema()` at line 1988).
+
+- **`_seobetter_language` post-meta save** — `seobetter.php` line **~1536-1540** (immediately after `_seobetter_country` save)
+  - Persists the `language` request param so `get_in_language()` can recover it later
+  - Unconditional save (empty `language_param` is simply not written; reader falls back to locale)
+
+- **Doc sync (same commit):**
+  - `seo-guidelines/structured-data.md §4` — new "Universal — `inLanguage` on every top-level schema" block + `inLanguage` added to the Article/BlogPosting/NewsArticle recommended-fields list
+  - `seo-guidelines/SEO-GEO-AI-GUIDELINES.md §10.4` — new `inLanguage` bullet with the full fallback chain + cross-reference to `international-optimization.md §4.1`
+
+### Verify
+
+```bash
+# 1. Schema_Generator has the helper + post-processor
+grep -n "private function get_in_language" /Users/ben/Documents/autoresearch/seobetter/includes/Schema_Generator.php
+grep -n "\$s\['inLanguage'\] = \$in_language" /Users/ben/Documents/autoresearch/seobetter/includes/Schema_Generator.php
+
+# 2. Legacy path has injection loop + language save
+grep -n "Inject inLanguage" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+grep -n "_seobetter_language" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+
+# 3. Doc sync lands
+grep -n "Universal — \`inLanguage\`" /Users/ben/Documents/autoresearch/seobetter/seo-guidelines/structured-data.md
+grep -n "inLanguage\` (v1.5.206a)" /Users/ben/Documents/autoresearch/seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md
+```
+
+### Verified by user
+
+UNTESTED — Ben to regen one article with NO country/language selected and confirm:
+1. Rich Results Test still passes
+2. Schema has `"inLanguage": "en"` (or site locale)
+3. Article renders identically to before
+4. No console errors in admin or front-end
+
+### Next
+
+v1.5.206b — regional citation whitelist expansion (additive array append in `get_trusted_domain_whitelist()`).
 
 ---
 

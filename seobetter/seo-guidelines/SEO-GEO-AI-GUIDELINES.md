@@ -688,6 +688,7 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 - **Product** pros/cons (positiveNotes/negativeNotes) extracted from Pros/Cons sections
 - **LocalBusiness** auto-detected when article contains street addresses
 - **Speakable** enables Google Assistant to read article aloud (US English)
+- **`inLanguage` (v1.5.206a)** — universal BCP-47 language tag injected into every top-level schema by `Schema_Generator::generate()` and the legacy `populate_aioseo()` path. Source of truth: `_seobetter_language` post meta; fallback chain: meta → `get_locale()` (with `_` → `-`) → `'en'`. Required for Layer 6 (international) LLM retrieval — Baidu, Yandex, Naver, and regional LLMs all key off `inLanguage` to decide regional relevance. See `international-optimization.md §4.1` and `structured-data.md §4` for full spec.
 
 ---
 

@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.205
+ * Version: 1.5.206
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.205' );
+define( 'SEOBETTER_VERSION', '1.5.206' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1533,6 +1533,12 @@ final class SEOBetter {
         if ( $domain_param ) {
             update_post_meta( $post_id, '_seobetter_domain', $domain_param );
         }
+        // v1.5.206a — Save language for Schema_Generator::get_in_language() → inLanguage field.
+        // Additive: empty/missing language falls back to get_locale() then 'en' in the generator.
+        $language_param = sanitize_text_field( $request->get_param( 'language' ) ?? '' );
+        if ( $language_param ) {
+            update_post_meta( $post_id, '_seobetter_language', $language_param );
+        }
 
         $schema_gen = new SEOBetter\Schema_Generator();
         $post_obj = get_post( $post_id );
@@ -1980,6 +1986,19 @@ final class SEOBetter {
         // Use user-selected content type if provided, otherwise auto-detect from title
         $schema_type = $content_type ? $this->content_type_to_schema( $content_type ) : $this->detect_schema_type( $seo_title, $content );
         $schema_data = $this->build_aioseo_schema( $schema_type, $post_id, $seo_title, $content, $keyword );
+
+        // v1.5.206a — Inject inLanguage (BCP-47) into every top-level schema.
+        // Additive: only sets inLanguage when missing; never overwrites or removes fields.
+        $lang_meta     = get_post_meta( $post_id, '_seobetter_language', true );
+        $in_language   = ( is_string( $lang_meta ) && $lang_meta )
+            ? str_replace( '_', '-', sanitize_text_field( $lang_meta ) )
+            : ( str_replace( '_', '-', get_locale() ?: '' ) ?: 'en' );
+        foreach ( $schema_data as &$entry ) {
+            if ( is_array( $entry ) && ! isset( $entry['inLanguage'] ) ) {
+                $entry['inLanguage'] = $in_language;
+            }
+        }
+        unset( $entry );
 
         // Store schema in post meta for wp_head output (used when no SEO plugin active)
         $schema_with_context = [ '@context' => 'https://schema.org' ];

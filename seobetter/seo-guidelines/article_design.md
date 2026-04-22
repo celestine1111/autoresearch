@@ -673,6 +673,10 @@ Each content type affects **three layers** of the generated article:
 2. **Styled block detection** — `Content_Formatter::format_hybrid()` applies different inline styles based on heading context
 3. **Schema output** — `Schema_Generator::generate()` in `includes/Schema_Generator.php` AND `build_aioseo_schema()` in `seobetter.php` emit different `@type` values and secondary schemas
 
+### Universal schema field (v1.5.206a) — `inLanguage`
+
+Every top-level schema entry emitted by either path is tagged with `inLanguage` (BCP-47) regardless of content type. Source of truth: `_seobetter_language` post meta → `get_locale()` (with `_` → `-`) → `'en'`. This is **not per-content-type** — no type-specific branching in the matrix below — but the visual impact is nil (schema is invisible to readers). Full spec in `structured-data.md §4` and `international-optimization.md §4.1`.
+
 ### Design & schema matrix
 
 | Content Type | Primary Schema | Secondary Schemas | Styled Blocks |
