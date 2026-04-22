@@ -19,7 +19,7 @@
 ## v1.5.195 — Press Release: research-backed structure + AI-citability schema
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `37a39a7`
 
 ### Research backing
 
