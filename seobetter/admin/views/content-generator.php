@@ -715,10 +715,16 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
     // user has Australia selected.
     var sbCountryEl = document.querySelector('[name="country"]') || document.getElementById('sb-country-val');
     var sbCountry = sbCountryEl ? (sbCountryEl.value || '').toUpperCase() : '';
+    // v1.5.206d-fix2 — send language so backend can:
+    // 1) skip Datamuse (English-only) for non-English queries
+    // 2) query the right Wikipedia subdomain (ru/ja/ko/de/etc.)
+    // 3) ask the LLM audience inference to respond in the target language
+    var sbLangEl = document.querySelector('[name="language"]');
+    var sbLang = sbLangEl ? (sbLangEl.value || 'en') : 'en';
     fetch(CLOUD + '/api/topic-research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ niche: kw, site_url: SITE, country: sbCountry })
+        body: JSON.stringify({ niche: kw, site_url: SITE, country: sbCountry, language: sbLang })
     }).then(function(r) { return r.json(); }).then(function(d) {
         btn.disabled = false;
         if (!d || !d.success) {

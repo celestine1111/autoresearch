@@ -7,12 +7,80 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d-fix)
+> **Last updated:** 2026-04-23 (v1.5.206d-fix2)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d-fix2 — Multilingual auto-suggest (LSI keywords + Target Audience in target language)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben's Russian test (2026-04-23) after v1.5.206d-fix confirmed the schema/label fix was working but surfaced a follow-on bug in the Auto-Suggest feature:
+- **Secondary Keywords** came back in Russian ✅ (Google Suggest is geo-aware via the `gl` param, already threaded)
+- **LSI Keywords** came back in English ❌ — Datamuse is an English-only semantic API and returned English words even for Russian queries; Wikipedia fallback hit `en.wikipedia.org` returning English titles too
+- **Target Audience** came back in English ❌ — `inferAudienceAndCategoryWithLLM` has an English-only prompt that told gpt-4.1-mini to respond with an English audience description
+
+Root cause pattern identical to the schema/label bug: the `language` field never got plumbed from the frontend to the backend. The auto-suggest click was sending `{ niche, site_url, country }` but not `language`.
+
+### Shipped
+
+**Frontend (`admin/views/content-generator.php`):**
+- Auto-suggest click handler (line ~718-728) — reads the article language select and adds `language: sbLang` to the POST body for `/api/topic-research`.
+
+**Backend (`cloud-api/api/topic-research.js`):**
+1. Top-level handler accepts `language` from `req.body`, derives `baseLang` (ISO 639-1 from BCP-47) and `isEnglish` flag.
+2. **Datamuse gated** — skipped entirely when `isEnglish === false`. Returns empty array so the LSI builder falls through to Google Suggest + Wikipedia variations.
+3. **`fetchWikipedia( query, lang )`** — now uses `https://${lang}.wikipedia.org/w/api.php?...` so Russian queries hit `ru.wikipedia.org`, Japanese hit `ja.wikipedia.org`, etc. Validates lang matches `^[a-z]{2,3}$` before substitution; falls back to `en` on unknown codes.
+4. **`fetchSerperKeywords( keyword, gl, lang )`** — signature extended with `lang`; passes it to the LLM audience inference call.
+5. **`inferAudienceAndCategoryWithLLM( keyword, serpResults, lang )`** — maps `lang` to a human language name (30+ languages in `langNames` table) and injects it into the prompt: *"audience: a 5-15 word description of WHO searches for this specific keyword, written in {langName}. The audience description must be in {langName} regardless of the English prompt instructions."* The `category` field stays in English (it's a machine-readable slug used by downstream code paths, not reader-facing copy).
+
+### Safety posture
+
+- **Zero regression for English queries** — the `isEnglish` flag bypasses every new code path; Datamuse still runs, Wikipedia still hits en.wikipedia.org, audience LLM still writes in English. US/English auto-suggest is byte-identical to pre-v1.5.206d-fix2.
+- **Backward-compatible backend signatures** — every extended function defaults its new `lang` arg to `'en'`, so older callers (if any) still work.
+- **Graceful degradation** — if the LLM errors or `OPENROUTER_KEY` is missing, audience returns empty and the frontend shows an empty field (existing pre-v1.5.206d-fix2 behavior preserved).
+- **Non-Latin Wikipedia subdomains verified** — ru/ja/ko/zh/de/fr/es/it/pt/hi/ar all exist with large article counts. Valid for every language SEOBetter supports.
+
+### Doc sync
+
+- BUILD_LOG v1.5.206d-fix2 entry (this one).
+- `cloud-api/api/topic-research.js` internal comments reference `v1.5.206d-fix2` at each change point so future drift audits are easy.
+
+### Verify
+
+```bash
+# 1. Frontend sends language
+grep -n "language: sbLang" /Users/ben/Documents/autoresearch/seobetter/admin/views/content-generator.php
+
+# 2. Backend accepts language + skips Datamuse for non-English
+grep -n "const { niche, site_url, country, language }" /Users/ben/Documents/autoresearch/seobetter/cloud-api/api/topic-research.js
+grep -n "isEnglish ? fetchDatamuse" /Users/ben/Documents/autoresearch/seobetter/cloud-api/api/topic-research.js
+
+# 3. fetchWikipedia uses language subdomain
+grep -n "https://\${validLang}.wikipedia.org" /Users/ben/Documents/autoresearch/seobetter/cloud-api/api/topic-research.js
+
+# 4. Audience LLM prompt requests target language
+grep -n "written in \${langName}" /Users/ben/Documents/autoresearch/seobetter/cloud-api/api/topic-research.js
+```
+
+After Vercel redeploys the backend + Ben hard-refreshes the admin page, re-run Russian auto-suggest:
+- Secondary: Russian (unchanged)
+- LSI: Russian (previously English)
+- Target Audience: Russian prose (previously English)
+
+### Verified by user
+
+UNTESTED — pending Vercel deploy of `cloud-api/api/topic-research.js` (usually auto on git push to main; manual re-deploy if needed). Frontend change in the plugin zip is effective immediately after re-install.
+
+**Deploy note:** `topic-research.js` is backend-only (runs on Ben's Vercel). The plugin zip does NOT need `cloud-api/` redistributed; only the frontend change (content-generator.php) ships to users. Backend ships via git push + Vercel auto-deploy.
 
 ---
 

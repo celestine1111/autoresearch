@@ -25,10 +25,17 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
 
-  const { niche, site_url, country } = req.body || {};
+  const { niche, site_url, country, language } = req.body || {};
   if (!niche) return res.status(400).json({ error: 'niche is required.' });
   // v1.5.57 — accept country code to geo-localize Google Suggest completions
   const gl = (country && typeof country === 'string') ? country.toLowerCase().slice(0, 2) : '';
+  // v1.5.206d-fix2 — accept article language so we skip Datamuse (English-only),
+  // hit the correct Wikipedia subdomain, and ask the audience LLM to respond
+  // in the target language. Empty / unknown / 'en' falls back to existing
+  // English-pipeline behaviour (no regression for US/English generators).
+  const lang = (language && typeof language === 'string') ? language.toLowerCase().slice(0, 5) : 'en';
+  const baseLang = lang.split('-')[0];
+  const isEnglish = (baseLang === 'en' || baseLang === '');
 
   // Rate limit
   const rateKey = `${site_url || 'unknown'}_${new Date().getHours()}`;
@@ -57,14 +64,20 @@ export default async function handler(req, res) {
     // the overlap filter in buildKeywordSets. We run BOTH the full niche
     // AND the core topic in parallel and merge the results, so if the
     // long-tail does have any completions we still capture them.
+    // v1.5.206d-fix2 — Datamuse is English-only (returns English LSI words even
+    // for Russian/Japanese/Korean queries). Skip it entirely for non-English
+    // articles and rely on Google Suggest + language-specific Wikipedia for LSI.
+    // fetchWikipedia now uses the article language subdomain (ru.wikipedia.org,
+    // ja.wikipedia.org, de.wikipedia.org, etc.).
     const [suggestLong, suggestCore, datamuse, wiki, reddit, serperData] = await Promise.all([
       fetchGoogleSuggest(niche, gl),
       (niche !== coreTopic) ? fetchGoogleSuggest(coreTopic, gl) : Promise.resolve([]),
-      fetchDatamuse(coreTopic),
-      fetchWikipedia(niche),
+      isEnglish ? fetchDatamuse(coreTopic) : Promise.resolve([]),
+      fetchWikipedia(niche, baseLang),
       fetchReddit(niche),
       // v1.5.173 — Serper-powered keyword extraction (if key available)
-      fetchSerperKeywords(niche, gl),
+      // v1.5.206d-fix2 — pass language so audience LLM responds in target language
+      fetchSerperKeywords(niche, gl, baseLang),
     ]);
     // Merge core-topic suggestions into the main list, deduped
     const suggest = [...suggestLong];
@@ -363,9 +376,15 @@ function parseFreq(tags) {
 // ============================================================
 // Source 3: Wikipedia OpenSearch (subtopics)
 // ============================================================
-async function fetchWikipedia(query) {
+async function fetchWikipedia(query, lang = 'en') {
   try {
-    const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=15&format=json&namespace=0`;
+    // v1.5.206d-fix2 — use the article's language subdomain.
+    // Wikipedia has 300+ language editions; most major articles have their own
+    // language version with native-language titles. This is how LSI keywords
+    // become Russian/Japanese/Korean/etc. instead of falling back to English
+    // titles when the query is non-Latin.
+    const validLang = /^[a-z]{2,3}$/.test(lang) ? lang : 'en';
+    const url = `https://${validLang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=15&format=json&namespace=0`;
     const resp = await fetch(url, {
       headers: { 'User-Agent': 'SEOBetter/1.0' },
       signal: AbortSignal.timeout(5000),
@@ -424,7 +443,7 @@ async function fetchReddit(query) {
 // Calls Serper (Google SERP), extracts secondary keywords from
 // page titles, LSI terms from snippets, and audience from domains.
 // ============================================================
-async function fetchSerperKeywords(keyword, gl = '') {
+async function fetchSerperKeywords(keyword, gl = '', lang = 'en') {
   const SERPER_KEY = process.env.SERPER_API_KEY;
   if (!SERPER_KEY) return null;
 
@@ -530,7 +549,8 @@ async function fetchSerperKeywords(keyword, gl = '') {
     // the fields manually).
     const { audience, category } = await inferAudienceAndCategoryWithLLM(
       keyword,
-      results.slice(0, 8)
+      results.slice(0, 8),
+      lang
     );
 
     return {
@@ -561,11 +581,25 @@ async function fetchSerperKeywords(keyword, gl = '') {
  *          never a hard-coded fallback. The frontend shows empty fields
  *          and lets the user fill them manually.
  */
-async function inferAudienceAndCategoryWithLLM(keyword, serpResults) {
+async function inferAudienceAndCategoryWithLLM(keyword, serpResults, lang = 'en') {
   const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
   if (!OPENROUTER_KEY || !Array.isArray(serpResults) || serpResults.length === 0) {
     return { audience: '', category: '' };
   }
+
+  // v1.5.206d-fix2 — map BCP-47 base code to full language name for the prompt.
+  // When the article is non-English, the audience description must come back
+  // in the target language so it renders correctly in the audience form field
+  // and threads through to the generation prompt without English leaks.
+  const langNames = {
+    en: 'English', ja: 'Japanese', zh: 'Chinese (Simplified)', ko: 'Korean',
+    ru: 'Russian', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian',
+    pt: 'Portuguese', hi: 'Hindi', ar: 'Arabic', nl: 'Dutch', pl: 'Polish',
+    tr: 'Turkish', sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish',
+    cs: 'Czech', hu: 'Hungarian', ro: 'Romanian', el: 'Greek', uk: 'Ukrainian',
+    vi: 'Vietnamese', th: 'Thai', id: 'Indonesian', ms: 'Malay', he: 'Hebrew',
+  };
+  const langName = langNames[lang] || 'English';
 
   const serpLines = serpResults.slice(0, 8).map((r, i) => {
     let host = '';
@@ -588,8 +622,8 @@ Top ranking results:
 ${serpLines}
 
 Return JSON with exactly two fields:
-- "audience": a 5-15 word description of WHO searches for this specific keyword (e.g. "Australian students, parents, and higher-education policy makers"). Be specific to the keyword. Do NOT default to generic groups like "healthcare professionals" unless the keyword is actually about healthcare. If the keyword is about a policy, country, or specific group, name them.
-- "category": ONE value from this list that best matches the topic: ${allowedCategories.join(', ')}. Use "general" if nothing fits.
+- "audience": a 5-15 word description of WHO searches for this specific keyword, written in ${langName}. Be specific to the keyword (e.g. for "лучшие смартфоны 2026" output Russian like "российские покупатели смартфонов, технообзорщики и сравнительные шопперы"). Do NOT default to generic groups unless the keyword is actually about them. If the keyword is about a policy, country, or specific group, name them. The audience description must be in ${langName} regardless of the English prompt instructions.
+- "category": ONE value from this English list that best matches the topic: ${allowedCategories.join(', ')}. Use "general" if nothing fits. Category STAYS IN ENGLISH — it's a machine-readable slug, not reader-facing copy.
 
 Output only the JSON object, no markdown fences, no explanation.`;
 
