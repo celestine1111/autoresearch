@@ -19,7 +19,7 @@
 ## v1.5.206a — Schema `inLanguage` on every top-level schema (Layer 6 — piece 1 of 4)
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `3352783`
 
 ### Why this patch exists
 
