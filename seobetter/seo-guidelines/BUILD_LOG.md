@@ -19,7 +19,7 @@
 ## v1.5.204 — Scoring gate fix: per-type skip of BLUF / Section Openings / Freshness for §3.1A genre-override types
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `2869e7a`
 
 ### Why this patch exists
 
