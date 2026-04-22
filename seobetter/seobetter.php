@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.191
+ * Version: 1.5.192
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.191' );
+define( 'SEOBETTER_VERSION', '1.5.192' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1417,6 +1417,9 @@ final class SEOBetter {
                 // v1.5.14 — thread content_type so format_hybrid() can render
                 // HowTo step-number boxes for ordered lists in how_to articles
                 'content_type' => sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' ),
+                // v1.5.192 — thread language so RTL languages (ar, he, fa, ur,
+                // ps, sd, dv, ug, yi, ckb) wrap the article in dir="rtl"
+                'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
             ] );
 
             // v1.5.67 — run Places_Link_Injector on the saved hybrid HTML so
@@ -1721,12 +1724,16 @@ final class SEOBetter {
         // clicks the preview fell back to inherited admin-theme CSS
         // (raw full-size images, wider text, different font) — exactly
         // the regression the user kept reporting. Classic mode is correct.
-        $html = $formatter->format( $updated_markdown, 'classic', [ 'accent_color' => $accent ] );
+        $html = $formatter->format( $updated_markdown, 'classic', [
+            'accent_color' => $accent,
+            'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
+        ] );
 
         // v1.5.101b — Score using hybrid HTML (same fix as rest_optimize_all)
         $hybrid_html = $formatter->format( $updated_markdown, 'hybrid', [
             'accent_color' => $accent,
             'content_type' => $request->get_param( 'content_type' ) ?? 'blog_post',
+            'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
         ] );
         $analyzer = new SEOBetter\GEO_Analyzer();
         $score = $analyzer->analyze( $hybrid_html, $keyword );
@@ -1887,7 +1894,10 @@ final class SEOBetter {
         $updated_markdown = SEOBetter\Citation_Pool::append_references_section( $updated_markdown, $combined_pool );
 
         $formatter = new SEOBetter\Content_Formatter();
-        $html = $formatter->format( $updated_markdown, 'classic', [ 'accent_color' => $accent ] );
+        $html = $formatter->format( $updated_markdown, 'classic', [
+            'accent_color' => $accent,
+            'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
+        ] );
 
         // v1.5.101b — Score using HYBRID HTML for accuracy. Classic mode wraps
         // content in <style> + scoped <div> which can confuse the GEO analyzer
@@ -1897,6 +1907,7 @@ final class SEOBetter {
         $hybrid_html = $formatter->format( $updated_markdown, 'hybrid', [
             'accent_color' => $accent,
             'content_type' => $request->get_param( 'content_type' ) ?? 'blog_post',
+            'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
         ] );
         $analyzer = new SEOBetter\GEO_Analyzer();
         $score = $analyzer->analyze( $hybrid_html, $keyword );
@@ -1926,7 +1937,10 @@ final class SEOBetter {
 
         // Format as classic HTML
         $formatter = new SEOBetter\Content_Formatter();
-        $html = $formatter->format( $markdown, 'classic', [ 'accent_color' => $accent ] );
+        $html = $formatter->format( $markdown, 'classic', [
+            'accent_color' => $accent,
+            'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
+        ] );
 
         // Re-score
         $analyzer = new SEOBetter\GEO_Analyzer();

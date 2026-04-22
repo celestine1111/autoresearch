@@ -7,12 +7,79 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22
+> **Last updated:** 2026-04-22 (v1.5.192)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.192 — Opinion type redesign (research-backed) + RTL language support
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Opinion content type (research-backed redesign)
+
+Based on 20+ sources spanning publisher editorial guides (NYT, WaPo, OpEd Project, Harvard Kennedy School, The Conversation, Nieman Lab, Poynter, NPR, Purdue OWL), AI-citation research (Princeton GEO arXiv 2311.09735, Ahrefs AI SEO stats, Qwairy Q3 2025 citation study, Profound AI-platform citation patterns), and Google E-E-A-T 2025 guidance. Full source list in conversation transcript.
+
+- **New prose template** — `includes/Async_Generator.php::get_prose_template()` line **~710**
+  - Old: `Key Takeaways, Thesis Statement, Supporting Arguments (3 points with evidence), Counterargument, Call to Action, FAQ, References`
+  - New: `Key Takeaways, Hook and Thesis, Argument 1 (strongest), Argument 2, Argument 3 (optional if >1000w), The Objection (steelman then refute), What This Means, FAQ, Conclusion and Call to Action, References`
+  - Guidance rewritten: explicit thesis by paragraph 3; strongest argument first; steelman the counter; first-person encouraged but avoid "I think/I feel" hedges; 4-8 pool-matched links per 1000 words with descriptive noun-phrase anchor text; qualified claims beat absolutism; label opinion explicitly.
+  - Verify: `grep -n "The Objection (steelman" includes/Async_Generator.php`
+
+- **Schema enrichment for `OpinionNewsArticle`** — `includes/Schema_Generator.php::build_article()` line **~385–405**
+  - Added `citation` field populated from every outbound URL in the article body (up to 20, deduped). Per Princeton GEO: citation-backed pages get ~30-40% higher generative-engine citation rate.
+  - Added `backstory` field with explicit "Opinion piece — reflects the author's personal views, not an objective news report." AI engines use this to disambiguate opinion from news.
+  - New helper `Schema_Generator::extract_outbound_urls()` added.
+  - `dateModified`, `author.sameAs` (from plugin settings), `speakable` already populated — verified no drift.
+  - Verify: `grep -n "extract_outbound_urls\|'backstory'" includes/Schema_Generator.php`
+
+- **Removed `opinion` from ClaimReview eligibility** — `includes/Schema_Generator.php::detect_factcheck_schema()` line **~1612**
+  - Policy risk: Google's ClaimReview documentation says this schema is for fact-checking someone else's claim, not for an author's own opinions. Emitting ClaimReview on an op-ed could trigger a manual action.
+  - Verify: `grep -n "news_article', 'blog_post', 'scholarly_article'" includes/Schema_Generator.php`
+
+- **Opinion disclosure bar** — `includes/Content_Formatter.php::format_hybrid()` line **~525**
+  - Rendered below the red type badge for `content_type === 'opinion'`. One-line red-bordered callout: "Opinion — this piece reflects the author's views, not objective reporting." Per Google 2025 E-E-A-T: clearly label opinion vs. fact.
+  - Verify: `grep -n "this piece reflects the author" includes/Content_Formatter.php`
+
+- **Editorial pull-quote styling** — `includes/Content_Formatter.php` `case 'quote':` branch (hybrid) line **~1015**
+  - All blockquotes in opinion articles now render as dramatic editorial pull-quotes: oversized leading `❝` mark (#fecdd3, 5em, Georgia serif), 5px red accent border (#e11d48), gradient background (#fff1f2 → #ffe4e6), 1.25em italic text in #881337, rounded 12px corners. Wrapped in `<figure class="sb-op-pullquote">`.
+  - Per Smashing/Folwell research: pull quotes lift enjoyment + readability and AI engines treat blockquotes as "witness statements" with higher citation rates.
+  - Verify: `grep -n "sb-op-pullquote" includes/Content_Formatter.php`
+
+### RTL language support (ALL content types, not just Opinion)
+
+Previously the plugin offered Arabic (`ar`), Hebrew (`he`), Urdu (`ur`), Persian (`fa`), etc. as article language options but emitted zero RTL markup — articles in these languages rendered LTR with physical-CSS callouts on the wrong side.
+
+- **`Content_Formatter::is_rtl_language()`** — new public static helper line **~45 onwards**
+  - RTL language codes: `ar, arc, ckb, dv, fa, he, ks, ku, ps, sd, ug, ur, yi` (BCP-47 aware — strips region subtag).
+  - Verify: `grep -n "is_rtl_language" includes/Content_Formatter.php`
+
+- **RTL output wrapper** — `Content_Formatter::format()` entry point line **~30–65**
+  - When `$options['language']` is RTL, wraps entire output in `<div dir="rtl" lang="XX" class="sb-rtl-article">…</div>` and prepends a scoped `<style id="seobetter-rtl-overrides">` block.
+  - Scoped CSS flips the most common physical patterns: `border-left:4px|5px solid` → `border-right`, `padding-left` → `padding-right`, `margin-left` reset, `text-align:left` → `text-align:right`, list marker padding flipped, Opinion pull-quote `❝` repositioned, tables right-aligned.
+  - Works for ALL 21 content types. The browser also flips text direction automatically, so content inside blockquotes, lists, tables, callouts, References box all render RTL correctly.
+  - Verify: `grep -n 'rtl_css_block\|sb-rtl-article' includes/Content_Formatter.php`
+
+- **Language threaded through all `format()` call sites:**
+  - `seobetter.php::rest_save_draft()` line **~1422** (main save path)
+  - `seobetter.php` optimize-all and citation-fix routes lines **~1729, 1736, 1906, 1938**
+  - `includes/Async_Generator.php::assemble_final()` line **~2068** (preview)
+  - `includes/Bulk_Generator.php::process_next()` lines **~53, 99, 177, 215** (Bulk CSV `language` column + start_job + format)
+  - Verify: `grep -n "'language'" seobetter/seobetter.php seobetter/includes/Async_Generator.php seobetter/includes/Bulk_Generator.php seobetter/includes/Content_Formatter.php | head -20`
+
+### Confirmed unaffected
+
+- **v1.5.191 outbound-link pipeline unchanged.** Schema generation, prose templates, and CSS do not touch `validate_outbound_links`, `linkify_bracketed_references`, Pass 4 dedup, or `append_references_section`. The `cleanup → validate → linkify → references` order in `rest_save_draft` is preserved verbatim. Confirmed by grep across all changed files.
+- **Other 20 content types unaffected by Opinion changes.** Opinion-specific blocks gate on `$is_opinion === true` (content_type match). Non-opinion articles render exactly as before.
+
+### Verified by user
+
+- UNTESTED
 
 ---
 

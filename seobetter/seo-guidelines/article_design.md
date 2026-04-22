@@ -712,7 +712,7 @@ Every content type gets a **type badge** — a colored pill at the top of the ar
 | comparison | &#8644; Comparison | Purple (#ede9fe) | VS badge, two-column grid, winner highlights |
 | buying_guide | &#128722; Buying Guide | Green (#ecfdf5) | Pick pills ("Our Pick"), product cards |
 | news_article | &#128240; News | Blue (#eff6ff) | Dateline, "Updated" timestamp, minimal chrome |
-| opinion | &#128172; Opinion | Red (#fef2f2) | Large author photo, editorial stance |
+| opinion | &#128172; Opinion | Red (#fef2f2) | **v1.5.192:** Opinion disclosure bar under the type badge ("this piece reflects the author's views, not objective reporting"); editorial pull-quote styling on ALL blockquotes (red accent bar, oversized leading ❝ mark, #fff1f2→#ffe4e6 gradient, 1.25em italic #881337 text); shared E-E-A-T author-bio block at article end. New prose template: Hook+Thesis → Arg1 → Arg2 → Arg3 (optional) → The Objection → What This Means → FAQ → Conclusion+CTA → References. Schema adds `citation` (every outbound URL) + `backstory` ("Opinion piece — reflects the author's personal views, not an objective news report."). Removed `opinion` from ClaimReview eligibility (Google policy: ClaimReview is for fact-checking others' claims, not own opinions). |
 | interview | &#127908; Interview / Q&A | Green (#f0fdf4) | **Q cards** (green gradient bg, green left border, green Q circle, microphone SVG) + **A blocks** (gray bg, gray left border, gray A circle, indented at 64px). H3 questions ending in `?` trigger Q/A styling. Auto-closed at next H2 or end of article. |
 | case_study | &#128200; Case Study | Indigo (#eff6ff) | Large stat numbers, Challenge/Solution/Results |
 | tech_article | &#128187; Technical Article | Slate (#f1f5f9) | **Code blocks**: dark bg (#0f172a), header bar with traffic-light dots + language label + terminal SVG, `<pre><code>` with monospace font stack (Fira Code → JetBrains Mono → Consolas), rounded corners, box-shadow. **Inline code**: dark pill (#1e293b text on #e2e8f0 bg), 4px radius, monospace. 28+ language labels auto-detected from fence hint. |
@@ -807,6 +807,27 @@ Every generated article MUST have:
 - [ ] No empty References section heading (FM-4 — removed if all entries fail whitelist)
 
 ---
+
+## RTL / right-to-left language support (v1.5.192)
+
+When the chosen article language is right-to-left — Arabic (`ar`), Hebrew (`he`), Persian/Farsi (`fa`), Urdu (`ur`), Pashto (`ps`), Sindhi (`sd`), Divehi (`dv`), Uyghur (`ug`), Yiddish (`yi`), Central Kurdish (`ckb`), Aramaic (`arc`), Kashmiri (`ks`) — `Content_Formatter::format()` wraps the entire article output in a `<div dir="rtl" lang="XX" class="sb-rtl-article">…</div>` block and emits a scoped `<style id="seobetter-rtl-overrides">` CSS block just before the wrapper.
+
+The scoped CSS flips the most common physical-CSS patterns used by wp:html styled blocks:
+
+- `border-left:4px|5px solid …` → `border-right:4px|5px solid …` (Key Takeaways, Pros, Cons, Ingredients, References box, Opinion pull-quote, Interview Q/A, quote blocks)
+- `padding-left: …` → `padding-right: …`
+- `margin-left: …` → reset
+- `text-align:left` → `text-align:right`
+- `ul`, `ol` list-marker side flipped (`padding-right:1.5em`)
+- `figure.sb-op-pullquote > span` (Opinion oversized leading `❝`) repositioned to the right
+- Tables: `direction:rtl`; `th`/`td` right-aligned
+
+The wrapper works for ALL 21 content types, not just Opinion. It applies equally to the Async preview, the saved draft, and Fix-Now-reformatted output. Detection: `Content_Formatter::is_rtl_language($lang)` — public static, BCP-47 aware (strips region subtag).
+
+Language flows from:
+- Single generation: `$_POST['language']` → REST param `language` → `rest_save_draft` → `format( $markdown, 'hybrid', [ 'language' => ... ] )`
+- Preview: `Async_Generator::start_job( [ 'language' => ... ] )` → `$options['language']` in `assemble_final`
+- Bulk: CSV `language` column → `$item['language']` → `Async_Generator::start_job` AND `format()` call
 
 *This document defines the visual design language for all SEOBetter article output. `Content_Formatter.php` implements the rendering; `Stock_Image_Inserter.php` handles image placement; `Citation_Pool.php` and `seobetter.php::append_references_section()` handle References. Update this file whenever any of those change.*
 

@@ -50,6 +50,8 @@ class Bulk_Generator {
                 'domain'             => sanitize_text_field( $data['domain'] ?? 'general' ),
                 'content_type'       => sanitize_text_field( $data['content_type'] ?? 'blog_post' ),
                 'country'            => sanitize_text_field( $data['country'] ?? '' ),
+                // v1.5.192 — optional per-row language (falls back to 'en')
+                'language'           => sanitize_text_field( $data['language'] ?? 'en' ),
             ];
         }
 
@@ -95,6 +97,7 @@ class Bulk_Generator {
                 'domain'             => $kw['domain'] ?? $defaults['domain'] ?? 'general',
                 'content_type'       => $kw['content_type'] ?? $defaults['content_type'] ?? 'blog_post',
                 'country'            => $kw['country'] ?? $defaults['country'] ?? '',
+                'language'           => $kw['language'] ?? $defaults['language'] ?? 'en',
                 'status'             => 'pending',
                 'post_id'            => null,
                 'post_title'         => null,
@@ -169,6 +172,10 @@ class Bulk_Generator {
                 'content_type'       => $item['content_type'] ?? 'blog_post',
                 'accent_color'       => '#764ba2',
                 'country'            => $item['country'] ?? '',
+                // v1.5.192 — thread language so the AI writes in the chosen
+                // language AND the formatter applies the RTL wrapper when
+                // appropriate
+                'language'           => $item['language'] ?? 'en',
             ] );
 
             if ( empty( $start['success'] ) ) {
@@ -208,6 +215,8 @@ class Bulk_Generator {
                     $content_html = $formatter->format( $markdown, 'hybrid', [
                         'accent_color' => $accent,
                         'content_type' => $item['content_type'] ?? 'blog_post',
+                        // v1.5.192 — thread language for RTL wrapper
+                        'language'     => $item['language'] ?? 'en',
                     ] );
                 }
 

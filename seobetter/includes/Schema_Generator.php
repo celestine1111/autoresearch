@@ -398,7 +398,58 @@ class Schema_Generator {
             $schema['articleSection'] = 'News';
         }
 
+        // v1.5.192 — OpinionNewsArticle enrichment per GEO/AI-citation research:
+        //   - `citation` = every outbound URL the article body cites
+        //     (tells AI crawlers the piece is claim-backed, ~30-40% lift in
+        //     generative-engine citation per Princeton GEO 2311.09735).
+        //   - `backstory` = the content-type label ("Opinion")
+        //     so AI models can disambiguate opinion from reporting.
+        if ( $type === 'OpinionNewsArticle' ) {
+            $urls = $this->extract_outbound_urls( $post->post_content );
+            if ( ! empty( $urls ) ) {
+                $schema['citation'] = array_map( function ( $u ) {
+                    return [ '@type' => 'CreativeWork', 'url' => $u ];
+                }, $urls );
+            }
+            $schema['backstory'] = 'Opinion piece — reflects the author\'s personal views, not an objective news report.';
+        }
+
         return $schema;
+    }
+
+    /**
+     * v1.5.192 — Extract outbound URLs from post content for schema `citation`.
+     * Collects every external http(s) URL found in markdown links, HTML anchors,
+     * or `<a href>` tags, deduplicates, filters to external (non-site) hosts.
+     * Returns up to 20 URLs (schema size cap — more is diminishing returns).
+     *
+     * @return string[] List of unique external URLs.
+     */
+    private function extract_outbound_urls( string $content ): array {
+        $urls = [];
+        // Match <a href="URL"> and [text](URL)
+        if ( preg_match_all( '/href=["\'](https?:\/\/[^"\'\s]+)["\']/i', $content, $m1 ) ) {
+            $urls = array_merge( $urls, $m1[1] );
+        }
+        if ( preg_match_all( '/\[[^\]]+\]\((https?:\/\/[^)]+)\)/', $content, $m2 ) ) {
+            $urls = array_merge( $urls, $m2[1] );
+        }
+        if ( empty( $urls ) ) return [];
+
+        $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+        $seen = [];
+        $out = [];
+        foreach ( $urls as $u ) {
+            $u = trim( $u, " \t\n\r\0\x0B\"'" );
+            $host = wp_parse_url( $u, PHP_URL_HOST );
+            if ( ! $host || $host === $site_host ) continue;
+            $key = strtolower( rtrim( preg_replace( '/[?#].*$/', '', $u ), '/' ) );
+            if ( isset( $seen[ $key ] ) ) continue;
+            $seen[ $key ] = true;
+            $out[] = $u;
+            if ( count( $out ) >= 20 ) break;
+        }
+        return $out;
     }
 
     /**
@@ -1610,7 +1661,11 @@ class Schema_Generator {
      * that contain claim verification language.
      */
     private function detect_factcheck_schema( \WP_Post $post, string $content, string $content_type ): ?array {
-        if ( ! in_array( $content_type, [ 'news_article', 'opinion', 'blog_post', 'scholarly_article' ], true ) ) {
+        // v1.5.192 — Removed 'opinion' from ClaimReview eligibility.
+        // Per Google's ClaimReview policy, ClaimReview is for fact-checking
+        // someone else's claim, NOT for an author's own opinions. Emitting
+        // ClaimReview on an op-ed risks a manual action.
+        if ( ! in_array( $content_type, [ 'news_article', 'blog_post', 'scholarly_article' ], true ) ) {
             return null;
         }
         $text = wp_strip_all_tags( $content );

@@ -568,7 +568,7 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 |---|---|---|---|
 | Blog Post | BlogPosting + FAQPage | Hook → Intro → Body → Conclusion → CTA | 800-2000 |
 | News Article | NewsArticle | Lede → Nut Graf → Details → Background → Closing | 400-1200 |
-| Opinion / Op-Ed | OpinionNewsArticle | Thesis → Arguments → Counterargument → CTA | 600-1500 |
+| Opinion / Op-Ed | OpinionNewsArticle | **v1.5.192 research-backed structure:** Key Takeaways → Hook+Thesis (nut graf by para 3) → Arg1 (strongest) → Arg2 → Arg3 (optional if >1000w) → The Objection (steelman then refute) → What This Means → FAQ → Conclusion+CTA → References. First-person encouraged, avoid "I think/I feel" hedges. Steelman the opposing view before refuting. Qualified claims beat absolutism. Sources: NYT Opinion/WaPo/OpEd Project guides; Purdue OWL; Poynter/Nieman nut-graf; Princeton GEO (arXiv 2311.09735); Ahrefs AI SEO stats; Claude/Perplexity citation studies Q3 2025; Google E-E-A-T 2025. | 800-1400 (sweet spot 900-1100) |
 | How-To Guide | HowTo + Article | Why → Prerequisites → Steps → Troubleshooting → Conclusion | 800-2500 |
 | Listicle | Article + ItemList | Intro → Numbered Items → Conclusion | 1000-3000 |
 | Product Review | Review + Article | Intro → Specs → Experience → Pros/Cons → Verdict | 800-2000 |

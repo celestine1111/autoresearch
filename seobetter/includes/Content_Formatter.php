@@ -31,14 +31,92 @@ class Content_Formatter {
         $sections = $this->parse_markdown( $markdown );
 
         if ( $mode === 'hybrid' ) {
-            return $this->format_hybrid( $sections, $options );
+            $html = $this->format_hybrid( $sections, $options );
+        } elseif ( $mode === 'gutenberg' ) {
+            $html = $this->format_gutenberg( $sections, $options );
+        } else {
+            $html = $this->format_classic( $sections, $options );
         }
 
-        if ( $mode === 'gutenberg' ) {
-            return $this->format_gutenberg( $sections, $options );
+        // v1.5.192 — RTL wrapping. When the article language is right-to-left
+        // (Arabic, Hebrew, Persian, Urdu, Pashto, Sindhi, Divehi, Uyghur,
+        // Yiddish, Central Kurdish), wrap the output in a dir="rtl" / lang="XX"
+        // block so the browser flips text flow, list marker placement, and
+        // paragraph alignment automatically. A scoped CSS override block
+        // also flips the most common physical-CSS patterns used by the
+        // styled wp:html blocks (border-left, padding-left, margin-left,
+        // text-align:left) so callouts, lists, blockquotes, References
+        // boxes, and Opinion pull-quotes render correctly. Works for ALL
+        // 21 content types, not just Opinion.
+        $lang = $options['language'] ?? '';
+        if ( $lang && self::is_rtl_language( $lang ) ) {
+            $html = self::rtl_css_block() . "\n\n" . '<!-- wp:html -->' . "\n"
+                  . '<div dir="rtl" lang="' . esc_attr( $lang ) . '" class="sb-rtl-article">'
+                  . "\n" . '<!-- /wp:html -->' . "\n\n"
+                  . $html
+                  . "\n\n" . '<!-- wp:html -->' . "\n" . '</div>' . "\n" . '<!-- /wp:html -->';
         }
 
-        return $this->format_classic( $sections, $options );
+        return $html;
+    }
+
+    /**
+     * v1.5.192 — Whether a given language code is right-to-left.
+     *
+     * Based on the ISO 639-1 / BCP-47 set of scripts whose dominant direction
+     * is RTL. Ambiguous cases (Kurdish, Uzbek, Hausa — script-dependent) are
+     * handled by their dedicated RTL subtags where possible.
+     */
+    public static function is_rtl_language( string $lang ): bool {
+        $rtl = [ 'ar', 'arc', 'ckb', 'dv', 'fa', 'he', 'ks', 'ku', 'ps', 'sd', 'ug', 'ur', 'yi' ];
+        $primary = strtolower( explode( '-', $lang )[0] ?? '' );
+        return in_array( $primary, $rtl, true );
+    }
+
+    /**
+     * v1.5.192 — Scoped CSS overrides that flip common physical-CSS patterns
+     * to their RTL equivalents inside `.sb-rtl-article`. Emitted once, before
+     * the RTL article wrapper.
+     *
+     * Elements targeted:
+     *   - Left-border callouts (Key Takeaways, Pros, Cons, Ingredients,
+     *     References box, Opinion pull-quote, Interview Q/A, quote blocks)
+     *   - Left-padding lists and indented blocks
+     *   - Left-aligned tables and headings
+     *   - Opinion pull-quote oversized leading-quote mark positioning
+     */
+    private static function rtl_css_block(): string {
+        $css = <<<'CSS'
+<style id="seobetter-rtl-overrides">
+.sb-rtl-article { text-align: right; direction: rtl; }
+.sb-rtl-article blockquote,
+.sb-rtl-article [style*="border-left:4px solid"],
+.sb-rtl-article [style*="border-left: 4px solid"],
+.sb-rtl-article [style*="border-left:5px solid"],
+.sb-rtl-article [style*="border-left: 5px solid"] {
+    border-left: 0 !important;
+    border-right-width: 4px !important;
+    border-right-style: solid !important;
+}
+.sb-rtl-article blockquote[style*="border-left:5px solid"],
+.sb-rtl-article [style*="border-left:5px solid"] {
+    border-right-width: 5px !important;
+}
+.sb-rtl-article [style*="padding-left"] { padding-left: 0 !important; padding-right: 1.5em !important; }
+.sb-rtl-article [style*="margin-left"]  { margin-left: 0 !important; }
+.sb-rtl-article [style*="text-align:left"],
+.sb-rtl-article [style*="text-align: left"] { text-align: right !important; }
+.sb-rtl-article ul, .sb-rtl-article ol { padding-right: 1.5em; padding-left: 0; }
+.sb-rtl-article figure.sb-op-pullquote > span:first-child {
+    left: auto !important;
+    right: -0.05em !important;
+}
+.sb-rtl-article table { direction: rtl; }
+.sb-rtl-article table th, .sb-rtl-article table td { text-align: right !important; }
+.sb-rtl-article .seobetter-author-bio { text-align: right; }
+</style>
+CSS;
+        return "<!-- wp:html -->\n{$css}\n<!-- /wp:html -->";
     }
 
     /**
@@ -522,6 +600,25 @@ class Content_Formatter {
             if ( $type_badge ) {
                 $output[] = "<!-- wp:html -->\n{$type_badge}\n<!-- /wp:html -->";
             }
+
+            // v1.5.192 — Opinion disclosure bar: a small explicit notice
+            // that this article reflects the author's personal views, not
+            // objective reporting. Per Google 2025 E-E-A-T guidance:
+            // "clearly label opinion vs. fact". Also helps AI engines
+            // disambiguate opinion from news when indexing.
+            if ( $content_type === 'opinion' ) {
+                $op_icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+                $output[] = "<!-- wp:html -->\n"
+                    . '<div style="display:flex !important;align-items:center !important;gap:8px !important;'
+                    . 'padding:10px 14px !important;margin:0 auto 20px !important;max-width:100% !important;'
+                    . 'background:#fff1f2 !important;border:1px solid #fecdd3 !important;border-left:4px solid #e11d48 !important;'
+                    . 'border-radius:6px !important;font-size:0.82em !important;line-height:1.5 !important;'
+                    . 'color:#991b1b !important">'
+                    . $op_icon
+                    . '<span style="font-weight:600 !important;color:#9f1239 !important">Opinion —</span> '
+                    . '<span style="color:#7f1d1d !important">this piece reflects the author&rsquo;s views, not objective reporting.</span>'
+                    . "</div>\n<!-- /wp:html -->";
+            }
         } catch ( \Throwable $e ) {
             // Non-fatal — don't crash article formatting
         }
@@ -538,6 +635,11 @@ class Content_Formatter {
         $is_white_paper  = ( $options['content_type'] ?? '' ) === 'white_paper';
         $wp_section_num  = 0; // auto-incrementing section counter for formal numbering
         $in_exec_summary = false; // true after Executive Summary heading, until next H2
+
+        // v1.5.192 — Opinion styling state: replaces the plain blockquote
+        // with a dramatic editorial pull-quote (large italic, red accent bar,
+        // oversized leading quotation mark) for all quotes in op-ed articles.
+        $is_opinion = ( $options['content_type'] ?? '' ) === 'opinion';
 
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
@@ -999,6 +1101,24 @@ class Content_Formatter {
 
                     // Default: styled blockquote (expert quote / pull quote) — wp:html
                     $text = $this->inline_markdown( $section['content'] );
+
+                    // v1.5.192 — Opinion articles get dramatic editorial pull-quote
+                    // styling: oversized leading ❝ mark, larger italic text,
+                    // red accent bar, gradient bg. Per opinion-writing research
+                    // (Smashing/Folwell): pull quotes lift enjoyment + readability
+                    // and AI engines treat blockquotes as "witness statements"
+                    // with higher citation rates than plain prose.
+                    if ( $is_opinion ) {
+                        $html  = '<figure class="sb-op-pullquote" style="margin:2em 0;padding:0;position:relative">';
+                        $html .= '<span aria-hidden="true" style="position:absolute;top:-0.2em;left:-0.05em;font-size:5em;line-height:1;color:#fecdd3 !important;font-family:Georgia,serif;pointer-events:none">&ldquo;</span>';
+                        $html .= '<blockquote style="border-left:5px solid #e11d48;margin:0;padding:1.25em 1.75em 1.25em 2.25em;background:linear-gradient(135deg,#fff1f2 0%,#ffe4e6 100%) !important;border-radius:0 12px 12px 0;font-style:italic;font-size:1.25em;line-height:1.55;color:#881337 !important;font-weight:500;position:relative;z-index:1">';
+                        $html .= '<p style="margin:0;color:#881337 !important">' . $text . '</p>';
+                        $html .= '</blockquote>';
+                        $html .= '</figure>';
+                        $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
+                        break;
+                    }
+
                     $html = "<blockquote style=\"border-left:4px solid {$accent};margin:1.5em 0;padding:1em 1.5em;background:#f9fafb;border-radius:0 8px 8px 0;font-style:italic;font-size:1.05em;color:#4b5563 !important;line-height:1.7\"><p style=\"margin:0;color:#4b5563 !important\">{$text}</p></blockquote>";
                     $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     break;
