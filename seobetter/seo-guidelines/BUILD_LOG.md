@@ -19,7 +19,7 @@
 ## v1.5.197 — Clean schema description + exclude author social links from citation[]
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `cce622c`
 
 ### User report (live Opinion article schema audit)
 
