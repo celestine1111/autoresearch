@@ -19,7 +19,7 @@
 ## v1.5.206d-fix — Forward `language` from JS to save-draft so Layer 6 actually fires
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `9f50371`
 
 ### Why this patch exists
 
