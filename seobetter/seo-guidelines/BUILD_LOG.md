@@ -19,7 +19,7 @@
 ## v1.5.206c — Regional prompt context injector (Layer 6 — piece 3 of 4)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `ab123a3`
 
 ### Why this patch exists
 
