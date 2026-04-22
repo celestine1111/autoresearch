@@ -7,12 +7,70 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.203)
+> **Last updated:** 2026-04-22 (v1.5.204)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.204 — Scoring gate fix: per-type skip of BLUF / Section Openings / Freshness for §3.1A genre-override types
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+`GEO_Analyzer.php` runs 14 weighted checks per the §6 scoring rubric. Three of them (BLUF Header = 8% weight, Section Openings = 8%, Freshness Signal = 6%) were designed against the §3.1 DEFAULT profile — they expect Key Takeaways + Last Updated + 40-60 word direct-answer section openings.
+
+The seven §3.1A genre-override content types legitimately skip these structural elements by design. Before v1.5.204, a correctly-crafted Personal Essay (per v1.5.201 research-backed spec — NYT Modern Love, Longreads, etc.) would zero out on all three checks → 22% of the rubric scored 0 → artificial ≤78 cap despite the article being excellent for its genre. Same issue on Press Release (v1.5.199), News Article baseline, Live Blog, Interview, Recipe.
+
+v1.5.202 documented the gap as a known issue in §6 and deferred the code fix. v1.5.204 is the code fix.
+
+### Fixed
+
+- **Per-type skip gates in `GEO_Analyzer::analyze()`** — `includes/GEO_Analyzer.php` line **~60-100**
+  - `$skip_bluf_types = [ 'news_article', 'press_release', 'personal_essay', 'live_blog', 'interview', 'recipe' ]` — 6 types that skip the BLUF Header check (no Key Takeaways by design)
+  - `$skip_opener_types` extended from 5 → 6 types (added `personal_essay` — literary narrative doesn't fit 40-60 word direct-answer pattern)
+  - `$skip_freshness_types = [ 'news_article', 'press_release', 'personal_essay', 'live_blog', 'interview', 'recipe' ]` — 6 types that skip the Freshness Signal check (use dateline or genre-appropriate signal)
+  - Skipped checks return `score: 100` with explanatory detail string — the type is NOT penalised; its structure is correctly genre-appropriate
+  - `opinion` is NOT in any skip list (HYBRID profile per §3.1A keeps Key Takeaways + FAQ + References; default checks apply)
+  - Verify: `grep -n 'skip_bluf_types\|skip_freshness_types' includes/GEO_Analyzer.php`
+
+- **`SEO-GEO-AI-GUIDELINES.md §6 updated`** — `seo-guidelines/SEO-GEO-AI-GUIDELINES.md` line **~527**
+  - Removed the "code change deferred" note from v1.5.202
+  - Added per-check skip table documenting the three gates and their type lists
+  - Documented expected before/after impact: 3 × 0-point checks on §3.1A types → 3 × 100-point skips → full 22% credit restored
+  - Verify: `grep -n 'Per-type scoring gating.*v1.5.204' seo-guidelines/SEO-GEO-AI-GUIDELINES.md`
+
+### Effect on recently-shipped §3.1A types
+
+| Type | Before v1.5.204 | After v1.5.204 |
+|---|---|---|
+| `personal_essay` v1.5.201 | BLUF + Openings + Freshness all zeroed → 22% of rubric at 0 → capped ≤78 | All three skipped with score 100 → 22% fully credited → accurate score reflects quality |
+| `press_release` v1.5.195/v1.5.199 | Same 22% cap | Same fair scoring |
+| `news_article` baseline | Same 22% cap | Now fair even without research-backed template |
+| `live_blog`, `interview`, `recipe` | Same cap | Now fair |
+| `opinion` v1.5.192/v1.5.196 | Default checks (HYBRID profile has all 3 elements) | Unchanged — fully scorable as before |
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — gate is content_type-based, no keyword logic.
+2. **Works for ALL 21 content types?** YES — 14 default-profile types continue using default checks; 7 genre-override types use skip gates. No type is made worse; §3.1A types are made fair.
+3. **Works for ALL AI models?** YES — post-generation scoring is model-agnostic.
+
+### Unaffected
+
+- v1.5.191 outbound-link pipeline untouched
+- v1.5.194/v1.5.198 Places gating untouched
+- v1.5.199 Quick Comparison enforcer untouched
+- All universal Princeton §1 checks (Readability, Factual Density, Citations, Expert Quotes, Entity Usage, Humanizer, Keyword Density, Tables, Lists, Island Test, CORE-EEAT) apply to every type as before
+
+### Verified by user
+
+- UNTESTED — please regenerate an existing Personal Essay (e.g. the one at srv1608940.hstgr.cloud that previously scored low) and confirm the new score reflects its craft quality rather than missing Key Takeaways.
 
 ---
 

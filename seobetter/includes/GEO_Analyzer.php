@@ -56,14 +56,54 @@ class GEO_Analyzer {
         $sections = $this->extract_sections( $content );
         $word_count = str_word_count( $text );
 
-        // Content types where section opener prose rules don't apply
-        $skip_opener_types = [ 'recipe', 'faq_page', 'live_blog', 'interview', 'glossary_definition' ];
-        $skip_openers = in_array( $content_type, $skip_opener_types, true );
+        // v1.5.204 — §3.1A Genre Override gating for structural checks.
+        //
+        // Three checks (bluf_header, section_openings, freshness) were designed
+        // against the §3.1 DEFAULT profile (blog_post / how_to / listicle / etc.)
+        // which requires Key Takeaways + Last Updated + 40-60 word section openings.
+        // Seven content types follow §3.1A GENRE OVERRIDES and legitimately skip
+        // these structural elements by design — penalising them is unfair and was
+        // producing artificially-low scores on correctly-crafted articles (notably
+        // personal_essay scoring in the B/C range despite being research-backed
+        // per NYT Modern Love, Longreads, Project Write Now, Google E-E-A-T 2025).
+        //
+        // Per-check skip lists (content types that skip by design):
+        //
+        //   bluf_header      — types without Key Takeaways:
+        //                      news_article, press_release, personal_essay,
+        //                      live_blog, interview, recipe
+        //
+        //   section_openings — types where "40-60 word direct answer" doesn't fit:
+        //                      recipe, faq_page, live_blog, interview,
+        //                      glossary_definition, personal_essay (v1.5.204 added)
+        //
+        //   freshness        — types that use dateline or genre-appropriate signal
+        //                      instead of "Last Updated":
+        //                      news_article, press_release, personal_essay,
+        //                      live_blog, interview, recipe
+        //
+        // Skipped checks return score 100 with a detail string explaining why —
+        // the type is NOT penalised; its structure is correctly genre-appropriate.
+        // Opinion is NOT in any skip list (it is a HYBRID profile — keeps Key
+        // Takeaways + FAQ + References per §3.1A row, so default checks apply).
+        //
+        // See SEO-GEO-AI-GUIDELINES.md §3.1A for the authoritative override table.
+        $skip_bluf_types      = [ 'news_article', 'press_release', 'personal_essay', 'live_blog', 'interview', 'recipe' ];
+        $skip_opener_types    = [ 'recipe', 'faq_page', 'live_blog', 'interview', 'glossary_definition', 'personal_essay' ];
+        $skip_freshness_types = [ 'news_article', 'press_release', 'personal_essay', 'live_blog', 'interview', 'recipe' ];
+
+        $skip_bluf      = in_array( $content_type, $skip_bluf_types, true );
+        $skip_openers   = in_array( $content_type, $skip_opener_types, true );
+        $skip_freshness = in_array( $content_type, $skip_freshness_types, true );
 
         $checks = [
             'readability'      => $this->check_readability( $text ),
-            'bluf_header'      => $this->check_bluf_header( $content ),
-            'section_openings' => $skip_openers ? [ 'score' => 80, 'detail' => 'Section opener check adjusted for ' . $content_type . ' content type' ] : $this->check_section_openings( $sections ),
+            'bluf_header'      => $skip_bluf
+                ? [ 'score' => 100, 'detail' => 'BLUF header check skipped — content type "' . $content_type . '" uses a §3.1A genre override (no Key Takeaways by design)' ]
+                : $this->check_bluf_header( $content ),
+            'section_openings' => $skip_openers
+                ? [ 'score' => 100, 'detail' => 'Section opener check skipped — content type "' . $content_type . '" uses a §3.1A genre override (section form does not fit 40-60 word direct-answer pattern)', 'sections' => [] ]
+                : $this->check_section_openings( $sections ),
             'island_test'      => $this->check_island_test( $text ),
             'factual_density'  => $this->check_factual_density( $text, $word_count ),
             // v1.5.72 — pass raw HTML ($content) not stripped text ($text).
@@ -75,7 +115,9 @@ class GEO_Analyzer {
             'expert_quotes'    => $this->check_expert_quotes( $content ),
             'tables'           => $this->check_tables( $content ),
             'lists'            => $this->check_lists( $content ),
-            'freshness'        => $this->check_freshness_signal( $content ),
+            'freshness'        => $skip_freshness
+                ? [ 'score' => 100, 'detail' => 'Freshness signal check skipped — content type "' . $content_type . '" uses a dateline or genre-appropriate signal instead of "Last Updated" (§3.1A genre override)' ]
+                : $this->check_freshness_signal( $content ),
             'entity_usage'     => $this->check_entity_usage( $text ),
             // v1.5.11 additions — guideline §5A, §4B, §15B
             'keyword_density'  => $this->check_keyword_density( $content, $text, $keyword_or_title, $word_count ),

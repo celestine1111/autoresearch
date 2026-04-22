@@ -524,15 +524,30 @@ This is the scoring system used by `GEO_Analyzer.php`. Each check is weighted. *
 
 ⭐ = added in v1.5.11 (guideline §5A, §4B, §15B integration).
 
-### Per-type scoring note (v1.5.202)
+### Per-type scoring gating (v1.5.204 — implemented)
 
-The 14 checks above are CONCEPTUALLY universal, but three of them (BLUF Header, Freshness Signal "Last Updated", and the FAQ/References-adjacent structural expectations baked into Section Openings) were designed against the §3.1 DEFAULT profile. Per §3.1A, seven content types follow genre-override profiles that do NOT include Key Takeaways / static "Last Updated" stamp / separate FAQ block by design:
+The 14 checks above are conceptually universal, but three of them (BLUF Header, Freshness Signal "Last Updated", and Section Openings' 40-60 word direct-answer rule) were designed against the §3.1 DEFAULT profile. Per §3.1A, seven content types follow genre-override profiles that legitimately skip these structural elements by design.
 
-- `news_article, opinion` (hybrid — keeps Key Takeaways + FAQ, so fully scorable), `press_release, personal_essay, live_blog, interview, recipe`
+**Implemented in `GEO_Analyzer::analyze()` (v1.5.204):** the three structural checks now skip by content_type when the type's §3.1A profile does not include the corresponding element. Skipped checks return score **100** with a detail string explaining why — the type is NOT penalised; its structure is correctly genre-appropriate.
 
-**Scoring fairness rule:** for §3.1A override types, `GEO_Analyzer` should not penalise the absence of sections that are intentionally excluded by genre. BLUF Header check should not zero-out a Personal Essay (literary essays don't use Key Takeaways boxes); Freshness Signal check should not zero-out a News Article (the dateline IS the freshness signal). The **universal Princeton §1 checks (Readability, Factual Density, Citations, Expert Quotes, Entity Usage, Humanizer, Keyword Density)** still apply to every type — those are where genre overrides earn their score via the per-genre form of the boost (see §3.1B).
+**Per-check skip lists (from `GEO_Analyzer::analyze()`):**
 
-Implementation status: as of v1.5.202, the scoring code in `GEO_Analyzer.php` has NOT yet been updated to skip BLUF/Freshness for §3.1A types. This is documented as a known issue — genre-override articles may currently score lower than their quality warrants. A future patch will gate the three structural checks by content_type using the §3.1A allowlist above. Code change deferred; this note documents the known gap.
+| Check | Skipped for content types | Reason |
+|---|---|---|
+| `bluf_header` | news_article, press_release, personal_essay, live_blog, interview, recipe | No Key Takeaways by design |
+| `section_openings` | recipe, faq_page, live_blog, interview, glossary_definition, personal_essay | Section form doesn't fit the 40-60 word direct-answer pattern (recipes have ingredient/step boxes, FAQ IS Q&A, live blogs are timestamped updates, interviews are Q&A, glossaries are definition-first, personal essays are literary narrative) |
+| `freshness_signal` | news_article, press_release, personal_essay, live_blog, interview, recipe | Dateline (news/PR), `datePublished` in schema (recipe), or no static freshness signal by genre (essay/interview/live) |
+
+**Opinion is NOT in any skip list** — per §3.1A it is a HYBRID profile that keeps Key Takeaways + FAQ + References alongside its argumentative structure. Default scoring applies.
+
+**Universal checks still apply to every type:** Readability, Factual Density, Citations, Expert Quotes, Entity Usage, Humanizer, Keyword Density, Tables, Lists, Island Test, CORE-EEAT. These are where genre overrides earn their score via the per-genre form of each boost (see §3.1B — e.g. personal essay's dated specifics ARE the factual-density signal).
+
+**Effect on recently-shipped §3.1A types** (observed before vs expected after v1.5.204):
+- `personal_essay` v1.5.201 — BLUF/Freshness/Openings were zeroing: 3 × 0-point checks on 8+8+6 = 22% of the rubric → artificially ≤78 cap. Now: 3 × 100-point skips → full 22% credited for correctly not having those sections.
+- `press_release` v1.5.195/199 — same 22% cap. Now fair.
+- `news_article` baseline — had same issue; now fair even without research-backed template.
+
+Source: [`GEO_Analyzer.php::analyze()`](../includes/GEO_Analyzer.php) `$skip_bluf_types` / `$skip_opener_types` / `$skip_freshness_types` arrays. BUILD_LOG v1.5.204.
 
 ### Grade Scale
 - **A+ (90-100):** Publish immediately — optimized for AI citations
