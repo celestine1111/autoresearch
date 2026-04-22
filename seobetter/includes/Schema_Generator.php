@@ -22,6 +22,61 @@ class Schema_Generator {
     private array $_multi_recipes = [];
 
     /**
+     * v1.5.206a — Schema.org @types that accept `inLanguage`.
+     *
+     * Per Schema.org, `inLanguage` is defined on CreativeWork, Event, LinkRole,
+     * PronounceableText, and WriteAction. Any @type that extends those inherits
+     * it. Types extending Intangible (BreadcrumbList, ItemList, DefinedTerm,
+     * JobPosting), Organization (LocalBusiness, Restaurant), Place, or Product
+     * do NOT accept it — adding inLanguage there triggers validator warnings.
+     *
+     * Whitelist all @types emitted by Schema_Generator that DO accept inLanguage.
+     */
+    private const INLANGUAGE_ACCEPTED_TYPES = [
+        // Article family (CreativeWork subclasses)
+        'Article', 'BlogPosting', 'NewsArticle', 'OpinionNewsArticle',
+        'ScholarlyArticle', 'TechArticle', 'Report', 'ReportageNewsArticle',
+        'LiveBlogPosting', 'AnalysisNewsArticle', 'BackgroundNewsArticle',
+        'OpinionNewsArticle', 'ReviewNewsArticle', 'AskPublicNewsArticle',
+        'AdvertiserContentArticle', 'SatiricalArticle',
+        // HowTo family
+        'HowTo',
+        // Food
+        'Recipe',
+        // Reviews (CreativeWork subclasses)
+        'Review', 'ClaimReview', 'CriticReview', 'EmployerReview', 'MediaReview',
+        'UserReview',
+        // WebPage family
+        'WebPage', 'FAQPage', 'QAPage', 'ProfilePage', 'CollectionPage',
+        'ItemPage', 'AboutPage', 'ContactPage', 'SearchResultsPage',
+        'MedicalWebPage', 'RealEstateListing',
+        // Media (MediaObject → CreativeWork)
+        'ImageObject', 'VideoObject', 'AudioObject', 'MediaObject', 'Photograph',
+        '3DModel', 'MusicVideoObject',
+        // Software / apps (CreativeWork subclasses)
+        'SoftwareApplication', 'WebApplication', 'MobileApplication',
+        'VideoGame', 'GameServer',
+        // Data
+        'Dataset', 'DataFeed', 'DataDownload',
+        // Courses / learning
+        'Course', 'LearningResource', 'EducationalOccupationalCredential',
+        // Documents
+        'DigitalDocument', 'TextDigitalDocument', 'NoteDigitalDocument',
+        'PresentationDigitalDocument', 'SpreadsheetDigitalDocument',
+        // Books / screen
+        'Book', 'Movie', 'TVEpisode', 'TVSeries', 'PodcastEpisode',
+        'MusicRecording', 'MusicAlbum',
+        // Events (has own inLanguage)
+        'Event', 'BusinessEvent', 'ChildrensEvent', 'ComedyEvent',
+        'CourseInstance', 'DanceEvent', 'DeliveryEvent', 'EducationEvent',
+        'ExhibitionEvent', 'Festival', 'FoodEvent', 'LiteraryEvent',
+        'MusicEvent', 'PublicationEvent', 'SaleEvent', 'ScreeningEvent',
+        'SocialEvent', 'SportsEvent', 'TheaterEvent', 'VisualArtsEvent',
+        // Other CreativeWork descendants
+        'Guide', 'Question', 'Quotation', 'Comment',
+    ];
+
+    /**
      * v1.5.206a — Resolve article language as BCP-47 code for schema inLanguage.
      *
      * Priority: user-selected `_seobetter_language` post meta > WordPress locale > 'en'.
@@ -311,14 +366,21 @@ class Schema_Generator {
         $schemas[] = $this->generate_breadcrumb_schema( $post );
 
         // Strip @context from individual schemas (caller wraps in single @graph)
-        // v1.5.206a — Inject inLanguage (BCP-47) into every top-level schema.
+        // v1.5.206a — Inject inLanguage (BCP-47) into top-level schemas whose
+        // @type accepts it per Schema.org (CreativeWork + Event descendants).
         // Additive: only sets inLanguage when the builder hasn't already set one.
         // Never overwrites existing values, never removes other fields.
+        // Skipped for BreadcrumbList/ItemList/LocalBusiness/Product/DefinedTerm/
+        // Organization/JobPosting etc. — those don't accept inLanguage and
+        // injecting it triggers schema.org validator warnings.
         $in_language = $this->get_in_language( $post );
         foreach ( $schemas as &$s ) {
             unset( $s['@context'] );
             if ( is_array( $s ) && ! isset( $s['inLanguage'] ) ) {
-                $s['inLanguage'] = $in_language;
+                $type = $s['@type'] ?? '';
+                if ( is_string( $type ) && in_array( $type, self::INLANGUAGE_ACCEPTED_TYPES, true ) ) {
+                    $s['inLanguage'] = $in_language;
+                }
             }
         }
         unset( $s );

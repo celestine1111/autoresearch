@@ -675,7 +675,7 @@ Each content type affects **three layers** of the generated article:
 
 ### Universal schema field (v1.5.206a) — `inLanguage`
 
-Every top-level schema entry emitted by either path is tagged with `inLanguage` (BCP-47) regardless of content type. Source of truth: `_seobetter_language` post meta → `get_locale()` (with `_` → `-`) → `'en'`. This is **not per-content-type** — no type-specific branching in the matrix below — but the visual impact is nil (schema is invisible to readers). Full spec in `structured-data.md §4` and `international-optimization.md §4.1`.
+Top-level schemas whose `@type` accepts `inLanguage` per Schema.org (CreativeWork + Event descendants — Article/HowTo/Recipe/Review/FAQPage/ImageObject/etc.) are tagged with `inLanguage` (BCP-47). `BreadcrumbList`, `ItemList`, `LocalBusiness`, `DefinedTerm`, `Organization`, `Product` are **skipped** (schema.org doesn't define `inLanguage` on them — injecting causes validator warnings). Source of truth: `_seobetter_language` post meta → `get_locale()` (with `_` → `-`) → `'en'`. This is **not per-content-type** — no matrix branching — but the visual impact is nil (schema is invisible to readers). Full whitelist in `Schema_Generator::INLANGUAGE_ACCEPTED_TYPES`; full spec in `structured-data.md §4` and `international-optimization.md §4.1`.
 
 ### Design & schema matrix
 

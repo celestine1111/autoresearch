@@ -80,14 +80,19 @@
 
 ## 4. REQUIRED AND RECOMMENDED FIELDS PER TYPE
 
-### Universal — `inLanguage` on every top-level schema (v1.5.206a)
+### Universal — `inLanguage` on eligible top-level schemas (v1.5.206a)
 
-Every top-level schema emitted by `Schema_Generator::generate()` and the legacy `build_aioseo_schema()` path is tagged with `inLanguage` (BCP-47 code: `en`, `en-US`, `zh-CN`, `ja`, `ko`, `ru`, `de`, `fr`, `es`, `pt-BR`, etc.).
+Every top-level schema emitted by `Schema_Generator::generate()` and the legacy `build_aioseo_schema()` path is tagged with `inLanguage` (BCP-47 code: `en`, `en-US`, `zh-CN`, `ja`, `ko`, `ru`, `de`, `fr`, `es`, `pt-BR`, etc.) — **but only on @types that accept it per Schema.org**.
+
+**Gated by `@type` whitelist** — Per Schema.org, `inLanguage` is defined on `CreativeWork`, `Event`, `LinkRole`, `PronounceableText`, `WriteAction` and their descendants. Injecting it on other types (Intangible, Organization, Place, Product descendants) triggers schema.org validator warnings.
+
+- **Accepted (gets `inLanguage` injected):** `Article`, `BlogPosting`, `NewsArticle`, `OpinionNewsArticle`, `ScholarlyArticle`, `TechArticle`, `LiveBlogPosting`, `HowTo`, `Recipe`, `Review`, `ClaimReview`, `FAQPage`, `QAPage`, `ProfilePage`, `WebPage`, `ImageObject`, `VideoObject`, `AudioObject`, `MediaObject`, `SoftwareApplication`, `Dataset`, `Course`, `Book`, `Movie`, `Event` (+ subclasses). Full list in `Schema_Generator::INLANGUAGE_ACCEPTED_TYPES`.
+- **Skipped (no `inLanguage`):** `BreadcrumbList`, `ItemList`, `DefinedTerm`, `DefinedTermSet`, `LocalBusiness`, `Organization`, `Product`, `Offer`, `AggregateOffer`, `Person`, `PostalAddress`, `Rating`, `AggregateRating`, `JobPosting`, `VacationRental`, `LodgingBusiness`, `NutritionInformation`, `HowToStep`, `Question`, `Answer`, `ListItem`, `Audience`, `Country`, `Place`, `GeoCoordinates`, `PropertyValue`.
 
 - **Source of truth:** `_seobetter_language` post meta (saved from the `language` request param at save time).
 - **Fallback chain:** `_seobetter_language` meta → `get_locale()` (converted `_` → `-`) → `'en'`.
-- **Anchor:** `Schema_Generator::get_in_language()` + the injection loop in `Schema_Generator::generate()` post-processor (after `unset( $s['@context'] )`).
-- **Legacy path:** `seobetter.php::populate_aioseo()` injects `inLanguage` into every entry of `$schema_data` before wrapping in `@graph`.
+- **Anchor:** `Schema_Generator::get_in_language()` + the type-gated injection loop in `Schema_Generator::generate()` post-processor (after `unset( $s['@context'] )`).
+- **Legacy path:** `seobetter.php::populate_aioseo()` mirrors the same type-gate inline before wrapping in `@graph`.
 - **Additive guarantee:** never overwrites an `inLanguage` that a specific builder has already set; never touches other fields.
 
 ### Article / BlogPosting / NewsArticle

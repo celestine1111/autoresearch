@@ -7,12 +7,70 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.206a)
+> **Last updated:** 2026-04-22 (v1.5.206a-fix)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206a-fix — Gate `inLanguage` injection by Schema.org @type whitelist (validator-warning fix)
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+The v1.5.206a post-processor injected `inLanguage` into **every** top-level schema, including types that don't accept it per Schema.org. Ben's schema.org validator surfaced a warning on the `BreadcrumbList`:
+
+> "The property inLanguage is not recognised by the schema (e.g. schema.org) for an object of type BreadcrumbList."
+
+Per Schema.org, `inLanguage` is defined on `CreativeWork`, `Event`, `LinkRole`, `PronounceableText`, and `WriteAction` — inherited by descendants. Types extending `Intangible` (BreadcrumbList, ItemList, DefinedTerm, JobPosting), `Organization` (LocalBusiness), `Place`, or `Product` do not inherit it.
+
+### Fixed
+
+- **`Schema_Generator::INLANGUAGE_ACCEPTED_TYPES` constant** — `includes/Schema_Generator.php` line **~24-72** — whitelist of all @types the plugin emits that accept `inLanguage`. Includes Article family, HowTo, Recipe, Review family, WebPage family (FAQPage/QAPage/ProfilePage/etc.), MediaObject family (Image/Video/Audio), SoftwareApplication family, Dataset, Course, Book, Movie, Event family, LiveBlogPosting.
+
+- **`Schema_Generator::generate()` post-processor** — `includes/Schema_Generator.php` line **~370-385** — injection loop now reads each schema's `@type` and only injects `inLanguage` when the type is in the whitelist. Skipped types (BreadcrumbList, ItemList, DefinedTerm, LocalBusiness, Organization, Product, JobPosting, VacationRental) are passed through untouched.
+
+- **Legacy `populate_aioseo()` path** — `seobetter.php` line **~1990-2015** — inline mirror of the same whitelist + guard. Kept as inline array rather than importing the class constant to preserve the legacy path's independence from Schema_Generator.
+
+### Doc sync (same commit)
+
+- **`seo-guidelines/structured-data.md §4`** — "Universal" block now documents both accepted and skipped types lists.
+- **`seo-guidelines/SEO-GEO-AI-GUIDELINES.md §10.4`** — `inLanguage` bullet expanded with accepted/skipped type lists.
+- **`seo-guidelines/article_design.md §11`** — "Universal schema field" note updated to mention the whitelist gating.
+
+### Safety posture
+
+- **Still additive** — only change is that some @types that previously got `inLanguage` injected incorrectly now don't get it injected at all. No existing schema field is modified or removed.
+- **Accepted types are unchanged** — Article, HowTo, FAQPage, etc. still get `inLanguage` exactly as in v1.5.206a pre-fix.
+- **Expected outcome** — Ben's validator warning on BreadcrumbList disappears. Rich Results Test continues to pass. Articles render identically.
+
+### Verify
+
+```bash
+# Whitelist constant exists with expected types
+grep -n "INLANGUAGE_ACCEPTED_TYPES" /Users/ben/Documents/autoresearch/seobetter/includes/Schema_Generator.php
+
+# Type-gate in the injection loop
+grep -n "in_array( \$type, self::INLANGUAGE_ACCEPTED_TYPES" /Users/ben/Documents/autoresearch/seobetter/includes/Schema_Generator.php
+
+# Legacy path has same whitelist inline
+grep -n "inlang_whitelist" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+```
+
+After regen, confirm in the page source:
+- `Article` / `BlogPosting` / etc. → has `"inLanguage"`
+- `BreadcrumbList` → NO `"inLanguage"`
+- `ItemList` (listicles) → NO `"inLanguage"`
+- `LocalBusiness` (if detected) → NO `"inLanguage"`
+
+### Verified by user
+
+UNTESTED — Ben to re-run schema.org validator; BreadcrumbList warning should be gone.
 
 ---
 

@@ -1987,15 +1987,30 @@ final class SEOBetter {
         $schema_type = $content_type ? $this->content_type_to_schema( $content_type ) : $this->detect_schema_type( $seo_title, $content );
         $schema_data = $this->build_aioseo_schema( $schema_type, $post_id, $seo_title, $content, $keyword );
 
-        // v1.5.206a — Inject inLanguage (BCP-47) into every top-level schema.
+        // v1.5.206a — Inject inLanguage (BCP-47) into top-level schemas whose
+        // @type accepts it per Schema.org (CreativeWork + Event descendants).
+        // Mirrors Schema_Generator::INLANGUAGE_ACCEPTED_TYPES whitelist to skip
+        // BreadcrumbList/ItemList/LocalBusiness/Product/DefinedTerm/etc.
         // Additive: only sets inLanguage when missing; never overwrites or removes fields.
-        $lang_meta     = get_post_meta( $post_id, '_seobetter_language', true );
-        $in_language   = ( is_string( $lang_meta ) && $lang_meta )
+        $lang_meta        = get_post_meta( $post_id, '_seobetter_language', true );
+        $in_language      = ( is_string( $lang_meta ) && $lang_meta )
             ? str_replace( '_', '-', sanitize_text_field( $lang_meta ) )
             : ( str_replace( '_', '-', get_locale() ?: '' ) ?: 'en' );
+        $inlang_whitelist = [
+            'Article', 'BlogPosting', 'NewsArticle', 'OpinionNewsArticle',
+            'ScholarlyArticle', 'TechArticle', 'Report', 'ReportageNewsArticle',
+            'LiveBlogPosting', 'HowTo', 'Recipe', 'Review', 'ClaimReview',
+            'WebPage', 'FAQPage', 'QAPage', 'ProfilePage', 'CollectionPage',
+            'ImageObject', 'VideoObject', 'AudioObject', 'MediaObject',
+            'SoftwareApplication', 'WebApplication', 'MobileApplication',
+            'Dataset', 'Course', 'Book', 'Movie', 'Event',
+        ];
         foreach ( $schema_data as &$entry ) {
             if ( is_array( $entry ) && ! isset( $entry['inLanguage'] ) ) {
-                $entry['inLanguage'] = $in_language;
+                $entry_type = $entry['@type'] ?? '';
+                if ( is_string( $entry_type ) && in_array( $entry_type, $inlang_whitelist, true ) ) {
+                    $entry['inLanguage'] = $in_language;
+                }
             }
         }
         unset( $entry );
