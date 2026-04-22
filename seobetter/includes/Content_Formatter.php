@@ -172,7 +172,18 @@ CSS;
         }
 
         // Build the bio card HTML
-        $html = '<div style="display:flex;gap:1.25em;align-items:flex-start;background:#f8fafc !important;border:1px solid #e2e8f0;border-radius:12px;padding:1.5em;margin:2em 0 1em;color:#1e293b !important">';
+        // v1.5.200 — class="seobetter-author-bio" is required by:
+        //   (a) v1.5.192 RTL CSS override at Content_Formatter.php ~116 which
+        //       targets .sb-rtl-article .seobetter-author-bio for right-align;
+        //   (b) v1.5.195 Press Release SpeakableSpecification cssSelector at
+        //       Schema_Generator.php ~430 which targets .seobetter-author-bio
+        //       so voice assistants read the bio block aloud.
+        // Until v1.5.199 the class was referenced in both places but never
+        // actually applied to the rendered element — Rich Results Test
+        // reported "No matches found for expression .seobetter-author-bio".
+        // This attaches the class to the wrapper without changing any
+        // visible styling (inline styles carry the look).
+        $html = '<div class="seobetter-author-bio" style="display:flex;gap:1.25em;align-items:flex-start;background:#f8fafc !important;border:1px solid #e2e8f0;border-radius:12px;padding:1.5em;margin:2em 0 1em;color:#1e293b !important">';
 
         // Headshot
         if ( $image ) {

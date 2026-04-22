@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.199)
+> **Last updated:** 2026-04-22 (v1.5.200)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.200 — Add `class="seobetter-author-bio"` to the author-bio wrapper (fix dead cssSelector references)
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### User report
+
+Google Rich Results Test for the Press Release schema flagged:
+
+```
+SpeakableSpecification
+cssSelector: h1
+cssSelector: h2 + p
+cssSelector: .seobetter-author-bio  (No matches found for expression .seobetter-author-bio.)
+```
+
+### Root cause
+
+Two places in the codebase reference the `.seobetter-author-bio` class but the class was never actually applied to any rendered element:
+
+1. **v1.5.192 RTL CSS override** — `includes/Content_Formatter.php` line **116**: `.sb-rtl-article .seobetter-author-bio { text-align: right; }` — right-align override for RTL languages (Arabic, Hebrew, etc.) reading the bio block.
+2. **v1.5.195 Press Release SpeakableSpecification** — `includes/Schema_Generator.php` line **430**: `'cssSelector' => [ 'h1', 'h2 + p', '.seobetter-author-bio' ]` — voice-assistant directive to read the bio aloud.
+
+The bio wrapper `<div>` at `Content_Formatter.php::build_author_bio()` line **175** had only inline styles, no class. Both the CSS override and the speakable selector were looking for an element that did not exist.
+
+### Fixed
+
+- **Class attached to author-bio wrapper** — `includes/Content_Formatter.php::build_author_bio()` line **~175**
+  - Added `class="seobetter-author-bio"` to the outer `<div>`.
+  - Visible styling unchanged (inline styles continue to carry the look). The class is a hook only — for the RTL override and speakable selector.
+  - Verify: `grep -n 'class="seobetter-author-bio"' includes/Content_Formatter.php`
+  - Verify live: view-source on any generated article, search for `seobetter-author-bio` → should match one `<div class="seobetter-author-bio" style=...>` block near the end of post_content.
+
+### Why this fix is content-type-universal
+
+The author-bio block is emitted for EVERY content type (inside `format_hybrid` at `Content_Formatter.php` ~1236). So attaching the class universally:
+- Fixes the Press Release speakable Rich Results error (v1.5.195's intended target)
+- Fixes the RTL right-align override for author bios in Arabic / Hebrew / Persian / Urdu articles (v1.5.192's intended behaviour)
+- Prepares for any future speakable / CSS selector that wants to target the bio block
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — class-on-element change, no keyword logic.
+2. **Works for ALL 21 content types?** YES — bio block is emitted for every type; class applies universally.
+3. **Works for ALL AI models?** YES — markup change, no model dependency.
+
+### Verified by user
+
+- UNTESTED — regenerate a press release, re-run the Rich Results Test, and the `.seobetter-author-bio` cssSelector should now match exactly one element.
 
 ---
 
