@@ -840,7 +840,23 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         if (data && method !== 'GET') opts.body = JSON.stringify(data);
         var url = apiRoot + 'seobetter/v1/' + endpoint;
         if (data && method === 'GET') url += '?' + new URLSearchParams(data).toString();
-        return fetch(url, opts).then(function(r) { return r.json(); });
+        return fetch(url, opts).then(function(r) {
+            // v1.5.188 — Catch non-JSON responses (PHP fatal errors return HTML)
+            var contentType = r.headers.get('content-type') || '';
+            if (!r.ok) {
+                return r.text().then(function(t) {
+                    console.error('SEOBetter API error (' + r.status + '):', t.substring(0, 300));
+                    throw new Error('Server returned ' + r.status + ': ' + t.substring(0, 100));
+                });
+            }
+            if (contentType.indexOf('application/json') === -1) {
+                return r.text().then(function(t) {
+                    console.error('SEOBetter API returned non-JSON:', t.substring(0, 300));
+                    throw new Error('Server returned HTML instead of JSON — check PHP error log. Preview: ' + t.substring(0, 80));
+                });
+            }
+            return r.json();
+        });
     }
 
     // v1.5.185 — retry counter for 429/network errors
