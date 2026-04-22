@@ -19,7 +19,7 @@
 ## v1.5.196 — Fix Opinion + Press Release templates dropping sections (split `sections` from `guidance`)
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `187a92e`
 
 ### Root cause
 
