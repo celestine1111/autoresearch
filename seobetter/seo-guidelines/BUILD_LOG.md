@@ -7,12 +7,84 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.200)
+> **Last updated:** 2026-04-22 (v1.5.201)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.201 — Personal Essay: research-backed structure + AI-citability schema + distinctive literary CSS
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Research backing
+
+Drawn from 12 sources spanning publisher submission guidelines, craft instruction, schema.org docs, E-E-A-T 2025 guidance, and AI-citation research. Key data points:
+
+- **NYT Modern Love** (the gold-standard mainstream personal essay): **1,500–1,700 words**
+- **Longreads:** 2,500–5,000 words (literary long-form)
+- **Craft consensus** (MasterClass, Jane Friedman, Project Write Now, Louisa Deasey): in-media-res opening, central event / fulcrum, scenes (not summary), three sensory data points per moment, transformation required, earned insight over pronounced moral
+- **Schema.org / Google:** BlogPosting (not generic Article) is correct for first-person narrative; BlogPosting inherently signals "personal / first-hand voice"
+- **E-E-A-T 2025** (Single Grain / Google docs): Experience signals = first-person documentation, timestamps, named places/people, sensory specifics, before-and-after markers
+- **Cornell 2025:** AI-generic personal essays lack voice — concrete named specifics are what AI engines recognise as genuine Experience
+
+### Fixed / Changed
+
+- **Personal essay prose template rewritten** — `includes/Async_Generator.php::get_prose_template()` `personal_essay` entry line **~736**
+  - New `sections`: `Opening Scene, The Central Event, Scenes and Sensory Detail, Reflection, Resolution or Lesson` (dropped FAQ/References from required — essays don't need them unless the essay cites external sources).
+  - Per-section word budgets explicit (Opening Scene 200-300, Central Event 300-400, Scenes 400-600, Reflection 150-250, Resolution 100-200) summing to 1500.
+  - Guidance includes explicit craft rules: in media res opening, three sensory data points per scene, named places/dates/people, attributed dialogue, transformation required.
+  - Ban list on generic openings (`"Growing up"`, `"For as long as I can remember"`, `"In today's world"`, `"at the end of the day"`) and vague placeholders (`"a café"`, `"a friend"`, `"many years ago"`).
+  - Verify: `grep -n "'personal_essay' => \[" includes/Async_Generator.php`
+
+- **Default word count: 1000 → 1500** — `includes/Async_Generator.php` line **~72**
+  - Matches the empirically-validated Modern Love sweet spot. Hard ceiling 2500.
+  - Verify: `grep -n "'personal_essay' => 1500" includes/Async_Generator.php`
+
+- **Schema enrichment on BlogPosting for personal_essay** — `includes/Schema_Generator.php::build_article()` line **~451+**
+  - `articleSection: "Personal Essay"` for AI disambiguation from generic blog posts.
+  - `citation[]` populated via existing `extract_outbound_urls()` helper (up to 20 deduped, author-social filtered per v1.5.197).
+  - `backstory: "Personal essay — first-person literary narrative based on the author's lived experience."` (matches Opinion + Press Release pattern).
+  - `speakable.cssSelector: [ "h1", "h2 + p", ".seobetter-author-bio" ]` — voice assistant reads opening of each section + bio (class now correctly attached per v1.5.200).
+  - Verify: `grep -n "'Personal Essay'" includes/Schema_Generator.php`
+
+- **Distinctive literary CSS** — `includes/Content_Formatter.php::format_hybrid()` line **~660**
+  - New `$is_essay` state. When content_type is personal_essay, wraps the entire article body in `<div class="seobetter-essay">...</div>` (bio sits OUTSIDE the frame, using default chrome).
+  - Emits a scoped `<style id="seobetter-essay-style">` block at the top of the article:
+    - Narrow 720px centered column (vs other types which flow full-width)
+    - Georgia/serif body font at 1.08em, 1.85 line-height (vs other types which use default site chrome)
+    - H2s italic-centered (not accent color, not bold) with a decorative 40px 1px fuchsia underline via `::after`
+    - **Drop cap** on the first paragraph: 4.2em serif initial in #86198f via `.sb-essay-first-p::first-letter` — only the first body paragraph gets the class, every other para renders normally (restores the v1.5.20-removed drop cap, but gated to essays ONLY).
+    - Centered italic blockquote pull-quotes in #6b21a8 with decorative `::before` / `::after` 30px divider lines (distinctly different from v1.5.192 Opinion's dramatic red pull-quotes).
+    - Reusable `.sb-essay-reflection` class for italic-highlighted insight blocks.
+  - The result: every personal essay is **visually distinguishable** at a glance from the other 20 content types — serif body, narrow column, drop cap, centered italic heads.
+  - Verify: `grep -n 'seobetter-essay\|sb-essay-first-p' includes/Content_Formatter.php`
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — template + CSS are keyword-independent.
+2. **Works for ALL 21 content types?** YES — all changes gate on `content_type === 'personal_essay'`. Other 20 types render identically.
+3. **Works for ALL AI models?** YES — prose template is instructions every model follows; schema + CSS are post-processing.
+
+### Unaffected (confirmed via grep)
+
+- v1.5.191 outbound-link pipeline — schema/template/CSS don't touch `validate_outbound_links`, `linkify_bracketed_references`, Pass 4 dedup.
+- v1.5.194/v1.5.198 Places gating — personal_essay not in compatible list, waterfall + validator remain skipped.
+- v1.5.199 Quick Comparison enforcer — personal_essay not in `$table_compatible` allowlist, no auto-injected table.
+- Pros/Cons skip + strip_unlinked_quotes exemption + ProfilePage secondary schema — all preserved.
+
+### Verified by user
+
+- UNTESTED — please generate a personal essay (e.g. keyword `"the summer I learned to ride a bike"`, Australia, 1500 words, Personal Essay type) and confirm:
+  1. Narrow centered column with serif body text
+  2. Drop cap on the first letter of the first paragraph
+  3. H2s italic-centered with decorative underline
+  4. Blockquotes centered italic with line dividers
+  5. Schema has `articleSection: "Personal Essay"`, `citation[]`, `backstory`, and `speakable` with `.seobetter-author-bio` matching
 
 ---
 

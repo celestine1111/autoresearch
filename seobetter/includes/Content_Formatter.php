@@ -652,6 +652,40 @@ CSS;
         // oversized leading quotation mark) for all quotes in op-ed articles.
         $is_opinion = ( $options['content_type'] ?? '' ) === 'opinion';
 
+        // v1.5.201 — Personal Essay state: a literary-magazine feel (narrow
+        // column, serif body, drop cap on the first paragraph, italic
+        // reflection passages, soft italic blockquote pull-quotes with
+        // centered attribution line — all visually distinct from the other
+        // 20 content types).
+        $is_essay         = ( $options['content_type'] ?? '' ) === 'personal_essay';
+        $essay_drop_cap_done = false;  // only the first paragraph gets the cap
+        if ( $is_essay ) {
+            // Emit the literary wrapper: narrow centered column + serif
+            // typography + generous line-height, plus CSS for the drop cap
+            // and italic reflection sections. The :first-of-type drop cap
+            // would not fire reliably across WP themes (theme CSS often
+            // wins), so we tag the first paragraph with a specific class
+            // below and style that instead.
+            $essay_css = <<<'CSS'
+<style id="seobetter-essay-style">
+.seobetter-essay { max-width: 720px; margin: 0 auto; font-family: Georgia, "Libre Caslon Text", "Source Serif Pro", "Noto Serif", Cambria, serif; font-size: 1.08em; line-height: 1.85; color: #1f2937; letter-spacing: 0.005em; }
+.seobetter-essay p { margin: 0 0 1.4em; text-align: left; }
+.seobetter-essay h1, .seobetter-essay h2, .seobetter-essay h3 { font-family: Georgia, "Libre Caslon Text", "Source Serif Pro", "Noto Serif", Cambria, serif; letter-spacing: -0.01em; font-weight: 700; }
+.seobetter-essay h2 { font-size: 1.35em !important; font-style: italic; color: #374151 !important; margin: 2.4em auto 0.9em; text-align: center; font-weight: 400; letter-spacing: 0.03em; text-transform: none; }
+.seobetter-essay h2::after { content: ""; display: block; width: 40px; height: 1px; background: #d946ef; margin: 0.6em auto 0; opacity: 0.6; }
+.seobetter-essay .sb-essay-first-p::first-letter { float: left; font-family: "Libre Caslon Text", Georgia, serif; font-size: 4.2em; line-height: 0.88; font-weight: 700; color: #86198f; padding: 0.08em 0.12em 0 0; margin-top: 0.05em; }
+.seobetter-essay blockquote { border: 0; margin: 2em auto; padding: 0 1.5em; font-style: italic; font-size: 1.18em; line-height: 1.6; color: #6b21a8; text-align: center; max-width: 560px; position: relative; }
+.seobetter-essay blockquote::before, .seobetter-essay blockquote::after { content: ""; display: block; width: 30px; height: 1px; background: #d946ef; margin: 0.8em auto; opacity: 0.5; }
+.seobetter-essay blockquote p { margin: 0; color: inherit; }
+.seobetter-essay .sb-essay-reflection { background: #faf5ff; border-left: 3px solid #d946ef; padding: 1.2em 1.4em; border-radius: 0 6px 6px 0; font-style: italic; color: #581c87; margin: 1.8em 0; }
+.seobetter-essay hr.sb-essay-divider { border: 0; text-align: center; margin: 2.6em 0; }
+.seobetter-essay hr.sb-essay-divider::before { content: "\2766"; font-size: 1.3em; color: #d946ef; opacity: 0.55; letter-spacing: 0.5em; }
+</style>
+CSS;
+            $output[] = "<!-- wp:html -->\n{$essay_css}\n<!-- /wp:html -->";
+            $output[] = "<!-- wp:html -->\n<div class=\"seobetter-essay\">\n<!-- /wp:html -->";
+        }
+
         foreach ( $sections as $i => $section ) {
             switch ( $section['type'] ) {
 
@@ -927,9 +961,22 @@ CSS;
                     else {
                         // v1.5.20 — dropcap removed. Was visually overbearing and the
                         // user reported it appearing on too many sentences/paragraphs.
-                        $output[] = '<!-- wp:paragraph -->';
-                        $output[] = "<p>{$text}</p>";
-                        $output[] = '<!-- /wp:paragraph -->';
+                        // v1.5.201 — Personal Essay ONLY: re-introduce a drop cap on
+                        // the very first body paragraph. Tagged via class
+                        // `sb-essay-first-p` so the CSS block emitted at the top of
+                        // the article renders a large serif drop cap. Drop cap
+                        // only applies to literary essays — other 20 content
+                        // types keep the v1.5.20 no-dropcap behaviour.
+                        if ( $is_essay && ! $essay_drop_cap_done ) {
+                            $output[] = '<!-- wp:paragraph -->';
+                            $output[] = "<p class=\"sb-essay-first-p\">{$text}</p>";
+                            $output[] = '<!-- /wp:paragraph -->';
+                            $essay_drop_cap_done = true;
+                        } else {
+                            $output[] = '<!-- wp:paragraph -->';
+                            $output[] = "<p>{$text}</p>";
+                            $output[] = '<!-- /wp:paragraph -->';
+                        }
                         $para_count++;
                         // Insert wp:more after the 2nd regular paragraph (creates Read More break)
                         if ( $para_count === 2 && ! $more_inserted ) {
@@ -1239,6 +1286,14 @@ CSS;
 
         // v1.5.177 — Close any open Executive Summary box
         if ( $in_exec_summary ) {
+            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+        }
+
+        // v1.5.201 — Close the Personal Essay literary wrapper before the
+        // author bio so the bio itself sits OUTSIDE the narrow-column
+        // serif-styled frame (bio should use the site's default styling,
+        // not the literary formatting).
+        if ( $is_essay ) {
             $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
         }
 

@@ -448,6 +448,41 @@ class Schema_Generator {
             $schema['backstory'] = 'Opinion piece — reflects the author\'s personal views, not an objective news report.';
         }
 
+        // v1.5.201 — Personal Essay enrichment on BlogPosting. Schema.org /
+        // Google / schemavalidator all recommend BlogPosting (not generic
+        // Article) for first-person narrative — BlogPosting is already the
+        // primary @type for personal_essay, this block just adds the extra
+        // signals AI engines + voice assistants use:
+        //   - `articleSection: "Personal Essay"` — disambiguates literary
+        //     narrative from generic blog posts (matches the Opinion /
+        //     Press Release pattern established in v1.5.192 / v1.5.195).
+        //   - `citation` — any outbound source the essay references
+        //     (books, news events, songs) so E-E-A-T Experience signals
+        //     line up with actual linked evidence.
+        //   - `backstory` — explicit "Personal essay…" label for AI
+        //     disambiguation, matching OpinionNewsArticle treatment.
+        //   - `speakable` targets `h1, h2 + p, .seobetter-author-bio` —
+        //     voice assistants read the opening line of each section
+        //     plus the bio. Google RR Test now matches .seobetter-author-bio
+        //     after v1.5.200.
+        if ( $type === 'BlogPosting' ) {
+            $content_type_check = get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: '';
+            if ( $content_type_check === 'personal_essay' ) {
+                $schema['articleSection'] = 'Personal Essay';
+                $urls = $this->extract_outbound_urls( $post->post_content );
+                if ( ! empty( $urls ) ) {
+                    $schema['citation'] = array_map( function ( $u ) {
+                        return [ '@type' => 'CreativeWork', 'url' => $u ];
+                    }, $urls );
+                }
+                $schema['backstory'] = 'Personal essay — first-person literary narrative based on the author\'s lived experience.';
+                $schema['speakable'] = [
+                    '@type'       => 'SpeakableSpecification',
+                    'cssSelector' => [ 'h1', 'h2 + p', '.seobetter-author-bio' ],
+                ];
+            }
+        }
+
         return $schema;
     }
 
