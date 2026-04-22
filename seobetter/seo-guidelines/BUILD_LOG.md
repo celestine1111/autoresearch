@@ -19,7 +19,7 @@
 ## v1.5.206d — Layer 6 i18n + language-aware scoring + 15th International Signals check (piece 4 of 4)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `b1b9033`
 
 ### Why this patch exists
 
