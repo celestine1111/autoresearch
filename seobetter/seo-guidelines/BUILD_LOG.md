@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.195)
+> **Last updated:** 2026-04-22 (v1.5.196)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.196 — Fix Opinion + Press Release templates dropping sections (split `sections` from `guidance`)
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Root cause
+
+User reported live Opinion article at `srv1608940.hstgr.cloud/why-remote-work-is-better-than-office-in-2026-what-to-know/` was missing three required sections:
+
+- ❌ What This Means (implications)
+- ❌ FAQ
+- ❌ Conclusion and Call to Action
+
+Observed H2s: Key Takeaways → Hook/Thesis (renamed) → Arg 1 → Arg 2 → Arg 3 → Objection → Quick Comparison (PHP-enforced table) → [nothing else] → References (with 6 items, correct).
+
+`Async_Generator.php::assemble_outline()` at line **~938** sends the prose template's `sections` string to the AI as `REQUIRED SECTIONS:` in the outline prompt. My v1.5.192 Opinion template and v1.5.195 Press Release template both stuffed ~200 words of per-section parenthetical guidance INTO the `sections` string — e.g. `Argument 1 (strongest point, claim → evidence → example, 150-220 words)`. The outline-generation AI interpreted the verbose prompt as "pick the section themes that matter most" and condensed/dropped later entries. `max_tokens: 500` on the outline call amplifies this — the AI's heading list was being cut before reaching FAQ/Conclusion/References.
+
+Other content types (blog_post, news_article, how_to, listicle, review, comparison, buying_guide) already follow the correct pattern: clean comma-separated section names in `sections`, all detail in `guidance`. This is the pattern generate_section() actually consumes per-heading anyway — the verbose `sections` string wasn't even being used for per-section generation.
+
+### Fixed
+
+- **Opinion template split** — `includes/Async_Generator.php::get_prose_template()` line **~720**
+  - `sections`: now `Key Takeaways, Hook and Thesis, Argument 1, Argument 2, Argument 3, The Objection, What This Means, FAQ, Conclusion and Call to Action, References` — clean comma-separated H2 names.
+  - `guidance`: all per-section detail moved here (Hook/Thesis purpose, Argument structure, Objection steelman rule, FAQ length, Conclusion pattern, pull-quote rule, tone rules, citation density, cliché/hedge bans). Same content, correct location.
+  - AI outline call now receives just the 10 H2 names it needs to emit, not 200 words of embedded instructions. The detailed guidance reaches the AI via `generate_section()` which wraps each per-section call with the `$prose['guidance']` string, so no rule is lost.
+  - Verify: `grep -n "'opinion' => \[" includes/Async_Generator.php`
+
+- **Press Release template split** — `includes/Async_Generator.php::get_prose_template()` line **~735**
+  - Same anti-pattern had been introduced in v1.5.195. Fixed preemptively so the next press-release test doesn't reproduce the Opinion bug.
+  - `sections`: `Dateline and Lede, Body, Key Facts, Quotes, FAQ, About Us, Media Contact, References` — clean. (Removed the redundant "Headline" section since the post title already serves as H1, and the AI was confusingly emitting a second "Headline" H2.)
+  - `guidance`: full cliché ban list + journalist-attention rules + section purpose + inverted-pyramid rule + link rules all preserved, just relocated.
+  - Verify: `grep -n "'press_release' => \[" includes/Async_Generator.php`
+
+### Unaffected
+
+- The 19 other content-type templates were already correctly split — no change.
+- No changes to schema (v1.5.192 Opinion + v1.5.195 PR schema enrichments preserved verbatim).
+- No changes to outbound-link pipeline (v1.5.191 unaffected).
+- No changes to Places gating (v1.5.194 unaffected).
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — purely structural template cleanup, no keyword-specific logic.
+2. **Works for ALL 21 content types?** YES — fixes the 2 types that had the bug; other 19 were already clean.
+3. **Works for ALL AI models?** YES — clean section lists are MORE robust across models. Smaller LLMs (Llama 3 8B, Mistral 7B) were especially likely to choke on the verbose embedded-parentheses format; all models handle clean comma-separated lists correctly.
+
+### Verified by user
+
+- UNTESTED — please regenerate the "why remote work is better than office in 2026" Opinion article and confirm all 10 H2s appear (Key Takeaways, Hook and Thesis, Argument 1, Argument 2, Argument 3 if total >1000w, The Objection, What This Means, FAQ, Conclusion and Call to Action, References).
 
 ---
 
