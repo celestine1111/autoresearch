@@ -13,11 +13,19 @@
 
 ## 1. ARTICLE GENERATION PAGE — FORM FIELDS
 
+### 1.0 Country & Language Section (v1.5.206d-fix5 — FIRST SECTION, above Keywords)
+| Field | Type | Name/ID | Required | Notes |
+|---|---|---|---|---|
+| Target Country | searchable picker | `country` (hidden input) | no | 90+ countries with flags. Drives: Google Suggest region, research API localization, regional prompt context, schema `inLanguage` fallback, Layer 6 scoring. |
+| Article Language | select | `language` | no | 30+ languages (default English). Drives: AI output language, localized UI labels (Last Updated / Key Takeaways / References), schema `inLanguage`, Wikipedia subdomain, audience LLM language. |
+
+**Why this is the first section (v1.5.206d-fix5):** auto-suggest, research, and generation all read these values. Previously at the bottom of Article Settings, which caused users to click Auto-Suggest before the values were set — producing English-pipeline output on non-English keywords.
+
 ### 1.1 Keywords Section
 | Field | Type | Name/ID | Required | Notes |
 |---|---|---|---|---|
 | Primary Keyword | text input | `primary_keyword` | YES | Target keyword for the article |
-| Auto-suggest | button | `seobetter-auto-keywords` | — | v1.5.173: Populates secondary keywords from **Serper Google SERP titles** (what competitors target), LSI keywords from **Serper snippet frequency analysis**, and **Target Audience** from source domain analysis. Falls back to Google Suggest + Datamuse when Serper key not available. Auto-fills audience field if empty. |
+| Auto-suggest | button | `seobetter-auto-keywords` | — | v1.5.173: Populates secondary keywords from **Serper Google SERP titles** (what competitors target), LSI keywords from **Serper snippet frequency analysis**, and **Target Audience** from source domain analysis. Falls back to Google Suggest + Datamuse when Serper key not available. v1.5.206d-fix4: ALWAYS overwrites Secondary + LSI fields from the server response (including empty string when server returned 0 items) so stale prior values never persist. v1.5.206d-fix2: forwards Country + Language to `/api/topic-research` so all output matches the target locale. |
 | Secondary Keywords | text input | `secondary_keywords` | no | Comma-separated related phrases |
 | LSI / Semantic Keywords | text input | `lsi_keywords` | no | Comma-separated semantic terms |
 
@@ -30,7 +38,8 @@
 | Category | select | `domain` | YES | 25 categories | Triggers category-specific APIs + affects AI prompts |
 | Target Audience | text input | `audience` | no | Free text | Injected into every section prompt |
 | Accent Color | color picker | `accent_color` | no | Default: #764ba2 | Affects headings, borders, tables, links |
-| Country & Language | searchable dropdown | `country` + `language` (hidden) | no | 90+ countries with flags | Sets article language + triggers country APIs |
+
+_(Note: the Country & Language row moved out of Article Settings to its own §1.0 at the top of the form in v1.5.206d-fix5.)_
 
 ### 1.3 Generate Button
 - Single button: **"Generate Article"** (primary style, 50px height)

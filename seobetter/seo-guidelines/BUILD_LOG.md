@@ -7,12 +7,74 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d-fix4)
+> **Last updated:** 2026-04-23 (v1.5.206d-fix5)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d-fix5 — Country + Language moved to top of form (UX fix — the root cause every user was hitting)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben confirmed Layer 6 works end-to-end when Country + Language are set correctly — but also pointed out both fields were at the **bottom** of the form, below Keywords, Article Settings, Target Audience, Accent Color. Users (including Ben on his Korean test) naturally typed the primary keyword at the top, clicked Auto-Suggest, and only *then* scrolled down to see Country + Language — by which point Auto-Suggest had already fired with `{ country: "", language: "en" }` and returned English-pipeline output.
+
+This is the single field-ordering mistake that made every multilingual test fail on first click. Every fix in 206a-d was correct; users just never got to run the pipeline with correct inputs.
+
+### Shipped
+
+- **`admin/views/content-generator.php`** — the entire 229-line Country + Language block (sb-field-row with country picker, inline `sbCountries` JS, Article Language `<select>`, and the "💡 Tip" paragraph about decoupling) moved from inside the Article Settings section (lines ~238-466) to its own new `<div class="sb-section">` at the TOP of the form, immediately after the `<form>` tag and BEFORE the `<!-- Keywords Section -->` block. New section header: `<h3>🌍 Country & Language — set these FIRST; every downstream step uses them</h3>` so the intent is visible.
+
+- **Stale tooltip fixed** — the Category tooltip said "controlled by Target Country **below**"; now says "controlled by Target Country **at the top of the form**".
+
+- **No logic changes.** Same markup, same IDs (`sb-country-val`, `sb-lang-val`, `sb-country-picker`, `sb-country-dropdown`, etc.), same inline JS (`sbCountries`, `sbSelectCountry`, `sbFilterCountries`, `sbRenderCountries`), same `<select name="language">` options. The block was moved as contiguous text; all downstream readers (`sbSelectCountry` event handler, Auto-Suggest click reading `[name="country"]` + `[name="language"]`, save-draft payload, generate POST) continue to work unchanged.
+
+- **Autocomplete of the Korean/Japanese/etc. tests** now works correctly on the FIRST click because the user naturally sets Country + Language first (they're the first thing they see) before typing the keyword.
+
+### Doc sync
+
+- **`seo-guidelines/plugin_UX.md §1.0`** — NEW section documenting Country & Language as the first section, above Keywords. §1.2 Article Settings table updated to remove the Country & Language row and add a pointer-note explaining the move.
+- **BUILD_LOG v1.5.206d-fix5 entry (this one).**
+
+### Safety posture
+
+- **Pure UX move — zero logic changes.** Moved markup is byte-identical; only its position in the DOM changed.
+- **All IDs, event handlers, form field names preserved.** Auto-Suggest, save-draft, and generate all continue to read the same selectors and post the same payload keys.
+- **JS syntax verified** — `node --check` on the moved `sbCountries` inline script post-move: SYNTAX OK.
+- **Plugin version unchanged at 1.5.206** — still the same release, just a UX fix within the 206 series.
+
+### Verify
+
+```bash
+# 1. New section exists at the top
+grep -n "v1.5.206d-fix5 — Country + Language moved to the TOP" /Users/ben/Documents/autoresearch/seobetter/admin/views/content-generator.php
+
+# 2. Old location no longer has the block (should return only the NEW location)
+grep -c "sb-country-picker" /Users/ben/Documents/autoresearch/seobetter/admin/views/content-generator.php
+# Expect: 2 (one in markup, one in event-handler JS reference) — NOT 4
+
+# 3. Country+Language block appears BEFORE Keywords Section
+python3 -c "
+with open('/Users/ben/Documents/autoresearch/seobetter/admin/views/content-generator.php') as f: src = f.read()
+cl = src.index('sb-country-picker')
+kw = src.index('Keywords Section')
+print('Country+Language at char', cl, 'Keywords at char', kw, '→', 'correct order' if cl < kw else 'WRONG ORDER')
+"
+```
+
+### Verified by user
+
+UNTESTED — Ben to reinstall zip, hard-refresh admin page, verify Country + Language appear as the first section in the form. Test Korean auto-suggest WITHOUT scrolling — set Country + Language, type keyword, click Auto-Suggest on first go.
+
+### Next
+
+Layer 6 foundation + UX are now complete (206a inLanguage schema, 206b regional whitelist, 206c regional prompt, 206d i18n + scoring, 206d-fix for save-draft plumbing, -fix2 for multilingual auto-suggest, -fix3 for LSI overflow, -fix4 for stale-field UX, -fix5 for field ordering). Per-article-type testing can now begin with Opinion (UNTESTED since v1.5.196).
 
 ---
 

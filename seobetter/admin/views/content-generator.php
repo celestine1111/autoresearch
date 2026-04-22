@@ -79,161 +79,18 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
             <form method="post" onsubmit="return false">
                 <?php wp_nonce_field( 'seobetter_generate_nonce' ); ?>
 
-                <!-- Keywords Section -->
+                <!-- v1.5.206d-fix5 — Country + Language moved to the TOP of the form.
+                     These two fields affect every downstream behaviour: keyword
+                     auto-suggest (topic-research uses them for regional Google Suggest
+                     + language-specific Wikipedia + language-aware audience LLM),
+                     system prompt regional context (Regional_Context::get_block),
+                     schema inLanguage (Schema_Generator::get_in_language),
+                     localized labels (Localized_Strings), and Layer 6 scoring
+                     (GEO_Analyzer::check_international_signals). Previously buried
+                     at the bottom of Article Settings, which caused users to click
+                     Auto-Suggest before setting them — guaranteed English pipeline. -->
                 <div class="sb-section">
-                    <h3 class="sb-section-header"><span class="dashicons dashicons-search"></span> Keywords</h3>
-
-                    <div class="sb-field">
-                        <label>Primary Keyword <span style="color:var(--sb-error)">*</span></label>
-                        <div style="display:flex;gap:8px">
-                            <input type="text" id="primary_keyword" name="primary_keyword" value="<?php echo esc_attr( $pre_keyword ); ?>" placeholder="e.g. equine vet supplies" required style="flex:1" />
-                            <button type="button" id="seobetter-auto-keywords" class="button sb-btn-secondary" style="height:44px;white-space:nowrap;padding:0 16px">Auto-suggest</button>
-                        </div>
-                        <div class="sb-help">Target keyword for your article. <span id="seobetter-auto-status" style="font-style:italic"></span></div>
-                    </div>
-
-                    <div class="sb-field-row">
-                        <div class="sb-field">
-                            <label>Secondary Keywords
-                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Extra keyword phrases the AI will weave into headings and body text so your article ranks for multiple related search terms, not just the primary keyword. Comma-separated. Leave empty to let the AI auto-pick from research data.</span>
-                                </span>
-                            </label>
-                            <input type="text" name="secondary_keywords" value="<?php echo esc_attr( $_POST['secondary_keywords'] ?? '' ); ?>" placeholder="horse vet supplies, equine medical supplies" />
-                            <div class="sb-help">Comma-separated</div>
-                        </div>
-                        <div class="sb-field">
-                            <label>LSI / Semantic Keywords
-                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Semantically-related single words and short phrases that AI search engines (ChatGPT, Perplexity, Google AI Overviews, Gemini) expect to see alongside your keyword. Helps your article get cited by AI answers. Comma-separated. Leave empty and the Auto-suggest button will fill it for you.</span>
-                                </span>
-                            </label>
-                            <input type="text" name="lsi_keywords" value="<?php echo esc_attr( $_POST['lsi_keywords'] ?? '' ); ?>" placeholder="equine wound care, horse first aid" />
-                            <div class="sb-help">Comma-separated — optimizes for AI citations</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Settings Section -->
-                <div class="sb-section">
-                    <h3 class="sb-section-header"><span class="dashicons dashicons-admin-settings"></span> Article Settings</h3>
-
-                    <div class="sb-field-row">
-                        <div class="sb-field">
-                            <label>Content Type
-                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Tells the AI what shape of article to write. A Listicle produces numbered business/product picks. A How-To produces step-by-step instructions. A Review produces a hands-on evaluation. Each type changes the section structure, tone, and schema markup automatically. Pick the one that matches what you&rsquo;re writing.</span>
-                                </span>
-                            </label>
-                            <select name="content_type" id="sb-content-type" onchange="sbContentTypeChanged(this.value)">
-                                <optgroup label="Common">
-                                    <option value="blog_post" <?php selected( $_POST['content_type'] ?? 'blog_post', 'blog_post' ); ?>>Blog Post</option>
-                                    <option value="how_to" <?php selected( $_POST['content_type'] ?? '', 'how_to' ); ?>>How-To Guide</option>
-                                    <option value="listicle" <?php selected( $_POST['content_type'] ?? '', 'listicle' ); ?>>Listicle (Top 10...)</option>
-                                    <option value="review" <?php selected( $_POST['content_type'] ?? '', 'review' ); ?>>Product Review</option>
-                                    <option value="comparison" <?php selected( $_POST['content_type'] ?? '', 'comparison' ); ?>>Comparison (X vs Y)</option>
-                                    <option value="buying_guide" <?php selected( $_POST['content_type'] ?? '', 'buying_guide' ); ?>>Buying Guide / Roundup</option>
-                                    <option value="news_article" <?php selected( $_POST['content_type'] ?? '', 'news_article' ); ?>>News Article</option>
-                                    <option value="faq_page" <?php selected( $_POST['content_type'] ?? '', 'faq_page' ); ?>>FAQ Page</option>
-                                    <option value="pillar_guide" <?php selected( $_POST['content_type'] ?? '', 'pillar_guide' ); ?>>Ultimate Guide</option>
-                                </optgroup>
-                                <optgroup label="Specialized">
-                                    <option value="recipe" <?php selected( $_POST['content_type'] ?? '', 'recipe' ); ?>>Recipe</option>
-                                    <option value="case_study" <?php selected( $_POST['content_type'] ?? '', 'case_study' ); ?>>Case Study</option>
-                                    <option value="tech_article" <?php selected( $_POST['content_type'] ?? '', 'tech_article' ); ?>>Technical Article</option>
-                                    <option value="interview" <?php selected( $_POST['content_type'] ?? '', 'interview' ); ?>>Interview / Q&A</option>
-                                    <option value="white_paper" <?php selected( $_POST['content_type'] ?? '', 'white_paper' ); ?>>White Paper / Report</option>
-                                    <option value="opinion" <?php selected( $_POST['content_type'] ?? '', 'opinion' ); ?>>Opinion / Op-Ed</option>
-                                    <option value="press_release" <?php selected( $_POST['content_type'] ?? '', 'press_release' ); ?>>Press Release</option>
-                                    <option value="personal_essay" <?php selected( $_POST['content_type'] ?? '', 'personal_essay' ); ?>>Personal Essay</option>
-                                    <option value="glossary_definition" <?php selected( $_POST['content_type'] ?? '', 'glossary_definition' ); ?>>Glossary / Definition</option>
-                                    <option value="scholarly_article" <?php selected( $_POST['content_type'] ?? '', 'scholarly_article' ); ?>>Scholarly Article</option>
-                                    <option value="sponsored" <?php selected( $_POST['content_type'] ?? '', 'sponsored' ); ?>>Sponsored / Advertorial</option>
-                                    <option value="live_blog" <?php selected( $_POST['content_type'] ?? '', 'live_blog' ); ?>>Live Blog</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="sb-field-row-3">
-                        <div class="sb-field">
-                            <label>Word Count
-                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> How long the finished article will be. 2,000 words is the sweet spot for AI search citations (ChatGPT, Perplexity, Google AI Overviews tend to cite longer authoritative pieces). Shorter (800-1,000) works for product pages and buying guides. Longer (3,000+) is for ultimate-guide content.</span>
-                                </span>
-                            </label>
-                            <select name="word_count">
-                                <option value="800" <?php selected( $_POST['word_count'] ?? '', '800' ); ?>>800 — Quick answer</option>
-                                <option value="1000" <?php selected( $_POST['word_count'] ?? '', '1000' ); ?>>1,000 — Product/transactional</option>
-                                <option value="1500" <?php selected( $_POST['word_count'] ?? '', '1500' ); ?>>1,500 — Standard article</option>
-                                <option value="2000" <?php selected( $_POST['word_count'] ?? '2000', '2000' ); ?>>2,000 — AI citation optimal</option>
-                                <option value="2500" <?php selected( $_POST['word_count'] ?? '', '2500' ); ?>>2,500 — Comprehensive guide</option>
-                                <option value="3000" <?php selected( $_POST['word_count'] ?? '', '3000' ); ?>>3,000 — Definitive guide</option>
-                            </select>
-                            <div id="sb-wc-hint" class="sb-help" style="display:none;margin-top:4px;font-size:11px;color:#6b7280"></div>
-                        </div>
-                        <div class="sb-field">
-                            <label>Tone</label>
-                            <select name="tone">
-                                <option value="authoritative" <?php selected( $_POST['tone'] ?? 'authoritative', 'authoritative' ); ?>>Authoritative</option>
-                                <option value="conversational" <?php selected( $_POST['tone'] ?? '', 'conversational' ); ?>>Conversational</option>
-                                <option value="professional" <?php selected( $_POST['tone'] ?? '', 'professional' ); ?>>Professional</option>
-                                <option value="educational" <?php selected( $_POST['tone'] ?? '', 'educational' ); ?>>Educational</option>
-                                <option value="journalistic" <?php selected( $_POST['tone'] ?? '', 'journalistic' ); ?>>Journalistic</option>
-                            </select>
-                        </div>
-                        <div class="sb-field">
-                            <label>Category <span style="color:#ef4444">*</span>
-                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
-                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Picks which free public data sources the plugin pulls real-time statistics from while writing your article. For example, &ldquo;Food &amp; Drink&rdquo; pulls from OpenFoodFacts and recipe databases, &ldquo;Finance&rdquo; pulls from economic data APIs, &ldquo;Travel &amp; Tourism&rdquo; pulls from destination info sources. This is ONLY about supporting stats woven into the article prose — it does NOT affect where the plugin looks for places or businesses (that&rsquo;s controlled by Target Country below). Pick the category that best matches your article topic.</span>
-                                </span>
-                            </label>
-                            <select name="domain" required>
-                                <?php // v1.5.15 — keep this list IDENTICAL to bulk-generator.php and content-brief.php. See plugin_UX.md §9. ?>
-                                <option value="" disabled <?php selected( $_POST['domain'] ?? '', '' ); ?>>Select category...</option>
-                                <option value="general" <?php selected( $_POST['domain'] ?? '', 'general' ); ?>>General</option>
-                                <option value="animals" <?php selected( $_POST['domain'] ?? '', 'animals' ); ?>>Animals &amp; Pets (General)</option>
-                                <option value="art_design" <?php selected( $_POST['domain'] ?? '', 'art_design' ); ?>>Art &amp; Design</option>
-                                <option value="blockchain" <?php selected( $_POST['domain'] ?? '', 'blockchain' ); ?>>Blockchain</option>
-                                <option value="books" <?php selected( $_POST['domain'] ?? '', 'books' ); ?>>Books &amp; Literature</option>
-                                <option value="business" <?php selected( $_POST['domain'] ?? '', 'business' ); ?>>Business</option>
-                                <option value="cryptocurrency" <?php selected( $_POST['domain'] ?? '', 'cryptocurrency' ); ?>>Cryptocurrency</option>
-                                <option value="currency" <?php selected( $_POST['domain'] ?? '', 'currency' ); ?>>Currency &amp; Forex</option>
-                                <option value="ecommerce" <?php selected( $_POST['domain'] ?? '', 'ecommerce' ); ?>>Ecommerce</option>
-                                <option value="education" <?php selected( $_POST['domain'] ?? '', 'education' ); ?>>Education</option>
-                                <option value="entertainment" <?php selected( $_POST['domain'] ?? '', 'entertainment' ); ?>>Entertainment &amp; Movies</option>
-                                <option value="environment" <?php selected( $_POST['domain'] ?? '', 'environment' ); ?>>Environment &amp; Climate</option>
-                                <option value="finance" <?php selected( $_POST['domain'] ?? '', 'finance' ); ?>>Finance &amp; Economics</option>
-                                <option value="food" <?php selected( $_POST['domain'] ?? '', 'food' ); ?>>Food &amp; Drink</option>
-                                <option value="games" <?php selected( $_POST['domain'] ?? '', 'games' ); ?>>Games &amp; Gaming</option>
-                                <option value="government" <?php selected( $_POST['domain'] ?? '', 'government' ); ?>>Government, Law &amp; Politics</option>
-                                <option value="health" <?php selected( $_POST['domain'] ?? '', 'health' ); ?>>Health &amp; Medical (Human)</option>
-                                <option value="music" <?php selected( $_POST['domain'] ?? '', 'music' ); ?>>Music</option>
-                                <option value="news" <?php selected( $_POST['domain'] ?? '', 'news' ); ?>>News &amp; Media</option>
-                                <option value="science" <?php selected( $_POST['domain'] ?? '', 'science' ); ?>>Science &amp; Space</option>
-                                <option value="sports" <?php selected( $_POST['domain'] ?? '', 'sports' ); ?>>Sports &amp; Fitness</option>
-                                <option value="technology" <?php selected( $_POST['domain'] ?? '', 'technology' ); ?>>Technology</option>
-                                <option value="transportation" <?php selected( $_POST['domain'] ?? '', 'transportation' ); ?>>Transportation &amp; Logistics</option>
-                                <option value="travel" <?php selected( $_POST['domain'] ?? '', 'travel' ); ?>>Travel &amp; Tourism</option>
-                                <option value="veterinary" <?php selected( $_POST['domain'] ?? '', 'veterinary' ); ?>>Veterinary &amp; Pet Health (Research)</option>
-                                <option value="weather" <?php selected( $_POST['domain'] ?? '', 'weather' ); ?>>Weather &amp; Climate</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="sb-field-row">
-                        <div class="sb-field">
-                            <label>Target Audience</label>
-                            <input type="text" name="audience" value="<?php echo esc_attr( $_POST['audience'] ?? '' ); ?>" placeholder="e.g. horse owners, equine vets" />
-                        </div>
-                        <div class="sb-field">
-                            <label>Accent Color</label>
-                            <div style="display:flex;gap:10px;align-items:center">
-                                <input type="color" name="accent_color" value="<?php echo esc_attr( $_POST['accent_color'] ?? '#764ba2' ); ?>" style="width:44px;height:44px;padding:4px;cursor:pointer;border:1px solid var(--sb-border);border-radius:6px" />
-                                <span class="sb-help" style="margin:0">Headings, borders, CTA buttons</span>
-                            </div>
-                        </div>
-                    </div>
+                    <h3 class="sb-section-header"><span class="dashicons dashicons-admin-site-alt3"></span> Country &amp; Language <span style="font-size:11px;color:#6b7280;font-weight:400;margin-left:8px">— set these FIRST; every downstream step uses them</span></h3>
 
                     <!-- v1.5.45 — split Country and Language into two independent fields.
                          The old combined picker forced country→language coupling: picking
@@ -464,6 +321,164 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                         <strong>Target Country</strong> tells the plugin <em>where to look up real local businesses</em> (shops, restaurants, vets, hotels, etc). Pick the country your keyword is about.<br>
                         <strong>Article Language</strong> is the language your readers will read. These are independent — you can write an English article about Japanese restaurants by setting Country = Japan and Language = English.
                     </p>
+                </div>
+
+                <!-- Keywords Section -->
+                <div class="sb-section">
+                    <h3 class="sb-section-header"><span class="dashicons dashicons-search"></span> Keywords</h3>
+
+                    <div class="sb-field">
+                        <label>Primary Keyword <span style="color:var(--sb-error)">*</span></label>
+                        <div style="display:flex;gap:8px">
+                            <input type="text" id="primary_keyword" name="primary_keyword" value="<?php echo esc_attr( $pre_keyword ); ?>" placeholder="e.g. equine vet supplies" required style="flex:1" />
+                            <button type="button" id="seobetter-auto-keywords" class="button sb-btn-secondary" style="height:44px;white-space:nowrap;padding:0 16px">Auto-suggest</button>
+                        </div>
+                        <div class="sb-help">Target keyword for your article. <span id="seobetter-auto-status" style="font-style:italic"></span></div>
+                    </div>
+
+                    <div class="sb-field-row">
+                        <div class="sb-field">
+                            <label>Secondary Keywords
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Extra keyword phrases the AI will weave into headings and body text so your article ranks for multiple related search terms, not just the primary keyword. Comma-separated. Leave empty to let the AI auto-pick from research data.</span>
+                                </span>
+                            </label>
+                            <input type="text" name="secondary_keywords" value="<?php echo esc_attr( $_POST['secondary_keywords'] ?? '' ); ?>" placeholder="horse vet supplies, equine medical supplies" />
+                            <div class="sb-help">Comma-separated</div>
+                        </div>
+                        <div class="sb-field">
+                            <label>LSI / Semantic Keywords
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Semantically-related single words and short phrases that AI search engines (ChatGPT, Perplexity, Google AI Overviews, Gemini) expect to see alongside your keyword. Helps your article get cited by AI answers. Comma-separated. Leave empty and the Auto-suggest button will fill it for you.</span>
+                                </span>
+                            </label>
+                            <input type="text" name="lsi_keywords" value="<?php echo esc_attr( $_POST['lsi_keywords'] ?? '' ); ?>" placeholder="equine wound care, horse first aid" />
+                            <div class="sb-help">Comma-separated — optimizes for AI citations</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Section -->
+                <div class="sb-section">
+                    <h3 class="sb-section-header"><span class="dashicons dashicons-admin-settings"></span> Article Settings</h3>
+
+                    <div class="sb-field-row">
+                        <div class="sb-field">
+                            <label>Content Type
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Tells the AI what shape of article to write. A Listicle produces numbered business/product picks. A How-To produces step-by-step instructions. A Review produces a hands-on evaluation. Each type changes the section structure, tone, and schema markup automatically. Pick the one that matches what you&rsquo;re writing.</span>
+                                </span>
+                            </label>
+                            <select name="content_type" id="sb-content-type" onchange="sbContentTypeChanged(this.value)">
+                                <optgroup label="Common">
+                                    <option value="blog_post" <?php selected( $_POST['content_type'] ?? 'blog_post', 'blog_post' ); ?>>Blog Post</option>
+                                    <option value="how_to" <?php selected( $_POST['content_type'] ?? '', 'how_to' ); ?>>How-To Guide</option>
+                                    <option value="listicle" <?php selected( $_POST['content_type'] ?? '', 'listicle' ); ?>>Listicle (Top 10...)</option>
+                                    <option value="review" <?php selected( $_POST['content_type'] ?? '', 'review' ); ?>>Product Review</option>
+                                    <option value="comparison" <?php selected( $_POST['content_type'] ?? '', 'comparison' ); ?>>Comparison (X vs Y)</option>
+                                    <option value="buying_guide" <?php selected( $_POST['content_type'] ?? '', 'buying_guide' ); ?>>Buying Guide / Roundup</option>
+                                    <option value="news_article" <?php selected( $_POST['content_type'] ?? '', 'news_article' ); ?>>News Article</option>
+                                    <option value="faq_page" <?php selected( $_POST['content_type'] ?? '', 'faq_page' ); ?>>FAQ Page</option>
+                                    <option value="pillar_guide" <?php selected( $_POST['content_type'] ?? '', 'pillar_guide' ); ?>>Ultimate Guide</option>
+                                </optgroup>
+                                <optgroup label="Specialized">
+                                    <option value="recipe" <?php selected( $_POST['content_type'] ?? '', 'recipe' ); ?>>Recipe</option>
+                                    <option value="case_study" <?php selected( $_POST['content_type'] ?? '', 'case_study' ); ?>>Case Study</option>
+                                    <option value="tech_article" <?php selected( $_POST['content_type'] ?? '', 'tech_article' ); ?>>Technical Article</option>
+                                    <option value="interview" <?php selected( $_POST['content_type'] ?? '', 'interview' ); ?>>Interview / Q&A</option>
+                                    <option value="white_paper" <?php selected( $_POST['content_type'] ?? '', 'white_paper' ); ?>>White Paper / Report</option>
+                                    <option value="opinion" <?php selected( $_POST['content_type'] ?? '', 'opinion' ); ?>>Opinion / Op-Ed</option>
+                                    <option value="press_release" <?php selected( $_POST['content_type'] ?? '', 'press_release' ); ?>>Press Release</option>
+                                    <option value="personal_essay" <?php selected( $_POST['content_type'] ?? '', 'personal_essay' ); ?>>Personal Essay</option>
+                                    <option value="glossary_definition" <?php selected( $_POST['content_type'] ?? '', 'glossary_definition' ); ?>>Glossary / Definition</option>
+                                    <option value="scholarly_article" <?php selected( $_POST['content_type'] ?? '', 'scholarly_article' ); ?>>Scholarly Article</option>
+                                    <option value="sponsored" <?php selected( $_POST['content_type'] ?? '', 'sponsored' ); ?>>Sponsored / Advertorial</option>
+                                    <option value="live_blog" <?php selected( $_POST['content_type'] ?? '', 'live_blog' ); ?>>Live Blog</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="sb-field-row-3">
+                        <div class="sb-field">
+                            <label>Word Count
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> How long the finished article will be. 2,000 words is the sweet spot for AI search citations (ChatGPT, Perplexity, Google AI Overviews tend to cite longer authoritative pieces). Shorter (800-1,000) works for product pages and buying guides. Longer (3,000+) is for ultimate-guide content.</span>
+                                </span>
+                            </label>
+                            <select name="word_count">
+                                <option value="800" <?php selected( $_POST['word_count'] ?? '', '800' ); ?>>800 — Quick answer</option>
+                                <option value="1000" <?php selected( $_POST['word_count'] ?? '', '1000' ); ?>>1,000 — Product/transactional</option>
+                                <option value="1500" <?php selected( $_POST['word_count'] ?? '', '1500' ); ?>>1,500 — Standard article</option>
+                                <option value="2000" <?php selected( $_POST['word_count'] ?? '2000', '2000' ); ?>>2,000 — AI citation optimal</option>
+                                <option value="2500" <?php selected( $_POST['word_count'] ?? '', '2500' ); ?>>2,500 — Comprehensive guide</option>
+                                <option value="3000" <?php selected( $_POST['word_count'] ?? '', '3000' ); ?>>3,000 — Definitive guide</option>
+                            </select>
+                            <div id="sb-wc-hint" class="sb-help" style="display:none;margin-top:4px;font-size:11px;color:#6b7280"></div>
+                        </div>
+                        <div class="sb-field">
+                            <label>Tone</label>
+                            <select name="tone">
+                                <option value="authoritative" <?php selected( $_POST['tone'] ?? 'authoritative', 'authoritative' ); ?>>Authoritative</option>
+                                <option value="conversational" <?php selected( $_POST['tone'] ?? '', 'conversational' ); ?>>Conversational</option>
+                                <option value="professional" <?php selected( $_POST['tone'] ?? '', 'professional' ); ?>>Professional</option>
+                                <option value="educational" <?php selected( $_POST['tone'] ?? '', 'educational' ); ?>>Educational</option>
+                                <option value="journalistic" <?php selected( $_POST['tone'] ?? '', 'journalistic' ); ?>>Journalistic</option>
+                            </select>
+                        </div>
+                        <div class="sb-field">
+                            <label>Category <span style="color:#ef4444">*</span>
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Picks which free public data sources the plugin pulls real-time statistics from while writing your article. For example, &ldquo;Food &amp; Drink&rdquo; pulls from OpenFoodFacts and recipe databases, &ldquo;Finance&rdquo; pulls from economic data APIs, &ldquo;Travel &amp; Tourism&rdquo; pulls from destination info sources. This is ONLY about supporting stats woven into the article prose — it does NOT affect where the plugin looks for places or businesses (that&rsquo;s controlled by Target Country at the top of the form). Pick the category that best matches your article topic.</span>
+                                </span>
+                            </label>
+                            <select name="domain" required>
+                                <?php // v1.5.15 — keep this list IDENTICAL to bulk-generator.php and content-brief.php. See plugin_UX.md §9. ?>
+                                <option value="" disabled <?php selected( $_POST['domain'] ?? '', '' ); ?>>Select category...</option>
+                                <option value="general" <?php selected( $_POST['domain'] ?? '', 'general' ); ?>>General</option>
+                                <option value="animals" <?php selected( $_POST['domain'] ?? '', 'animals' ); ?>>Animals &amp; Pets (General)</option>
+                                <option value="art_design" <?php selected( $_POST['domain'] ?? '', 'art_design' ); ?>>Art &amp; Design</option>
+                                <option value="blockchain" <?php selected( $_POST['domain'] ?? '', 'blockchain' ); ?>>Blockchain</option>
+                                <option value="books" <?php selected( $_POST['domain'] ?? '', 'books' ); ?>>Books &amp; Literature</option>
+                                <option value="business" <?php selected( $_POST['domain'] ?? '', 'business' ); ?>>Business</option>
+                                <option value="cryptocurrency" <?php selected( $_POST['domain'] ?? '', 'cryptocurrency' ); ?>>Cryptocurrency</option>
+                                <option value="currency" <?php selected( $_POST['domain'] ?? '', 'currency' ); ?>>Currency &amp; Forex</option>
+                                <option value="ecommerce" <?php selected( $_POST['domain'] ?? '', 'ecommerce' ); ?>>Ecommerce</option>
+                                <option value="education" <?php selected( $_POST['domain'] ?? '', 'education' ); ?>>Education</option>
+                                <option value="entertainment" <?php selected( $_POST['domain'] ?? '', 'entertainment' ); ?>>Entertainment &amp; Movies</option>
+                                <option value="environment" <?php selected( $_POST['domain'] ?? '', 'environment' ); ?>>Environment &amp; Climate</option>
+                                <option value="finance" <?php selected( $_POST['domain'] ?? '', 'finance' ); ?>>Finance &amp; Economics</option>
+                                <option value="food" <?php selected( $_POST['domain'] ?? '', 'food' ); ?>>Food &amp; Drink</option>
+                                <option value="games" <?php selected( $_POST['domain'] ?? '', 'games' ); ?>>Games &amp; Gaming</option>
+                                <option value="government" <?php selected( $_POST['domain'] ?? '', 'government' ); ?>>Government, Law &amp; Politics</option>
+                                <option value="health" <?php selected( $_POST['domain'] ?? '', 'health' ); ?>>Health &amp; Medical (Human)</option>
+                                <option value="music" <?php selected( $_POST['domain'] ?? '', 'music' ); ?>>Music</option>
+                                <option value="news" <?php selected( $_POST['domain'] ?? '', 'news' ); ?>>News &amp; Media</option>
+                                <option value="science" <?php selected( $_POST['domain'] ?? '', 'science' ); ?>>Science &amp; Space</option>
+                                <option value="sports" <?php selected( $_POST['domain'] ?? '', 'sports' ); ?>>Sports &amp; Fitness</option>
+                                <option value="technology" <?php selected( $_POST['domain'] ?? '', 'technology' ); ?>>Technology</option>
+                                <option value="transportation" <?php selected( $_POST['domain'] ?? '', 'transportation' ); ?>>Transportation &amp; Logistics</option>
+                                <option value="travel" <?php selected( $_POST['domain'] ?? '', 'travel' ); ?>>Travel &amp; Tourism</option>
+                                <option value="veterinary" <?php selected( $_POST['domain'] ?? '', 'veterinary' ); ?>>Veterinary &amp; Pet Health (Research)</option>
+                                <option value="weather" <?php selected( $_POST['domain'] ?? '', 'weather' ); ?>>Weather &amp; Climate</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="sb-field-row">
+                        <div class="sb-field">
+                            <label>Target Audience</label>
+                            <input type="text" name="audience" value="<?php echo esc_attr( $_POST['audience'] ?? '' ); ?>" placeholder="e.g. horse owners, equine vets" />
+                        </div>
+                        <div class="sb-field">
+                            <label>Accent Color</label>
+                            <div style="display:flex;gap:10px;align-items:center">
+                                <input type="color" name="accent_color" value="<?php echo esc_attr( $_POST['accent_color'] ?? '#764ba2' ); ?>" style="width:44px;height:44px;padding:4px;cursor:pointer;border:1px solid var(--sb-border);border-radius:6px" />
+                                <span class="sb-help" style="margin:0">Headings, borders, CTA buttons</span>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- Generate Button —
