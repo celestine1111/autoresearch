@@ -51,6 +51,10 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
     // v1.5.24 — preserve existing settings and merge in only the fields
     // from this form so other-form fields (e.g. places_integrations save)
     // don't get wiped when the main settings form is saved.
+    // v1.5.186 — Only update fields that belong to THIS form section.
+    // Previously this handler also wrote author_* fields with empty defaults,
+    // wiping the Author Bio when the General Settings form was saved
+    // (because author_* fields are in a SEPARATE form).
     $existing = get_option( 'seobetter_settings', [] );
     $settings = array_merge( $existing, [
         'auto_schema'        => ! empty( $_POST['auto_schema'] ),
@@ -60,20 +64,8 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
         'llms_txt_enabled'   => ! empty( $_POST['llms_txt_enabled'] ),
         'tavily_api_key'     => sanitize_text_field( $_POST['tavily_api_key'] ?? '' ),
         'pexels_api_key'     => sanitize_text_field( $_POST['pexels_api_key'] ?? '' ),
-        // v1.5.139 — Author Bio (E-E-A-T)
-        'author_name'        => sanitize_text_field( $_POST['author_name'] ?? '' ),
-        'author_title'       => sanitize_text_field( $_POST['author_title'] ?? '' ),
-        'author_bio'         => sanitize_textarea_field( $_POST['author_bio'] ?? '' ),
-        'author_image'       => esc_url_raw( $_POST['author_image'] ?? '' ),
-        'author_linkedin'    => esc_url_raw( $_POST['author_linkedin'] ?? '' ),
-        'author_twitter'     => esc_url_raw( $_POST['author_twitter'] ?? '' ),
-        'author_facebook'    => esc_url_raw( $_POST['author_facebook'] ?? '' ),
-        'author_instagram'   => esc_url_raw( $_POST['author_instagram'] ?? '' ),
-        'author_youtube'     => esc_url_raw( $_POST['author_youtube'] ?? '' ),
-        'author_website'     => esc_url_raw( $_POST['author_website'] ?? '' ),
-        'author_credentials' => sanitize_text_field( $_POST['author_credentials'] ?? '' ),
-        'author_experience'  => sanitize_text_field( $_POST['author_experience'] ?? '' ),
     ] );
+    // Author bio fields are NOT in this form — don't touch them
     update_option( 'seobetter_settings', $settings );
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'seobetter' ) . '</p></div>';
 }
