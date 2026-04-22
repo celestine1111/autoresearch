@@ -19,7 +19,7 @@
 ## v1.5.200 — Add `class="seobetter-author-bio"` to the author-bio wrapper (fix dead cssSelector references)
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `dab3c6c`
 
 ### User report
 
