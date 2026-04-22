@@ -19,7 +19,7 @@
 ## v1.5.193 — Auto-suggest: systematic LLM-based audience + category inference
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `c6e8be2`
 
 ### Root cause being fixed
 
