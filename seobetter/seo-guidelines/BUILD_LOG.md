@@ -7,12 +7,62 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.192)
+> **Last updated:** 2026-04-22 (v1.5.193)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.193 — Auto-suggest: systematic LLM-based audience + category inference
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Root cause being fixed
+
+User: "keyword is 'should university be free in australia' and Auto-suggest populated Target Audience with 'healthcare professionals and patients seeking medical information' — that was from an earlier test. You are not fixing it systematically, you are just fixing it for that keyword."
+
+Two independent bandaids had been layered in prior versions:
+
+1. **Backend (cloud-api/api/topic-research.js v1.5.173 → v1.5.180)** — audience and category were inferred from hand-written regex across ~10 topic buckets (healthcare, developer, recipe, finance, pet, travel, crypto, business, beginner) matched against the SERP snippets + domain string. Any keyword whose SERP happened to include trigger words (e.g. Australian university SERP mentions "nurse training" or "patient protests") produced false positives. Every new topic required a new hard-coded branch — the opposite of universal.
+
+2. **Frontend (admin/views/content-generator.php v1.5.173)** — `!audField.value.trim()` guard and `currentCat === 'general' || currentCat === 'business'` guard refused to overwrite the fields when stale PHP-restored `$_POST` values were present, so a keyword change didn't clear the previous keyword's audience.
+
+Both violated the skill's "absolute rules over fuzzy matching" + "never fix a symptom for one keyword" principles.
+
+### Fixed
+
+- **`inferAudienceAndCategoryWithLLM()`** — NEW helper in `cloud-api/api/topic-research.js` line **~580**
+  - Takes `(keyword, serpResults)` and calls `openai/gpt-4.1-mini` via OpenRouter with the keyword + top-8 SERP titles/domains/snippets.
+  - Returns `{ audience, category }` with `response_format: { type: 'json_object' }` and 8-second timeout.
+  - Audience: 5-15 word description of WHO searches for THIS specific keyword (e.g. "Australian students, parents, and higher-education policy makers").
+  - Category: exactly one of 26 allow-listed values (`health, veterinary, technology, finance, food, travel, sports, science, ecommerce, cryptocurrency, business, entertainment, weather, government, education, legal, real_estate, automotive, fashion, parenting, lifestyle, gaming, arts, religion, politics, general`). Anything else → empty (not a fake fallback).
+  - If `OPENROUTER_KEY` is unset or the call errors: returns `{ audience: '', category: '' }`. Fail gracefully, never fail silently.
+  - Works for any keyword, any language, any country. Zero hardcoded topic mapping.
+  - Verify: `grep -n 'inferAudienceAndCategoryWithLLM' cloud-api/api/topic-research.js`
+
+- **Removed the hand-written regex blocks** — `cloud-api/api/topic-research.js::fetchSerperKeywords()` lines **~517–636 previously**
+  - Deleted ~120 lines of keyword-specific regex (audience + category). Replaced with a single call to the new LLM helper.
+  - Verify: `grep -n 'healthcare professionals and patients' cloud-api/api/topic-research.js` → expect 0 hits (the string was hardcoded in the old regex path).
+
+- **Frontend: Auto-suggest always overwrites audience + category** — `admin/views/content-generator.php sbAutoBtn handler` line **~746**
+  - Removed `!audField.value.trim()` guard on audience.
+  - Removed `currentCat === 'general' || currentCat === 'business'` guard on category.
+  - When LLM returns empty, the field is cleared (user sees blank and knows to fill manually rather than being silently left with stale data).
+  - Verify: `grep -n 'v1.5.193 — Auto-suggest ALWAYS overwrites' admin/views/content-generator.php`
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — no hardcoded topic mapping. LLM reads the actual SERP for the current keyword.
+2. **Works for ALL 21 content types?** YES — audience/category inference is content-type-agnostic.
+3. **Works for ALL AI models?** YES — the LLM is server-side (Ben's OPENROUTER_KEY), NOT the user's model. Per the sonar-backend rule.
+
+### Verified by user
+
+- UNTESTED
 
 ---
 

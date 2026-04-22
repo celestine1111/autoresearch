@@ -509,131 +509,29 @@ async function fetchSerperKeywords(keyword, gl = '') {
       if (lsi.length >= 10) break;
     }
 
-    // --- Infer target audience from source domains ---
-    const domains = results.map(r => {
-      try { return new URL(r.link).hostname.replace('www.', ''); } catch { return ''; }
-    }).filter(Boolean);
-
-    // v1.5.180 — Audience detection: snippet-first approach.
-    // Domain-only matching was too coarse (LinkedIn → "marketing professionals"
-    // even for AI-in-healthcare articles). Now analyzes WHAT the content says,
-    // not just WHERE it's published.
-    let audience = '';
-    const domainStr = domains.join(' ');
-    const allLinks = results.map(r => r.link || '').join(' ').toLowerCase();
-    const kwLowerAud = keyword.toLowerCase();
-
-    // Step 1: Check keyword + snippet content together (most accurate)
-    const snippetsForAud = allSnippetText + ' ' + kwLowerAud;
-
-    if (/\b(healthcare|medical|clinical|patient|diagnosis|treatment|hospital)\b/.test(snippetsForAud) && /\b(ai|artificial intelligence|machine learning|deep learning)\b/.test(snippetsForAud)) {
-      audience = 'healthcare professionals and researchers exploring AI applications';
-    } else if (/\b(healthcare|medical|clinical|patient|diagnosis|nhs|doctor|nurse)\b/.test(snippetsForAud)) {
-      audience = 'healthcare professionals and patients seeking medical information';
-    } else if (/\b(developer|programming|code|api|framework|deploy|github|stack)\b/.test(snippetsForAud)) {
-      if (/\b(beginner|learn|tutorial|getting started|introduction)\b/.test(snippetsForAud)) {
-        audience = 'beginner to intermediate developers learning new skills';
-      } else {
-        audience = 'developers and software engineers';
-      }
-    } else if (/\b(recipe|cooking|ingredient|bake|cuisine|dish)\b/.test(snippetsForAud)) {
-      audience = 'home cooks looking for reliable recipes';
-    } else if (/\b(invest|stock|portfolio|mortgage|retirement|savings)\b/.test(snippetsForAud)) {
-      audience = 'people making financial decisions';
-    } else if (/\b(pet|dog|cat|veterinar|puppy|kitten|breed)\b/.test(snippetsForAud)) {
-      audience = 'pet owners seeking health and care advice';
-    } else if (/\b(travel|hotel|flight|destination|tourism|backpack)\b/.test(snippetsForAud)) {
-      audience = 'travelers planning trips and experiences';
-    } else if (/\b(crypto|bitcoin|ethereum|blockchain|defi|nft)\b/.test(snippetsForAud)) {
-      audience = 'crypto investors and blockchain enthusiasts';
-    }
-
-    // Step 2: Domain-based detection (only if snippet detection missed)
-    if (!audience) {
-      if (/aarp\.org|healthline\.com|webmd\.com|mayoclinic\.org|health\.harvard/.test(domainStr)) {
-        audience = 'health-conscious adults seeking evidence-based information';
-      } else if (/zerotomastery|freecodecamp|codecademy|realpython|dev\.to/.test(domainStr)) {
-        audience = 'beginner to intermediate developers learning new skills';
-      } else if (/wirecutter|rtings|tomsguide|techradar|pcmag/.test(domainStr)) {
-        audience = 'buyers researching products before purchase';
-      } else if (/investopedia|nerdwallet|bankrate/.test(domainStr)) {
-        audience = 'people making financial decisions';
-      } else if (/allrecipes|foodnetwork|bbcgoodfood|taste\.com/.test(domainStr)) {
-        audience = 'home cooks looking for reliable recipes';
-      } else if (/salesforce|hubspot|mailchimp/.test(domainStr)) {
-        audience = 'business owners and marketing professionals';
-      }
-      // Note: linkedin.com removed as standalone trigger — it's too generic
-    }
-
-    // Step 3: Broad snippet fallback
-    if (!audience) {
-      if (/\bbusiness|company|brand|marketing|strategy|revenue\b/.test(snippetsForAud)) {
-        audience = 'business professionals and decision makers';
-      } else if (/\bbeginner|getting started|learn|tutorial\b/.test(snippetsForAud)) {
-        audience = 'beginners looking for practical guidance';
-      }
-    }
-
-    // --- v1.5.176 — Auto-detect category from source domains + snippets ---
-    // Maps the top-ranking domains to the plugin's category dropdown values
-    let category = '';
-    // allLinks already declared above in audience detection
-    const snippetAndTitles = allSnippetText + ' ' + results.map(r => (r.title || '').toLowerCase()).join(' ');
-
-    // Domain-based detection (strongest signal)
-    if (/healthline|webmd|mayoclinic|health\.harvard|medlineplus|nih\.gov|clevelandclinic/.test(domainStr)) {
-      category = 'health';
-    } else if (/petmd|akc\.org|thesprucepets|rover\.com|vetstreet|vet\.cornell|rspca/.test(domainStr)) {
-      category = 'veterinary';
-    } else if (/github\.com|stackoverflow|dev\.to|realpython|freecodecamp|codecademy|digitalocean|medium\.com.*tech/.test(domainStr)) {
-      category = 'technology';
-    } else if (/investopedia|nerdwallet|bankrate|morningstar|bloomberg|cnbc\.com|wsj\.com/.test(domainStr)) {
-      category = 'finance';
-    } else if (/allrecipes|foodnetwork|bbcgoodfood|taste\.com|epicurious|seriouseats|bonappetit/.test(domainStr)) {
-      category = 'food';
-    } else if (/tripadvisor|lonelyplanet|booking\.com|skyscanner|travelandleisure|nomadicmatt/.test(domainStr)) {
-      category = 'travel';
-    } else if (/espn\.com|bleacherreport|sportsillustrated|nba\.com|nfl\.com|fifa\.com|bbc\.com\/sport/.test(domainStr)) {
-      category = 'sports';
-    } else if (/nasa\.gov|space\.com|nature\.com|sciencedirect|arxiv\.org|newscientist/.test(domainStr)) {
-      category = 'science';
-    } else if (/amazon\.com.*\/dp|shopify|ebay\.com|etsy\.com|woocommerce/.test(domainStr)) {
-      category = 'ecommerce';
-    } else if (/coindesk|coinmarketcap|coingecko|cointelegraph|binance|kraken/.test(domainStr)) {
-      category = 'cryptocurrency';
-    } else if (/hubspot|salesforce|shopify\.com\/blog|entrepreneur\.com|inc\.com|hbr\.org|forbes\.com\/business/.test(domainStr)) {
-      category = 'business';
-    } else if (/pcmag|tomsguide|techradar|wirecutter|rtings|cnet\.com|theverge/.test(domainStr)) {
-      category = 'technology';
-    } else if (/imdb|rottentomatoes|letterboxd|variety\.com|deadline\.com|hollywoodreporter/.test(domainStr)) {
-      category = 'entertainment';
-    } else if (/weather\.gov|accuweather|weather\.com|bom\.gov\.au|metoffice\.gov/.test(domainStr)) {
-      category = 'weather';
-    } else if (/gov\.uk|gov\.au|usa\.gov|congress\.gov|legislation|parliament/.test(domainStr)) {
-      category = 'government';
-    } else if (/coursera|edx\.org|khanacademy|university|\.edu\//.test(domainStr)) {
-      category = 'education';
-    }
-
-    // Fallback: snippet/title keyword detection
-    if (!category) {
-      if (/\b(recipe|cooking|ingredient|bake|roast|cuisine)\b/.test(snippetAndTitles)) {
-        category = 'food';
-      } else if (/\b(symptom|treatment|diagnosis|patient|clinical|therapy|medical)\b/.test(snippetAndTitles)) {
-        category = 'health';
-      } else if (/\b(framework|api|programming|developer|code|software|deploy)\b/.test(snippetAndTitles)) {
-        category = 'technology';
-      } else if (/\b(invest|stock|portfolio|mortgage|interest rate|retirement)\b/.test(snippetAndTitles)) {
-        category = 'finance';
-      } else if (/\b(marketing|startup|revenue|roi|business strategy|b2b|saas)\b/.test(snippetAndTitles)) {
-        category = 'business';
-      } else if (/\b(hotel|flight|destination|travel|tourism|backpack|resort)\b/.test(snippetAndTitles)) {
-        category = 'travel';
-      } else if (/\b(veterinar|pet|dog|cat|puppy|kitten|breed|animal health)\b/.test(snippetAndTitles)) {
-        category = 'veterinary';
-      }
-    }
+    // v1.5.193 — Audience + category inference via LLM on the live SERP.
+    //
+    // Previous versions (v1.5.173 → v1.5.180) used hand-written regex maps
+    // over ~10 hard-coded topic buckets (healthcare, developer, recipe,
+    // finance, pet, travel, crypto, business, beginner). This violated
+    // the plugin's universal-rule principle and produced false positives:
+    //
+    //   Keyword: "should university be free in australia"
+    //   SERP snippet mentions "nurse training" or "patient protests"
+    //     → old regex matched /\b(patient|nurse)\b/
+    //     → audience = "healthcare professionals and patients seeking
+    //                   medical information"
+    //
+    // The LLM call below takes the keyword + top-8 SERP titles, domains,
+    // and snippets and returns a fresh audience + category sized for the
+    // actual topic. Works for any keyword in any language, no maintenance
+    // required when new topics emerge. Falls back to empty strings on
+    // LLM error (frontend handles the empty case gracefully — user fills
+    // the fields manually).
+    const { audience, category } = await inferAudienceAndCategoryWithLLM(
+      keyword,
+      results.slice(0, 8)
+    );
 
     return {
       secondary: secondary.slice(0, 7),
@@ -645,6 +543,95 @@ async function fetchSerperKeywords(keyword, gl = '') {
   } catch (err) {
     console.error('Serper keyword extraction error (non-fatal):', err.message);
     return null;
+  }
+}
+
+/**
+ * v1.5.193 — LLM-based audience + category inference.
+ *
+ * Replaces the hand-written regex blocks that previously inferred
+ * audience and category from hard-coded topic buckets. Calls the
+ * same OPENROUTER_KEY + gpt-4.1-mini infrastructure used elsewhere
+ * in the backend so no new credentials are needed.
+ *
+ * @param {string} keyword     The search keyword the user entered.
+ * @param {Array}  serpResults Up to 8 Serper SERP results ({title, link, snippet}).
+ * @returns {Promise<{audience:string, category:string}>}
+ *          Empty strings when the LLM is unavailable or errors out —
+ *          never a hard-coded fallback. The frontend shows empty fields
+ *          and lets the user fill them manually.
+ */
+async function inferAudienceAndCategoryWithLLM(keyword, serpResults) {
+  const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+  if (!OPENROUTER_KEY || !Array.isArray(serpResults) || serpResults.length === 0) {
+    return { audience: '', category: '' };
+  }
+
+  const serpLines = serpResults.slice(0, 8).map((r, i) => {
+    let host = '';
+    try { host = new URL(r.link || '').hostname.replace(/^www\./, ''); } catch { /* noop */ }
+    const title = (r.title || '').toString().slice(0, 120);
+    const snippet = (r.snippet || '').toString().slice(0, 220);
+    return `${i + 1}. [${host}] ${title}${snippet ? ' — ' + snippet : ''}`;
+  }).join('\n');
+
+  const allowedCategories = [
+    'health','veterinary','technology','finance','food','travel','sports','science',
+    'ecommerce','cryptocurrency','business','entertainment','weather','government',
+    'education','legal','real_estate','automotive','fashion','parenting','lifestyle',
+    'gaming','arts','religion','politics','general',
+  ];
+
+  const prompt = `Google search keyword: "${keyword}"
+
+Top ranking results:
+${serpLines}
+
+Return JSON with exactly two fields:
+- "audience": a 5-15 word description of WHO searches for this specific keyword (e.g. "Australian students, parents, and higher-education policy makers"). Be specific to the keyword. Do NOT default to generic groups like "healthcare professionals" unless the keyword is actually about healthcare. If the keyword is about a policy, country, or specific group, name them.
+- "category": ONE value from this list that best matches the topic: ${allowedCategories.join(', ')}. Use "general" if nothing fits.
+
+Output only the JSON object, no markdown fences, no explanation.`;
+
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_KEY}`,
+      },
+      body: JSON.stringify({
+        model: process.env.EXTRACTION_MODEL || 'openai/gpt-4.1-mini',
+        messages: [
+          { role: 'system', content: 'You classify search keywords by target audience and topic category. You read the keyword and SERP results carefully and never default to generic buckets unrelated to the keyword.' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 150,
+        temperature: 0.0,
+        response_format: { type: 'json_object' },
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!resp.ok) return { audience: '', category: '' };
+    const data = await resp.json();
+    let content = data?.choices?.[0]?.message?.content || '';
+    if (!content) return { audience: '', category: '' };
+
+    // Strip any markdown fences just in case response_format is ignored
+    content = content.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '').trim();
+    const parsed = JSON.parse(content);
+
+    const audience = typeof parsed.audience === 'string' ? parsed.audience.trim().slice(0, 200) : '';
+    let category = typeof parsed.category === 'string' ? parsed.category.trim().toLowerCase() : '';
+    // Validate category against the allowed list; anything else → empty (not 'general'
+    // — 'general' is a valid pick but we don't want to fake it when the LLM errored).
+    if (category && !allowedCategories.includes(category)) category = '';
+
+    return { audience, category };
+  } catch (err) {
+    console.error('inferAudienceAndCategoryWithLLM error (non-fatal):', err.message);
+    return { audience: '', category: '' };
   }
 }
 

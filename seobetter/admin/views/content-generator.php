@@ -742,24 +742,36 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
         if (lsi.length) {
             document.querySelector('[name="lsi_keywords"]').value = lsi.join(', ');
         }
-        // v1.5.173 — Auto-fill Target Audience from Serper domain analysis
+        // v1.5.193 — Auto-suggest ALWAYS overwrites the Target Audience and
+        // Category fields when the user clicks the button. Previously we
+        // guarded the audience field with !audField.value.trim() so the
+        // button would not clobber a manual entry — but that rule also
+        // refused to overwrite stale values left in the field by PHP from
+        // an earlier $_POST (e.g. the user tested a healthcare keyword, the
+        // audience got set, then they typed a completely different keyword
+        // like "should university be free in australia" and the old
+        // healthcare audience stayed). Clicking "Auto-suggest" is an
+        // explicit request for fresh suggestions — the fact that the field
+        // already has text should never prevent that.
         var aud = (d.keywords && d.keywords.audience) || '';
         var audField = document.querySelector('[name="audience"]');
-        if (aud && audField && !audField.value.trim()) {
+        if (audField) {
+            // Overwrite when LLM returned an audience; clear when it didn't
+            // (so the user sees a blank field and knows to fill it manually
+            // rather than being silently left with stale data).
             audField.value = aud;
         }
-        // v1.5.176 — Auto-select Category from Serper domain analysis
+        // v1.5.193 — Same treatment for Category: ALWAYS overwrite when the
+        // LLM returned a valid category value that exists in the dropdown.
+        // Previously we only overwrote when the current value was empty or
+        // equal to 'general'/'business', which also preserved stale $_POST
+        // values across keyword changes.
         var cat = (d.keywords && d.keywords.category) || '';
         var catField = document.querySelector('[name="domain"]');
-        if (cat && catField) {
-            // Only auto-select if user hasn't manually chosen (still on default "business" or empty)
-            var currentCat = catField.value;
-            if (!currentCat || currentCat === 'general' || currentCat === 'business') {
-                // Check the value exists in the dropdown
-                var optExists = catField.querySelector('option[value="' + cat + '"]');
-                if (optExists) {
-                    catField.value = cat;
-                }
+        if (catField && cat) {
+            var optExists = catField.querySelector('option[value="' + cat + '"]');
+            if (optExists) {
+                catField.value = cat;
             }
         }
         var serperCount = (d.sources && d.sources.serper) || 0;
