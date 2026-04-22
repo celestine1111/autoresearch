@@ -3,7 +3,7 @@
 > **Single source of truth** for how SEOBetter handles outbound URLs in generated articles.
 > If you change link behavior, UPDATE THIS FILE in the same commit.
 >
-> **Last updated:** v1.5.191 — 2026-04-22
+> **Last updated:** v1.5.205 — 2026-04-22 (regional international citation domain stubs added §10)
 
 ---
 
@@ -464,6 +464,66 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 **v1.5.24 — Tier 5 (Google Places API New, paid with free credit, user-provided API key):**
 - `maps.google.com`, `google.com/maps` — Google Maps place URLs
 - `maps.googleapis.com`, `places.googleapis.com` — Google Places API endpoints (server-side only)
+
+**v1.5.205 — Regional international citation domains (stub; code lands v1.5.206)**
+
+Documented here for traceability. Actual addition to `get_trusted_domain_whitelist()` happens in v1.5.206 with optional per-article-country gating. See `international-optimization.md §6` for the full per-region rationale.
+
+*China (Baidu / Doubao / ERNIE / DeepSeek / Qwen / Kimi):*
+- `baike.baidu.com`, `zhihu.com`, `jiandan.net`, `36kr.com`, `tmtpost.com`
+- `people.com.cn`, `xinhuanet.com`, `chinadaily.com.cn`, `cctv.com`
+- `zh.wikipedia.org`
+- `*.gov.cn`, `*.edu.cn`
+
+*Russia (Yandex / YandexGPT / GigaChat):*
+- `ru.wikipedia.org`, `yandex.ru`, `kremlin.ru`
+- `lenta.ru`, `ria.ru`, `tass.ru`, `rbc.ru`, `habr.com`
+- `*.gov.ru`
+
+*South Korea (Naver / HyperCLOVA X / Kanana):*
+- `ko.wikipedia.org`
+- `terms.naver.com`, `kin.naver.com`, `academic.naver.com`
+- `yna.co.kr`, `chosun.com`, `donga.com`, `hani.co.kr`, `joongang.co.kr`
+- `*.go.kr`, `*.ac.kr`
+
+*Japan (Yahoo! Japan / Sakana AI / PLaMo / Rinna / ELYZA):*
+- `ja.wikipedia.org`, `chiebukuro.yahoo.co.jp`, `kotobank.jp`
+- `nhk.or.jp`, `asahi.com`, `mainichi.jp`, `nikkei.com`, `yomiuri.co.jp`
+- `*.go.jp`, `*.ac.jp`
+
+*Germany / DACH (Mistral / Aleph Alpha EU):*
+- `de.wikipedia.org`
+- `spiegel.de`, `faz.net`, `zeit.de`, `sueddeutsche.de`, `welt.de`, `tagesschau.de`
+- `*.bund.de`, `*.gv.at`, `*.admin.ch`
+
+*France:*
+- `fr.wikipedia.org`
+- `lemonde.fr`, `lefigaro.fr`, `liberation.fr`, `leparisien.fr`
+- `*.gouv.fr`
+
+*Spain / Latin America:*
+- `es.wikipedia.org`
+- `elpais.com`, `elmundo.es`, `clarin.com`, `lanacion.com.ar`, `reforma.com`
+- `*.gob.es`, `*.gob.mx`, `*.gob.ar`
+
+*Italy:*
+- `it.wikipedia.org`, `corriere.it`, `repubblica.it`, `lastampa.it`
+- `*.gov.it`
+
+*Brazil / Portugal:*
+- `pt.wikipedia.org`
+- `globo.com`, `folha.uol.com.br`, `uol.com.br`, `estadao.com.br`
+- `publico.pt`, `expresso.pt`
+- `*.gov.br`, `*.gov.pt`
+
+*Middle East (Arabic):*
+- `ar.wikipedia.org`, `aljazeera.net`, `alarabiya.net`, `bbc.com/arabic`
+- `*.gov.sa`, `*.gov.ae`
+
+*India:*
+- `hi.wikipedia.org`
+- `thehindu.com`, `indianexpress.com`, `timesofindia.indiatimes.com`, `ndtv.com`
+- `*.gov.in`, `*.ac.in`
 
 ### How matching works
 

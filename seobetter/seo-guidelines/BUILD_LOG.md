@@ -7,12 +7,75 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.204)
+> **Last updated:** 2026-04-22 (v1.5.205)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.205 — International optimization research + reference doc (Layer 6 foundation)
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+The 5-layer + 6-vector optimization framework (confirmed by Ben 2026-04-22) requires a 6th international vector: Baidu / Yandex / Naver / regional LLMs (Doubao, ERNIE, DeepSeek, Qwen, Kimi, YandexGPT, GigaChat, HyperCLOVA X, Kanana, Mistral, Aleph Alpha, Japanese LLMs). Before per-article-type testing begins, the plugin needs a reference doc covering what each international engine/LLM values — otherwise Phase 2 (Research) of every per-type workflow would re-research the same international landscape 21 times.
+
+v1.5.205 is a **pure-docs commit**. No PHP code changes. Critical code lands in v1.5.206 (schema `inLanguage`, Wikidata `sameAs`, regional prompt injector, Layer 6 scoring check, language-enforcement gate).
+
+### Shipped
+
+- **`seo-guidelines/international-optimization.md`** (new, ~330 lines) — Layer 6 contract covering:
+  - §1 Engine landscape: global engines, regional engines (Baidu/Sogou/Yandex/Naver/Daum/Seznam/Yahoo! Japan), international LLMs, answer engines
+  - §2 Per-engine optimization preferences: Baidu (title 32–54 chars, meta keywords still weighted, .cn domain + ICP + mainland CDN, Baidu Baike citations), Yandex (Cyrillic, mandatory JSON-LD, Turbo Pages <1.8s LCP, Cyrillic URLs), Naver (C-Rank + P-Rank + DIA, Naver ecosystem citations), Seznam, Yahoo! Japan
+  - §3 Per-region tactics: China / Russia / Korea / Japan / Germany / Brazil
+  - §4 Schema.org additions: `inLanguage` (BCP-47 required), `hreflang`, Wikidata `sameAs`, `audience` / `spatialCoverage` / `contentLocation`
+  - §5 `llms.txt` emerging standard (Answer.AI 2024, adopted by Anthropic/Stripe/Zapier/Cloudflare; not yet a ranking signal)
+  - §6 International regional citation domain whitelist — 11 regions
+  - §7 Per-content-type international notes — 21-row stub to be filled per-type during Phase 2 Research
+  - §8 Implementation tasks for v1.5.206 (schema inLanguage, Wikidata sameAs, regional prompt context injector, whitelist expansion, Layer 6 scoring, language-enforcement gate)
+
+- **`seo-guidelines/external-links-policy.md §10`** — regional international citation domain stubs added under a new "v1.5.205" subsection covering China / Russia / Korea / Japan / Germany / France / Spain / Italy / Brazil / Middle East / India. Documented as stubs; actual `get_trusted_domain_whitelist()` addition happens in v1.5.206 with optional per-article-country gating.
+
+- **Version bump** — `seobetter/seobetter.php` header line **6** (`Version: 1.5.205`) and `SEOBETTER_VERSION` constant line **21**.
+
+### Scope boundary
+
+No PHP code changed. No CSS changed. No behavior changed. This commit exists to:
+1. Give Phase 2 (Research) of the per-article-type workflow a pre-built international reference so each type doesn't re-research the same 20+ engines.
+2. Lock the spec for v1.5.206 (the next code commit) so implementation has a clear target.
+
+### Verify
+
+```bash
+# 1. New doc exists and has 11 sections
+grep -c "^## " /Users/ben/Documents/autoresearch/seobetter/seo-guidelines/international-optimization.md
+# Expect: 11
+
+# 2. external-links-policy.md §10 has the v1.5.205 stub
+grep -n "v1.5.205 — Regional international" /Users/ben/Documents/autoresearch/seobetter/seo-guidelines/external-links-policy.md
+
+# 3. Version bumped
+grep -n "1.5.205" /Users/ben/Documents/autoresearch/seobetter/seobetter.php | head -3
+```
+
+### Verified by user
+
+UNTESTED — pure-docs commit; no runtime verification possible until v1.5.206 code lands. User acceptance = confirming the doc scope matches the Layer 6 contract they want.
+
+### Next
+
+v1.5.206 — critical international code (per §8 of the new doc):
+- `Schema_Generator.php` + `build_aioseo_schema()`: `inLanguage` on every schema block
+- Wikidata SPARQL integration in research phase → inject `sameAs` in `mentions`
+- `Async_Generator.php::get_system_prompt()`: regional context injector per target country
+- `get_trusted_domain_whitelist()`: add all §6 regional domains from `international-optimization.md`
+- `GEO_Analyzer.php`: new "International signals" check (6% weight, triggered when country ≠ US)
+- Language-enforcement gate: regenerate if >20% of content is not in target language's script
 
 ---
 
