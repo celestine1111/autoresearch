@@ -106,11 +106,20 @@ Source: Princeton University GEO study (arxiv.org/pdf/2311.09735), KDD 2024, GEO
 
 ---
 
-## 3. ARTICLE STRUCTURE PROTOCOL (v2026.4)
+## 3. ARTICLE STRUCTURE PROTOCOL (v2026.4 — **default profile**; v1.5.202: genre overrides documented in §3.1A)
 
-Every generated article MUST follow this structure. This is the foundation for GEO scoring.
+The plugin ships TWO structural systems:
 
-### 3.1 Required Sections (in order)
+**A) Default profile** (§3.1 below) — applies to 14 of 21 content types. Standard scannable-informational-content layout with Last Updated / Key Takeaways / Content / FAQ / References. This is what most SEO plugins check for and what GEO_Analyzer scores against.
+
+**B) Genre-override profiles** (§3.1A below) — 7 content types whose real-world publisher conventions OVERRIDE the default because forcing §3.1 onto them would break genre authenticity (a personal essay with "Key Takeaways" at the top feels like a blog post in disguise; a press release with "Key Takeaways" is not what media outlets pick up). These types follow per-genre structures documented in `article_design.md` §11 and per-type BUILD_LOG entries.
+
+The §1 Princeton-backed boosts (quotations, statistics, citations, fluency, readability) are UNIVERSAL — they apply to every content type — but the *form* the boost takes varies by genre (see §3.1B). This is the foundation for how GEO scoring works per-type (see §6 note on per-type scoring).
+
+### 3.1 Required Sections — DEFAULT profile
+
+**Applies to:** `blog_post, how_to, listicle, review, comparison, buying_guide, pillar_guide, tech_article, white_paper, scholarly_article, case_study, faq_page, glossary_definition, sponsored` (14 of 21 types).
+
 1. **Last Updated: [Month Year]** — Freshness signal at the very top
 2. **H1: [Article Title]** — Keyword front-loaded, 50-60 chars
 3. **H2: Key Takeaways** — 3 bullet points, 15-25 words each
@@ -119,6 +128,38 @@ Every generated article MUST follow this structure. This is the foundation for G
 6. **H2: [Content Section 3+]** — As many as needed for word count
 7. **H2: Frequently Asked Questions** — 3-5 Q&A pairs
 8. **H2: References** — 5-8 cited sources with years
+
+### 3.1A Genre Overrides (v1.5.202)
+
+**Applies to:** 7 content types whose real-world publisher conventions override the default. For these types, §3.1 does NOT apply — they follow documented per-genre structures. All §s below link to the research sources backing each override.
+
+| Content Type | Override profile | Source of truth |
+|---|---|---|
+| `news_article` | Inverted pyramid: Lede (5 Ws, who/what/when/where/why in first 25 words) → Nut Graf → Details → Background → Closing. No standalone Key Takeaways. | AP Stylebook + journalism convention |
+| `opinion` (v1.5.192) | **Hybrid** — keeps §3.1's Key Takeaways + FAQ + References, but inserts the Hook & Thesis / Arg 1 / Arg 2 / Arg 3 / The Objection / What This Means / Conclusion + CTA structure. Compliant with both §3.1 AND opinion-genre best practices. | NYT/WaPo/OpEd Project style guides, Purdue OWL, Poynter/Nieman nut-graf research, Princeton GEO (arXiv 2311.09735). See `article_design.md` §11 + BUILD_LOG v1.5.192 |
+| `press_release` (v1.5.199) | Dateline + Lede (first 25 words, 5 Ws) → Body (inverted pyramid) → Key Highlights (bullet list with stats) → quotes inline in body → About the Company → Media Contact → FAQ → References. No Key Takeaways (would fail journalist pickup — see v1.5.195 research). 400 words target. | Muck Rack State of Journalism 2025, Cision journalist survey, Empathy First Media 400-word sweet spot, Google 2025 PR guidelines. See BUILD_LOG v1.5.195 + v1.5.199 |
+| `personal_essay` (v1.5.201) | Literary narrative: Opening Scene (in media res) → The Central Event → Scenes and Sensory Detail → Reflection → Resolution or Lesson. No Key Takeaways or FAQ — would shatter the literary feel. Three sensory data points per scene, named places/dates/people, attributed dialogue, transformation required. 1500 words target. | NYT Modern Love, Longreads, MasterClass, Jane Friedman, Project Write Now, Google 2025 E-E-A-T Experience. See BUILD_LOG v1.5.201 |
+| `live_blog` | Timestamped updates in reverse-chronological order. Coverage intro at top, then `HH:MM — [update]` entries. No Key Takeaways, FAQ, or static References. | LiveBlogPosting schema spec; live-coverage convention |
+| `interview` | Intro → Bio → Q&A (the Q&A pairs ARE the content) → Closing. No separate FAQ (the whole piece is Q&A). Keeps References. | Interview journalism convention |
+| `recipe` | Recipe-card structure: Story → Tips → Ingredients (list) → Instructions (numbered steps) → Notes. No Key Takeaways or FAQ — structured recipe-card fields replace them. | Recipe schema + Google Search recipe rich-result spec |
+
+### 3.1B Princeton §1 boosts are UNIVERSAL — the form varies by genre
+
+§1 says statistics +40%, quotations +41%, citations +30% visibility boost. These apply to EVERY content type. The *form* varies:
+
+- **blog_post / how_to / listicle / review / comparison / buying_guide**: explicit `(Source Name, Year)` inline citations, `"quote" — Name, Title, Org` quote blocks, numeric stats.
+- **opinion**: 4-8 pool-matched citations per 1000 words, steelman'd counter-argument quotes, statistics in argument sections.
+- **press_release**: 1-2 named-executive quotes inline, Key Highlights bullet with stats, 1-2 outbound links max (Google post-2025).
+- **news_article**: lede contains 5 Ws + primary source, body cites officials/reports.
+- **personal_essay**: **dated specifics replace stats** ("$60 a week", "four months in", "October 2019"). Named people + places + dialogue replace expert quotes. Same purpose (+factual density, +Experience signal), different genre form.
+- **recipe**: ingredient measurements + cooking times ARE the stats.
+- **interview**: the interviewee's quotes ARE the attributed quotations.
+
+GEO_Analyzer checks factual density, quote count, and citation count on the rendered HTML regardless of content type — the universal boosts still score. Only the §3.1 structural presence checks (Key Takeaways box, FAQ H2, References H2) are skipped for §3.1A override types (see §6).
+
+### 3.1C When to update §3.1A
+
+Whenever a new content type is added or an existing type's structure is redesigned based on publisher research, update §3.1A in the same commit as the code change. This table is the single source of truth for "which types do NOT follow §3.1". If a type is missing from the table, GEO_Analyzer assumes it follows the default.
 
 ### 3.2 Focus Keyword in First Paragraph (CRITICAL — SEO plugins check this)
 
@@ -482,6 +523,16 @@ This is the scoring system used by `GEO_Analyzer.php`. Each check is weighted. *
 | **CORE-EEAT Lite** ⭐ | **5%** | 10/10 items pass (see §15B rubric) | 0/10 |
 
 ⭐ = added in v1.5.11 (guideline §5A, §4B, §15B integration).
+
+### Per-type scoring note (v1.5.202)
+
+The 14 checks above are CONCEPTUALLY universal, but three of them (BLUF Header, Freshness Signal "Last Updated", and the FAQ/References-adjacent structural expectations baked into Section Openings) were designed against the §3.1 DEFAULT profile. Per §3.1A, seven content types follow genre-override profiles that do NOT include Key Takeaways / static "Last Updated" stamp / separate FAQ block by design:
+
+- `news_article, opinion` (hybrid — keeps Key Takeaways + FAQ, so fully scorable), `press_release, personal_essay, live_blog, interview, recipe`
+
+**Scoring fairness rule:** for §3.1A override types, `GEO_Analyzer` should not penalise the absence of sections that are intentionally excluded by genre. BLUF Header check should not zero-out a Personal Essay (literary essays don't use Key Takeaways boxes); Freshness Signal check should not zero-out a News Article (the dateline IS the freshness signal). The **universal Princeton §1 checks (Readability, Factual Density, Citations, Expert Quotes, Entity Usage, Humanizer, Keyword Density)** still apply to every type — those are where genre overrides earn their score via the per-genre form of the boost (see §3.1B).
+
+Implementation status: as of v1.5.202, the scoring code in `GEO_Analyzer.php` has NOT yet been updated to skip BLUF/Freshness for §3.1A types. This is documented as a known issue — genre-override articles may currently score lower than their quality warrants. A future patch will gate the three structural checks by content_type using the §3.1A allowlist above. Code change deferred; this note documents the known gap.
 
 ### Grade Scale
 - **A+ (90-100):** Publish immediately — optimized for AI citations

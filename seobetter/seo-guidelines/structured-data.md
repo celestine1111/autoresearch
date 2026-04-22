@@ -8,8 +8,20 @@
 > - https://developers.google.com/search/docs/appearance/structured-data/sd-policies
 > - https://developers.google.com/search/docs/appearance/enriched-search-results
 >
-> **Last updated:** 2026-04-19
+> **Last updated:** 2026-04-22 (v1.5.202 — content-type schema enrichments documented)
 > **Code:** `includes/Schema_Generator.php`
+>
+> ---
+>
+> ### Cross-reference note (v1.5.202)
+>
+> Three documents cover schema guidance and must be kept in sync on every schema change:
+>
+> 1. **This file (`structured-data.md`)** — Google compliance policies, required/recommended fields per @type, content-type → @type mapping (§5), validation tools.
+> 2. **`SEO-GEO-AI-GUIDELINES.md` §10** — content-type → schema @type + secondary schemas table, with per-type prose structure context.
+> 3. **`article_design.md` §11** — content-type schema stacking matrix with styled-block context.
+>
+> When `Schema_Generator.php` changes, update ALL THREE in the same commit. Step 4b of the `/seobetter` skill workflow lists the first two as mandatory co-updates — `structured-data.md` should be added to that mapping for any new schema field (citation, backstory, articleSection override, speakable refinement, enriched secondary schemas).
 
 ---
 
@@ -186,6 +198,51 @@ The `build_review()` method auto-detects WHAT is being reviewed and sets the cor
 - `datePublished` and `dateModified` in ISO 8601
 - `positiveNotes` / `negativeNotes` as ItemList (from Pros/Cons section)
 - `reviewRating` only if extractable (patterns: "4.5/5", "Rating: 8/10", "Score: 4 out of 5")
+
+### OpinionNewsArticle (v1.5.192 enrichments)
+
+**Required:** All NewsArticle fields (headline, image, datePublished, dateModified, author, publisher, mainEntityOfPage).
+
+**v1.5.192 additions (AI-citability signals — mirrors Princeton GEO 2311.09735 and Claude/Perplexity citation Q3 2025 research):**
+- `articleSection: "News"` — OpinionNewsArticle is itself the opinion signal; articleSection stays "News" (it's a subtype of NewsArticle).
+- `citation[]` — every outbound URL the article body cites, up to 20 dedup'd. Author-social profiles excluded (v1.5.197) so `author.sameAs` and `citation[]` don't duplicate.
+- `backstory: "Opinion piece — reflects the author's personal views, not an objective news report."` — explicit AI-disambiguation label.
+- `speakable.cssSelector: ["h1", ".key-takeaways", "h2 + p"]` — voice-assistant reads opening + Key Takeaways + section intros.
+- `ClaimReview` schema EXPLICITLY REMOVED from eligibility (v1.5.192) — Google policy: ClaimReview is for fact-checking others' claims, NOT for own opinions. Emitting on op-ed risks manual action.
+
+Source: [BUILD_LOG v1.5.192](./BUILD_LOG.md) + [article_design.md §11](./article_design.md).
+
+### NewsArticle + Press Release override (v1.5.195 / v1.5.199 enrichments)
+
+**When content_type === 'press_release' and schema is NewsArticle:**
+- `articleSection: "Press Release"` (NOT "News") — disambiguates corporate announcements from editorial reporting for AI engines and Google News.
+- `citation[]` — outbound URLs the body cites (max 1-2 per Google 2025 PR rules; schema captures whatever survives).
+- `speakable.cssSelector: ["h1", "h2 + p", ".seobetter-author-bio"]` — voice-assistant reads headline + lede-of-each-section + company boilerplate. Requires the `seobetter-author-bio` class to be present on the bio wrapper (v1.5.200 attached it).
+- Regular `news_article` content type keeps `articleSection: "News"`.
+
+**Organization schema enrichment (v1.5.195):**
+- For `press_release, case_study, sponsored, interview` content types, the secondary Organization node now includes:
+  - `description` (pulled from WP `bloginfo('description')` — site tagline)
+  - `sameAs` (pulled from the 6 author-social-profile settings — social profiles serve double-duty as author AND organization entity grounding)
+- Previously only `name, url, logo` were emitted.
+
+### BlogPosting + Personal Essay override (v1.5.201 enrichments)
+
+**When content_type === 'personal_essay' and schema is BlogPosting:**
+- `articleSection: "Personal Essay"` — disambiguates literary narrative from generic blog posts.
+- `citation[]` — outbound URLs the body cites (essays can reference books, news events, songs; filter excludes author-social profiles per v1.5.197).
+- `backstory: "Personal essay — first-person literary narrative based on the author's lived experience."` — explicit AI-disambiguation label mirroring Opinion pattern.
+- `speakable.cssSelector: ["h1", "h2 + p", ".seobetter-author-bio"]` — voice-assistant reads opening of each section + bio.
+
+Source: [BUILD_LOG v1.5.201](./BUILD_LOG.md).
+
+### `build_clean_description()` helper (v1.5.197 — applies to ALL schema types)
+
+The schema `description` field is generated from post content via `Schema_Generator::build_clean_description()`, which strips `<!-- wp:html -->` structural blocks (type badge, Opinion disclosure bar, Key Takeaways box, tables, author bio, pull-quotes) and all H1-H6 headings before summarising to 30 words. Prevents the pre-v1.5.197 pollution where descriptions read `"💬 Opinion Opinion — this piece reflects... Key Takeaways Key Takeaways..."`.
+
+### `extract_outbound_urls()` citation filter (v1.5.197 — applies to any schema with `citation[]`)
+
+When `citation[]` is populated (Opinion, Press Release, Personal Essay, and any future type), URLs matching the author's 6 configured social profiles (`author_linkedin, _twitter, _facebook, _instagram, _youtube, _website`) are filtered out. Those URLs belong in `author.sameAs` (Person schema), not duplicated into article `citation[]`.
 
 ### FAQPage
 **Required:** `mainEntity` (array of Question/Answer)

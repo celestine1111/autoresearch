@@ -7,12 +7,76 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.201)
+> **Last updated:** 2026-04-22 (v1.5.202)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.202 — Documentation reconciliation: §3.1 default profile + §3.1A genre overrides + structured-data.md sync
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben asked two questions in this session that revealed a documentation-drift problem that's been compounding since v1.5.192:
+
+1. **"Did you follow SEO-GEO-AI-GUIDELINES.md and llm-visibility-strategy.md when designing the recent content-type templates?"** — Honest answer: no, I built Opinion / Press Release / Personal Essay primarily from external publisher research (NYT Modern Love, Muck Rack, Cision journalist survey, Princeton GEO, etc.) without cross-checking the internal SEO/GEO rules. This led to apparent violations of §3.1 "required sections" where Personal Essay dropped Key Takeaways/FAQ/References, Press Release dropped Key Takeaways, etc.
+
+2. **"Is structured-data.md integrated? Should it be updated every time?"** — Yes, substantially integrated (the 21-type → @type map matches `CONTENT_TYPE_MAP`), but all recent schema enrichments (v1.5.192 / v1.5.195 / v1.5.197 / v1.5.199 / v1.5.201) added `citation`, `backstory`, `articleSection` overrides, and `Organization.sameAs` without updating `structured-data.md`. Three docs cover schema (structured-data.md, SEO-GEO-AI-GUIDELINES.md §10, article_design.md §11) and were drifting independently.
+
+Ben's instinct: don't retrofit §3.1 onto the genre-override types (it would break craft authenticity we just built with publisher research). Instead, acknowledge the layered reality in the docs.
+
+### Fixed — docs only, zero code changes
+
+This patch touches NO PHP. All three recent templates (Opinion / Press Release / Personal Essay) and all schema enrichments stay exactly as shipped.
+
+- **`SEO-GEO-AI-GUIDELINES.md` §3 reframed** — `seo-guidelines/SEO-GEO-AI-GUIDELINES.md` line **~109**
+  - Old §3 "Every generated article MUST follow this structure" was universal and implicitly in conflict with v1.5.192+ genre overrides.
+  - New §3 introduces the DEFAULT profile vs GENRE OVERRIDE profile distinction.
+  - §3.1 now explicitly lists the 14 types the default structure applies to (blog_post, how_to, listicle, review, comparison, buying_guide, pillar_guide, tech_article, white_paper, scholarly_article, case_study, faq_page, glossary_definition, sponsored).
+  - New §3.1A lists the 7 genre-override types (news_article, opinion, press_release, personal_essay, live_blog, interview, recipe) with the profile each uses and the publisher-research source backing each override.
+  - New §3.1B documents that Princeton §1 boosts (quotations +41%, statistics +40%, citations +30%) are UNIVERSAL but the *form* varies by genre — e.g. personal essay's dated specifics ("$60 a week", "October 2019", "four months in") ARE the Experience/factual-density signal, same purpose as "(Source, Year)" citations, different genre form.
+  - New §3.1C establishes the rule: when adding or redesigning a content type, update §3.1A in the same commit.
+  - Verify: `grep -n '3.1A Genre Overrides' seo-guidelines/SEO-GEO-AI-GUIDELINES.md`
+
+- **`SEO-GEO-AI-GUIDELINES.md` §6 scoring rubric note added** — line **~527**
+  - Documents that three checks (BLUF Header, Freshness Signal, and some aspects of Section Openings) were designed against the §3.1 default and may penalise §3.1A override types unfairly.
+  - Records this as a known issue — `GEO_Analyzer.php` should gate those three checks by content_type using the §3.1A allowlist, but code change is deferred to a future patch (not this one, per "zero code changes" scope).
+  - Universal Princeton §1 checks (Readability, Factual Density, Citations, Expert Quotes, Entity Usage, Humanizer, Keyword Density) remain applicable to all 21 types.
+  - Verify: `grep -n 'Per-type scoring note' seo-guidelines/SEO-GEO-AI-GUIDELINES.md`
+
+- **`structured-data.md` — sync with v1.5.192–v1.5.201 schema enrichments** — `seo-guidelines/structured-data.md`
+  - New cross-reference header (line ~13) documents the three-doc parity requirement (structured-data.md + SEO-GEO-AI-GUIDELINES.md §10 + article_design.md §11) and requests `/seobetter` skill Step 4b mapping be extended.
+  - New §4 subsections documenting:
+    - **OpinionNewsArticle v1.5.192 enrichments** — citation[], backstory, speakable refinement, ClaimReview explicit removal.
+    - **NewsArticle + Press Release override (v1.5.195 / v1.5.199)** — articleSection: "Press Release", citation[], speakable with .seobetter-author-bio, enriched Organization (description + sameAs).
+    - **BlogPosting + Personal Essay override (v1.5.201)** — articleSection: "Personal Essay", citation[], backstory, speakable.
+    - **`build_clean_description()` helper (v1.5.197)** — strips wp:html blocks + headings before summarising; applies to all schema types that use build_article().
+    - **`extract_outbound_urls()` citation filter (v1.5.197)** — excludes author's 6 social profiles from citation[].
+  - Verify: `grep -n 'v1.5.192 enrichments\|v1.5.195 / v1.5.199 enrichments\|v1.5.201 enrichments' seo-guidelines/structured-data.md`
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — pure docs, no keyword logic.
+2. **Works for ALL 21 content types?** YES — docs patch covers all 21 with explicit default/override classification.
+3. **Works for ALL AI models?** YES — no code, no model dependency.
+
+### What this fixes for future sessions
+
+Memory feedback file saved earlier (`feedback_seobetter_research_workflow.md`) now references all three docs (SEO-GEO-AI-GUIDELINES, llm-visibility-strategy, structured-data). Future content-type work will:
+1. Read all three BEFORE external publisher research
+2. Identify which §3.1A override profile the type uses (or confirm it uses the default)
+3. Surface any external-research-vs-internal-rule conflicts explicitly
+4. Update structured-data.md in the same commit as any Schema_Generator.php change
+
+### Verified by user
+
+- UNTESTED (docs patch — nothing to verify in runtime; verify by reading the new §3.1A table and confirming it matches your intent for each of the 21 types).
 
 ---
 
