@@ -19,7 +19,7 @@
 ## v1.5.203 — Workflow enforcement: 4-doc sync hook + agent semantic verifier + content-type-status tracker
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `3a848e7`
 
 ### Why this patch exists
 
