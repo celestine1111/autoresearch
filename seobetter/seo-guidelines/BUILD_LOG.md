@@ -19,7 +19,7 @@
 ## v1.5.206d-fix5 — Country + Language moved to top of form (UX fix — the root cause every user was hitting)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `9992c3c`
 
 ### Why this patch exists
 
