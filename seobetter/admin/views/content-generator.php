@@ -779,7 +779,7 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
     });
 });
 
-<?php if ( $result && $result['success'] ) : ?>
+<?php if ( ! empty( $result ) && ! empty( $result['success'] ) ) : ?>
 // Social content generator
 document.getElementById('sb-gen-social').addEventListener('click', function() {
     var btn=this, st=document.getElementById('sb-social-status');
