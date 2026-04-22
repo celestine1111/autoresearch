@@ -19,7 +19,7 @@
 ## v1.5.202 — Documentation reconciliation: §3.1 default profile + §3.1A genre overrides + structured-data.md sync
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `9cacdc1`
 
 ### Why this patch exists
 
