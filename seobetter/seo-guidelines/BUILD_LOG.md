@@ -19,7 +19,7 @@
 ## v1.5.201 — Personal Essay: research-backed structure + AI-citability schema + distinctive literary CSS
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `5a9baf0`
 
 ### Research backing
 
