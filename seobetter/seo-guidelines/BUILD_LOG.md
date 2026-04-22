@@ -19,7 +19,7 @@
 ## v1.5.205 — International optimization research + reference doc (Layer 6 foundation)
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `19507f7`
 
 ### Why this patch exists
 
