@@ -19,7 +19,7 @@
 ## v1.5.206b — Regional citation whitelist expansion (Layer 6 — piece 2 of 4)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `d81aedf`
 
 ### Why this patch exists
 
