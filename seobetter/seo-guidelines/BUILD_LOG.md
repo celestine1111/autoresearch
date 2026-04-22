@@ -19,7 +19,7 @@
 ## v1.5.206a-fix — Gate `inLanguage` injection by Schema.org @type whitelist (validator-warning fix)
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `e689e67`
 
 ### Why this patch exists
 
