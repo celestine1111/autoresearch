@@ -19,7 +19,7 @@
 ## v1.5.191 — Every `(Source)` reference clickable + fix broken Bluesky reference item
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `aea578a`
 
 ### Fixed
 
