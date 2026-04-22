@@ -19,7 +19,7 @@
 ## v1.5.192 — Opinion type redesign (research-backed) + RTL language support
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `75ee19c`
 
 ### Opinion content type (research-backed redesign)
 
