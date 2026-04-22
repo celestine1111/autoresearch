@@ -7,12 +7,81 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.193)
+> **Last updated:** 2026-04-22 (v1.5.194)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.194 — Gate Places pipeline by content_type (stop false-positive places_insufficient warnings on non-places articles)
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Root cause being fixed
+
+User generated an Opinion article with keyword `"should university be free in australia"` and got:
+
+```
+[places_insufficient] ⚠️ No verified businesses were found in Australia …
+Places Validator: article was structurally hallucinated
+Pool size: 0 verified places
+Places_Validator: 7 of 8 listicle sections named businesses not in the verified pool.
+```
+
+The keyword is a POLICY question for an Opinion article, not a local-business search. But `cloud-api/api/research.js::detectLocalIntent()` Pattern 1 (`^(.+?)\s+in\s+([A-Z][\w\s,'-]+?)`) matched: `businessHint="should university be free"` + `location="australia"`. The Places waterfall fired (Sonar → OSM → Wikidata → Foursquare → HERE → Google), found 0 businesses of type "should-university-be-free" in Australia, and Places_Validator then flagged the Opinion article as "structurally hallucinated".
+
+The old v1.5.174 NON_LOCATION_WORDS blocklist was still a bandaid — it only catches generic nouns like "healthcare", "education" in the location slot. It can never fully distinguish "best pizza shops in Melbourne" (legitimate Places case) from "should university be free in Australia" (opinion).
+
+### Systematic fix
+
+Gate the entire Places pipeline by `content_type`. Only 4 content types legitimately need real-business grounding:
+- **listicle** — "top 10 X in Y" lists (primary use case)
+- **buying_guide** — "best [product] stores in [city]"
+- **comparison** — "Business A vs Business B in [city]"
+- **review** — reviewing a specific physical place
+
+For all other 17 content types (Opinion, Blog Post, How-To, News, Recipe, Tech Article, White Paper, Scholarly, Live Blog, Press Release, Personal Essay, Glossary, Sponsored, Case Study, Interview, FAQ, Ultimate Guide), the Places pipeline is **skipped entirely** regardless of keyword pattern. No regex-guessing, no false positives, no warnings.
+
+### Fixed
+
+- **Backend gate** — `cloud-api/api/research.js` main handler line **~27–40**
+  - Accept `content_type` from the request body.
+  - `PLACES_COMPATIBLE_CONTENT_TYPES = ['listicle', 'buying_guide', 'comparison', 'review']`.
+  - `placesEnabled = !content_type || PLACES_COMPATIBLE_CONTENT_TYPES.includes(content_type)`. Empty `content_type` preserves pre-v1.5.194 behaviour for callers that don't specify (diagnostic endpoints etc.).
+  - `fetchPlacesWaterfall()` at line ~185 is wrapped in a ternary that returns an empty skeleton when `placesEnabled === false`: `{ places: [], location: null, isLocal: false, business_type: null, providers_tried: [], provider_used: null, skipped_reason: '...' }`.
+  - `is_local_intent: !!placesData?.isLocal` in the response therefore comes back as `false`, which cascades through the plugin and prevents every downstream places check from firing.
+  - Verify: `grep -n 'PLACES_COMPATIBLE_CONTENT_TYPES\|placesEnabled' cloud-api/api/research.js`
+
+- **Plugin thread-through** — `includes/Trend_Researcher.php::research()` line **~58**
+  - Signature now takes `string $content_type = ''`. Added to request body sent to `/api/research`.
+  - Cache key now includes `$content_type` so cached Listicle results don't bleed into Opinion runs (or vice versa).
+  - Default empty preserves all existing callers (Content_Ranking_Framework, Citation_Pool, Content_Injector, AI_Content_Generator, seobetter.php test button) at current behaviour.
+  - Verify: `grep -n "content_type'" includes/Trend_Researcher.php`
+
+- **Plugin caller updated** — `includes/Async_Generator.php::run_step()` trends step line **~177**
+  - Passes `$options['content_type']` to the new 4th argument of `Trend_Researcher::research()`.
+  - Verify: `grep -n 'Trend_Researcher::research(' includes/Async_Generator.php`
+
+- **Plugin-side backstop** — `includes/Async_Generator.php::assemble_final()` line **~2093**
+  - Same allow-list of 4 places-compatible content types.
+  - `$places_enabled_for_type = $content_type === '' || in_array($content_type, $places_compatible_types, true)`.
+  - `Places_Validator::validate()` runs ONLY when `$places_enabled_for_type && (! empty($places_pool) || $is_local_intent)`.
+  - Belt-and-braces — the backend already returns empty places/isLocal for non-compatible types, but this handles stale cached responses that pre-date v1.5.194.
+  - Verify: `grep -n 'places_enabled_for_type' includes/Async_Generator.php`
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — the gate is `content_type`, not a keyword-pattern heuristic. Any keyword (local-looking or not) works identically as long as the user picks the right article type.
+2. **Works for ALL 21 content types?** YES — every content type is explicitly mapped. 4 places-compatible, 17 places-skipped.
+3. **Works for ALL AI models?** YES — gating is in the Node backend and PHP plugin, runs before any AI prompt is sent.
+
+### Verified by user
+
+- UNTESTED
 
 ---
 

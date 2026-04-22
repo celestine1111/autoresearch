@@ -55,14 +55,17 @@ class Trend_Researcher {
      * @param string $type    Research type: 'general', 'recommendations', 'comparison', 'news'.
      * @return array Research results with stats, quotes, trends, and sources.
      */
-    public static function research( string $keyword, string $type = 'general', string $country = '' ): array {
+    public static function research( string $keyword, string $type = 'general', string $country = '', string $content_type = '' ): array {
         // v1.5.34 — cache key includes a schema version so upgrading the
         // plugin automatically invalidates all stale cached research results.
         // Also validate the cached shape: if it lacks the v1.5.26+ fields
         // (is_local_intent, places, places_count), treat it as a cache miss
         // and re-fetch. This protects against WP object caches that might
         // ignore transient expiry.
-        $cache_key = 'seobetter_trends_' . self::CACHE_VERSION . '_' . md5( $keyword . $type . $country );
+        // v1.5.194 — cache key includes content_type so e.g. a Listicle run
+        // (which triggers Places) doesn't share a cached result with an
+        // Opinion run (which must skip Places).
+        $cache_key = 'seobetter_trends_' . self::CACHE_VERSION . '_' . md5( $keyword . $type . $country . $content_type );
         $cached = get_transient( $cache_key );
 
         // v1.5.58 — places-override pass. Sonar is a live non-deterministic
@@ -253,10 +256,17 @@ class Trend_Researcher {
         $settings = get_option( 'seobetter_settings', [] );
 
         $body = [
-            'keyword'  => $keyword,
-            'site_url' => home_url(),
-            'domain'   => $domain,
-            'country'  => $country,
+            'keyword'      => $keyword,
+            'site_url'     => home_url(),
+            'domain'       => $domain,
+            'country'      => $country,
+            // v1.5.194 — thread content_type so the backend can skip the
+            // Places waterfall for non-places-compatible types (Opinion,
+            // Blog Post, How-To, News, Recipe, Tech, White Paper, etc.).
+            // Empty string means "unknown" — backend treats that as allowed
+            // (preserves pre-v1.5.194 behaviour when the caller doesn't
+            // specify a type).
+            'content_type' => $content_type,
         ];
 
         // v1.5.24 — Places API keys from Settings → Integrations.

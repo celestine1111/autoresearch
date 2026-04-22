@@ -174,7 +174,17 @@ class Async_Generator {
                     ? 'Researching real-time trends + building citation pool...'
                     : 'Researching recent trends + building citation pool...';
 
-                $research = Trend_Researcher::research( $keyword, $options['domain'] ?? 'general', $options['country'] ?? '' );
+                // v1.5.194 — pass content_type so the backend can skip the
+                // Places waterfall for non-places-compatible types. Prevents
+                // false-positive places_insufficient warnings on Opinion /
+                // Blog Post / How-To / Recipe / etc. articles that happen to
+                // mention a country or city in the keyword.
+                $research = Trend_Researcher::research(
+                    $keyword,
+                    $options['domain'] ?? 'general',
+                    $options['country'] ?? '',
+                    $options['content_type'] ?? ''
+                );
                 // v1.5.137 — Strip Crossref/academic junk from research context BEFORE AI sees it.
                 // Prevents AI from writing about "cited 0 times" or academic paper titles.
                 $trends_raw = $research['for_prompt'] ?? '';
@@ -2082,10 +2092,25 @@ class Async_Generator {
         $is_local_intent = ! empty( $job['results']['is_local_intent'] );
         $places_warnings = [];
         $places_force_informational = false;
+
+        // v1.5.194 — Places pipeline is gated by content_type. Only 4 content
+        // types legitimately need real-business grounding: Listicle (top 10 X
+        // in Y), Buying Guide, Comparison, Review. For all other 17 types
+        // (Opinion, Blog Post, How-To, News, Recipe, Tech, White Paper, FAQ,
+        // Personal Essay, etc.) the validator is skipped regardless of what
+        // detectLocalIntent thought the keyword looked like. The backend already
+        // skips the waterfall itself (research.js), so places_pool + is_local_intent
+        // should already be empty for these types — this is a belt-and-braces
+        // gate in case an old cached response still has is_local_intent=true.
+        $places_compatible_types = [ 'listicle', 'buying_guide', 'comparison', 'review' ];
+        $article_content_type    = $options['content_type'] ?? '';
+        $places_enabled_for_type = $article_content_type === '' || in_array( $article_content_type, $places_compatible_types, true );
+
         // v1.5.27 — also run the validator when pool is empty but the keyword
         // has local intent, so the backstop can strip any hallucinated business
         // sections that slipped through the pre-generation prompt override.
-        if ( ! empty( $places_pool ) || $is_local_intent ) {
+        // v1.5.194 — but ONLY when the content type is places-compatible.
+        if ( $places_enabled_for_type && ( ! empty( $places_pool ) || $is_local_intent ) ) {
             $pv_result = Places_Validator::validate(
                 $html,
                 $places_pool,

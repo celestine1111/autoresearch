@@ -24,11 +24,21 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
 
-  const { keyword, site_url, brave_key, domain, country, places_keys, test_all_places_tiers, test_all_sources } = req.body || {};
+  const { keyword, site_url, brave_key, domain, country, places_keys, test_all_places_tiers, test_all_sources, content_type } = req.body || {};
 
   if (!keyword) {
     return res.status(400).json({ error: 'keyword is required.' });
   }
+
+  // v1.5.194 — Places pipeline only runs for content types where real-world
+  // business names are a natural part of the article. For all other content
+  // types (Opinion, Blog Post, How-To, News, Recipe, Tech Article, etc.) the
+  // Places waterfall is skipped regardless of how the keyword LOOKS — no
+  // regex-pattern-matching on the keyword, no "in Australia" heuristic, no
+  // false-positive places_insufficient warnings on policy or essay articles.
+  // The 4 places-compatible types are the ONLY ones where the pipeline runs.
+  const PLACES_COMPATIBLE_CONTENT_TYPES = ['listicle', 'buying_guide', 'comparison', 'review'];
+  const placesEnabled = !content_type || PLACES_COMPATIBLE_CONTENT_TYPES.includes(content_type);
 
   // Rate limiting
   const rateKey = `${site_url || 'unknown'}_${new Date().getHours()}`;
@@ -174,8 +184,10 @@ export default async function handler(req, res) {
       searchMastodon(keyword),
       searchDevTo(keyword),
       searchLemmy(keyword),
-      // v1.5.24 — 5-tier Places waterfall
-      fetchPlacesWaterfall(keyword, country, places_keys || {}, { runAllTiers: !!test_all_places_tiers }),
+      // v1.5.24 — 5-tier Places waterfall (v1.5.194 — gated by content_type)
+      placesEnabled
+        ? fetchPlacesWaterfall(keyword, country, places_keys || {}, { runAllTiers: !!test_all_places_tiers })
+        : Promise.resolve({ places: [], location: null, isLocal: false, business_type: null, providers_tried: [], provider_used: null, skipped_reason: `content_type=${content_type} is not places-compatible` }),
       // v1.5.81 — Sonar research (kept for citations/stats/table, quotes now from Tavily)
       fetchSonarResearch(keyword, country),
     ];

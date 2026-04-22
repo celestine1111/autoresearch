@@ -285,6 +285,18 @@ Free OpenStreetMap integration that prevents the AI from inventing business name
 
 **GEO_Analyzer sentinel** ([GEO_Analyzer.php::check_local_places_grounding()](../includes/GEO_Analyzer.php)): post-generation safety check. For listicle/buying_guide/review/comparison articles with local-intent keywords, verifies the content contains map URLs or specific addresses. If neither, floors `geo_score` at 40 so the user sees a red flag and regenerates.
 
+**v1.5.194 — Places pipeline is gated by `content_type`.** Previously the Places waterfall ran whenever `detectLocalIntent(keyword)` matched any `X in Y` pattern — which false-positive-fired on Opinion / Blog Post / How-To / Recipe / etc. keywords that happened to mention a country or city (e.g. `"should university be free in australia"` flagged as `businessHint="should university be free"` + `location="australia"` → Places waterfall ran → found 0 → Places_Validator flagged the article as "structurally hallucinated"). As of v1.5.194 the pipeline is content-type-gated end to end:
+
+**Places-compatible types (pipeline runs):** `listicle, buying_guide, comparison, review`.
+**Places-skipped types (pipeline does NOT run, regardless of keyword):** all other 17 types — `blog_post, news_article, opinion, how_to, recipe, tech_article, white_paper, scholarly_article, live_blog, press_release, personal_essay, glossary, sponsored, case_study, interview, faq_page, pillar_guide`.
+
+Gate layers:
+1. **Backend** — `cloud-api/api/research.js` accepts `content_type` in the request body. `fetchPlacesWaterfall()` is only invoked when `content_type` is empty (unknown caller) OR in the 4-item allowlist. Otherwise the response returns an empty skeleton `{ places: [], isLocal: false, skipped_reason: 'content_type=X is not places-compatible' }` so `is_local_intent` cascades as `false` everywhere downstream.
+2. **Plugin** — `Trend_Researcher::research()` 4th argument `$content_type` is threaded from `Async_Generator::run_step()` (trends step) and included in the request body + cache key. Separate cache slots per content type, so switching from Listicle → Opinion on the same keyword doesn't serve a cached Listicle response with Places data.
+3. **Plugin backstop** — `Async_Generator::assemble_final()` refuses to run `Places_Validator::validate()` when `content_type` isn't in the 4-item allowlist, even if an old cached response has `is_local_intent=true`.
+
+Empty `content_type` preserves pre-v1.5.194 behaviour for diagnostic callers (Settings → Test Places Providers button etc.) — those code paths want to exercise the full waterfall regardless of article type.
+
 **Whitelisted domains** (v1.5.23): `openstreetmap.org`, `www.openstreetmap.org`, `nominatim.openstreetmap.org`, `overpass-api.de`.
 
 ### 1.7 Topic Research Endpoint (`/api/topic-research`, v1.5.22 enhanced)
