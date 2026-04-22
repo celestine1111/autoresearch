@@ -7,12 +7,68 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d-fix2)
+> **Last updated:** 2026-04-23 (v1.5.206d-fix3)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d-fix3 — LSI overflow from Google Suggest + relaxed Wikipedia word-count for non-English
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Live probe of Vercel `/api/topic-research` with Korean keyword `서울 최고의 카페 2026` after v1.5.206d-fix2 returned:
+
+- `secondary: ['최고의 사랑', '최고의 이혼', '최고의 수면 자세']` ✅ — Korean
+- `audience: "서울 내 최신 인기 카페와 핫플레이스를 찾는 20-30대 카페 애호가 및 여행자"` ✅ — Korean
+- `lsi: ['seongsu']` ❌ — only 1 result, not useful
+
+Root cause: `buildKeywordSets()` LSI logic expects Datamuse (skipped for non-English by v1.5.206d-fix2) and Wikipedia (ko.wikipedia.org returned very few titles for the specific query + the Wikipedia fallback filter rejected multi-word titles with `wordCount > 2`). Result: non-English LSI is nearly empty.
+
+Ben's report "no LSI keywords even showed" matches this.
+
+Also: the audience coming back in English on Ben's side while my live probe returned Korean → browser JS cache issue (old content-generator.php without `language` in the POST body). Force hard-refresh.
+
+### Shipped
+
+Backend only (`cloud-api/api/topic-research.js`) — no plugin zip change required:
+
+1. **`buildKeywordSets( niche, suggest, datamuse, wiki, lang = 'en' )`** — signature extended with `lang` arg; derives `isEnglish` flag.
+
+2. **Wikipedia fallback relaxed for non-English** — previously `if (wordCount > 2) continue` dropped multi-word Wikipedia titles. Now: English keeps the 2-word cap (prevents noise like "balance of payments"); non-English allows up to 4-word phrases because CJK/Cyrillic Wikipedia titles are typically compound (e.g. `한국의 커피 문화` = "Korean coffee culture" is 3 words, legitimately semantic).
+
+3. **Google Suggest overflow into LSI for non-English (new)** — Google Suggest typically returns 10+ native-language variations; the first 7 become secondary. The remaining 3-7 are perfectly good semantic variations. For non-English, if LSI is still `< 8` after the Datamuse + Wikipedia pass, fill from leftover Google Suggest phrases. English path unchanged — Datamuse + Wikipedia handle LSI fully without this overflow.
+
+4. **`buildKeywordSets` call site** updated to pass `baseLang`.
+
+### Safety posture
+
+- **English articles byte-identical** — `isEnglish` flag bypasses both new code paths (wordCount stays at 2; Google Suggest overflow skipped). No risk of English LSI quality regressing.
+- **Non-English LSI now reliably populates** — even when ko.wikipedia.org / ja.wikipedia.org / ru.wikipedia.org return sparse results, Google Suggest overflow provides native-language fallback.
+- **Plugin zip unchanged** — this is a backend-only deploy. The plugin frontend from v1.5.206d-fix2 is already correct (sends `language` in POST). Once Vercel redeploys this commit, Ben's next auto-suggest click will work on every language without a plugin reinstall.
+
+### Verify
+
+Live probe once Vercel redeploys:
+
+```bash
+curl -sS -X POST "https://seobetter.vercel.app/api/topic-research" \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"서울 최고의 카페 2026","country":"KR","language":"ko","site_url":"test"}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('lsi count:', len(d.get('keywords',{}).get('lsi',[]))); print('lsi:', d.get('keywords',{}).get('lsi',[])[:10])"
+```
+
+Expect: `lsi count: 7` or higher, all Korean (Hangul).
+
+### Verified by user
+
+UNTESTED — pending Vercel deploy + Ben hard-refresh of admin page. Plugin zip does NOT need reinstall.
 
 ---
 

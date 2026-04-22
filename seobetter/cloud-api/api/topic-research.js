@@ -90,7 +90,10 @@ export default async function handler(req, res) {
 
     // v1.5.173 — Build keywords from Serper titles + snippets (high quality)
     // then merge with existing Google Suggest + Datamuse results as fallback.
-    const keywords = buildKeywordSets(niche, suggest, datamuse, wiki);
+    // v1.5.206d-fix3 — pass language so non-English paths get Google Suggest
+    // overflow into LSI and relaxed Wikipedia word-count filters (CJK titles
+    // are phrases, not single words).
+    const keywords = buildKeywordSets(niche, suggest, datamuse, wiki, baseLang);
 
     // v1.5.173 — Serper-extracted keywords override when available
     if (serperData && serperData.secondary.length > 0) {
@@ -669,7 +672,8 @@ Output only the JSON object, no markdown fences, no explanation.`;
   }
 }
 
-function buildKeywordSets(niche, suggest, datamuse, wiki) {
+function buildKeywordSets(niche, suggest, datamuse, wiki, lang = 'en') {
+  const isEnglish = lang === 'en' || !lang;
   const nicheLower = (niche || '').toLowerCase().trim();
   const seen = new Set([ nicheLower ]);
 
@@ -816,18 +820,44 @@ function buildKeywordSets(niche, suggest, datamuse, wiki) {
     if (lsi.length >= 10) break;
   }
 
-  // If Datamuse returned too few results, top up with Wikipedia titles
-  // (single-word or 2-word) — these are always real concepts.
+  // If Datamuse returned too few results, top up with Wikipedia titles.
+  // English: single-word or 2-word only (prevents "balance of payments" noise).
+  // Non-English: allow up to 4-word phrases because CJK/Cyrillic Wikipedia
+  // titles are typically compound phrases (e.g. "한국의 커피 문화" = "Korean
+  // coffee culture" is 3 words and is a legitimate LSI).
   if (lsi.length < 6) {
+    const maxWords = isEnglish ? 2 : 4;
     for (const w of wiki) {
       const title = (w.title || '').toLowerCase().trim();
       if (!title) continue;
       const wordCount = title.split(/\s+/).length;
-      if (wordCount > 2) continue;
+      if (wordCount > maxWords) continue;
       if (seen.has(title)) continue;
       if (nicheLower.includes(title) || title.includes(nicheLower)) continue;
       seen.add(title);
       lsi.push(title);
+      if (lsi.length >= 10) break;
+    }
+  }
+
+  // v1.5.206d-fix3 — For non-English articles, overflow Google Suggest phrases
+  // into LSI. Datamuse is English-only and skipped for non-English; Wikipedia
+  // often returns <6 results for specific queries. Google Suggest typically
+  // returns 10+ native-language variations — the first 7 become secondary,
+  // the remaining 3-7 are perfectly good semantic variations and in Korean/
+  // Japanese/Russian/Chinese/Arabic they are the primary way to get
+  // native-language LSI signals into the article's keyword context.
+  // English path is unchanged: Datamuse + Wikipedia handle LSI fully.
+  if (!isEnglish && lsi.length < 8) {
+    const secondarySet = new Set(secondary);
+    for (const s of suggest) {
+      const phrase = (s || '').toLowerCase().trim();
+      if (!phrase || seen.has(phrase) || secondarySet.has(phrase)) continue;
+      if (phrase.length < 4 || phrase.length > 80) continue;
+      // Skip exact niche
+      if (phrase === nicheLower) continue;
+      seen.add(phrase);
+      lsi.push(phrase);
       if (lsi.length >= 10) break;
     }
   }
