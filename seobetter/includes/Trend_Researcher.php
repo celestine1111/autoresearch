@@ -56,6 +56,35 @@ class Trend_Researcher {
      * @return array Research results with stats, quotes, trends, and sources.
      */
     public static function research( string $keyword, string $type = 'general', string $country = '', string $content_type = '' ): array {
+        // v1.5.198 — single chokepoint that strips local-intent / places from
+        // whatever the rest of research() produces, when content_type is not
+        // places-compatible. This closes two pre-existing leaks that v1.5.194
+        // left open:
+        //   (a) The persisted_places cache (keyed by keyword|country, not
+        //       content_type) would override an Opinion run with places from
+        //       an earlier Listicle run.
+        //   (b) When cloud_research fails and we fall back to run_last30days
+        //       or ai_fallback, ensure_local_intent_fields() runs PHP-side
+        //       regex that force-sets is_local_intent=true for any keyword
+        //       matching "X in Y" — e.g. "should university be free in
+        //       australia" wrongly tagged local.
+        // Wrapped via a helper that runs on the return value of every branch
+        // so all paths go through one gate.
+        $places_compatible_types = [ 'listicle', 'buying_guide', 'comparison', 'review' ];
+        $strip_places = ( $content_type !== '' && ! in_array( $content_type, $places_compatible_types, true ) );
+        $enforce = function ( array $result ) use ( $strip_places ): array {
+            if ( $strip_places ) {
+                $result['is_local_intent']        = false;
+                $result['places']                 = [];
+                $result['places_count']           = 0;
+                $result['places_location']        = null;
+                $result['places_business_type']   = null;
+                $result['places_provider_used']   = null;
+                $result['places_providers_tried'] = [];
+            }
+            return $result;
+        };
+
         // v1.5.34 — cache key includes a schema version so upgrading the
         // plugin automatically invalidates all stale cached research results.
         // Also validate the cached shape: if it lacks the v1.5.26+ fields
@@ -95,7 +124,7 @@ class Trend_Researcher {
                 $cached['places_business_type']   = $persisted_places['business_type'] ?? ( $cached['places_business_type'] ?? '' );
                 $cached['is_local_intent']        = true;
             }
-            return $cached;
+            return $enforce( $cached );
         }
         // If an old-format cache entry is still here, delete it so we re-fetch
         if ( $cached ) {
@@ -159,6 +188,7 @@ class Trend_Researcher {
                 ], 24 * HOUR_IN_SECONDS );
             }
 
+            $result = $enforce( $result );
             set_transient( $cache_key, $result, self::CACHE_TTL );
             return $result;
         }
@@ -168,6 +198,7 @@ class Trend_Researcher {
             $result = self::run_last30days( $keyword, $type );
             if ( $result['success'] ) {
                 $result = self::ensure_local_intent_fields( $result, $keyword );
+                $result = $enforce( $result );
                 set_transient( $cache_key, $result, self::CACHE_TTL );
                 return $result;
             }
@@ -177,9 +208,10 @@ class Trend_Researcher {
         $result = self::ai_fallback( $keyword );
         if ( $result['success'] ) {
             $result = self::ensure_local_intent_fields( $result, $keyword );
+            $result = $enforce( $result );
             set_transient( $cache_key, $result, self::CACHE_TTL );
         }
-        return $result;
+        return $enforce( $result );
     }
 
     /**

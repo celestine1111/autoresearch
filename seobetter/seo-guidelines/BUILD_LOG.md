@@ -7,12 +7,54 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.197)
+> **Last updated:** 2026-04-22 (v1.5.198)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.198 — Close PHP-side leaks in content_type Places gate
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### User report
+
+Opinion article with keyword `"should university be free in australia"` (1500 words) was STILL producing `places_insufficient` warning despite v1.5.194 shipping the content-type Places gate. The gate only closed the backend path — two PHP-side fallbacks continued to set `is_local_intent: true` regardless of content_type.
+
+### Root cause — two independent PHP leaks
+
+1. **Persisted places cache override** — `includes/Trend_Researcher.php::research()` line **~118, 163-175**
+   - `seobetter_places_only_{md5(keyword|country)}` is keyed only on keyword+country (domain-/content-type-agnostic by design, so test-button results flow into any article generation for the same keyword). If the user had previously tested this keyword as a Listicle where Sonar found real university listings, those places were persisted. On the subsequent Opinion run, the main cache was a miss (new cache-key includes content_type), backend correctly returned `is_local_intent: false`, `places: []` — but the PHP-side override at line 163 then replaced the empty places with the persisted Listicle pool and force-set `is_local_intent: true`.
+
+2. **`ensure_local_intent_fields()` PHP regex fallback** — `includes/Trend_Researcher.php::ensure_local_intent_fields()` line **~201**
+   - When `cloud_research()` fails and we fall back to `run_last30days` or `ai_fallback` (both return responses WITHOUT `is_local_intent` populated), the PHP-side `ensure_local_intent_fields()` runs the same `X in Y` regex as `detectLocalIntent` in the backend. It matches `"should university be free in australia"` → force-sets `is_local_intent: true`. Content-type-unaware.
+
+### Fixed
+
+- **Single PHP chokepoint via `$enforce` closure** — `includes/Trend_Researcher.php::research()` line **~58-86**
+  - At the top of `research()`, compute `$strip_places = ($content_type !== '' && !in_array($content_type, ['listicle','buying_guide','comparison','review'], true))`.
+  - Build an `$enforce()` closure that, when `$strip_places` is true, overwrites `is_local_intent → false, places → [], places_count → 0, places_location/business_type/provider_used → null, places_providers_tried → []` on any result array passed through it.
+  - Every `return` path in `research()` now goes through `$enforce`: main cache hit, successful cloud response, last30days success path, ai_fallback path, and the final catch-all return.
+  - Closes both leak paths at the function boundary. The persisted places cache continues to write normally (so Listicle→Listicle cache flow works), but Opinion/Blog/How-To/etc. reads are force-filtered before reaching the caller.
+  - Verify: `grep -n '\\\$enforce\\|strip_places' includes/Trend_Researcher.php`
+
+### Why a chokepoint instead of gating each leak individually
+
+Two independent leaks today; more could be introduced later (e.g. a new fallback source, new cache layer). A single chokepoint at the function boundary is the smallest possible surface area and can't be bypassed by a new return path. Reused idiom: same pattern as v1.5.194's `placesEnabled` ternary in `research.js`.
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — gate is content_type-based, not keyword-based.
+2. **Works for ALL 21 content types?** YES — 4 places-compatible types (listicle, buying_guide, comparison, review) preserve full behavior; the other 17 force-reset.
+3. **Works for ALL AI models?** YES — PHP-side only; no AI dependency.
+
+### Verified by user
+
+- UNTESTED — please regenerate the Opinion article "should university be free in australia" and confirm no `places_insufficient` warning appears in the results panel.
 
 ---
 
