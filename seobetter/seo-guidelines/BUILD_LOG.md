@@ -7,12 +7,92 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.194)
+> **Last updated:** 2026-04-22 (v1.5.195)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.195 — Press Release: research-backed structure + AI-citability schema
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### Research backing
+
+Spec derived from 15 sources spanning wire services, journalist surveys, SEO authority blogs, academic GEO research, and AI-citation studies. Key data points:
+
+- **68% of journalists prefer releases under 400 words** (Empathy First Media / Newswire benchmark)
+- **70% stop reading at 200 words; journalists spend 5-10 seconds deciding** (multiple sources)
+- **Quotes from named executives → +40% media pickup** (prism-me.com)
+- **Multimedia → up to 9.7× engagement** (Cision / PR Newswire)
+- **Tuesday/Wednesday morning distribution → +30% attention** (Newswire.ca)
+- **77% of journalists now use AI tools**; 86% reject off-topic pitches (Muck Rack State of Journalism 2025)
+- **Google 2025**: press releases deprioritized as SEO tactic; `rel="nofollow"` or `rel="sponsored"` on all links; max 1-2 links; no exact-match keyword anchor text
+- **AI citation rules** (pr.co, actual.agency, SEO Maven, Media OutReach March 2025): clear H1/H2 structure, dateline, inverted pyramid, bullet lists for stats, attributed quotes, JSON-LD NewsArticle schema
+
+### Fixed / Changed
+
+- **Press release prose template rewritten** — `includes/Async_Generator.php::get_prose_template()` line **~735**
+  - New section order: Headline (H1, ≤70 chars, active verb) → Subheadline (15-25 words) → Dateline + Lede (5 Ws in first 25 words, 25-40 words total) → Body (inverted pyramid, 2-3 sentence paragraphs) → Key Facts (3-5 bullets for AI snippet extraction) → Quotes (1-2 named-exec quotes, formatted "said [Name], [Title] at [Company]") → FAQ (2-3 Q&A) → About/Boilerplate (50-100 words) → Media Contact → References.
+  - Explicit cliché ban list baked into guidance: *groundbreaking, disruptor, disruptive, revolutionary, game-changing, industry-leading, one-stop-shop, unique, innovative, breaking, urgent, exclusive, best-in-class, cutting-edge, next-generation, world-class, leverage, synergy, unleash, unveil.*
+  - Journalist-attention rules explicit: 5-10 second decision window, 70% stop at 200 words, first 25 words must make the news understandable standalone.
+  - Link rules: 1-2 outbound links max, no exact-match keyword anchor text.
+  - Verify: `grep -n 'disruptor, disruptive, revolutionary' includes/Async_Generator.php`
+
+- **Default word target: 500 → 400** — `includes/Async_Generator.php` word-count array line **~72**
+  - Matches the empirically-validated sweet spot. Hard ceiling 500 (down from 800).
+  - Verify: `grep -n "'press_release' => 400" includes/Async_Generator.php`
+
+- **Schema enrichment for press-release NewsArticle** — `includes/Schema_Generator.php::build_article()` line **~402-430**
+  - `articleSection: 'Press Release'` (was 'News') for better AI disambiguation between corporate announcements and editorial reporting.
+  - `citation` populated from outbound URLs via existing `extract_outbound_urls()` helper (up to 20 deduped). Per Princeton GEO 2311.09735: citation-backed pages get ~30-40% higher generative-engine citation rate.
+  - `speakable` cssSelector refined to target `h1, h2 + p, .seobetter-author-bio` so voice assistants read the headline, lede/section intros, and boilerplate.
+  - Only applies when `content_type === 'press_release'`. Regular NewsArticle (news_article type) keeps `articleSection: 'News'`.
+  - Verify: `grep -n "'Press Release'" includes/Schema_Generator.php`
+
+- **Organization schema enriched** — `includes/Schema_Generator.php::detect_organization_schema()` line **~1631**
+  - Added `description` (pulled from site tagline) and `sameAs` (pulled from author social profiles in settings — same field as the Person `sameAs`; social profiles serve double duty for author + organization entity grounding). AI engines use `sameAs` to canonically link the company across Wikidata, LinkedIn, etc.
+  - Applies to press_release, case_study, sponsored, interview content types (same set as before — no change to eligibility).
+  - Verify: `grep -n "'sameAs'" includes/Schema_Generator.php | head -5`
+
+### Unaffected (confirmed via grep)
+
+- **v1.5.191 outbound-link pipeline** — schema + prose template changes don't touch `validate_outbound_links`, `linkify_bracketed_references`, Pass 4 dedup, or `append_references_section`. The `extract_outbound_urls()` helper reused by `citation` was added as a pure-read helper in v1.5.192 Opinion work.
+- **v1.5.194 Places gating** — press_release is NOT in `PLACES_COMPATIBLE_CONTENT_TYPES`, so the Places pipeline remains skipped for press releases.
+- **v1.5.192 Opinion work** — Opinion's `citation` / `backstory` additions live in a separate `type === 'OpinionNewsArticle'` branch; press-release additions are in a new `type === 'NewsArticle' && content_type === 'press_release'` branch. No overlap.
+- **strip_unlinked_quotes exemption** (line 2025) and Pros/Cons skip (line 762) for press_release — preserved.
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — no keyword-specific logic; cliché ban list and word-count rules apply universally.
+2. **Works for ALL 21 content types?** YES — schema changes gate on `content_type === 'press_release'`; other 20 types render identically.
+3. **Works for ALL AI models?** YES — prose template is instructions all AI models follow; schema and `articleSection` changes are post-processing, model-agnostic.
+
+### Sources consulted
+
+1. Muck Rack State of Journalism 2025 (https://media.muckrack.com/documents/6.9.2025_state_of_journalism.pdf)
+2. Buchanan PR — State of Journalism 2025 takeaways
+3. Empathy First Media — 400-word sweet spot + per-section word counts
+4. Cision journalist survey — words to avoid in press releases
+5. pr.co — 7 rules for AI-citable press releases
+6. actual.agency — LLM-native press release template
+7. GlobalWave PR — Google 2025 press release guidelines
+8. Signal Genesys — Press Release SEO 2026 guide
+9. B2Press — How Press Releases Improve SEO After Google's 2025 Updates
+10. SEO Maven — Press Releases in SEO and AI Discovery
+11. SEO Design Chicago — Press Release Statistics 2025
+12. PR Newswire — multimedia distribution stats
+13. schema.org/NewsArticle + Google Article docs
+14. Muck Rack — Michael Smart on media pitch subject lines
+15. Browser Media — 10 tips for press-release headlines
+
+### Verified by user
+
+- UNTESTED
 
 ---
 

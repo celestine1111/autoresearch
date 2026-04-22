@@ -398,6 +398,31 @@ class Schema_Generator {
             $schema['articleSection'] = 'News';
         }
 
+        // v1.5.195 — Press Release specific overrides on NewsArticle.
+        // When this NewsArticle is a press release (vs. regular news reporting),
+        // swap articleSection to "Press Release" so AI models + Google News can
+        // disambiguate corporate announcements from editorial reporting. Also
+        // add `citation` (outbound URLs) so AI engines treat the release as
+        // claim-backed (Princeton GEO arXiv 2311.09735: +30-40% citation rate
+        // on content with linked sources), and ensure `speakable` targets the
+        // lede + boilerplate (voice-assistant reads the news + the About block).
+        if ( $type === 'NewsArticle' ) {
+            $content_type_check = get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: '';
+            if ( $content_type_check === 'press_release' ) {
+                $schema['articleSection'] = 'Press Release';
+                $urls = $this->extract_outbound_urls( $post->post_content );
+                if ( ! empty( $urls ) ) {
+                    $schema['citation'] = array_map( function ( $u ) {
+                        return [ '@type' => 'CreativeWork', 'url' => $u ];
+                    }, $urls );
+                }
+                $schema['speakable'] = [
+                    '@type'       => 'SpeakableSpecification',
+                    'cssSelector' => [ 'h1', 'h2 + p', '.seobetter-author-bio' ],
+                ];
+            }
+        }
+
         // v1.5.192 — OpinionNewsArticle enrichment per GEO/AI-citation research:
         //   - `citation` = every outbound URL the article body cites
         //     (tells AI crawlers the piece is claim-backed, ~30-40% lift in
@@ -1607,15 +1632,37 @@ class Schema_Generator {
         if ( ! in_array( $content_type, [ 'press_release', 'case_study', 'sponsored', 'interview' ], true ) ) {
             return null;
         }
-        return [
+        $org = [
             '@type' => 'Organization',
             'name'  => get_bloginfo( 'name' ),
             'url'   => home_url(),
             'logo'  => [
-                '@type'  => 'ImageObject',
-                'url'    => get_site_icon_url( 512 ) ?: '',
+                '@type' => 'ImageObject',
+                'url'   => get_site_icon_url( 512 ) ?: '',
             ],
         ];
+
+        // v1.5.195 — Enrich with description + sameAs so AI engines can
+        // disambiguate the organization (same entity-grounding rationale as
+        // the Person schema's sameAs). sameAs is pulled from the social
+        // profiles configured in SEOBetter settings — they serve double duty
+        // as the author's AND the organization's canonical links.
+        $tagline = get_bloginfo( 'description' );
+        if ( ! empty( $tagline ) ) {
+            $org['description'] = $tagline;
+        }
+        $s = get_option( 'seobetter_settings', [] );
+        $same_as = [];
+        foreach ( [ 'author_linkedin', 'author_twitter', 'author_facebook', 'author_instagram', 'author_youtube', 'author_website' ] as $key ) {
+            if ( ! empty( $s[ $key ] ) ) {
+                $same_as[] = $s[ $key ];
+            }
+        }
+        if ( ! empty( $same_as ) ) {
+            $org['sameAs'] = $same_as;
+        }
+
+        return $org;
     }
 
     /**

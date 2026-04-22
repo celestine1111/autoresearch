@@ -583,7 +583,7 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 | White Paper | Report | Executive Summary → Problem → Methodology → Findings → Recommendations | 2500-8000 |
 | Scholarly Article | ScholarlyArticle | Abstract → Intro → Lit Review → Methods → Results → Discussion | 3000-8000 |
 | Live Blog | LiveBlogPosting | Coverage Intro → Timestamped Updates | 500-5000 |
-| Press Release | NewsArticle | Headline → Dateline → Body → Boilerplate → Contact | 300-800 |
+| Press Release | NewsArticle (`articleSection: "Press Release"`) + Organization | **v1.5.195 (research-backed):** Headline (≤70 chars, active verb, no cliché words) → Subheadline → Dateline + 5-Ws Lede (first 25 words) → Body (inverted pyramid, 2-3 sentence paragraphs) → Key Facts (3-5 bullet list for AI snippets) → Quotes (1-2 named-exec quotes) → FAQ (2-3 Q&A) → About/Boilerplate (50-100 words) → Media Contact → References. Sources: Muck Rack 2025, Cision journalist survey, Empathy First Media, pr.co LLM-native template, Google 2025 PR guidelines. Pickup-rate levers: quotes +40%, multimedia up to 9.7× engagement, Tuesday/Wednesday +30%. | 400 target, 500 max |
 | Personal Essay | BlogPosting | Scene → Tension → Reflection → Resolution | 800-2500 |
 | Glossary | Article + FAQPage | Definition → Explanation → Examples → Related Terms | 400-1200 |
 | Sponsored | AdvertiserContentArticle | Disclosure → Intro → Body → Sponsor CTA | 600-1500 |
