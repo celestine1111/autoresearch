@@ -70,6 +70,30 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'seobetter' ) . '</p></div>';
 }
 
+// v1.5.187 — Separate Author Bio save handler.
+// Previously shared the same submit button name as General Settings,
+// so clicking "Save Author Bio" ran the General Settings handler
+// which didn't include author_* fields → wiped them.
+if ( isset( $_POST['seobetter_save_author'] ) && check_admin_referer( 'seobetter_settings_nonce' ) ) {
+    $existing = get_option( 'seobetter_settings', [] );
+    $settings = array_merge( $existing, [
+        'author_name'        => sanitize_text_field( $_POST['author_name'] ?? '' ),
+        'author_title'       => sanitize_text_field( $_POST['author_title'] ?? '' ),
+        'author_bio'         => sanitize_textarea_field( $_POST['author_bio'] ?? '' ),
+        'author_image'       => esc_url_raw( $_POST['author_image'] ?? '' ),
+        'author_linkedin'    => esc_url_raw( $_POST['author_linkedin'] ?? '' ),
+        'author_twitter'     => esc_url_raw( $_POST['author_twitter'] ?? '' ),
+        'author_facebook'    => esc_url_raw( $_POST['author_facebook'] ?? '' ),
+        'author_instagram'   => esc_url_raw( $_POST['author_instagram'] ?? '' ),
+        'author_youtube'     => esc_url_raw( $_POST['author_youtube'] ?? '' ),
+        'author_website'     => esc_url_raw( $_POST['author_website'] ?? '' ),
+        'author_credentials' => sanitize_text_field( $_POST['author_credentials'] ?? '' ),
+        'author_experience'  => sanitize_text_field( $_POST['author_experience'] ?? '' ),
+    ] );
+    update_option( 'seobetter_settings', $settings );
+    echo '<div class="notice notice-success"><p>' . esc_html__( 'Author bio saved.', 'seobetter' ) . '</p></div>';
+}
+
 // v1.5.24 — Places Integrations save handler. Lives in its own form so saving
 // one section doesn't clobber the other. Stores three optional API keys that
 // flow through Trend_Researcher → cloud-api for the 5-tier Places waterfall.
@@ -415,7 +439,7 @@ $settings = get_option( 'seobetter_settings', [] );
                     </td>
                 </tr>
             </table>
-            <?php submit_button( __( 'Save Author Bio', 'seobetter' ), 'primary', 'seobetter_save_settings' ); ?>
+            <?php submit_button( __( 'Save Author Bio', 'seobetter' ), 'primary', 'seobetter_save_author' ); ?>
         </form>
     </div>
 
