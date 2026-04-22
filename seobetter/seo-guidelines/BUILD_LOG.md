@@ -19,7 +19,7 @@
 ## v1.5.194 — Gate Places pipeline by content_type (stop false-positive places_insufficient warnings on non-places articles)
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `41209f8`
 
 ### Root cause being fixed
 
