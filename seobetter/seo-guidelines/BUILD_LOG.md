@@ -7,12 +7,61 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d-fix3)
+> **Last updated:** 2026-04-23 (v1.5.206d-fix4)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d-fix4 — Auto-suggest always clears stale Secondary/LSI fields
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben's Korean auto-suggest screenshot showed Secondary = Korean ✅ (overwritten correctly), LSI = `equine wound care, horse first aid` ❌ (stale from a prior RSPCA test), and Target Audience = English ("Korean coffee enthusiasts…").
+
+Two independent bugs:
+
+1. **LSI field never cleared when server returned 0 items.** `if (lsi.length) { ... }` guarded the overwrite, so when the server returned 0 LSI (after fix3 it typically returns 0-4 for non-English), the field kept whatever stale value was there. Same bug pattern as the pre-v1.5.193 audience/category bug. This fix mirrors the v1.5.193 "always overwrite on auto-suggest click" rule.
+2. **English audience on screen.** My server probe with `language: "ko"` returned Korean audience; Ben's screenshot shows English audience. Root cause is almost certainly a browser JS cache — old `content-generator.php` JS without the `language` field in the POST body — but it's user-facing enough that we should add an obvious signal if the browser is running stale code. See "Browser cache diagnostic" below.
+
+### Shipped
+
+- **`admin/views/content-generator.php` line ~745** — auto-suggest handler now unconditionally writes Secondary + LSI fields from the server response (including empty string when server returned 0 items). Matches the existing v1.5.193 audience/category behavior. Prevents stale values from persisting across keyword changes.
+
+### Browser cache diagnostic (no code change, documentation)
+
+If a user reports auto-suggest returning English labels despite Language being set non-English, the almost-certain cause is a cached old `content-generator.php` JS that doesn't POST the `language` field. Diagnostic:
+
+1. DevTools → Network tab → click Auto-Suggest.
+2. Click the `/api/topic-research` request → Payload panel.
+3. Look for `"language": "{code}"` in the request body.
+4. If missing or `"en"` when a non-English language is selected → stale JS.
+
+Recovery:
+- Hard-refresh (`Cmd+Shift+R` / `Ctrl+Shift+R`).
+- If that fails: DevTools → Application → Clear storage for the site.
+- If still failing: test in an incognito window.
+- If still failing: check whether a WP page-caching plugin (WP Rocket / W3 Total Cache / LiteSpeed Cache / SiteGround Optimizer) is serving a cached admin page. Admin pages should bypass cache by default; if a plugin is overriding, exclude `/wp-admin/` from its rules.
+
+### Safety posture
+
+Purely a JS UX fix — prevents stale display, doesn't change backend behaviour or API shape. Zero regression on English articles (behaviour is now identical to v1.5.193's audience/category handling).
+
+### Verify
+
+```bash
+grep -n "v1.5.206d-fix4" /Users/ben/Documents/autoresearch/seobetter/admin/views/content-generator.php
+```
+
+### Verified by user
+
+UNTESTED — pending zip reinstall + hard-refresh + Korean auto-suggest.
 
 ---
 

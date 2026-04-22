@@ -742,12 +742,17 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
             st.innerHTML = '<span style="color:#1e40af;font-style:normal">&#8505;&#65039; No auto-suggestions for this long-tail keyword (that\'s normal for very specific phrases). You can safely leave Secondary Keywords empty — the AI will generate variations from the research pool.</span>';
             return;
         }
-        if (sec.length) {
-            document.querySelector('[name="secondary_keywords"]').value = sec.join(', ');
-        }
-        if (lsi.length) {
-            document.querySelector('[name="lsi_keywords"]').value = lsi.join(', ');
-        }
+        // v1.5.206d-fix4 — ALWAYS overwrite Secondary + LSI fields on
+        // auto-suggest click (including clearing when server returns 0 items).
+        // Previously stale values from $_POST or a previous test persisted
+        // when the server returned fewer suggestions — e.g. LSI field kept
+        // "equine wound care, horse first aid" from an earlier RSPCA test
+        // when a fresh Korean query returned zero LSI. Same bug pattern the
+        // audience field had in v1.5.193.
+        var secField = document.querySelector('[name="secondary_keywords"]');
+        if (secField) secField.value = sec.join(', ');
+        var lsiField = document.querySelector('[name="lsi_keywords"]');
+        if (lsiField) lsiField.value = lsi.join(', ');
         // v1.5.193 — Auto-suggest ALWAYS overwrites the Target Audience and
         // Category fields when the user clicks the button. Previously we
         // guarded the audience field with !audField.value.trim() so the
