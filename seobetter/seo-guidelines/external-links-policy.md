@@ -3,7 +3,7 @@
 > **Single source of truth** for how SEOBetter handles outbound URLs in generated articles.
 > If you change link behavior, UPDATE THIS FILE in the same commit.
 >
-> **Last updated:** v1.5.205 — 2026-04-22 (regional international citation domain stubs added §10)
+> **Last updated:** v1.5.206b — 2026-04-23 (regional international citation domains SHIPPED in `get_trusted_domain_whitelist()`)
 
 ---
 
@@ -465,9 +465,9 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 - `maps.google.com`, `google.com/maps` — Google Maps place URLs
 - `maps.googleapis.com`, `places.googleapis.com` — Google Places API endpoints (server-side only)
 
-**v1.5.205 — Regional international citation domains (stub; code lands v1.5.206)**
+**v1.5.206b — Regional international citation domains (SHIPPED — unconditional additive)**
 
-Documented here for traceability. Actual addition to `get_trusted_domain_whitelist()` happens in v1.5.206 with optional per-article-country gating. See `international-optimization.md §6` for the full per-region rationale.
+Added to `get_trusted_domain_whitelist()` in `seobetter.php` line **~3309-3378**, following the same always-trusted pattern as the existing UK/AU/US entries. Per-article-country gating is a future enhancement (v1.5.20X) — today these domains pass for any article, on the assumption that they are high-authority regardless of the article's target country (same as `theguardian.com` and `bbc.co.uk` being trusted even on US-only articles). See `international-optimization.md §6` for per-engine rationale.
 
 *China (Baidu / Doubao / ERNIE / DeepSeek / Qwen / Kimi):*
 - `baike.baidu.com`, `zhihu.com`, `jiandan.net`, `36kr.com`, `tmtpost.com`

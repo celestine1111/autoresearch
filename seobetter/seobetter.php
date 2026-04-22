@@ -3305,6 +3305,72 @@ final class SEOBetter {
             'theage.com.au', 'www.theage.com.au',
             'smh.com.au', 'www.smh.com.au',
             'abc.net.au', 'www.abc.net.au',
+
+            // v1.5.206b — Regional international citation domains (Layer 6).
+            // Additive: unconditional expansion of the always-trusted set, same
+            // pattern as existing UK/AU/US entries. See international-optimization.md §6
+            // for per-engine rationale. Per-article-country gating is a future
+            // enhancement; today these domains pass for any article.
+
+            // China (Baidu / Doubao / ERNIE / DeepSeek / Qwen / Kimi)
+            'baike.baidu.com', 'zhihu.com', 'jiandan.net', '36kr.com', 'tmtpost.com',
+            'people.com.cn', 'xinhuanet.com', 'chinadaily.com.cn', 'cctv.com',
+            'zh.wikipedia.org',
+
+            // Russia (Yandex / YandexGPT / GigaChat)
+            'ru.wikipedia.org', 'yandex.ru', 'kremlin.ru',
+            'lenta.ru', 'ria.ru', 'tass.ru', 'rbc.ru', 'habr.com',
+
+            // South Korea (Naver / HyperCLOVA X / Kanana)
+            'ko.wikipedia.org',
+            'terms.naver.com', 'kin.naver.com', 'academic.naver.com',
+            'yna.co.kr', 'chosun.com', 'donga.com', 'hani.co.kr', 'joongang.co.kr',
+
+            // Japan (Yahoo! Japan / Sakana AI / PLaMo / Rinna / ELYZA)
+            'ja.wikipedia.org', 'chiebukuro.yahoo.co.jp', 'kotobank.jp',
+            'nhk.or.jp', 'asahi.com', 'mainichi.jp', 'nikkei.com', 'yomiuri.co.jp',
+
+            // Germany / DACH (Mistral / Aleph Alpha EU)
+            'de.wikipedia.org',
+            'spiegel.de', 'faz.net', 'zeit.de', 'sueddeutsche.de', 'welt.de', 'tagesschau.de',
+
+            // France
+            'fr.wikipedia.org',
+            'lemonde.fr', 'lefigaro.fr', 'liberation.fr', 'leparisien.fr',
+
+            // Spain / Latin America
+            'es.wikipedia.org',
+            'elpais.com', 'elmundo.es', 'clarin.com', 'lanacion.com.ar', 'reforma.com',
+
+            // Italy
+            'it.wikipedia.org',
+            'corriere.it', 'repubblica.it', 'lastampa.it',
+
+            // Brazil / Portugal
+            'pt.wikipedia.org',
+            'globo.com', 'folha.uol.com.br', 'uol.com.br', 'estadao.com.br',
+            'publico.pt', 'expresso.pt',
+
+            // Middle East (Arabic)
+            'ar.wikipedia.org', 'aljazeera.net', 'alarabiya.net',
+
+            // India
+            'hi.wikipedia.org',
+            'thehindu.com', 'indianexpress.com', 'timesofindia.indiatimes.com', 'ndtv.com',
+
+            // Regional government / academic wildcards
+            '*.gov.cn', '*.edu.cn',
+            '*.gov.ru',
+            '*.go.kr', '*.ac.kr',
+            '*.go.jp', '*.ac.jp',
+            '*.bund.de', '*.gv.at', '*.admin.ch',
+            '*.gouv.fr',
+            '*.gob.es', '*.gob.mx', '*.gob.ar',
+            '*.gov.it',
+            '*.gov.br', '*.gov.pt',
+            '*.gov.sa', '*.gov.ae',
+            '*.gov.in', '*.ac.in',
+            '*.europa.eu',
         ];
 
         $custom = apply_filters( 'seobetter_trusted_domains', $default );

@@ -7,12 +7,82 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.206a-fix)
+> **Last updated:** 2026-04-23 (v1.5.206b)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206b — Regional citation whitelist expansion (Layer 6 — piece 2 of 4)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Layer 6 (International) requires regional citation domains — Baidu Baike, Zhihu, TASS, RIA, Yandex, Naver Knowledge, Chiebukuro, Spiegel, Le Monde, etc. — to pass `validate_outbound_links()` when articles cite them legitimately. Without whitelisting, Pass 2 strips them as untrusted and the References section comes back empty on any non-English/US article.
+
+v1.5.205 documented the target domain list in `external-links-policy.md §10` as a stub. This commit ships the code.
+
+### Shipped
+
+- **`seobetter.php::get_trusted_domain_whitelist()`** — line **~3309-3378** — new v1.5.206b regional block appended after the existing AU news domains. ~60 new entries covering:
+  - China (10): `baike.baidu.com`, `zhihu.com`, `jiandan.net`, `36kr.com`, `tmtpost.com`, `people.com.cn`, `xinhuanet.com`, `chinadaily.com.cn`, `cctv.com`, `zh.wikipedia.org`
+  - Russia (8): `ru.wikipedia.org`, `yandex.ru`, `kremlin.ru`, `lenta.ru`, `ria.ru`, `tass.ru`, `rbc.ru`, `habr.com`
+  - South Korea (9): `ko.wikipedia.org`, `terms.naver.com`, `kin.naver.com`, `academic.naver.com`, `yna.co.kr`, `chosun.com`, `donga.com`, `hani.co.kr`, `joongang.co.kr`
+  - Japan (8): `ja.wikipedia.org`, `chiebukuro.yahoo.co.jp`, `kotobank.jp`, `nhk.or.jp`, `asahi.com`, `mainichi.jp`, `nikkei.com`, `yomiuri.co.jp`
+  - Germany/DACH (7): `de.wikipedia.org`, `spiegel.de`, `faz.net`, `zeit.de`, `sueddeutsche.de`, `welt.de`, `tagesschau.de`
+  - France (5): `fr.wikipedia.org`, `lemonde.fr`, `lefigaro.fr`, `liberation.fr`, `leparisien.fr`
+  - Spain / Latin America (6): `es.wikipedia.org`, `elpais.com`, `elmundo.es`, `clarin.com`, `lanacion.com.ar`, `reforma.com`
+  - Italy (4): `it.wikipedia.org`, `corriere.it`, `repubblica.it`, `lastampa.it`
+  - Brazil / Portugal (7): `pt.wikipedia.org`, `globo.com`, `folha.uol.com.br`, `uol.com.br`, `estadao.com.br`, `publico.pt`, `expresso.pt`
+  - Middle East (3): `ar.wikipedia.org`, `aljazeera.net`, `alarabiya.net`
+  - India (5): `hi.wikipedia.org`, `thehindu.com`, `indianexpress.com`, `timesofindia.indiatimes.com`, `ndtv.com`
+  - Government/academic wildcards (17): `*.gov.cn`, `*.edu.cn`, `*.gov.ru`, `*.go.kr`, `*.ac.kr`, `*.go.jp`, `*.ac.jp`, `*.bund.de`, `*.gv.at`, `*.admin.ch`, `*.gouv.fr`, `*.gob.es`, `*.gob.mx`, `*.gob.ar`, `*.gov.it`, `*.gov.br`, `*.gov.pt`, `*.gov.sa`, `*.gov.ae`, `*.gov.in`, `*.ac.in`, `*.europa.eu`
+
+### Safety posture
+
+- **Unconditional additive** — same always-trusted pattern as existing `theguardian.com`, `bbc.co.uk`, `rspca.org.au` entries (trusted regardless of article target country).
+- **No existing entry removed or modified.** Existing whitelist is byte-identical; only new entries appended.
+- **No-op for existing articles** — if an article never cites any of these domains, behavior is unchanged.
+- **Filter hook untouched** — `seobetter_trusted_domains` filter still works for site-specific additions.
+- **Per-country gating deferred** — a US-focused article could technically pass a `tass.ru` citation through Pass 2 if the AI somehow generated one. Mitigated by:
+  1. AI prompts are in the article's selected language, so English prompts rarely produce Cyrillic-domain citations.
+  2. Pass 1 (research pool) already catches legitimate citations — whitelist is only the fallback.
+  3. Existing whitelist already has cross-region precedent (Reuters UK, BBC UK, ABC Australia all trusted on US articles).
+
+### Doc sync (same commit)
+
+- **`seo-guidelines/external-links-policy.md §10`** — "Last updated" line bumped to v1.5.206b; the v1.5.205 "stub" note replaced with "SHIPPED" and anchored to `seobetter.php` line ~3309-3378.
+
+### Verify
+
+```bash
+# Whitelist has the v1.5.206b regional block
+grep -n "v1.5.206b — Regional international citation domains" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+
+# Sample entries are present
+grep -n "'baike.baidu.com'\|'tass.ru'\|'ko.wikipedia.org'\|'ja.wikipedia.org'" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+
+# external-links-policy.md flipped from stub to SHIPPED
+grep -n "v1.5.206b — Regional international citation domains (SHIPPED" /Users/ben/Documents/autoresearch/seobetter/seo-guidelines/external-links-policy.md
+```
+
+### Verified by user
+
+UNTESTED — Ben to regen any article with default country/language; confirm no regression:
+1. Existing citations from the current whitelist still pass (BBC, Reuters, RSPCA, etc.)
+2. References section still renders
+3. No new PHP warnings
+
+Optional exercise-the-new-code test: generate an article with Target Country = Japan, keyword = "seiyo ramen in Tokyo" or similar; confirm Japanese wiki / chiebukuro citations (if the AI selects any) survive into the References section instead of being stripped.
+
+### Next
+
+v1.5.206c — regional prompt context injector in `Async_Generator::get_system_prompt()` (country-gated: no-op for US/empty).
 
 ---
 
