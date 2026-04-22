@@ -313,4 +313,182 @@ Schema is injected via `wp_head` — compatible with any theme. Works alongside 
 
 ---
 
+## 13. VPS Setup Guide
+
+If you're using a VPS (DigitalOcean, Vultr, Hetzner, Linode, AWS Lightsail, etc.) with a control panel like CloudPanel, RunCloud, GridPane, or SpinupWP, follow these steps after installing WordPress and activating SEOBetter.
+
+### Step 1: Check PHP version
+
+SEOBetter requires PHP 8.0 or higher. Check via SSH:
+
+```bash
+php -v
+```
+
+If it shows PHP 7.x, upgrade through your control panel (CloudPanel: Sites → your site → PHP version).
+
+### Step 2: Fix permalinks (CRITICAL — most common VPS issue)
+
+Fresh WordPress installs on VPS often have **no permalink structure set**, which breaks the REST API entirely. SEOBetter uses the REST API for article generation — without it, you'll get 404 errors.
+
+**Symptoms:** "Failed to load results", "No route was found matching the URL", 404 errors during generation.
+
+**Fix via SSH:**
+
+```bash
+cd /path/to/your/wordpress
+wp rewrite structure '/%postname%/' --allow-root
+wp rewrite flush --allow-root
+```
+
+**Or via WordPress admin:** Go to **Settings → Permalinks**, select "Post name", click **Save Changes**.
+
+### Step 3: Verify .htaccess / Nginx rewrite rules
+
+**Apache (most common):** WordPress needs an `.htaccess` file with rewrite rules. Check it exists:
+
+```bash
+cat /path/to/your/wordpress/.htaccess
+```
+
+It should contain:
+
+```apache
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+```
+
+If the file is empty or missing, resave permalinks in WordPress admin or run:
+
+```bash
+wp rewrite flush --allow-root
+```
+
+**Nginx (CloudPanel, RunCloud):** The control panel usually handles this. If REST API returns 404, add to your Nginx config:
+
+```nginx
+location / {
+    try_files $uri $uri/ /index.php?$args;
+}
+```
+
+Then reload Nginx:
+
+```bash
+sudo systemctl reload nginx
+```
+
+### Step 4: Increase PHP limits
+
+VPS defaults are often too low. Edit your PHP configuration:
+
+```bash
+# Find your php.ini
+php -i | grep "Loaded Configuration"
+
+# Edit it
+sudo nano /path/to/php.ini
+```
+
+Set these values:
+
+```ini
+memory_limit = 256M
+max_execution_time = 300
+post_max_size = 64M
+upload_max_filesize = 64M
+max_input_vars = 5000
+```
+
+Then restart PHP:
+
+```bash
+# For PHP-FPM (most VPS setups)
+sudo systemctl restart php8.2-fpm
+
+# Or for CloudPanel
+sudo systemctl restart php8.2-fpm
+```
+
+### Step 5: Enable WordPress debug logging
+
+If something isn't working, enable error logging to see what's happening:
+
+```bash
+cd /path/to/your/wordpress
+wp config set WP_DEBUG true --raw --allow-root
+wp config set WP_DEBUG_LOG true --raw --allow-root
+```
+
+Then reproduce the issue and check the log:
+
+```bash
+tail -50 /path/to/your/wordpress/wp-content/debug.log
+```
+
+Common errors and fixes:
+
+| Error in debug.log | Fix |
+|---|---|
+| `Allowed memory size exhausted` | Increase `memory_limit` in php.ini |
+| `Maximum execution time exceeded` | Increase `max_execution_time` in php.ini |
+| `rest_no_route` / 404 on REST API | Resave permalinks (Step 2) |
+| `cURL error 28: Operation timed out` | Your server can't reach the AI provider — check firewall/DNS |
+| `Class 'SEOBetter\...' not found` | Plugin files incomplete — re-upload the zip |
+
+### Step 6: Reset WordPress password (if locked out)
+
+If you can't log into WordPress admin on your new VPS:
+
+```bash
+cd /path/to/your/wordpress
+
+# List users
+wp user list --allow-root
+
+# Reset password for user ID 1 (admin)
+wp user update 1 --user_pass="YourNewPassword123!" --allow-root
+```
+
+### Step 7: Verify the plugin is working
+
+After completing the steps above:
+
+1. Go to **SEOBetter → Settings** — the page should load without errors
+2. Add your AI provider key and save
+3. Go to **SEOBetter → Generate Content**
+4. Enter a test keyword like "best coffee shops 2026"
+5. Click **Auto-suggest** — should fill secondary keywords + audience
+6. Click **Generate Article** — should show progress bar and complete in 60-120 seconds
+
+If generation fails, check `debug.log` for the specific error.
+
+### CloudPanel-specific notes
+
+- PHP version: **Sites → your site → Settings → PHP Version**
+- Nginx config: **Sites → your site → Vhost** (rewrite rules are usually pre-configured)
+- PHP settings: **Sites → your site → Settings → PHP Settings** (memory_limit, max_execution_time)
+- SSL: ensure HTTPS is set up — some AI providers reject non-HTTPS callbacks
+
+### Common VPS hosting panels
+
+| Panel | Nginx config location | PHP config location |
+|---|---|---|
+| **CloudPanel** | Sites → Vhost tab | Sites → PHP Settings |
+| **RunCloud** | Web App → Nginx Config | Web App → PHP Settings |
+| **GridPane** | Sites → Nginx | Sites → PHP |
+| **SpinupWP** | Sites → Nginx | Sites → PHP Settings |
+| **Cyberpanel** | Websites → Manage → Rewrite Rules | PHP → PHP Config |
+| **No panel (manual)** | `/etc/nginx/sites-available/` | `/etc/php/8.x/fpm/php.ini` |
+
+---
+
 *For support, visit [seobetter.com](https://seobetter.com) or open an issue on GitHub.*
