@@ -7,12 +7,60 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-22 (v1.5.198)
+> **Last updated:** 2026-04-22 (v1.5.199)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.199 — Fix Press Release H2 structure + gate Quick Comparison enforcer
+
+**Date:** 2026-04-22
+**Commit:** `[pending]`
+
+### User report
+
+Generated a press release for keyword `"new pet wellness product launch in Australia"`. Inspected the article + schema:
+
+- **Schema is correct** (v1.5.195–v1.5.197 work verified):
+  - `@type: NewsArticle`, `articleSection: "Press Release"` ✓
+  - `citation[]` with 6 real article sources, no author-social leakage ✓
+  - `speakable`, `dateModified`, `Organization.sameAs`, clean description ✓
+
+- **Article body has 3 bugs**:
+  1. Only 5 H2s — missing Quotes, About Us, Media Contact, References
+  2. Literal template field names used as H2s: `"Dateline and Lede: Announcing..."` and `"Body: Details of..."` — no real press release has headings called "Dateline" or "Body"
+  3. Word count only 96 words (target 400)
+
+- **Separately**: a "Quick Comparison" table was auto-injected into the press release by `enforce_geo_requirements()`. Press releases don't have comparison tables — this PHP enforcer was ungated and firing on every content type.
+
+### Fixed
+
+- **Press release template restructured** — `includes/Async_Generator.php::get_prose_template()` `press_release` entry line **~735**
+  - New `sections`: `The Announcement, Key Highlights, About the Company, Media Contact, FAQ, References` — every H2 is a real press-release heading readers expect to see.
+  - "Dateline and Lede" and "Body" removed as standalone H2s. The dateline + lede + 3-4 body paragraphs + 1-2 executive quotes all flow inside the first H2 "The Announcement" (225-275 words under that heading).
+  - Quotes are now inline blockquotes embedded inside The Announcement (`> "quote," said Jane Doe, CTO at Acme`), matching how real press releases integrate named-exec quotes into flow instead of a standalone quote block.
+  - Explicit rule in guidance: "NEVER emit an H2 called 'Dateline and Lede' or 'Body' or 'Quote' or 'Subheadline'". Per-section word budgets are explicit (The Announcement 225-275, Key Highlights 40-60, About 60-100, Contact 20-30, FAQ 80-120).
+  - Verify: `grep -n "'press_release' => \[" includes/Async_Generator.php`
+
+- **Quick Comparison enforcer gated by content_type** — `includes/Async_Generator.php::enforce_geo_requirements()` line **~1660**
+  - Introduced `$table_compatible = [ 'listicle', 'how_to', 'buying_guide', 'comparison', 'review', 'ultimate_guide', 'pillar_guide', 'blog_post', 'tech_article' ]`. The post-generation table injector only runs when `$content_type` is in this allowlist.
+  - Skips: press_release, opinion, news_article, recipe, faq_page, interview, personal_essay, live_blog, sponsored, case_study, glossary, white_paper, scholarly_article.
+  - Matches the v1.5.60 allowlist used by the outline-phase table-enforcement prompt, so both phases stay in sync.
+  - Verify: `grep -n '\\\$table_compatible' includes/Async_Generator.php`
+
+### Three Systematic Questions
+
+1. **Works for ALL keywords?** YES — template + allowlist structural only, no keyword logic.
+2. **Works for ALL 21 content types?** YES — press_release template only affects press_release; table-enforcer allowlist is explicit per type. Types that previously got tables keep them; types that shouldn't (now gated) won't.
+3. **Works for ALL AI models?** YES — prose instructions + PHP post-processing, no model dependency.
+
+### Verified by user
+
+- UNTESTED — please regenerate `"new pet wellness product launch in Australia"` as Press Release and confirm: (a) 6 H2s appear (The Announcement, Key Highlights, About the Company, Media Contact, FAQ, References), (b) no "Quick Comparison" H2, (c) word count ~400, (d) quotes embedded inline in The Announcement as blockquotes.
 
 ---
 
