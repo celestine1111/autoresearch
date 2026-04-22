@@ -353,9 +353,12 @@ Separate endpoint from the main `/api/research` used for generation. Pulls real 
 
 ### 2.2 System Prompt (Applied to Every Section)
 
+Signature: `Async_Generator::get_system_prompt( string $language = 'en', string $country = '' )` — language and country both threaded from the user's form selections.
+
 Contains:
 - Current year enforcement (never 2024/2025)
 - Language instruction (if non-English)
+- **Regional context block (v1.5.206c — Layer 6 piece 3 of 4):** country-gated. When the user selects a target country other than US/GB/AU/CA/NZ/IE, `Regional_Context::get_block( $country )` injects a compact block telling the AI which regional authority sources to prefer (matching the v1.5.206b whitelist), measurement units, currency, date format, decimal/thousand separators, and editorial register (e.g. Japanese keigo, German Sie, Argentine 'vos'). 15 priority countries have custom blocks (CN/JP/KR/RU/DE/FR/ES/IT/BR/PT/IN/SA/AE/MX/AR). Non-priority non-Western countries: no-op (empty string — we don't guess guidance we haven't researched).
 - Keyword density rules (0.5-1.5%, every 100-200 words)
 - GEO visibility rules (+41% quotes, +40% stats, +30% citations)
 - E-E-A-T requirements (experience, expertise, authority, trust)

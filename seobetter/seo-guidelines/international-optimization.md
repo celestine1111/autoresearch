@@ -458,11 +458,14 @@ All deferred from this pure-docs commit to the next. Tracked here so v1.5.206 ha
 - Inject `sameAs: [wikidata_url, regional_wikipedia_url]` in the `mentions` or `about` schema blocks
 - Already-whitelisted domains: `wikidata.org`, `query.wikidata.org` (since v1.5.24)
 
-### 8.3 Regional prompt context injector
+### 8.3 Regional prompt context injector — ✅ SHIPPED v1.5.206c
 
-- In `Async_Generator.php::get_system_prompt()`, detect the user's target country
-- Inject a per-country context block covering: preferred engine(s), citation domains, dateline/date format, register/formality, measurement units, currency
-- Country-to-block map lives in a new helper `Regional_Context::get_block( $country_code )` to keep `Async_Generator` clean
+- **File:** `includes/Regional_Context.php` (new, ~130 lines)
+- **Integration:** `Async_Generator::get_system_prompt( $language, $country )` — country is second arg; defaults to empty; threaded from `$options['country']` at call site line 167.
+- **Country-gated:** returns empty string for `''` / `US` / `GB` / `AU` / `CA` / `NZ` / `IE` — byte-identical prompt to pre-v1.5.206c for Western-default articles.
+- **Priority countries with custom blocks (15):** CN, JP, KR, RU, DE, FR, ES, IT, BR, PT, IN, SA, AE, MX, AR
+- **Block contents per country:** regional authority citation domains (matching `external-links-policy.md §10`), measurement units, currency, date format, thousand/decimal separator conventions, editorial register (e.g. Japanese 敬語 / keigo, German Sie, French vous, Korean 존댓말, Argentine 'vos')
+- **Non-priority non-Western countries:** no-op (returns empty) — we don't guess guidance we haven't researched. Add more countries by extending `Regional_Context::get_blocks()` and updating §2 above.
 
 ### 8.4 Regional citation whitelist expansion
 

@@ -7,12 +7,100 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206b)
+> **Last updated:** 2026-04-23 (v1.5.206c)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206c — Regional prompt context injector (Layer 6 — piece 3 of 4)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Layer 6 (International) needs the AI to actively write differently per target country — not just tag schema with `inLanguage` (v1.5.206a) and accept regional citation URLs (v1.5.206b). Without regional prompt context, an article targeting Japan would cite American sources, use imperial units, and write in a US editorial register — regardless of whether `inLanguage: "ja"` was set. This commit fixes that by injecting a compact `REGIONAL CONTEXT` block into the system prompt when the user selects a non-Western target country.
+
+### Design
+
+**Country-gated, priority-scoped, prompt-size-conscious.**
+
+- **Country gate:** `Regional_Context::WESTERN_DEFAULT_COUNTRIES = [ '', 'US', 'GB', 'AU', 'CA', 'NZ', 'IE' ]`. For any country in this set, `get_block()` returns an empty string — the system prompt is byte-identical to pre-v1.5.206c. Zero regression risk on existing US/English/UK/AU/CA articles.
+- **Priority scope:** 15 countries ship with custom blocks — CN, JP, KR, RU, DE, FR, ES, IT, BR, PT, IN, SA, AE, MX, AR. These cover the major non-Western markets Ben flagged + the international LLMs that matter most (Baidu ecosystem, Yandex, Naver, regional Japanese/EU players).
+- **Non-priority non-Western:** no-op (empty string). We don't guess guidance we haven't researched. Adding a country is a 1-line change in `Regional_Context::get_blocks()` + a matching update to `external-links-policy.md §10` and `international-optimization.md §2`.
+- **Prompt-size discipline:** each block is ~4-6 lines. Tokens matter — a 20-line prompt-per-country would inflate every generation call.
+
+### Shipped
+
+- **`includes/Regional_Context.php`** — NEW file, ~130 lines. One public method `Regional_Context::get_block( string $country_code ): string`. Autoloads via the existing SEOBetter PSR-4 autoloader registered in `seobetter.php` line 29-39.
+
+- **`includes/Async_Generator.php::get_system_prompt()`** — signature extended:
+  - Before (v1.5.206b): `private static function get_system_prompt( string $language = 'en' ): string`
+  - After (v1.5.206c): `private static function get_system_prompt( string $language = 'en', string $country = '' ): string`
+  - Second arg defaults to empty — backward-compatible for any caller that still passes only `$language`.
+
+- **`includes/Async_Generator.php` line ~2316** — `$regional_block` built via `Regional_Context::get_block( $country )` and interpolated into the returned system prompt string immediately after `{$lang_rule}`.
+
+- **`includes/Async_Generator.php` line ~167** — call site updated: `get_system_prompt( $options['language'] ?? 'en', $options['country'] ?? '' )`.
+
+- **`seobetter.php` version** — unchanged at 1.5.206 (v1.5.206a bumped from .205 → .206; the sub-letters a/b/c/d all share the same numeric version; BUILD_LOG distinguishes).
+
+### Content of each country's REGIONAL CONTEXT block
+
+Every block specifies the same six facets in a compact prose paragraph:
+
+1. **Preferred citation domains** — drawn from the v1.5.206b regional whitelist so the AI's output survives `validate_outbound_links()`.
+2. **Measurement units** — metric for most; always explicit.
+3. **Currency** — with the conventional symbol + ISO 4217 code where ambiguity exists (e.g. `MXN $` vs `USD $`).
+4. **Date format** — e.g. `DD.MM.YYYY` for Germany/Russia, `YYYY/MM/DD` for Japan, `DD/MM/YYYY` for most others.
+5. **Decimal/thousand separator conventions** — e.g. German `EUR 1.234,56` vs French `EUR 1 234,56`.
+6. **Editorial register** — Japanese 敬語, German Sie, French vous, Korean 존댓말, Argentine 'vos' conjugation, etc.
+
+### Doc sync (same commit — 4-doc parity rule per pre-commit hook)
+
+- **`seo-guidelines/international-optimization.md §8.3`** — flipped from "deferred to v1.5.206" → "✅ SHIPPED v1.5.206c" with file/integration anchors.
+- **`seo-guidelines/plugin_functionality_wordpress.md §2.2`** — updated signature + added "Regional context block" bullet in the system-prompt contents list.
+- **`seo-guidelines/SEO-GEO-AI-GUIDELINES.md §2`** — new "International engines (v1.5.206c addendum — Layer 6)" subsection above Google AI Overviews, explains what the regional block contains and why Baidu/Yandex/Naver/regional-LLM citation eligibility depends on it.
+
+### Safety posture
+
+- **Zero regression risk on Western-default articles** — the early-return in `get_block()` produces byte-identical prompts for `''` / `US` / `GB` / `AU` / `CA` / `NZ` / `IE`.
+- **Additive for priority countries** — the regional block is *appended* to the system prompt (via `{$regional_block}` after `{$lang_rule}`); no existing prompt text is modified.
+- **No schema changes.** No scoring changes. No CSS changes. No pipeline phase changes. Only the system prompt grows slightly when a non-Western country is selected.
+- **No new autoload or plugin activation step required** — PSR-4 autoloader picks up `Regional_Context` automatically on first reference.
+
+### Verify
+
+```bash
+# 1. Regional_Context file exists with 15 priority countries
+grep -c "=> \"REGIONAL CONTEXT" /Users/ben/Documents/autoresearch/seobetter/includes/Regional_Context.php
+# Expect: 15
+
+# 2. Async_Generator signature has country param
+grep -n "get_system_prompt( string \$language = 'en', string \$country = ''" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+
+# 3. Call site threads country
+grep -n "Regional_Context::get_block" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+grep -n "get_system_prompt( \$options\['language'\] ?? 'en', \$options\['country'\]" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+
+# 4. Western-default list covers US/GB/AU/CA/NZ/IE
+grep -n "WESTERN_DEFAULT_COUNTRIES" /Users/ben/Documents/autoresearch/seobetter/includes/Regional_Context.php
+```
+
+### Verified by user
+
+UNTESTED — Ben to regen with:
+1. **Regression test** — same keyword as v1.5.206a test (US/English, no country) — confirm article looks identical to the pre-v1.5.206c version (system prompt didn't change for Western-default articles).
+2. **Layer 6 exercise** — same ramen/Tokyo keyword with Target Country = Japan, Language = English — confirm the article now references Japanese authorities (NHK / Asahi / Mainichi / Kotobank / ja.wikipedia) instead of US defaults, uses metric units + yen, and follows Japanese date conventions.
+3. **Japanese language test** — Target Country = Japan, Language = Japanese — confirm the article is fully in Japanese, uses keigo (敬語) register, and cites Japanese-language domains.
+
+### Next
+
+v1.5.206d — GEO_Analyzer Layer 6 scoring check (gated + non-regressive — 15th check, only activates when country ≠ US/empty; existing 14 checks keep identical weights for Western-default articles).
 
 ---
 

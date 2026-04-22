@@ -164,7 +164,7 @@ class Async_Generator {
         $lsi = array_filter( array_map( 'trim', explode( ',', $options['lsi_keywords'] ) ) );
 
         $generator = new AI_Content_Generator();
-        $system = self::get_system_prompt( $options['language'] ?? 'en' );
+        $system = self::get_system_prompt( $options['language'] ?? 'en', $options['country'] ?? '' );
         $result = null;
         $step_label = '';
 
@@ -2286,7 +2286,7 @@ class Async_Generator {
     /**
      * Get the system prompt.
      */
-    private static function get_system_prompt( string $language = 'en' ): string {
+    private static function get_system_prompt( string $language = 'en', string $country = '' ): string {
         $year = wp_date( 'Y' );
         $month_year = wp_date( 'F Y' );
 
@@ -2313,7 +2313,16 @@ class Async_Generator {
         // picking English. Explicit per-article language rule prevents drift.
         $lang_rule = "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every H1, H2, H3, paragraph, bullet list, FAQ question, FAQ answer, Key Takeaways item, and reference description must be in {$lang_name}. Research data may contain terms or place names in other languages — translate or describe them in {$lang_name}, do NOT copy them in the source language. The primary keyword may be in any language but the article body text must be {$lang_name}. This rule is non-negotiable.";
 
-        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).{$lang_rule}
+        // v1.5.206c — Regional prompt context (Layer 6 piece 3 of 4).
+        // No-op for empty/US/GB/AU/CA/NZ/IE (Western-default — byte-identical
+        // prompt to pre-v1.5.206c). Non-empty for CN/JP/KR/RU/DE/FR/ES/IT/BR/
+        // PT/IN/SA/AE/MX/AR — injects a REGIONAL CONTEXT block telling the AI
+        // which regional authority sources to prefer, date/unit/currency
+        // conventions, and editorial register (e.g. keigo for Japanese,
+        // vous/Sie for French/German).
+        $regional_block = Regional_Context::get_block( $country );
+
+        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).{$lang_rule}{$regional_block}
 
 CURRENT DATE: {$month_year}. The current year is {$year}. ALWAYS use {$year} when writing 'in [year]', 'best X in [year]', or any year reference. NEVER use 2024 or 2025 — those are outdated.
 

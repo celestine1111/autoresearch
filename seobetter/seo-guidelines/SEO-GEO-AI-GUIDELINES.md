@@ -69,6 +69,10 @@ Source: Princeton University GEO study (arxiv.org/pdf/2311.09735), KDD 2024, GEO
 
 ## 2. AI PLATFORM RANKING FACTORS
 
+### International engines (v1.5.206c addendum — Layer 6)
+
+When the user selects a non-Western target country (CN / JP / KR / RU / DE / FR / ES / IT / BR / PT / IN / SA / AE / MX / AR), `Async_Generator::get_system_prompt()` injects a `REGIONAL CONTEXT` block (via `Regional_Context::get_block()`) telling the AI which regional authority sources to prefer (matching the v1.5.206b whitelist), measurement units, currency, date format, decimal/thousand separator conventions, and editorial register (Japanese keigo, German Sie, French vous, Korean 존댓말, Argentine 'vos', etc.). This steers the generated prose toward citations and style conventions read by that region's audience — a prerequisite for Baidu / Yandex / Naver / regional LLM (Doubao / ERNIE / DeepSeek / Qwen / Kimi / YandexGPT / GigaChat / HyperCLOVA X / Kanana / Sakana AI / PLaMo / ELYZA / Mistral / Aleph Alpha) citation eligibility. Byte-identical prompt (no-op) for empty / US / GB / AU / CA / NZ / IE. Full per-country blocks live in `international-optimization.md §2` + code in `includes/Regional_Context.php`.
+
 ### Google AI Overviews (45% of Google searches)
 - Strong correlation with traditional rankings
 - Cited sources = +132% visibility boost
