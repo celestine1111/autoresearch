@@ -19,7 +19,7 @@
 ## v1.5.198 — Close PHP-side leaks in content_type Places gate
 
 **Date:** 2026-04-22
-**Commit:** `[pending]`
+**Commit:** `14b4d99`
 
 ### User report
 
