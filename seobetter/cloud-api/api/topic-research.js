@@ -70,8 +70,12 @@ export default async function handler(req, res) {
     // fetchWikipedia now uses the article language subdomain (ru.wikipedia.org,
     // ja.wikipedia.org, de.wikipedia.org, etc.).
     const [suggestLong, suggestCore, datamuse, wiki, reddit, serperData] = await Promise.all([
-      fetchGoogleSuggest(niche, gl),
-      (niche !== coreTopic) ? fetchGoogleSuggest(coreTopic, gl) : Promise.resolve([]),
+      // v1.5.206d-fix14 — pass baseLang as hl separately from country gl.
+      // Pre-fix14 sent `hl=${gl}` (country for both) which produced invalid
+      // hl values for Vietnamese/Indonesian/Thai/Japanese etc. (hl=VN/ID/TH
+      // are not valid language codes → Google returned no suggestions).
+      fetchGoogleSuggest(niche, gl, baseLang),
+      (niche !== coreTopic) ? fetchGoogleSuggest(coreTopic, gl, baseLang) : Promise.resolve([]),
       isEnglish ? fetchDatamuse(coreTopic) : Promise.resolve([]),
       fetchWikipedia(niche, baseLang),
       fetchReddit(niche),
@@ -207,7 +211,7 @@ export default async function handler(req, res) {
 // ============================================================
 // Source 1: Google Suggest (real search queries)
 // ============================================================
-async function fetchGoogleSuggest(query, gl = '') {
+async function fetchGoogleSuggest(query, gl = '', hl = '') {
   const variations = [
     query,
     'best ' + query,
@@ -221,8 +225,15 @@ async function fetchGoogleSuggest(query, gl = '') {
   // v1.5.57 — geo-localize completions so "pet shops" for an AU user returns
   // Australian completions ("pet shops sydney", "pet shops melbourne") not
   // US ones ("pet shops washington", "pet shops florida"). Google Suggest
-  // uses `gl=XX` for country and `hl=XX` for language. We pass both.
-  const geoParams = gl ? `&gl=${encodeURIComponent(gl)}&hl=${encodeURIComponent(gl)}` : '';
+  // uses `gl=XX` for country and `hl=XX` for language.
+  //
+  // v1.5.206d-fix14 — hl is LANGUAGE code (vi/id/th/ja/ko/zh), not country
+  // code. Pre-fix14 passed `hl=${gl}` which sent country for both → for
+  // Vietnamese (gl=VN) became `hl=VN` which Google treats as invalid → no
+  // suggestions returned. Now accepts separate `hl` param; falls back to
+  // gl for backward-compat if caller doesn't pass hl.
+  const hlParam = hl ? encodeURIComponent(hl) : (gl ? encodeURIComponent(gl) : '');
+  const geoParams = gl ? `&gl=${encodeURIComponent(gl)}${hlParam ? `&hl=${hlParam}` : ''}` : '';
 
   const allSuggestions = [];
   for (const v of variations) {
@@ -785,6 +796,18 @@ function buildKeywordSets(niche, suggest, datamuse, wiki, lang = 'en') {
   // suggestions are dropped unless they also contain a Mudgee/NSW token.
   const secondary = [];
   const nicheParts = nicheLower.split(/\s+/).filter(w => w.length >= 3 && !['the','and','for','with','from','are','you','can','how','why','what','when','where','who','2024','2025','2026','2027','2028'].includes(w));
+
+  // v1.5.206d-fix14 — character-level overlap for CJK/Thai/Lao/Khmer/Burmese.
+  // These scripts have no inter-word whitespace, so `.split(/\s+/)` returns
+  // the whole phrase as one token; Google Suggest completions rarely
+  // contain the ENTIRE niche verbatim → word-level overlap fails → zero
+  // secondary keywords. Character-level overlap (phrase shares at least
+  // one meaningful character with the niche) is the right check for
+  // non-segmented scripts.
+  const baseLang = (lang || '').toLowerCase().slice(0, 2);
+  const isNoSpace = ['ja', 'zh', 'ko', 'th', 'lo', 'km', 'my'].includes(baseLang);
+  const nicheCharsNoSpace = new Set(nicheLower.replace(/\s+/g, '').split('').filter(ch => /[一-鿿぀-ヿ가-힯฀-๿஀-௿ऀ-ॿЀ-ӿ؀-ۿ]/.test(ch) || /[a-z0-9]/.test(ch)));
+
   const targetLocationTokens = extractLocationTokens(niche);
   const hasTargetLocation = targetLocationTokens.length > 0;
 
@@ -794,7 +817,15 @@ function buildKeywordSets(niche, suggest, datamuse, wiki, lang = 'en') {
     if (phrase.length < 6 || phrase.length > 80) continue;
 
     // Must contain the niche or a piece of it (sanity filter)
-    const overlaps = nicheParts.some(w => phrase.includes(w));
+    let overlaps = nicheParts.some(w => phrase.includes(w));
+    // v1.5.206d-fix14 — for CJK/Thai/etc, fall back to character overlap
+    if (!overlaps && isNoSpace && nicheCharsNoSpace.size > 0) {
+      const phraseChars = phrase.replace(/\s+/g, '').split('');
+      const shared = phraseChars.filter(ch => nicheCharsNoSpace.has(ch)).length;
+      // Require at least 2 shared characters for relevance (1 char would
+      // match any CJK suggestion containing any common character).
+      overlaps = shared >= 2;
+    }
     if (!overlaps) continue;
 
     // v1.5.58 — location filter. If this keyword is location-specific,

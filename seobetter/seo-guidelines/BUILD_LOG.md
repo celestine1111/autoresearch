@@ -16,6 +16,86 @@
 
 ---
 
+## v1.5.206d-fix14 — hl= language param + CJK/Thai character overlap filter
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Systematic audit across 22 languages surfaced two distinct universal bugs:
+
+1. **Vietnamese / Indonesian / Thai / Japanese / Chinese: zero secondary keywords.** Google Suggest was receiving `hl=${gl}` (country code passed as language hint). For VN/ID/TH/JP/CN that sent `hl=VN` / `hl=ID` / `hl=TH` / `hl=JP` / `hl=CN` — invalid BCP-47 language codes. Google returned empty or default-English completions. Secondary keyword filter then rejected them all.
+
+2. **CJK + Thai secondary filter universally broken.** Even with correct `hl=`, word-level overlap check (`nicheParts.some(w => phrase.includes(w))`) fails for scripts without inter-word whitespace. Japanese/Chinese/Korean/Thai/Lao/Khmer/Burmese keywords `.split(/\s+/)` into ONE big token; Google Suggest completions rarely contain the whole token verbatim → every suggestion filtered out → zero secondary.
+
+### Shipped
+
+**Fix A — `hl=` gets the language code, not the country code:**
+
+- `fetchGoogleSuggest( query, gl = '', hl = '' )` — new optional third parameter. Constructs URL as `&gl={gl}&hl={hl}` when both present. Backward-compatible: falls back to `hl={gl}` if caller doesn't pass hl (preserves old behavior for any other caller).
+- Main handler passes `baseLang` as `hl` to both `fetchGoogleSuggest` invocations (niche + coreTopic).
+
+**Fix B — character-level overlap fallback for no-whitespace scripts:**
+
+- New `isNoSpace` flag: `true` for `ja / zh / ko / th / lo / km / my`.
+- New `nicheCharsNoSpace`: Set of meaningful characters from the niche (CJK, Devanagari, Cyrillic, Arabic, Thai, Hangul ranges + a-z + 0-9) with whitespace stripped.
+- Secondary-filter fallback: if word-level overlap fails AND `isNoSpace`, check character-level overlap; accept if ≥2 characters shared between phrase and niche (1 char would match too many unrelated suggestions).
+
+### Impact
+
+Before fix14 (from systematic audit):
+
+| Language | Secondary | LSI % native |
+|---|---|---|
+| Japanese | 0 | 14% |
+| Chinese | 0 | 0% |
+| Thai | 0 | 70% |
+| Vietnamese | 0 | 0% (all empty) |
+| Indonesian | 0 | 0% (all empty) |
+
+Expected after fix14 (post Vercel redeploy):
+
+| Language | Secondary | LSI % native |
+|---|---|---|
+| Japanese | 5–7 | higher (correct hl returns more Japanese snippets) |
+| Chinese | 5–7 | higher |
+| Thai | 5–7 | even higher |
+| Vietnamese | 5–7 (was empty) | populated |
+| Indonesian | 5–7 (was empty) | populated |
+
+Latin-script languages already at 7/7 secondary + 10 LSI — no behavioral change (pass through the `isNoSpace = false` branch and the word-level overlap that already worked).
+
+### Safety posture
+
+- **English + Latin-script byte-identical.** `isNoSpace` false → character-overlap fallback skipped. `hl` now equals `en` instead of `US` for English — Google treats both as English, output identical.
+- **Backward-compatible signature.** `fetchGoogleSuggest( query, gl, hl = '' )` — default empty `hl` reverts to pre-fix14 behavior.
+- **Conservative overlap threshold.** Requires ≥2 shared characters for CJK character-level overlap, preventing false matches on single common characters like の / 的 / 了.
+
+### Verify
+
+After Vercel redeploys:
+
+```bash
+# Japanese — should now have secondary populated
+curl -sS -X POST "https://seobetter.vercel.app/api/topic-research" \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"最高のスマートフォン 2026","country":"JP","language":"ja","site_url":"test"}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('secondary:', d.get('keywords',{}).get('secondary', [])[:5])"
+
+# Vietnamese — should now have results at all
+curl -sS -X POST "https://seobetter.vercel.app/api/topic-research" \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"điện thoại tốt nhất 2026","country":"VN","language":"vi","site_url":"test"}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('secondary:', d.get('keywords',{}).get('secondary', [])[:5])"
+```
+
+### Verified by user
+
+UNTESTED — pending Vercel auto-deploy.
+
+---
+
 ## v1.5.206d-fix13 — Native-script LSI prioritization for non-Latin languages
 
 **Date:** 2026-04-23
