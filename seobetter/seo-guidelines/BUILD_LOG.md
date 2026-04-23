@@ -19,7 +19,7 @@
 ## v1.5.206d-fix12 — Unicode-aware Serper tokenization (fixes English-only LSI for Hindi/Cyrillic/CJK)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `de2c93e`
 
 ### Why this patch exists
 
