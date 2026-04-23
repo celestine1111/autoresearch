@@ -29,6 +29,20 @@ Every one of these makes the article look unprofessional, hurts E-E-A-T, wastes 
 
 ---
 
+### Pass 1.5 — Mashed-URL sanitizer (v1.5.206d-fix8)
+
+Sits between Pass 1 (malformed markdown stripper) and Pass 2 (whitelist/pool filter). Detects AI hallucination pattern where two research-pool URLs got concatenated into one with the second URL's `://` stripped during URL encoding. Example observed 2026-04-23 on an Arabic Riyadh listicle:
+
+```
+https://www.facebook.com/riyadhcityguide/posts/[long-arabic-slug]-httpswwwthisisriyadhco
+                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^
+                                                                  second URL mashed in
+```
+
+The resulting URL is a valid-looking Facebook path that 404s (Facebook doesn't use arbitrary slugs). Regex heuristic: `/-?https?[whi][a-z]/` within a URL path (not in authority) signals concatenation corruption. Truncate at that boundary, keep the authority + valid prefix. If truncation would leave the path empty, keep original (let Pass 3 RLFKV kill it via content verification).
+
+Implemented in `seobetter.php::validate_outbound_links()` as an inline `$sanitize_mashed_url` closure called from both markdown-link and HTML-anchor callbacks. Rewrites URL in saved article body (not just filter verdict).
+
 ## 3. Research foundation
 
 The architecture is grounded in three recent papers. Together they define the "retrieve → ground → verify → filter" loop this plugin implements.

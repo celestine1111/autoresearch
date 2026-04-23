@@ -2642,11 +2642,47 @@ final class SEOBetter {
             $markdown
         );
 
+        // ===== Pass 1.5: Repair URLs with mashed-in second URL =====
+        // v1.5.206d-fix8 — AI hallucination pattern: two research-pool URLs
+        // get concatenated into one, with the second URL's "://" stripped
+        // during URL encoding. Example seen 2026-04-23 on an Arabic Riyadh
+        // article:
+        //   https://www.facebook.com/riyadhcityguide/posts/[long-arabic-slug]-httpswwwthisisriyadhco
+        //                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+        // The suffix is the second URL (thisisriyadh.co) mashed into the
+        // first. The resulting URL is a valid-looking Facebook path that
+        // 404s (Facebook doesn't use arbitrary slugs). Detect the `-?https?w`
+        // pattern within the path (no `://` separator indicates corruption)
+        // and truncate at that boundary.
+        $sanitize_mashed_url = function ( string $url ): string {
+            if ( preg_match( '#^(https?://[^/]+)(.*)$#', $url, $parts ) ) {
+                $authority = $parts[1];
+                $path      = $parts[2];
+                // Match an embedded http(s) + w/h letter pattern signalling
+                // a concatenated second URL (no colon separator). Requires
+                // `-` separator or path-end boundary before the marker to
+                // reduce false positives (e.g. won't match 'https' appearing
+                // inside a legitimate query parameter after '=').
+                if ( preg_match( '#^(.*?)(?:-|/)?https?[whi][a-z]#', $path, $cut ) && ! empty( $cut[1] ) ) {
+                    $trimmed = rtrim( $cut[1], '-/' );
+                    // Don't collapse the path completely — if nothing useful
+                    // remains after trim, leave original alone (safer to let
+                    // downstream Pass 3 RLFKV fail the URL than to corrupt it).
+                    if ( $trimmed !== '' ) {
+                        return $authority . $trimmed;
+                    }
+                }
+            }
+            return $url;
+        };
+
         // ===== Pass 2: Strict filtering of all real external links =====
         $whitelist = $this->get_trusted_domain_whitelist();
         $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
 
-        $filter_link = function ( $url, $text ) use ( $whitelist, $site_host, $citation_pool ) {
+        $filter_link = function ( $url, $text ) use ( $whitelist, $site_host, $citation_pool, $sanitize_mashed_url ) {
+            // v1.5.206d-fix8 — repair mashed-URL corruption before any other check
+            $url  = $sanitize_mashed_url( $url );
             $host = wp_parse_url( $url, PHP_URL_HOST );
             $path = wp_parse_url( $url, PHP_URL_PATH );
 
@@ -2715,21 +2751,35 @@ final class SEOBetter {
         // strip the inner `[alt](url)` of any image whose URL isn't on the
         // whitelist, leaving a stray `!` at the start of the line. See FM-13
         // in seo-guidelines/external-links-policy.md.
+        //
+        // v1.5.206d-fix8 — callbacks now rebuild the markdown/HTML with the
+        // sanitized URL when keep=true, so mashed-URL corruption repairs
+        // actually reach the saved article body (not just influence the
+        // filter_link verdict).
         $markdown = preg_replace_callback(
             '/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/',
-            function ( $m ) use ( $filter_link ) {
-                $res = $filter_link( $m[2], $m[1] );
-                return $res['keep'] ? $m[0] : $res['text'];
+            function ( $m ) use ( $filter_link, $sanitize_mashed_url ) {
+                $sanitized_url = $sanitize_mashed_url( $m[2] );
+                $res = $filter_link( $sanitized_url, $m[1] );
+                if ( ! $res['keep'] ) {
+                    return $res['text'];
+                }
+                // Rebuild with the sanitized URL so corrections persist.
+                return '[' . $m[1] . '](' . $sanitized_url . ')';
             },
             $markdown
         );
 
         // HTML anchor tags — <a href="...">text</a>
         $markdown = preg_replace_callback(
-            '/<a\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>(.*?)<\/a>/is',
-            function ( $m ) use ( $filter_link ) {
-                $res = $filter_link( $m[1], wp_strip_all_tags( $m[2] ) );
-                return $res['keep'] ? $m[0] : $res['text'];
+            '/<a\s+([^>]*)href="(https?:\/\/[^"]+)"([^>]*)>(.*?)<\/a>/is',
+            function ( $m ) use ( $filter_link, $sanitize_mashed_url ) {
+                $sanitized_url = $sanitize_mashed_url( $m[2] );
+                $res = $filter_link( $sanitized_url, wp_strip_all_tags( $m[4] ) );
+                if ( ! $res['keep'] ) {
+                    return $res['text'];
+                }
+                return '<a ' . $m[1] . 'href="' . esc_url( $sanitized_url ) . '"' . $m[3] . '>' . $m[4] . '</a>';
             },
             $markdown
         );

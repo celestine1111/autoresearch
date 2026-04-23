@@ -16,6 +16,77 @@
 
 ---
 
+## v1.5.206d-fix8 — Localized content-type badges + mashed-URL sanitizer
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben's Arabic Riyadh listicle test (post-fix7.1) surfaced two remaining issues universal across all non-English languages:
+
+1. **Content-type badge still in English.** Every article renders a colored pill at the top (e.g. "📋 TOP LIST" for listicles, "⭐ PRODUCT REVIEW" for reviews). The labels were hardcoded English in `Content_Formatter::get_type_badge()` — 19 content types × 1 English label each. A Korean listicle showed "TOP LIST" despite the entire body being Korean. Arabic, Japanese, Russian, German, etc. all have the same issue.
+
+2. **Mangled URL slipped through Pass 2 whitelist.** In Key Takeaways and References:
+   ```
+   https://www.facebook.com/riyadhcityguide/posts/[long-arabic-slug]-httpswwwthisisriyadhco
+   ```
+   The suffix `-httpswwwthisisriyadhco` is a second research-pool URL (`thisisriyadh.co`) mashed into the first with the `://` stripped during URL encoding — an AI hallucination pattern. The resulting URL is technically valid HTTP (`https://www.facebook.com/...`) so `validate_outbound_links()` Pass 2 let it through. The URL 404s on Facebook (arbitrary slugs don't resolve there). Universal problem — any multi-URL AI concatenation produces this.
+
+### Shipped
+
+**Badge localization (universal across 15 priority languages):**
+
+- `includes/Localized_Strings.php::get_type_badge_label( $content_type, $lang )` — NEW helper. Looks up localized label from `get_badge_labels()` table.
+- `includes/Localized_Strings.php::get_badge_labels()` — NEW private method. 19 content types × 15 languages = 285 translations (en / ja / ko / zh / ru / de / fr / es / it / pt / ar / hi / nl / pl / tr). Native translations from Wikipedia category equivalents + major publisher taxonomies, not machine-translated.
+- `includes/Content_Formatter.php::get_type_badge( $content_type, $accent, $lang = 'en' )` — signature extended. Now pulls label from `Localized_Strings::get_type_badge_label()`. Icon + background + border + text colors unchanged per language. Backward-compatible: defaulting `$lang = 'en'` preserves existing behavior for any caller not threading language.
+- `includes/Content_Formatter.php::format_hybrid()` line ~614 — call site now passes `$article_lang`.
+
+**Mashed-URL sanitizer (universal — works on any language's URL content):**
+
+- `seobetter.php::validate_outbound_links()` — NEW Pass 1.5 inline closure `$sanitize_mashed_url`. Detects the concatenation pattern `/-?https?[whi][a-z]/` within a URL path (not authority) — signals a second URL mashed in with `://` stripped. Truncates at that boundary, keeps authority + valid path prefix.
+- Both markdown-link and HTML-anchor `preg_replace_callback` handlers now REWRITE the URL with the sanitized version when `keep=true`, so corrections persist to the saved article body (previously callbacks only used `$m[0]` as-is, which would have kept the corrupt URL even after filter approval).
+
+### Doc sync
+
+- `article_design.md §11` — new "Type-badge localization" subsection above the Universal UI label block.
+- `external-links-policy.md §2-3 boundary` — new Pass 1.5 subsection documenting the sanitizer with the exact Arabic example.
+- `BUILD_LOG.md` — this entry.
+
+### Safety posture
+
+- **English articles byte-identical:** `get_type_badge_label( $type, 'en' )` returns the same English labels hardcoded pre-fix8. No visual change for US/UK/AU articles.
+- **Badge translation fallback chain:** exact lang → language family (`zh-cn` → `zh`) → `en`. Unknown languages see English, same as pre-fix8. Adding a language fills gaps without code changes.
+- **URL sanitizer pattern is conservative:** requires `-?` separator or path-start before the `https?[whi]` marker, so slugs like `-https-tutorial` don't match (`t` after `http` is not in `[whi]`). Worst case for false-positive: corrupts a URL that had a legitimate `-https?[whi]` in its slug; Pass 3 RLFKV would then fail it and strip entirely. False-negative stays possible (some corruption patterns won't match the regex); Pass 3 catches those via content verification.
+- **Backward-compatible signatures:** `get_type_badge()` defaults `$lang = 'en'`, all existing callers work.
+
+### Verify
+
+```bash
+# 1. Badge helper + translation table shipped
+grep -n "get_type_badge_label\|get_badge_labels" /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php
+
+# 2. Content_Formatter uses the helper
+grep -n "get_type_badge_label\|get_type_badge.*\$article_lang" /Users/ben/Documents/autoresearch/seobetter/includes/Content_Formatter.php
+
+# 3. URL sanitizer installed
+grep -n "sanitize_mashed_url\|Pass 1.5\|v1.5.206d-fix8" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+```
+
+After re-test of Arabic Riyadh (or any non-English) listicle:
+- Badge reads `قائمة الأفضل` (Arabic) / `톱 리스트` (Korean) / `トップリスト` (Japanese) / `Топ-список` (Russian) / `Bestenliste` (German), not `TOP LIST`
+- Mashed Facebook URLs get truncated at the `-httpsw...` boundary OR killed by Pass 3 RLFKV — no more visible corrupted URLs
+
+### Verified by user
+
+UNTESTED — Ben to reinstall zip, retest Arabic Riyadh article. Expected: badge in Arabic, no `-httpswwwthisisriyadhco` suffix on any URL in the output.
+
+### Deferred to fix9 (if still needed)
+
+- **References section layout issue** ("header and image with text below references"). Ben mentioned but not yet diagnosed. Likely: author bio block rendering AFTER references which is by-design layout (bio belongs at article end), but may look out of order. Needs raw HTML inspection of published article.
+
+---
+
 ## v1.5.206d-fix7.1 — Centralize language-name table (eliminates the 11-language gap)
 
 **Date:** 2026-04-23

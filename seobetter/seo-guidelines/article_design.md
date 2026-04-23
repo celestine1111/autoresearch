@@ -673,6 +673,12 @@ Each content type affects **three layers** of the generated article:
 2. **Styled block detection** — `Content_Formatter::format_hybrid()` applies different inline styles based on heading context
 3. **Schema output** — `Schema_Generator::generate()` in `includes/Schema_Generator.php` AND `build_aioseo_schema()` in `seobetter.php` emit different `@type` values and secondary schemas
 
+### Type-badge localization (v1.5.206d-fix8)
+
+`Content_Formatter::get_type_badge( $content_type, $accent, $lang = 'en' )` now accepts the article language and pulls the localized badge label from `Localized_Strings::get_type_badge_label( $content_type, $lang )`. Previously the 19 badge labels (Product Review, Top List, Buying Guide, Comparison, Opinion, News, Interview / Q&A, Case Study, Technical Article, White Paper, Scholarly Article, Press Release, Essay, Definition, Sponsored Content, Live, FAQ, Ultimate Guide, How-To Guide) were hardcoded English so a Korean listicle showed "TOP LIST" despite the article body being Korean.
+
+Icon, background color, border color, text color — all unchanged per language. Only the label translates. Adding a new language = extend `Localized_Strings::get_badge_labels()`. Coverage: 15 priority languages (en / ja / ko / zh / ru / de / fr / es / it / pt / ar / hi / nl / pl / tr). Other languages fall back to English (badges are short visual labels; English fallback is readable).
+
 ### Universal UI label localization (v1.5.206d → v1.5.206d-fix6) — `Localized_Strings`
 
 Plugin-rendered block labels (`References` and `Key Takeaways` block headers in `Content_Formatter::format_hybrid()`, `Last Updated:` prefix in `Content_Injector::inject_freshness()`) are fetched via `Localized_Strings::get( $key, $language )` where `$language` is the article's language meta. 30+ languages pre-translated. Fallback chain: exact match → language family → English.

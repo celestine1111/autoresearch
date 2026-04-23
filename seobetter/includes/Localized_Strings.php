@@ -142,6 +142,190 @@ class Localized_Strings {
     }
 
     /**
+     * v1.5.206d-fix8 — Content-type badge label translations.
+     *
+     * Content_Formatter::get_type_badge() renders a small colored pill at the
+     * top of every article (e.g. "📋 TOP LIST" for listicles). Pre-fix8 the
+     * labels were hardcoded English; a Korean listicle got "TOP LIST" despite
+     * the entire body being Korean.
+     *
+     * Returns the localized label for the given content_type + language.
+     * Falls back to English on unknown language / unknown content_type.
+     * Empty content_type returns empty string (some types have no badge —
+     * blog_post and recipe).
+     *
+     * Translations cover the 15 priority languages matching Regional_Context:
+     * en, ja, ko, zh (zh-cn, zh-tw via family fallback), ru, de, fr, es, it,
+     * pt (pt-br via family fallback), ar, hi, nl, pl, tr. Languages outside
+     * that set fall back to English — the badge is a short visual label so
+     * English fallback is readable for any audience, though not ideal.
+     * Adding a new language = extend each badge's array.
+     */
+    public static function get_type_badge_label( string $content_type, string $lang = 'en' ): string {
+        $lang = strtolower( str_replace( '_', '-', trim( $lang ) ) );
+        $badges = self::get_badge_labels();
+        if ( ! isset( $badges[ $content_type ] ) ) {
+            return '';
+        }
+        $labels = $badges[ $content_type ];
+        if ( isset( $labels[ $lang ] ) ) {
+            return $labels[ $lang ];
+        }
+        if ( strpos( $lang, '-' ) !== false ) {
+            $base = substr( $lang, 0, strpos( $lang, '-' ) );
+            if ( isset( $labels[ $base ] ) ) {
+                return $labels[ $base ];
+            }
+        }
+        return $labels['en'] ?? '';
+    }
+
+    /**
+     * Badge-label translation table. Keyed by content_type slug (matches
+     * Content_Formatter::get_type_badge()'s $badges array keys).
+     *
+     * Each content_type has translations for the 15 priority languages;
+     * fallback chain is exact → language family → English.
+     */
+    private static function get_badge_labels(): array {
+        return [
+            'review' => [
+                'en' => 'Product Review', 'ja' => '商品レビュー', 'ko' => '제품 리뷰',
+                'zh' => '产品评测', 'ru' => 'Обзор продукта', 'de' => 'Produkt­bewertung',
+                'fr' => 'Avis produit', 'es' => 'Reseña de producto', 'it' => 'Recensione prodotto',
+                'pt' => 'Análise do produto', 'ar' => 'مراجعة المنتج', 'hi' => 'उत्पाद समीक्षा',
+                'nl' => 'Productrecensie', 'pl' => 'Recenzja produktu', 'tr' => 'Ürün İncelemesi',
+            ],
+            'comparison' => [
+                'en' => 'Comparison', 'ja' => '比較', 'ko' => '비교',
+                'zh' => '对比', 'ru' => 'Сравнение', 'de' => 'Vergleich',
+                'fr' => 'Comparatif', 'es' => 'Comparativa', 'it' => 'Confronto',
+                'pt' => 'Comparativo', 'ar' => 'مقارنة', 'hi' => 'तुलना',
+                'nl' => 'Vergelijking', 'pl' => 'Porównanie', 'tr' => 'Karşılaştırma',
+            ],
+            'buying_guide' => [
+                'en' => 'Buying Guide', 'ja' => '購入ガイド', 'ko' => '구매 가이드',
+                'zh' => '购买指南', 'ru' => 'Руководство покупателя', 'de' => 'Kaufratgeber',
+                'fr' => 'Guide d\'achat', 'es' => 'Guía de compra', 'it' => 'Guida all\'acquisto',
+                'pt' => 'Guia de compra', 'ar' => 'دليل الشراء', 'hi' => 'खरीद गाइड',
+                'nl' => 'Koopgids', 'pl' => 'Poradnik zakupowy', 'tr' => 'Satın Alma Rehberi',
+            ],
+            'news_article' => [
+                'en' => 'News', 'ja' => 'ニュース', 'ko' => '뉴스',
+                'zh' => '新闻', 'ru' => 'Новости', 'de' => 'Nachrichten',
+                'fr' => 'Actualité', 'es' => 'Noticias', 'it' => 'Notizie',
+                'pt' => 'Notícias', 'ar' => 'أخبار', 'hi' => 'समाचार',
+                'nl' => 'Nieuws', 'pl' => 'Wiadomości', 'tr' => 'Haberler',
+            ],
+            'opinion' => [
+                'en' => 'Opinion', 'ja' => '意見', 'ko' => '오피니언',
+                'zh' => '观点', 'ru' => 'Мнение', 'de' => 'Meinung',
+                'fr' => 'Opinion', 'es' => 'Opinión', 'it' => 'Opinione',
+                'pt' => 'Opinião', 'ar' => 'رأي', 'hi' => 'राय',
+                'nl' => 'Opinie', 'pl' => 'Opinia', 'tr' => 'Görüş',
+            ],
+            'interview' => [
+                'en' => 'Interview / Q&A', 'ja' => 'インタビュー', 'ko' => '인터뷰',
+                'zh' => '访谈', 'ru' => 'Интервью', 'de' => 'Interview',
+                'fr' => 'Entretien', 'es' => 'Entrevista', 'it' => 'Intervista',
+                'pt' => 'Entrevista', 'ar' => 'مقابلة', 'hi' => 'साक्षात्कार',
+                'nl' => 'Interview', 'pl' => 'Wywiad', 'tr' => 'Röportaj',
+            ],
+            'case_study' => [
+                'en' => 'Case Study', 'ja' => 'ケーススタディ', 'ko' => '사례 연구',
+                'zh' => '案例研究', 'ru' => 'Кейс', 'de' => 'Fallstudie',
+                'fr' => 'Étude de cas', 'es' => 'Estudio de caso', 'it' => 'Caso di studio',
+                'pt' => 'Estudo de caso', 'ar' => 'دراسة حالة', 'hi' => 'केस स्टडी',
+                'nl' => 'Casestudy', 'pl' => 'Studium przypadku', 'tr' => 'Vaka Çalışması',
+            ],
+            'tech_article' => [
+                'en' => 'Technical Article', 'ja' => '技術記事', 'ko' => '기술 문서',
+                'zh' => '技术文章', 'ru' => 'Техническая статья', 'de' => 'Technischer Artikel',
+                'fr' => 'Article technique', 'es' => 'Artículo técnico', 'it' => 'Articolo tecnico',
+                'pt' => 'Artigo técnico', 'ar' => 'مقال تقني', 'hi' => 'तकनीकी लेख',
+                'nl' => 'Technisch artikel', 'pl' => 'Artykuł techniczny', 'tr' => 'Teknik Makale',
+            ],
+            'white_paper' => [
+                'en' => 'White Paper / Report', 'ja' => 'ホワイトペーパー', 'ko' => '백서',
+                'zh' => '白皮书', 'ru' => 'Аналитический отчёт', 'de' => 'Whitepaper',
+                'fr' => 'Livre blanc', 'es' => 'Informe técnico', 'it' => 'White paper',
+                'pt' => 'White paper', 'ar' => 'ورقة بيضاء', 'hi' => 'श्वेत पत्र',
+                'nl' => 'Whitepaper', 'pl' => 'Raport branżowy', 'tr' => 'Beyaz Kağıt',
+            ],
+            'scholarly_article' => [
+                'en' => 'Scholarly Article', 'ja' => '学術論文', 'ko' => '학술 논문',
+                'zh' => '学术论文', 'ru' => 'Научная статья', 'de' => 'Wissenschaftlicher Artikel',
+                'fr' => 'Article académique', 'es' => 'Artículo académico', 'it' => 'Articolo accademico',
+                'pt' => 'Artigo acadêmico', 'ar' => 'مقال أكاديمي', 'hi' => 'अकादमिक लेख',
+                'nl' => 'Wetenschappelijk artikel', 'pl' => 'Artykuł naukowy', 'tr' => 'Akademik Makale',
+            ],
+            'press_release' => [
+                'en' => 'Press Release', 'ja' => 'プレスリリース', 'ko' => '보도자료',
+                'zh' => '新闻稿', 'ru' => 'Пресс-релиз', 'de' => 'Pressemitteilung',
+                'fr' => 'Communiqué de presse', 'es' => 'Nota de prensa', 'it' => 'Comunicato stampa',
+                'pt' => 'Comunicado de imprensa', 'ar' => 'بيان صحفي', 'hi' => 'प्रेस विज्ञप्ति',
+                'nl' => 'Persbericht', 'pl' => 'Komunikat prasowy', 'tr' => 'Basın Bülteni',
+            ],
+            'personal_essay' => [
+                'en' => 'Essay', 'ja' => 'エッセイ', 'ko' => '에세이',
+                'zh' => '随笔', 'ru' => 'Эссе', 'de' => 'Essay',
+                'fr' => 'Essai', 'es' => 'Ensayo', 'it' => 'Saggio',
+                'pt' => 'Ensaio', 'ar' => 'مقال شخصي', 'hi' => 'निबंध',
+                'nl' => 'Essay', 'pl' => 'Esej', 'tr' => 'Deneme',
+            ],
+            'glossary_definition' => [
+                'en' => 'Definition', 'ja' => '用語解説', 'ko' => '용어 정의',
+                'zh' => '术语定义', 'ru' => 'Определение', 'de' => 'Definition',
+                'fr' => 'Définition', 'es' => 'Definición', 'it' => 'Definizione',
+                'pt' => 'Definição', 'ar' => 'تعريف', 'hi' => 'परिभाषा',
+                'nl' => 'Definitie', 'pl' => 'Definicja', 'tr' => 'Tanım',
+            ],
+            'sponsored' => [
+                'en' => 'Sponsored Content', 'ja' => 'スポンサード記事', 'ko' => '스폰서 콘텐츠',
+                'zh' => '赞助内容', 'ru' => 'Спонсорский контент', 'de' => 'Gesponserter Inhalt',
+                'fr' => 'Contenu sponsorisé', 'es' => 'Contenido patrocinado', 'it' => 'Contenuto sponsorizzato',
+                'pt' => 'Conteúdo patrocinado', 'ar' => 'محتوى مُموَّل', 'hi' => 'प्रायोजित सामग्री',
+                'nl' => 'Gesponsorde content', 'pl' => 'Treść sponsorowana', 'tr' => 'Sponsorlu İçerik',
+            ],
+            'live_blog' => [
+                'en' => 'Live', 'ja' => 'ライブ', 'ko' => '실시간',
+                'zh' => '实时', 'ru' => 'Онлайн', 'de' => 'Live',
+                'fr' => 'En direct', 'es' => 'En vivo', 'it' => 'In diretta',
+                'pt' => 'Ao vivo', 'ar' => 'مباشر', 'hi' => 'लाइव',
+                'nl' => 'Live', 'pl' => 'Na żywo', 'tr' => 'Canlı',
+            ],
+            'faq_page' => [
+                'en' => 'FAQ', 'ja' => 'よくある質問', 'ko' => '자주 묻는 질문',
+                'zh' => '常见问题', 'ru' => 'Часто задаваемые вопросы', 'de' => 'Häufige Fragen',
+                'fr' => 'FAQ', 'es' => 'Preguntas frecuentes', 'it' => 'Domande frequenti',
+                'pt' => 'Perguntas frequentes', 'ar' => 'الأسئلة الشائعة', 'hi' => 'अक्सर पूछे जाने वाले प्रश्न',
+                'nl' => 'Veelgestelde vragen', 'pl' => 'FAQ', 'tr' => 'Sıkça Sorulan Sorular',
+            ],
+            'listicle' => [
+                'en' => 'Top List', 'ja' => 'トップリスト', 'ko' => '톱 리스트',
+                'zh' => '精选榜单', 'ru' => 'Топ-список', 'de' => 'Bestenliste',
+                'fr' => 'Top liste', 'es' => 'Top lista', 'it' => 'Classifica',
+                'pt' => 'Top lista', 'ar' => 'قائمة الأفضل', 'hi' => 'टॉप सूची',
+                'nl' => 'Top-lijst', 'pl' => 'Zestawienie', 'tr' => 'En İyiler Listesi',
+            ],
+            'pillar_guide' => [
+                'en' => 'Ultimate Guide', 'ja' => '完全ガイド', 'ko' => '완벽 가이드',
+                'zh' => '终极指南', 'ru' => 'Подробное руководство', 'de' => 'Ultimativer Leitfaden',
+                'fr' => 'Guide complet', 'es' => 'Guía completa', 'it' => 'Guida completa',
+                'pt' => 'Guia completo', 'ar' => 'الدليل الشامل', 'hi' => 'संपूर्ण गाइड',
+                'nl' => 'Complete gids', 'pl' => 'Kompletny przewodnik', 'tr' => 'Eksiksiz Rehber',
+            ],
+            'how_to' => [
+                'en' => 'How-To Guide', 'ja' => 'ハウツーガイド', 'ko' => '방법 가이드',
+                'zh' => '操作指南', 'ru' => 'Инструкция', 'de' => 'Anleitung',
+                'fr' => 'Tutoriel', 'es' => 'Guía práctica', 'it' => 'Guida pratica',
+                'pt' => 'Guia prático', 'ar' => 'دليل إرشادي', 'hi' => 'गाइड',
+                'nl' => 'Handleiding', 'pl' => 'Poradnik', 'tr' => 'Nasıl Yapılır Kılavuzu',
+            ],
+        ];
+    }
+
+    /**
      * v1.5.206d-fix7.1 — Single source of truth for BCP-47 → human-readable
      * language name. Used by `Async_Generator::get_system_prompt()`,
      * `AI_Content_Generator::generate_headlines()`, and anywhere else the
