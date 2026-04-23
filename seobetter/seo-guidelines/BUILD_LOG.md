@@ -19,7 +19,7 @@
 ## v1.5.209 — Sponsored schema compliance + §10 authoritative sync across 21 content types
 
 **Date:** 2026-04-24
-**Commit:** `[pending]`
+**Commit:** `eb94aa8`
 
 ### Why this ships
 
