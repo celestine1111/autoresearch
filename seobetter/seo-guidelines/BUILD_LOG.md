@@ -19,7 +19,7 @@
 ## v1.5.206d-fix7.1 — Centralize language-name table (eliminates the 11-language gap)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `aa836ee`
 
 ### Why this patch exists
 
