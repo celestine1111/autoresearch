@@ -19,7 +19,7 @@
 ## v1.5.206d-fix11 — 7 more canonical anchors + REQUIRED SECTIONS rule
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `aed58f9`
 
 ### Why this patch exists
 
