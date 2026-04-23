@@ -101,10 +101,44 @@ class AI_Content_Generator {
     /**
      * Generate 5 headline variations for the article.
      * Based on copywriting skill: power words, numbers, emotional triggers, curiosity gaps.
+     *
+     * v1.5.206d-fix7 — Accepts $language so non-English articles get headlines
+     * written in the article's language, not English templates wrapping a
+     * foreign-language keyword. Fixes the "How to Find 서울 최고의 카페 2026:
+     * The Ultimate Insider Guide" bug where the Korean keyword was embedded
+     * in an English headline. Every language in the system prompt's
+     * $lang_names table is supported.
      */
-    public function generate_headlines( string $keyword, string $article_text = '' ): array {
+    public function generate_headlines( string $keyword, string $article_text = '', string $language = 'en' ): array {
+        $lang_names = [
+            'en' => 'English', 'fr' => 'French', 'de' => 'German', 'es' => 'Spanish',
+            'pt' => 'Portuguese', 'it' => 'Italian', 'nl' => 'Dutch', 'sv' => 'Swedish',
+            'no' => 'Norwegian', 'da' => 'Danish', 'fi' => 'Finnish', 'pl' => 'Polish',
+            'cs' => 'Czech', 'sk' => 'Slovak', 'hu' => 'Hungarian', 'ro' => 'Romanian',
+            'bg' => 'Bulgarian', 'hr' => 'Croatian', 'sr' => 'Serbian', 'sl' => 'Slovenian',
+            'uk' => 'Ukrainian', 'ru' => 'Russian', 'tr' => 'Turkish', 'el' => 'Greek',
+            'ja' => 'Japanese', 'ko' => 'Korean', 'zh' => 'Chinese (Simplified)',
+            'ar' => 'Arabic', 'he' => 'Hebrew', 'hi' => 'Hindi', 'bn' => 'Bengali',
+            'th' => 'Thai', 'vi' => 'Vietnamese', 'id' => 'Indonesian', 'ms' => 'Malay',
+        ];
+        $lang_name  = $lang_names[ $language ] ?? 'English';
+        $is_english = $language === 'en';
+
         $context = $article_text ? "\n\nArticle summary: " . substr( $article_text, 0, 300 ) : '';
-        $prompt = "Generate exactly 5 headline variations for an article about: \"{$keyword}\"{$context}
+
+        // v1.5.206d-fix7 — universal language clause. For English articles the
+        // clause is empty (byte-identical to pre-fix7). For non-English, it
+        // overrides the English example formulas and forbids mixing English
+        // with the target language. The AI still gets five varied formulas
+        // (number, how-to, question, power-words, current-year) but renders
+        // them IN the target language using the canonical translations the
+        // system prompt already injected (via canonical_translation_block).
+        $lang_clause = '';
+        if ( ! $is_english ) {
+            $lang_clause = "\n\nLANGUAGE: Write all 5 headlines ENTIRELY in {$lang_name}. Every word except the exact keyword phrase must be in {$lang_name}. Do NOT wrap a {$lang_name} keyword in English connector phrases like \"How to Find X: The Ultimate Guide\" — a {$lang_name} headline uses {$lang_name} connector phrases (e.g. Korean would use '{$lang_name}-appropriate wording' rather than 'How to Find X'). Use the five formulas below but express each formula in {$lang_name}.";
+        }
+
+        $prompt = "Generate exactly 5 headline variations for an article about: \"{$keyword}\"{$context}{$lang_clause}
 
 CRITICAL RULE: Every single headline MUST contain the exact phrase \"{$keyword}\" — no exceptions. If the keyword is multiple words, include ALL words.
 
@@ -113,15 +147,19 @@ Rules:
 2. The keyword \"{$keyword}\" must appear in ALL 5 headlines
 3. Front-load the keyword (put it in the first half of the headline) in at least 3 of 5
 4. Use different headline formulas:
-   - #1: Number + \"{$keyword}\" + Benefit (e.g., \"7 Best {$keyword} for [Outcome] in 2026\")
-   - #2: How-to + \"{$keyword}\" (e.g., \"How to Choose {$keyword}: Expert Guide\")
-   - #3: Question + \"{$keyword}\" (e.g., \"What Are the Best {$keyword}? Guide\")
-   - #4: \"{$keyword}\" + Power words (e.g., \"{$keyword}: Essential Guide You Need\")
-   - #5: \"{$keyword}\" + Current year (e.g., \"{$keyword} in 2026: What You Must Know\")
+   - #1: Number + \"{$keyword}\" + Benefit
+   - #2: How-to + \"{$keyword}\"
+   - #3: Question + \"{$keyword}\"
+   - #4: \"{$keyword}\" + Power words
+   - #5: \"{$keyword}\" + Current year
 
 Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
 
-        $result = $this->send_ai_request( $prompt, 'You are an expert copywriter who writes headlines that get clicks. Return only the numbered list.', [ 'max_tokens' => 400 ] );
+        $system_hint = $is_english
+            ? 'You are an expert copywriter who writes headlines that get clicks. Return only the numbered list.'
+            : "You are an expert copywriter who writes headlines that get clicks. Write every headline in {$lang_name}, never in English (except the exact keyword phrase itself if the user's keyword is in English). Return only the numbered list.";
+
+        $result = $this->send_ai_request( $prompt, $system_hint, [ 'max_tokens' => 400 ] );
 
         if ( ! $result['success'] ) {
             return [];
@@ -140,13 +178,25 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
             }
         }
 
-        // If filtering removed too many, add keyword-prefixed fallbacks
+        // If filtering removed too many, add fallback headlines.
+        // v1.5.206d-fix7 — for non-English articles the fallbacks are keyword-only
+        // (or keyword + current year), since there's no safe way to synthesize a
+        // full native-language "Complete Guide" / "Expert Review" phrase without
+        // a per-language template table. Keyword-only titles are common in
+        // Korean/Japanese/Chinese editorial style anyway.
         if ( count( $headlines ) < 3 ) {
-            $fallbacks = [
-                ucwords( $keyword ) . ': Complete Guide for ' . wp_date( 'Y' ),
-                'Best ' . ucwords( $keyword ) . ' — Expert Review ' . wp_date( 'Y' ),
-                'How to Choose ' . ucwords( $keyword ) . ': Buyer\'s Guide',
-            ];
+            if ( $is_english ) {
+                $fallbacks = [
+                    ucwords( $keyword ) . ': Complete Guide for ' . wp_date( 'Y' ),
+                    'Best ' . ucwords( $keyword ) . ' — Expert Review ' . wp_date( 'Y' ),
+                    'How to Choose ' . ucwords( $keyword ) . ': Buyer\'s Guide',
+                ];
+            } else {
+                $fallbacks = [
+                    $keyword . ' ' . wp_date( 'Y' ),
+                    $keyword,
+                ];
+            }
             foreach ( $fallbacks as $fb ) {
                 if ( count( $headlines ) >= 5 ) break;
                 $headlines[] = $fb;

@@ -7,12 +7,75 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d-fix6)
+> **Last updated:** 2026-04-23 (v1.5.206d-fix7)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d-fix7 — Language-aware headline generation + absolute-rule against English H2s in non-English articles
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben tested fix6 on a Korean listicle. Schema/labels/canonical-translations all worked, but three residual leaks showed up:
+
+1. **H1 title mixed Korean/English:** `"How to Find 서울 최고의 카페 2026: The Ultimate Insider Guide"` — the Korean keyword wrapped in an English headline template.
+2. **AI-invented H2s stayed English or mixed:** `"Why Trust Our Picks for 서울 최고의 카페 2026?"` and `"Seongsu's Best: 카페 오월"` — descriptive headings the AI invented outside the section list.
+3. **References section preview broken** — some links appear outside the styled purple box in the preview (but renders correctly after save/publish).
+
+Root causes:
+
+- **#1:** `AI_Content_Generator::generate_headlines()` hardcodes an English prompt, English formula examples (`"How to Choose {keyword}: Expert Guide"`), and English fallbacks (`"Complete Guide"`, `"Expert Review"`, `"Buyer's Guide"`). No `$language` parameter. Every non-English article got an English headline wrapping the native-language keyword.
+- **#2:** Fix6's canonical translations table covers 11 named anchors. But AI-invented descriptive H2s ("Why Trust Our Picks", "Seongsu's Best", etc.) don't match any canonical entry. The LANGUAGE rule said "translate headings" but wasn't strict enough — AI partially complied, left some English.
+- **#3:** Preview vs published rendering mismatch — deferred to fix8 after infrastructure investigation.
+
+### Shipped (addresses #1 and #2 universally across all 30+ supported languages)
+
+- **`includes/AI_Content_Generator.php::generate_headlines( $keyword, $article_text = '', $language = 'en' )`** — signature extended with `$language`. Logic:
+  - English articles: byte-identical to pre-fix7 (`$is_english = true` short-circuits the new language clause and keeps existing fallbacks).
+  - Non-English: prompt appends `LANGUAGE: Write all 5 headlines ENTIRELY in {lang_name}...`. Removes the English formula examples (they leaked the connector phrases). System message reinforces: *"Write every headline in {lang_name}, never in English."*
+  - Fallbacks for non-English become `{$keyword} {$year}` and `{$keyword}` alone (keyword-only is standard in Korean/Japanese/Chinese editorial style; no safe way to synthesize native-language "Complete Guide" phrase without a per-language template table).
+- **`includes/Async_Generator.php` line ~492** — call site now passes `$options['language'] ?? 'en'` to `generate_headlines()`.
+- **`includes/Async_Generator.php::get_system_prompt()` LANGUAGE rule** — appended absolute-rule paragraph: *"NO ENGLISH HEADINGS ANYWHERE — Every H2/H3 in a {lang_name} article, INCLUDING headings you invent (e.g. 'Why Trust Our Picks', 'Seongsu's Best'), MUST be written ENTIRELY in {lang_name}. No mixed-language. No English connectors before a {lang_name} proper noun. If you cannot translate a heading, omit it. A {lang_name} article with ONE English-dominant heading is a FAIL."* Fires automatically for every non-English article on every generation step (outline, section, headline) because it's part of the system prompt.
+
+### Doc sync
+
+- `seo-guidelines/plugin_functionality_wordpress.md §2.2` — added bullets for the NO ENGLISH HEADINGS rule and language-aware headline generation.
+- BUILD_LOG v1.5.206d-fix7 entry (this one).
+
+### Safety posture
+
+- **English articles byte-identical:** `$language === 'en'` short-circuits both changes — `generate_headlines` runs the exact pre-fix7 prompt + fallbacks; the LANGUAGE rule's new paragraph only appears when `$language !== 'en'`.
+- **Non-English articles strictly stricter:** a prompt that previously said "translate headings" now says "translate OR omit — mixed-language is a FAIL". AI compliance for H2 translation should rise sharply.
+- **Backward-compatible signature:** `generate_headlines( $keyword, $article_text = '', $language = 'en' )` — every caller that doesn't pass language still works (defaults to English, current behavior preserved).
+- **Graceful fallback:** if AI returns 0 headlines (malformed response), non-English gets keyword-only titles (readable in any language) instead of English "Complete Guide" fallbacks.
+
+### Verify
+
+```bash
+# 1. generate_headlines has language parameter
+grep -n "function generate_headlines" /Users/ben/Documents/autoresearch/seobetter/includes/AI_Content_Generator.php
+
+# 2. Call site threads language
+grep -n "generate_headlines.*options.*language" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+
+# 3. NO ENGLISH HEADINGS rule present in prompt
+grep -n "NO ENGLISH HEADINGS ANYWHERE" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+```
+
+### Verified by user
+
+UNTESTED — Ben to reinstall zip, hard-refresh, regen Korean (or any non-English) listicle. Expected: H1 entirely in Korean (no "How to Find" / "Ultimate Guide" prefix), every H2 entirely in Korean (no "Seongsu's Best:" prefix), GEO score at or above fix6 baseline of 67. Three of the four Korean-test fix5-era bugs (H1 English, AI-invented H2s English, mixed-language H2s) resolved.
+
+### Deferred to v1.5.206d-fix8
+
+- **Issue #3 — Preview-only References rendering mismatch.** Only affects the admin preview panel, not the published article. Investigation needed: does the preview render the AI-written References section before `Content_Formatter::format_hybrid()` runs, OR does `append_references_section()` produce differently-structured output in preview vs save? Needs HTML dump from Ben's next retest to diagnose.
 
 ---
 

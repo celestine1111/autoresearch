@@ -489,7 +489,10 @@ class Async_Generator {
             } elseif ( $step === 'headlines' ) {
                 $step_label = 'Generating headlines...';
                 $article_text = self::assemble_markdown( $job );
-                $headlines = $generator->generate_headlines( $keyword, wp_strip_all_tags( $article_text ) );
+                // v1.5.206d-fix7 — thread language so non-English articles get
+                // headlines in the target language, not English wrappers around
+                // a foreign-language keyword.
+                $headlines = $generator->generate_headlines( $keyword, wp_strip_all_tags( $article_text ), $options['language'] ?? 'en' );
                 $job['results']['headlines'] = $headlines;
 
             } elseif ( $step === 'meta' ) {
@@ -2311,7 +2314,7 @@ class Async_Generator {
         // names + addresses for Lucignano gelaterie), the AI could drift
         // into Italian for Key Takeaways or FAQ sections despite the user
         // picking English. Explicit per-article language rule prevents drift.
-        $lang_rule = "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every H1, H2, H3, paragraph, bullet list, FAQ question, FAQ answer, Key Takeaways item, and reference description must be in {$lang_name}. Research data may contain terms or place names in other languages — translate or describe them in {$lang_name}, do NOT copy them in the source language. The primary keyword may be in any language but the article body text must be {$lang_name}. This rule is non-negotiable.\n\nSECTION HEADING TRANSLATION (v1.5.206d): The section list below (Key Takeaways, Introduction, How We Chose, Pros and Cons, FAQ, References, Conclusion, What You Will Need, Common Problems, Methodology, Findings, Abstract, Executive Summary, About, Overview, Quick Overview Table, etc.) is given in English as the structural contract. When you output the article, translate each H2/H3 section heading into {$lang_name} while preserving its structural role. Never output an English heading inside a non-English article.";
+        $lang_rule = "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every H1, H2, H3, paragraph, bullet list, FAQ question, FAQ answer, Key Takeaways item, and reference description must be in {$lang_name}. Research data may contain terms or place names in other languages — translate or describe them in {$lang_name}, do NOT copy them in the source language. The primary keyword may be in any language but the article body text must be {$lang_name}. This rule is non-negotiable.\n\nSECTION HEADING TRANSLATION (v1.5.206d): The section list below (Key Takeaways, Introduction, How We Chose, Pros and Cons, FAQ, References, Conclusion, What You Will Need, Common Problems, Methodology, Findings, Abstract, Executive Summary, About, Overview, Quick Overview Table, etc.) is given in English as the structural contract. When you output the article, translate each H2/H3 section heading into {$lang_name} while preserving its structural role. Never output an English heading inside a non-English article.\n\nNO ENGLISH HEADINGS ANYWHERE (v1.5.206d-fix7 — ABSOLUTE RULE): Every H2 and H3 in a {$lang_name} article — including headings you invent that are NOT in the section list above (e.g. descriptive headings like \"Why Trust Our Picks\", \"Seongsu's Best\", \"Who Should Buy This\", \"The Bottom Line\", \"Insider Tips\") — MUST be written ENTIRELY in {$lang_name}. No mixed-language headings. No English connector phrases before a {$lang_name} proper noun (e.g. never \"Seongsu's Best: 카페 오월\" — write the whole heading in {$lang_name}). No English openers like \"How to\", \"Why\", \"What\", \"Best\" in a non-English article — use their {$lang_name} equivalents. If you cannot translate a heading, omit it entirely and merge its content into an adjacent section. A {$lang_name} article with ONE English-dominant heading is a FAIL.";
 
         // v1.5.206d-fix6 — Canonical translations table.
         // Empty for English. For non-English, appends the exact translations

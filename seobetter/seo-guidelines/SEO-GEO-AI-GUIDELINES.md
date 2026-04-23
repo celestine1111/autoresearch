@@ -75,6 +75,10 @@ When the user selects a non-Western target country (CN / JP / KR / RU / DE / FR 
 
 **Canonical translations block (v1.5.206d-fix6):** Additionally, for every non-English article, `Localized_Strings::canonical_translation_block( $language )` appends a table of EXACT canonical translations the plugin detects (Key Takeaways, References, Last Updated, FAQ, Introduction, Conclusion, Tip, Note, Warning, Pros, Cons). This prevents AI-invented synonyms (e.g. Korean `중요 포인트` instead of canonical `핵심 요약`) from breaking `Content_Formatter` detection and `GEO_Analyzer` BLUF/Freshness/References scoring. Language-agnostic by design — works for any language in the `Localized_Strings` table. Empty for English articles.
 
+**NO ENGLISH HEADINGS absolute rule (v1.5.206d-fix7):** The LANGUAGE clause for non-English articles now appends an explicit ban on English H2/H3 headings — INCLUDING descriptive headings the AI invents outside the section list (e.g. "Why Trust Our Picks", "Seongsu's Best: 카페 오월", "The Bottom Line"). The rule instructs the AI: *if you cannot translate a heading, omit it entirely*. Fires automatically on every generation step via the system prompt. Complements fix6's canonical-translations table (which covers the 11 named anchors); fix7 covers the long-tail of invented headings the table doesn't enumerate. Neither affects the §3.1A Genre Override table or the §10 Content Type → Schema Mapping — both remain language-agnostic structural contracts.
+
+**Language-aware headline generation (v1.5.206d-fix7):** `AI_Content_Generator::generate_headlines()` now accepts `$language` and produces headlines in the target language for non-English articles. Previously English templates ("How to Choose X: Expert Guide") wrapped a non-English keyword, producing mixed-language titles like "How to Find 서울 최고의 카페 2026: The Ultimate Insider Guide". Does not affect schema mapping or genre overrides.
+
 ### Google AI Overviews (45% of Google searches)
 - Strong correlation with traditional rankings
 - Cited sources = +132% visibility boost
