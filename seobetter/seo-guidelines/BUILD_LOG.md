@@ -16,6 +16,95 @@
 
 ---
 
+## v1.5.206d-fix9 — Section-name canonical translations + anti-bilingual colon rule + freshness sanitizer
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben's Japanese miso-soup how-to test surfaced three universal non-English leaks:
+
+1. **`Last Updated: April 2026`** rendered English inside the article body — the AI ignored fix6's canonical translation `最終更新日` and wrote English despite the instruction.
+2. **`Why This Matters: なぜ重要か`** — H2 heading with English anchor + Japanese colon-separated translation. The AI "compromised" between fix7's NO ENGLISH HEADINGS rule and the prose template's English section anchor.
+3. **`Common Problems: よくある失敗とその解決法`** — same colon-bilingual pattern.
+
+Additionally, Ben flagged `Written by` in the byline — that's a WordPress theme string, not a plugin string. Out of scope.
+
+Root cause of #1-3: the fix6 canonical-translations table only covered 11 high-level anchors (Key Takeaways, References, FAQ, Introduction, Conclusion, Tip, Note, Warning, Pros, Cons, Last Updated). The 21 prose templates in `Async_Generator::get_prose_template()` collectively use **82 unique section names**. When the AI sees "Why This Matters" / "Common Problems" / "What You Will Need" in the template but only knows canonical translations for the 11 covered anchors, it compromises with the colon-bilingual pattern — technically satisfies both "translate to target language" AND "preserve English structural anchor".
+
+### Shipped (3 layers of universal enforcement)
+
+**Layer 1 — Expand the canonical translations table by 17 keys (Localized_Strings):**
+
+- 17 new section-name keys × 15 priority languages = 255 new native translations:
+  - `why_this_matters`, `what_you_will_need`, `common_problems`, `what_to_look_for`
+  - `methodology`, `findings`, `executive_summary`, `abstract`
+  - `prerequisites`, `further_reading`, `examples`, `related_terms`
+  - `short_bio`, `overall_verdict`, `analysis`, `recommendations`, `how_we_chose`
+- `canonical_translation_block()` helper extended to include all 28 total keys (11 v1.5.206d-fix6 + 17 new). AI sees a larger authoritative translation table in the system prompt and uses the localized terms verbatim instead of compromising.
+
+**Layer 2 — Anti-bilingual colon rule (Async_Generator system prompt):**
+
+The LANGUAGE clause for non-English articles now has an explicit absolute rule:
+
+> NO COLON-SEPARATED BILINGUAL HEADINGS — Do NOT render a section heading as "English Phrase: {lang} translation" (example of what NOT to do: "Why This Matters: なぜ重要か"). That is a FAIL. Pick the {lang} phrase ALONE — drop the English anchor entirely. The plugin does NOT require the English anchor to be visible in the output.
+
+And a freshness-line rule:
+
+> FRESHNESS LINE TRANSLATION — If you include a "Last Updated: [Month Year]" line under the H1, use the canonical {lang} translation from the table above. Never output the literal English "Last Updated: April 2026" inside a non-English article.
+
+**Layer 3 — Defensive post-generation sanitizer (Async_Generator::assemble_final):**
+
+Even with the stronger prompt, AI compliance isn't 100%. Post-generation regex replace in `assemble_final()` (runs just before format_hybrid on every article) scans for English `Last Updated: Month Year` pattern and swaps:
+
+- `Last Updated` → `Localized_Strings::get( 'last_updated', $language )` — e.g. `最終更新日` for Japanese
+- `April 2026` → `Localized_Strings::month_year( $language, $timestamp )` — e.g. `2026年4月` for Japanese
+
+Parses the English month + year via lookup table, builds a proper timestamp, feeds through `month_year()` which already has language-aware formatting (CJK `YYYY年MM月` pattern, Cyrillic/Latin month names per language). Preserves surrounding markdown emphasis wrappers (`*...*`, `_..._`) so styling survives the swap.
+
+No-op for English articles (`$language === 'en'` short-circuit).
+
+### Doc sync
+
+- BUILD_LOG v1.5.206d-fix9 entry (this one).
+
+### Safety posture
+
+- **English articles byte-identical.** Every new code path early-returns on `$language === 'en'`.
+- **Backward-compatible additions only.** Canonical translations table grows by 17 keys, existing 11 untouched. Prompt rule is an appended clause, not a replacement.
+- **Defensive-in-depth.** If AI ignores canonical table (Layer 1), the anti-bilingual rule catches it (Layer 2). If AI still leaks English `Last Updated`, the post-gen regex catches it (Layer 3). Three independent layers; need all three to fail.
+- **Theme-owned strings acknowledged.** The "Written by" byline belongs to the WordPress theme's author template, not the plugin. Out of scope — users can patch their theme's `__()` calls or switch to a locale-aware theme.
+
+### Verify
+
+```bash
+# 1. 17 new canonical keys shipped
+grep -c "'why_this_matters' =>\|'common_problems' =>\|'what_you_will_need' =>\|'methodology' =>\|'abstract' =>\|'findings' =>\|'prerequisites' =>\|'further_reading' =>\|'examples' =>\|'related_terms' =>\|'short_bio' =>\|'overall_verdict' =>\|'analysis' =>\|'recommendations' =>\|'how_we_chose' =>\|'what_to_look_for' =>\|'executive_summary' =>" /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php
+# Expect: 17
+
+# 2. canonical_translation_block covers 28 total keys
+grep -c "=>" /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php | head -1
+
+# 3. Anti-bilingual colon rule in prompt
+grep -n "NO COLON-SEPARATED BILINGUAL HEADINGS" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+
+# 4. Post-gen Last Updated sanitizer
+grep -n "Defensive Last Updated sanitizer" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+```
+
+After re-running the Japanese miso-soup how-to article (or any non-English article):
+- `Last Updated: April 2026` → `最終更新日: 2026年4月` ✅ (Japanese) or language equivalent
+- `Why This Matters: なぜ重要か` → `なぜ重要か` ✅ (colon-bilingual compromise gone)
+- `Common Problems: よくある失敗...` → `よくある問題` ✅
+- `Written by` — still English; theme-owned string, documented here as out-of-scope
+
+### Verified by user
+
+UNTESTED — Ben to reinstall zip, retest Japanese (or any non-English) how-to.
+
+---
+
 ## v1.5.206d-fix8 — Localized content-type badges + mashed-URL sanitizer
 
 **Date:** 2026-04-23

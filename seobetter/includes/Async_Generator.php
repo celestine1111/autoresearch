@@ -2041,6 +2041,42 @@ class Async_Generator {
             $markdown = Content_Injector::strip_unlinked_quotes( $markdown );
         }
 
+        // v1.5.206d-fix9 — Defensive Last Updated sanitizer. Even with fix6's
+        // canonical translations table + fix9's stronger prompt, the AI still
+        // occasionally writes the English "Last Updated: April 2026" inside
+        // non-English articles. Universal post-generation regex replace swaps
+        // the English freshness line for the localized equivalent.
+        // No-op for English articles ($language === 'en' → early return).
+        // Detects both "Last Updated: Month Year" and optional leading em/strong.
+        $article_language = $options['language'] ?? 'en';
+        if ( $article_language !== 'en' && preg_match( '/last\s*updated/i', $markdown ) ) {
+            $localized_lu = Localized_Strings::get( 'last_updated', $article_language );
+            // Try to preserve the date — parse the English month + year and build
+            // the localized month-year string via Localized_Strings::month_year().
+            $english_months = [
+                'january' => 1, 'february' => 2, 'march' => 3, 'april' => 4,
+                'may' => 5, 'june' => 6, 'july' => 7, 'august' => 8,
+                'september' => 9, 'october' => 10, 'november' => 11, 'december' => 12,
+            ];
+            $markdown = preg_replace_callback(
+                '/(\*{0,2}_?_?)last\s*updated(_?_?\*{0,2})\s*:?\s*(\*?_?_?)([a-z]+)\s+(\d{4})(_?_?\*?)/i',
+                function ( $m ) use ( $localized_lu, $english_months, $article_language ) {
+                    $month_name = strtolower( $m[4] );
+                    $year       = (int) $m[5];
+                    if ( ! isset( $english_months[ $month_name ] ) ) {
+                        // Not a recognized English month — leave original alone
+                        return $m[0];
+                    }
+                    $month_num = $english_months[ $month_name ];
+                    $ts        = mktime( 0, 0, 0, $month_num, 1, $year );
+                    $localized_date = Localized_Strings::month_year( $article_language, $ts );
+                    // Preserve surrounding markdown emphasis wrappers (asterisks/underscores)
+                    return $m[1] . $localized_lu . $m[2] . ': ' . $m[3] . $localized_date . $m[6];
+                },
+                $markdown
+            );
+        }
+
         // v1.5.156 — Strip API/junk links from preview. Previously validate_outbound_links
         // only ran at save time, so API endpoints (earthquake.usgs.gov, api.census.gov)
         // showed in the preview. Now strip them at generation time too.
@@ -2304,7 +2340,7 @@ class Async_Generator {
         // names + addresses for Lucignano gelaterie), the AI could drift
         // into Italian for Key Takeaways or FAQ sections despite the user
         // picking English. Explicit per-article language rule prevents drift.
-        $lang_rule = "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every H1, H2, H3, paragraph, bullet list, FAQ question, FAQ answer, Key Takeaways item, and reference description must be in {$lang_name}. Research data may contain terms or place names in other languages — translate or describe them in {$lang_name}, do NOT copy them in the source language. The primary keyword may be in any language but the article body text must be {$lang_name}. This rule is non-negotiable.\n\nSECTION HEADING TRANSLATION (v1.5.206d): The section list below (Key Takeaways, Introduction, How We Chose, Pros and Cons, FAQ, References, Conclusion, What You Will Need, Common Problems, Methodology, Findings, Abstract, Executive Summary, About, Overview, Quick Overview Table, etc.) is given in English as the structural contract. When you output the article, translate each H2/H3 section heading into {$lang_name} while preserving its structural role. Never output an English heading inside a non-English article.\n\nNO ENGLISH HEADINGS ANYWHERE (v1.5.206d-fix7 — ABSOLUTE RULE): Every H2 and H3 in a {$lang_name} article — including headings you invent that are NOT in the section list above (e.g. descriptive headings like \"Why Trust Our Picks\", \"Seongsu's Best\", \"Who Should Buy This\", \"The Bottom Line\", \"Insider Tips\") — MUST be written ENTIRELY in {$lang_name}. No mixed-language headings. No English connector phrases before a {$lang_name} proper noun (e.g. never \"Seongsu's Best: 카페 오월\" — write the whole heading in {$lang_name}). No English openers like \"How to\", \"Why\", \"What\", \"Best\" in a non-English article — use their {$lang_name} equivalents. If you cannot translate a heading, omit it entirely and merge its content into an adjacent section. A {$lang_name} article with ONE English-dominant heading is a FAIL.";
+        $lang_rule = "\n\nLANGUAGE: Write the ENTIRE article in {$lang_name}. Every H1, H2, H3, paragraph, bullet list, FAQ question, FAQ answer, Key Takeaways item, and reference description must be in {$lang_name}. Research data may contain terms or place names in other languages — translate or describe them in {$lang_name}, do NOT copy them in the source language. The primary keyword may be in any language but the article body text must be {$lang_name}. This rule is non-negotiable.\n\nSECTION HEADING TRANSLATION (v1.5.206d): The section list below (Key Takeaways, Introduction, How We Chose, Pros and Cons, FAQ, References, Conclusion, What You Will Need, Common Problems, Methodology, Findings, Abstract, Executive Summary, About, Overview, Quick Overview Table, etc.) is given in English as the structural contract. When you output the article, translate each H2/H3 section heading into {$lang_name} while preserving its structural role. Never output an English heading inside a non-English article.\n\nNO ENGLISH HEADINGS ANYWHERE (v1.5.206d-fix7 — ABSOLUTE RULE): Every H2 and H3 in a {$lang_name} article — including headings you invent that are NOT in the section list above (e.g. descriptive headings like \"Why Trust Our Picks\", \"Seongsu's Best\", \"Who Should Buy This\", \"The Bottom Line\", \"Insider Tips\") — MUST be written ENTIRELY in {$lang_name}. No mixed-language headings. No English connector phrases before a {$lang_name} proper noun (e.g. never \"Seongsu's Best: 카페 오월\" — write the whole heading in {$lang_name}). No English openers like \"How to\", \"Why\", \"What\", \"Best\" in a non-English article — use their {$lang_name} equivalents. If you cannot translate a heading, omit it entirely and merge its content into an adjacent section. A {$lang_name} article with ONE English-dominant heading is a FAIL.\n\nNO COLON-SEPARATED BILINGUAL HEADINGS (v1.5.206d-fix9): Do NOT render a section heading as \"English Phrase: {$lang_name} translation\" (example of what NOT to do: \"Why This Matters: なぜ重要か\" or \"Common Problems: よくある問題\" or \"How We Chose: 選定基準\"). That is a FAIL. Pick the {$lang_name} phrase ALONE — drop the English anchor entirely. The plugin does NOT require the English anchor to be visible in the output; it translates the section list for its own record-keeping. Use ONLY the canonical {$lang_name} translation from the table above.\n\nFRESHNESS LINE TRANSLATION (v1.5.206d-fix9): If you include a \"Last Updated: [Month Year]\" line under the H1, use the canonical {$lang_name} translation for \"Last Updated\" from the table above. The \"Month Year\" portion should ALSO be in {$lang_name} format (e.g. Japanese \"2026年4月\", Korean \"2026년 4월\", German \"April 2026\", Russian \"апрель 2026\"). Never output the literal English \"Last Updated: April 2026\" inside a non-English article.";
 
         // v1.5.206d-fix6 — Canonical translations table.
         // Empty for English. For non-English, appends the exact translations
