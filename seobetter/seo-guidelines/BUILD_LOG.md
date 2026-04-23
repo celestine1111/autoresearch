@@ -16,6 +16,70 @@
 
 ---
 
+## v1.5.206d-fix12 — Unicode-aware Serper tokenization (fixes English-only LSI for Hindi/Cyrillic/CJK)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben's Hindi auto-suggest test (`सबसे अच्छा इलेक्ट्रिक स्कूटर 2026`) returned:
+- Secondary: 6 Hindi keywords ✅ (Google Suggest path works after fix10)
+- Audience: Hindi prose ✅ (LLM path works)
+- LSI: `['electric', 'scooter', 'scooters', 'india', 'motovlogs', 'talk', 'educational', 'bestelectricscooterinindia']` ❌ all English
+
+Indian SERP results for tech/product queries are English-dominant, but the Hindi snippets still contain Devanagari words. Backend probe revealed Serper LSI extractor was using ASCII-only regex `/[^a-z0-9]+/` to tokenize titles + snippets — every Devanagari character treated as separator → only Latin words survived → LSI English-only.
+
+Same bug affects every non-Latin-script language when SERP results contain mixed scripts: Russian (Cyrillic + Latin brand names), Japanese (CJK + romaji), Korean (Hangul + English brand names), Chinese (Chinese + English), Arabic (Arabic + Latin), Thai (Thai + Latin), etc.
+
+### Shipped
+
+`cloud-api/api/topic-research.js::fetchSerperKeywords()` — two regex tokenization patterns updated:
+
+- **Line ~515** (secondary keyword extraction from titles): `/[^a-z0-9]+/` → `/[^\p{L}\p{N}]+/u`
+- **Line ~541** (LSI extraction from snippets): same swap
+
+`\p{L}` matches any Unicode letter (Latin, Devanagari, Cyrillic, CJK ideographs, Hangul, Arabic, Hebrew, Thai, Greek, etc.). `\p{N}` matches any Unicode number digit. The `u` flag enables Unicode property escapes (ES2018, supported in Node.js 10+ which Vercel runs).
+
+### Impact across languages
+
+| Language | Pre-fix12 LSI | Post-fix12 LSI |
+|---|---|---|
+| Hindi (Devanagari) | English-only | Hindi words preserved |
+| Russian (Cyrillic) | English-only when SERP mixed | Cyrillic words preserved |
+| Japanese (CJK) | English-only when SERP mixed | Japanese words preserved |
+| Korean (Hangul) | English-only when SERP mixed | Korean words preserved |
+| Chinese (Han ideographs) | English-only when SERP mixed | Chinese words preserved |
+| Arabic | English-only when SERP mixed | Arabic words preserved |
+| Thai | English-only when SERP mixed | Thai words preserved |
+| Greek | Mostly worked (Greek extended Latin) | Same / better |
+| English | Same as before | Same as before |
+
+### Safety posture
+
+- **English articles byte-identical.** Latin a-z + 0-9 are subsets of `\p{L}` + `\p{N}` — every English word that tokenized before still tokenizes now identically.
+- **Backward-compatible.** No new dependencies; just regex character class change.
+- **Backend-only — Vercel auto-deploys.** Plugin zip unchanged.
+
+### Verify
+
+After Vercel redeploys:
+
+```bash
+curl -sS -X POST "https://seobetter.vercel.app/api/topic-research" \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"सबसे अच्छा इलेक्ट्रिक स्कूटर 2026","country":"IN","language":"hi","site_url":"test"}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('lsi:', d.get('keywords',{}).get('lsi',[]))"
+```
+
+Expect Hindi (Devanagari) words mixed in, not pure English.
+
+### Verified by user
+
+UNTESTED — pending Vercel auto-deploy + Ben re-run of Hindi auto-suggest. No plugin reinstall needed.
+
+---
+
 ## v1.5.206d-fix11 — 7 more canonical anchors + REQUIRED SECTIONS rule
 
 **Date:** 2026-04-23

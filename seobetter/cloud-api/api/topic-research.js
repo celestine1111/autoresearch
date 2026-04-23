@@ -511,8 +511,15 @@ async function fetchSerperKeywords(keyword, gl = '', lang = 'en') {
       // Remove site name suffix ("... - Website Name" or "| Website Name")
       const cleaned = title.replace(/\s*[-|]\s*[^-|]+$/, '').trim();
       if (cleaned === kwLower || cleaned.length < 8) continue;
-      // Extract 2-4 word phrases from the title that aren't the keyword itself
-      const words = cleaned.split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w));
+      // Extract 2-4 word phrases from the title that aren't the keyword itself.
+      // v1.5.206d-fix12 — Unicode-aware tokenization. Previously split on
+      // /[^a-z0-9]+/ which treated every Devanagari, Cyrillic, CJK, Arabic,
+      // Hangul, Thai character as a separator → only Latin words extracted →
+      // non-English LSI/secondary came back English-only when SERP results
+      // happened to be in the article's target language. Now uses
+      // /[^\p{L}\p{N}]+/u (any character not a Letter or Number is a
+      // separator) so words in any script are preserved.
+      const words = cleaned.split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 3 && !STOP.has(w));
       // Build 2-3 word ngrams
       for (let i = 0; i < words.length - 1; i++) {
         const bigram = words[i] + ' ' + words[i+1];
@@ -538,7 +545,8 @@ async function fetchSerperKeywords(keyword, gl = '', lang = 'en') {
     const lsi = [];
     const seenLsi = new Set();
     const allSnippetText = results.map(r => (r.snippet || '').toLowerCase()).join(' ');
-    const snippetWords = allSnippetText.split(/[^a-z0-9]+/).filter(w => w.length >= 4);
+    // v1.5.206d-fix12 — Unicode-aware split (see line ~518 comment).
+    const snippetWords = allSnippetText.split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 4);
     // Count word frequency across all snippets
     const freq = {};
     for (const w of snippetWords) {
