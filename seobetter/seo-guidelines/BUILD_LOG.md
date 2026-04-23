@@ -19,7 +19,7 @@
 ## v1.5.206d-fix6 — Universal language-aware detection + canonical translations prompt injection
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `10a83c9`
 
 ### Why this patch exists
 
