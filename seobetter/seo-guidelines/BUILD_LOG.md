@@ -19,7 +19,7 @@
 ## v1.5.206d-fix15 — CJK/Thai tail-substring variations for Google Suggest
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `7761b02`
 
 ### Why this patch exists
 
