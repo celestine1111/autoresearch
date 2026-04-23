@@ -1446,7 +1446,31 @@ Before writing, analyze the top 10 Google results for your target keyword:
 
 **Rule:** Your article must cover everything competitors cover PLUS unique angles they miss. The AI generates the outline from this research via the Async_Generator outline step.
 
-**Plugin implementation:** The Vercel research endpoint (`/api/research`) pulls real-time data from Reddit, HN, Wikipedia, Google Trends, and 70+ category-specific APIs. This data replaces competitor analysis by providing real statistics, quotes, and sources competitors may not have.
+**Plugin implementation (v1.5.208 — Competitive Content Brief):**
+
+Two complementary sources now feed Phase 1:
+
+1. **Research aggregator** — [`cloud-api/api/research.js`](../cloud-api/api/research.js) bundles 9 always-on sources (Reddit, HN, Wikipedia, Google Trends, Bluesky, Mastodon, Dev.to, Lemmy, DDG) plus 70+ category/country APIs plus Sonar-backed (Serper+Firecrawl) statistics, quotes, citations, places. Provides real factual grounding.
+
+2. **Competitive Content Brief (v1.5.208, BM25)** — [`cloud-api/api/content-brief.js`](../cloud-api/api/content-brief.js) + [`cloud-api/api/_bm25_util.js`](../cloud-api/api/_bm25_util.js) + inline `fetchContentBrief()` in research.js. Runs in parallel:
+    - Serper `/search` for top 5-10 organic results (uses `gl={country}` + `hl={language}` per Layer 6)
+    - Firecrawl scrape (Jina Reader fallback) of each URL's main content
+    - **BM25 corpus analysis** (k1=1.5, b=0.75) across scraped bodies → top 20-50 most distinctive concepts by BM25 score
+    - Common H2 heading patterns (patterns used by ≥2 competitors)
+    - People-Also-Ask questions from Serper
+    - Competitor word-count distribution (avg / min / max / median)
+    - Multilingual: tokenizer handles Latin / Cyrillic / Greek / Arabic / Hebrew / Hindi / Thai / CJK (2-char + 3-char sliding n-grams for CJK/Thai, Unicode `\p{L}\p{N}` for others). Per-language stopword lists for the 29 plugin-supported locales.
+    - Free: top 5 scraped, 20 terms returned, 7-day cache. Pro: top 10 scraped, 50 terms, 24-hour cache.
+
+**Anti-stuffing guard (§1 alignment):** The brief feeds outline + section prompts as OPTIONAL concept hints with explicit instruction: "cover concepts naturally where they fit; skip if they don't; do NOT target a density; keyword stuffing = −9%." See `Async_Generator::format_content_brief_for_prompt()`.
+
+**How it enters each §28 phase:**
+- **§28.1 Topic Selection** — the brief IS this phase's implementation (was unimplemented before v1.5.208)
+- **§28.4 Research-First Writing** — `format_content_brief_for_prompt()` prepends a `COMPETITIVE CONCEPT COVERAGE` block to the $trends_raw research text, so every section prompt sees the top 20 BM25 terms + word-count guidance
+- **`generate_outline()`** — reads `$options['content_brief']['h2_patterns']` and appends competitor H2 patterns as OPTIONAL hints (the REQUIRED SECTIONS structural contract from §3.1/§3.1A stays authoritative)
+- **§28.5 Quality Gate** — `GEO_Analyzer::check_term_coverage()` counts how many of the top-20 BM25 terms appear in the rendered HTML. Warn-but-allow: low coverage does NOT block publication (reasons: §6 rubric already tuned; coverage is a signal to regenerate, not rewrite; preserves anti-stuffing principle)
+
+**UI surface:** [`admin/views/content-generator.php`](../admin/views/content-generator.php) renders a read-only "Competitive Content Brief" collapsible card in the results panel showing the top 20 distinctive concepts, common H2 patterns, PAA questions, competitor word-count stats, and the term-coverage score from Phase 5. No action buttons — AI rewrite was removed; users who want coverage to change regenerate the article.
 
 ### 28.2 Step 2: Keyword Research Protocol
 - **For new/low-authority sites:** Target keywords with Keyword Difficulty (KD) < 20
@@ -1491,15 +1515,39 @@ Never generate an article in one prompt. The plugin's Async_Generator builds art
 Before publishing, every article passes through:
 
 1. **GEO Analyzer scoring** (Section 6) — must score 60+ to publish
-2. **SEO plugin checks** — AIOSEO/Yoast/RankMath auto-populated with focus keyword, meta title, meta description, OG tags
-3. **Schema auto-generation** — Article + FAQPage schema in JSON-LD
-4. **Multi-engine compatibility** — JSON-LD schema works universally across:
+2. **CORE-EEAT veto check** (§15B) — any VETO item blocks publication regardless of GEO score
+3. **Term Coverage check (v1.5.208)** — `GEO_Analyzer::check_term_coverage()` counts how many of the top-20 BM25 terms from the Competitive Content Brief (§28.1) appear in the rendered HTML. **Warn-but-allow — does NOT block publication.** Reasons: (a) §6 rubric weights are already tuned and stacking a second blocker risks over-rejecting, (b) low coverage means the pre-gen brief didn't steer the AI well — fix is regenerate (not rewrite; AI-rewrite buttons removed), (c) presence is a minimum, not a quality guarantee.
+4. **SEO plugin checks** — AIOSEO/Yoast/RankMath/SEOPress auto-populated with focus keyword, meta title, meta description, OG tags, Twitter card tags (v1.5.206d-fix19)
+5. **Schema auto-generation** — per-type primary + secondary schemas in JSON-LD
+6. **Multi-engine compatibility** — JSON-LD schema works universally across:
    - Google (AI Overviews, Featured Snippets, Rich Results)
    - Bing (Copilot, Rich Results)
    - Yandex (Structured Snippets)
    - Baidu (Structured Data)
    - AI platforms (ChatGPT, Perplexity, Claude, Gemini)
-5. **Image optimization** — Pexels images with keyword alt text, 1200px+ for Discover eligibility
+7. **Image optimization** — Pexels/Picsum/AI-generated featured image with keyword alt text, 1200px+ for Discover eligibility
+
+**Report shape** (stored in `_seobetter_framework_report` post_meta, Phase 5):
+```
+{
+  passed: bool,
+  score: int 0-100 (GEO score),
+  grade: string ("A+", "A", "B", "C", "D", "F"),
+  veto_hit: bool,
+  vetoes: array,
+  core_eeat: int 0-100 (CORE-EEAT normalized score),
+  min_score: 60,
+  term_coverage: {       // v1.5.208
+    score: int 0-100,
+    matched: int,
+    total: int,
+    missing_terms: string[],
+    detail: string
+  },
+  reason: string,
+  suggestions: array
+}
+```
 
 **FAQ from the framework:**
 - *How long should content be?* Long enough to cover everything, short enough to keep attention. Value matters, not word count — but empirically, 2000+ words ranks better for competitive keywords.

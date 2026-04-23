@@ -7,12 +7,89 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.207)
+> **Last updated:** 2026-04-23 (v1.5.208)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.208 — Competitive Content Brief (BM25) — implements §28.1 Topic Selection
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this ships
+
+SEO-GEO-AI-GUIDELINES.md §28.1 "Topic Selection via Competitor Analysis" was documented-but-unimplemented. The guideline verbatim said *"analyze the top 10 Google results for your target keyword, count headings used by competitors, map subtopics, identify content gaps"* but the plugin only pulled research from Reddit/HN/Wiki/category APIs — never scraped top-10 SERP or extracted the terms competitors actually use.
+
+This ships the missing piece: a BM25-based Competitive Content Brief that runs in parallel with the existing research aggregator and feeds the AI at outline + section generation time. All benefits bake in AT GENERATION; no AI rewrite buttons anywhere (per Ben's constraint).
+
+### Added
+
+- **`cloud-api/api/_bm25_util.js`** (NEW, 200+ lines) — Pure-JS (zero-dep) shared utility:
+  - `tokenize(text, lang)` — multilingual tokenizer. Latin/Cyrillic/Greek/Arabic/Hebrew/Hindi/Vietnamese/Indonesian/Malay use Unicode `\p{L}\p{N}+` word boundaries; CJK + Thai use 2-char + 3-char sliding n-grams. Per-language stopword lists inlined for all 29 plugin-supported locales.
+  - `bm25Corpus(documents, lang, opts)` — Okapi BM25 with k1=1.5, b=0.75. Returns terms ranked by corpus-wide distinctiveness, filtered to terms appearing in ≥2 documents (removes noise).
+  - `commonH2Patterns(htmls)` — extracts H2 headings used by ≥2 competitors.
+  - `wordCount(text, lang)` — CJK-aware char/2 heuristic matching `GEO_Analyzer::count_words_lang()`.
+  - Verify: `grep -n 'export function bm25Corpus\|export function tokenize' seobetter/cloud-api/api/_bm25_util.js`
+
+- **`cloud-api/api/content-brief.js`** (NEW) — Standalone Vercel endpoint. POST `/api/content-brief` with `{ keyword, country, language, tier }` returns `{ terms, h2_patterns, paa_questions, word_count, urls, stats }`. Pipeline: Serper `/search` (top 5 Free / 10 Pro with `gl=country` + `hl=language`) → Firecrawl scrape (Jina Reader fallback) → BM25 corpus → H2 pattern + PAA extraction. In-memory cache, 7d Free / 24h Pro.
+  - Verify: `grep -n 'export default async function handler' seobetter/cloud-api/api/content-brief.js`
+
+- **`fetchContentBrief()` inline helper in `research.js`** — Same algorithm as the standalone endpoint, called in parallel with the existing `Promise.all` bundle so the main `/api/research` response now includes `content_brief` without a second HTTP round-trip.
+  - Verify: `grep -n 'async function fetchContentBrief\|content_brief' seobetter/cloud-api/api/research.js`
+
+- **`Async_Generator::format_content_brief_for_prompt()`** — new static helper that formats the brief into a `COMPETITIVE CONCEPT COVERAGE` text block prepended to `$trends_raw`, so every section generation prompt sees the top 20 BM25 terms + word-count guidance + anti-stuffing instructions.
+  - Verify: `grep -n 'format_content_brief_for_prompt' seobetter/includes/Async_Generator.php`
+
+- **`GEO_Analyzer::check_term_coverage()`** — NEW public method. Counts how many of the top 20 BM25 terms from the brief appear in the rendered HTML. Returns `{ score, matched, total, missing_terms, detail }`. **REPORTING-ONLY — does NOT contribute to the §6 14-check rubric.** Reasons documented inline: rubric weights already tuned, preserves anti-stuffing per §1, §28.5 quality gate is the correct surface for cross-cutting signals.
+  - Verify: `grep -n 'function check_term_coverage' seobetter/includes/GEO_Analyzer.php`
+
+- **`Content_Ranking_Framework::quality_gate()` + `::phase_quality_gate()`** — signature now accepts `$content_brief`. Calls `check_term_coverage()` and includes the result in the Phase 5 report as `term_coverage: { score, matched, total, missing_terms, detail }`. **WARN-BUT-ALLOW** per product decision — low coverage does NOT block publication.
+  - Verify: `grep -n 'term_coverage\|check_term_coverage' seobetter/includes/Content_Ranking_Framework.php`
+
+### Changed
+
+- **`research.js` parallel fetch** — `fetchContentBriefPromise` now part of the existing `Promise.all` bundle alongside `freeSearches` + `catPromises`. Non-fatal: brief failure logs a warning and the article still generates with the existing research data.
+
+- **`Async_Generator` pipeline** — after `Trend_Researcher::research()` returns, `$research['content_brief']` is:
+  1. Stashed in `$job['results']['content_brief']` (flows to frontend UI)
+  2. Stashed in `$job['options']['content_brief']` (flows to outline + quality gate)
+  3. Formatted via `format_content_brief_for_prompt()` and prepended to `$trends_raw` (flows into every section prompt)
+
+- **`generate_outline()`** — reads `$options['content_brief']['h2_patterns']` and appends a `COMPETITOR H2 PATTERNS` block to the outline prompt as OPTIONAL hints. REQUIRED SECTIONS from §3.1/§3.1A stays authoritative.
+
+- **`admin/views/content-generator.php::renderResult()`** — new read-only `<details>` collapsible "Competitive Content Brief" card renders after the content preview. Shows: Term Coverage pill (from Phase 5 report), Competitor Word Count, missing concepts list, top 20 BM25 concept pills, common H2 patterns, PAA questions, BM25 k1/b/scrape-count footer. **No action buttons — AI rewrite removed entirely.**
+
+- **`_seobetterDraft` client-side state** — now includes `content_brief` so it persists across re-renders.
+
+### NOT added (per product decisions)
+
+- ❌ No AI-rewrite button for missing terms. AI-rewrite was removed from the plugin for good; if coverage is low, user regenerates (existing flow) or edits manually.
+- ❌ No change to the §6 GEO Scoring 14-check rubric. Term Coverage is a §28.5 Quality Gate input, NOT a scored rubric check. Protects anti-stuffing principle (§1 Princeton -9%).
+- ❌ No blocking on low term coverage at §28.5. Warn-but-allow — see decision rationale in SEO-GEO-AI-GUIDELINES.md §28.5.
+- ❌ No "Preview brief" button — brief runs automatically on every research call (decision 1).
+
+### Cross-doc sync (4-doc hook)
+
+- [SEO-GEO-AI-GUIDELINES.md §28.1](/Users/ben/Documents/autoresearch/seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md) — rewrote "Plugin implementation" paragraph to document the BM25 Competitive Content Brief as the §28.1 implementation; added anti-stuffing guard reference; listed the UI surface.
+- [SEO-GEO-AI-GUIDELINES.md §28.5](/Users/ben/Documents/autoresearch/seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md) — added Term Coverage step 3 (warn-but-allow) and a report-shape example showing the new `term_coverage` field.
+- [plugin_functionality_wordpress.md §1.2B + §2.1](/Users/ben/Documents/autoresearch/seobetter/seo-guidelines/plugin_functionality_wordpress.md) — new §1.2B documents the BM25 pipeline table + multilingual tokenizer + Free/Pro split + env vars. §2.1 generation-steps table updated to show brief data flowing into Trends → Outline → Sections → Assemble with explicit anti-stuffing note.
+- [plugin_UX.md §3.5B](/Users/ben/Documents/autoresearch/seobetter/seo-guidelines/plugin_UX.md) — new §3.5B fully specs the read-only Competitive Content Brief card including contents, no-action-button rationale, and data sources.
+
+### Verified by user
+
+- **UNTESTED** — Ben to verify: (a) brief card renders after article generation, (b) term coverage pill shows a score, (c) missing concepts list populates for articles where coverage < 80, (d) CJK/Cyrillic/Arabic articles produce non-empty BM25 terms (tokenizer multilingual path), (e) Phase 5 framework report includes `term_coverage` field on a saved post.
+
+### Research sources used in design
+
+- [Wikipedia — Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25) (algorithm + parameters)
+- [Superlinked VectorHub — Hybrid Search & Reranking](https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking) (91% recall@10 hybrid data for LLM retrieval)
+- [Search Engine Land — Content scoring tools first gate](https://searchengineland.com/content-scoring-tools-work-but-only-for-the-first-gate-in-googles-pipeline-469871)
+- Princeton GEO study — §1 of SEO-GEO-AI-GUIDELINES.md (-9% keyword stuffing)
 
 ---
 

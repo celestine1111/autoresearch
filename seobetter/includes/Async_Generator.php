@@ -189,6 +189,26 @@ class Async_Generator {
                 // Prevents AI from writing about "cited 0 times" or academic paper titles.
                 $trends_raw = $research['for_prompt'] ?? '';
                 $trends_raw = preg_replace( '/[^\n]*(?:cited \d+ times|Crossref,?\s*\d{4}|doi\.org\/|Government Gazette|Annual Report \d{4})[^\n]*\n?/i', '', $trends_raw );
+
+                // v1.5.208 — Competitive Content Brief (BM25 over top-N SERP).
+                // Implements SEO-GEO-AI-GUIDELINES.md §28.1 "Topic Selection via
+                // Competitor Analysis". Stashed for: (a) frontend read-only
+                // Competitive Brief card, (b) generate_outline() H2 hints,
+                // (c) generate_section() prompts as must-cover concepts,
+                // (d) Content_Ranking_Framework phase 5 term-coverage report.
+                // Anti-stuffing guard per §1 (-9% boost): brief is presented
+                // as "concepts competitors cover" with explicit instruction to
+                // weave naturally, never to hit a density target.
+                $content_brief = $research['content_brief'] ?? null;
+                $job['results']['content_brief'] = $content_brief;
+                $job['options']['content_brief'] = $content_brief;
+                if ( is_array( $content_brief ) && ! empty( $content_brief['terms'] ) ) {
+                    $brief_text = self::format_content_brief_for_prompt( $content_brief );
+                    if ( $brief_text !== '' ) {
+                        $trends_raw = $brief_text . "\n\n" . $trends_raw;
+                    }
+                }
+
                 $job['results']['trends'] = $trends_raw;
                 $job['results']['trend_source'] = $research['source'] ?? 'unknown';
 
@@ -583,6 +603,48 @@ class Async_Generator {
      * Get tone-specific writing guidance so the AI actually changes voice.
      */
     /**
+     * v1.5.208 — Format the Competitive Content Brief (BM25 over top SERP)
+     * into a text block the AI reads at section-generation time. The block
+     * is PREPENDED to $trends_raw so it shows up above the research data in
+     * every section prompt.
+     *
+     * Anti-stuffing guard (per SEO-GEO-AI-GUIDELINES.md §1 which documents
+     * keyword stuffing as -9% visibility): the block explicitly instructs
+     * the AI to weave concepts naturally, never target a density, and skip
+     * terms that don't fit the section's topic. We return "concept coverage"
+     * guidance, not a stuffing target.
+     */
+    private static function format_content_brief_for_prompt( array $brief ): string {
+        if ( empty( $brief['terms'] ) ) return '';
+
+        // Only top 20 terms regardless of free/pro; AI can only handle so many
+        // without losing coherence. More terms = more stuffing risk.
+        $top_terms = array_slice( $brief['terms'], 0, 20 );
+        $term_lines = array_map( function ( $t ) {
+            return '- ' . $t['term'] . ' (BM25 ' . $t['score'] . ', in ' . $t['df'] . ' competitors)';
+        }, $top_terms );
+
+        $block  = "COMPETITIVE CONCEPT COVERAGE (BM25 analysis of top " . (int) ( $brief['eligible_count'] ?? 0 ) . " competing Google results):\n";
+        $block .= "\n";
+        $block .= "The following concepts appear across competitors ranking for this keyword. Your article should COVER these concepts naturally where they fit the section you are writing. Rules:\n";
+        $block .= "- Cover each concept ONCE if the section topic allows it; do NOT repeat concepts just to hit a count.\n";
+        $block .= "- Do NOT force unrelated concepts into a section where they don't belong. A concept that doesn't fit gets dropped.\n";
+        $block .= "- Do NOT target a density, word-count, or frequency. Per Princeton GEO research (§1), keyword stuffing REDUCES AI visibility by 9%. Weave concepts into normal prose.\n";
+        $block .= "- Use synonyms, plurals, related phrasing — the list is conceptual, not verbatim. An article that paraphrases these concepts in good prose beats one that lists them literally.\n";
+        $block .= "\n";
+        $block .= "Concepts (top 20, ranked by BM25 distinctiveness):\n";
+        $block .= implode( "\n", $term_lines ) . "\n";
+
+        // Average competitor word count as guidance
+        $avg = (int) ( $brief['word_count']['avg'] ?? 0 );
+        if ( $avg >= 500 ) {
+            $block .= "\nCOMPETITOR WORD COUNT: top " . (int) ( $brief['eligible_count'] ?? 0 ) . " results average " . $avg . " words (range " . (int) ( $brief['word_count']['min'] ?? 0 ) . "-" . (int) ( $brief['word_count']['max'] ?? 0 ) . "). Match or slightly exceed this for topical depth, without padding — quality over length.\n";
+        }
+
+        return $block;
+    }
+
+    /**
      * v1.5.124 — RECIPE-ONLY domain list. Completely separate from get_authority_domains().
      * Only used when content_type === 'recipe' during Tavily recipe search.
      * Never affects other article types. Contains recipe-specific sites per country
@@ -938,7 +1000,23 @@ class Async_Generator {
                 ? "- INCLUDE ONE H2 titled exactly \"Quick Comparison Table\" (or \"At a Glance\" for comparison articles). This section will contain a real markdown comparison table — it is REQUIRED for this content type to meet GEO scoring.\n"
                 : '';
 
-            $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "{$country_context}\n\nRequirements:\n"
+            // v1.5.208 — Competitor H2 pattern hints from BM25 content brief.
+            // Implements SEO-GEO-AI-GUIDELINES.md §28.1 "Count headings used
+            // by competitors → map subtopics → identify gaps". Presented as
+            // optional hints so the REQUIRED SECTIONS structural contract
+            // (§3.1 / §3.1A) stays authoritative. The AI may pick 1-2 strong
+            // competitor patterns to weave into the required skeleton.
+            $brief_for_outline = '';
+            $cb = $options['content_brief'] ?? null;
+            if ( is_array( $cb ) && ! empty( $cb['h2_patterns'] ) ) {
+                $top_h2s = array_slice( $cb['h2_patterns'], 0, 8 );
+                $h2_lines = array_map( function ( $h ) {
+                    return '- ' . $h['text'] . ' (' . (int) $h['count'] . ' competitors used this)';
+                }, $top_h2s );
+                $brief_for_outline = "\n\nCOMPETITOR H2 PATTERNS (seen in top Google results — use as OPTIONAL hints, the REQUIRED SECTIONS above are mandatory):\n" . implode( "\n", $h2_lines ) . "\n";
+            }
+
+            $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}{$brief_for_outline}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "{$country_context}\n\nRequirements:\n"
                 . "- Follow the REQUIRED SECTIONS structure above — use those as your H2 headings\n"
                 . "- Adapt the section names to fit the specific keyword naturally\n"
                 . "- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. SEO plugins check this — headings without the keyword get flagged.\n"
@@ -2189,8 +2267,11 @@ class Async_Generator {
         $score = $analyzer->analyze( $html, $keyword, $options['content_type'] ?? '', $options['language'] ?? 'en', $options['country'] ?? '' );
 
         // 5-Part Framework (§28) Phase 5 — Quality Gate on the assembled article
+        // v1.5.208 — pass the Competitive Content Brief so Phase 5 computes the
+        // term-coverage report (§28.1 implementation). Warn-but-allow: low
+        // coverage does NOT block publication.
         $framework = new Content_Ranking_Framework();
-        $quality_gate = $framework->quality_gate( $html, $keyword, $options['content_type'] ?? '' );
+        $quality_gate = $framework->quality_gate( $html, $keyword, $options['content_type'] ?? '', $options['content_brief'] ?? null );
 
         // v1.5.26 — merge any Places_Validator warnings into the score suggestions
         // so the Analyze & Improve panel surfaces hallucination strips as high-

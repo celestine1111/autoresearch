@@ -1263,4 +1263,75 @@ class GEO_Analyzer {
 
         return $suggestions;
     }
+
+    /**
+     * v1.5.208 — Term Coverage check (Competitive Content Brief, BM25-based).
+     *
+     * Counts how many of the top BM25 terms from the Competitive Content
+     * Brief (see SEO-GEO-AI-GUIDELINES.md §28.1) appear in the article.
+     *
+     * IMPORTANT — this check is REPORTING-ONLY and does NOT contribute to
+     * the §6 14-check GEO scoring rubric. Reasons:
+     *   (1) The §6 rubric weights are already tuned + published; changing
+     *       them would destabilize scores on every article already saved.
+     *   (2) This check is fed by the Content_Ranking_Framework phase 5
+     *       quality-gate report (§28.5) which is ALREADY how new
+     *       cross-cutting quality signals are surfaced.
+     *   (3) Per §1, keyword-coverage as a RUBRIC weight would risk
+     *       incentivizing stuffing (-9% visibility). Keeping it as a gate
+     *       rather than a score avoids this.
+     *
+     * Decision documented in SEO-GEO-AI-GUIDELINES.md §28.5 update.
+     *
+     * @param string $content Rendered HTML (main article body).
+     * @param array|null $brief Content-brief payload from /api/research (keyed
+     *                          by content_brief on the results payload).
+     * @return array { score: int 0-100, matched: int, total: int, missing_terms: string[], detail: string }
+     */
+    public function check_term_coverage( string $content, ?array $brief ): array {
+        if ( ! is_array( $brief ) || empty( $brief['terms'] ) ) {
+            return [
+                'score'         => 0,
+                'matched'       => 0,
+                'total'         => 0,
+                'missing_terms' => [],
+                'detail'        => 'No competitive brief available (Serper/Firecrawl unavailable or zero SERP results scraped).',
+            ];
+        }
+
+        // Lowercase plain-text haystack for case-insensitive substring match.
+        // Uses mb_strtolower for CJK/Cyrillic/Greek safety.
+        $haystack = mb_strtolower( wp_strip_all_tags( $content ) );
+
+        // Only score against the top 20 most-distinctive terms. The brief
+        // itself may return up to 50 for Pro — we score against a consistent
+        // top-20 slice so Free/Pro articles score on the same scale.
+        $top_terms = array_slice( $brief['terms'], 0, 20 );
+        $matched   = [];
+        $missing   = [];
+        foreach ( $top_terms as $entry ) {
+            $term = isset( $entry['term'] ) ? mb_strtolower( (string) $entry['term'] ) : '';
+            if ( $term === '' ) continue;
+            if ( mb_strpos( $haystack, $term ) !== false ) {
+                $matched[] = $term;
+            } else {
+                $missing[] = $term;
+            }
+        }
+
+        $total = count( $top_terms );
+        $count_matched = count( $matched );
+        $score = $total > 0 ? (int) round( ( $count_matched / $total ) * 100 ) : 0;
+
+        return [
+            'score'         => $score,
+            'matched'       => $count_matched,
+            'total'         => $total,
+            'missing_terms' => array_slice( $missing, 0, 10 ),
+            'detail'        => sprintf(
+                '%d of %d competitor-distinctive concepts present (%d%%).',
+                $count_matched, $total, $score
+            ),
+        ];
+    }
 }

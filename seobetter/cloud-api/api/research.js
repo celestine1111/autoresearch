@@ -9,12 +9,21 @@
  * Category APIs pull real data from free public APIs based on the article's
  * domain (finance, health, sports, crypto, etc.) for better citations.
  *
+ * v1.5.208: Now also returns a `content_brief` payload — BM25 ranking of
+ * distinctive terms across the top 5-10 organic Google results for the
+ * keyword (Serper SERP + Firecrawl/Jina scrape). Implements §28.1 of
+ * SEO-GEO-AI-GUIDELINES.md (Topic Selection via Competitor Analysis).
+ *
  * Returns structured data with REAL verifiable sources and URLs
  * that get embedded as outbound links in the article References section.
  */
 
+import { bm25Corpus, commonH2Patterns, wordCount } from './_bm25_util.js';
+
 const rateLimitStore = new Map();
 const RATE_LIMIT = 10;
+const CONTENT_BRIEF_CACHE = new Map();
+const CONTENT_BRIEF_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -207,9 +216,20 @@ export default async function handler(req, res) {
     // v1.5.136 — Use allSettled so one crashing source can't kill the whole endpoint.
     // Previously Promise.all — any single API returning HTML instead of JSON would
     // crash everything, causing 0 citations/quotes/stats in every article.
-    const [coreSettled, catSettled] = await Promise.all([
+    // v1.5.208 — also run the Competitive Content Brief in parallel. Implements
+    // SEO-GEO-AI-GUIDELINES.md §28.1 (Topic Selection via Competitor Analysis).
+    // Scrapes top 5-10 SERP, computes BM25 distinctive terms + H2 patterns +
+    // PAA + word-count stats. Data becomes `content_brief` on the response and
+    // is consumed by Async_Generator at outline + section prompt time.
+    const contentBriefPromise = fetchContentBrief(keyword, country, req.body?.language || 'en', req.body?.tier || 'free').catch(e => {
+      console.error('content-brief failed (non-fatal):', e?.message || e);
+      return null;
+    });
+
+    const [coreSettled, catSettled, contentBrief] = await Promise.all([
       Promise.allSettled(freeSearches),
       Promise.allSettled(catPromises),
+      contentBriefPromise,
     ]);
 
     const coreResults = coreSettled.map(r => r.status === 'fulfilled' ? r.value : null);
@@ -241,6 +261,14 @@ export default async function handler(req, res) {
     const tavilyQuotes = tavilyData?.quotes || [];
 
     const result = buildResearchResult(keyword, redditData, hnData, wikiData, trendsData, braveData, categoryData, domain, ddgData, socialData, placesData, sonarResearchData, tavilyQuotes, tavilyData);
+
+    // v1.5.208 — Attach the Competitive Content Brief (BM25 over top-N SERP)
+    // alongside the existing research bundle. Implements §28.1 of the
+    // SEO-GEO-AI-GUIDELINES. Non-fatal: brief failure leaves the field null
+    // and the article still generates with the existing research data.
+    if (contentBrief) {
+      result.content_brief = contentBrief;
+    }
 
     return res.status(200).json(result);
   } catch (err) {
@@ -4064,4 +4092,161 @@ function buildResearchResult(keyword, reddit, hn, wiki, trends, brave, categoryD
 
     searched_at: now.toISOString(),
   };
+}
+
+// ============================================================
+// COMPETITIVE CONTENT BRIEF (v1.5.208)
+// ============================================================
+
+/**
+ * Fetch the Competitive Content Brief — BM25 corpus over top-N Google
+ * organic results for the keyword, plus common H2 patterns, PAA questions,
+ * and competitor word-count distribution.
+ *
+ * Implements SEO-GEO-AI-GUIDELINES.md §28.1 "Topic Selection via
+ * Competitor Analysis". The output is consumed by Async_Generator at
+ * outline + section-prompt time to ensure the article covers everything
+ * competitors cover (per §28.1) without keyword-stuffing (§1, -9% boost).
+ *
+ * Free tier: top 5 scraped, 20 BM25 terms returned, 7-day cache.
+ * Pro tier:  top 10 scraped, 50 BM25 terms returned, 24-hour cache.
+ *
+ * Non-fatal: any failure returns null and the article still generates
+ * with the existing research data.
+ */
+async function fetchContentBrief(keyword, country = '', language = 'en', tier = 'free') {
+  if (!keyword) return null;
+
+  const isPro = tier === 'pro';
+  const topN = isPro ? 10 : 5;
+  const maxTerms = isPro ? 50 : 20;
+  const cacheTTL = isPro ? 24 * 60 * 60 * 1000 : CONTENT_BRIEF_CACHE_TTL_MS;
+
+  const cacheKey = `${keyword.toLowerCase().trim()}|${country}|${language}|${topN}`;
+  const cached = CONTENT_BRIEF_CACHE.get(cacheKey);
+  if (cached && (Date.now() - cached.t) < cacheTTL) {
+    return { ...cached.data, cached: true };
+  }
+
+  const serperKey = process.env.SERPER_API_KEY || '';
+  if (!serperKey) {
+    console.warn('content-brief: SERPER_API_KEY missing — skipping');
+    return null;
+  }
+
+  // 1. Serper SERP fetch
+  const serperBody = { q: keyword, num: topN };
+  if (country) serperBody.gl = String(country).toLowerCase();
+  if (language) serperBody.hl = String(language).toLowerCase().split('-')[0];
+
+  let serperJson;
+  try {
+    const resp = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: { 'X-API-KEY': serperKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(serperBody),
+    });
+    if (!resp.ok) {
+      console.warn(`content-brief: Serper ${resp.status}`);
+      return null;
+    }
+    serperJson = await resp.json();
+  } catch (e) {
+    console.warn('content-brief: Serper exception', e?.message);
+    return null;
+  }
+
+  const organic = Array.isArray(serperJson.organic) ? serperJson.organic.slice(0, topN) : [];
+  const paa = (Array.isArray(serperJson.peopleAlsoAsk) ? serperJson.peopleAlsoAsk : [])
+    .map(q => q.question || q)
+    .filter(q => typeof q === 'string' && q.length > 5)
+    .slice(0, 8);
+
+  if (organic.length === 0) return null;
+
+  // 2. Scrape in parallel — Firecrawl primary, Jina Reader fallback
+  const firecrawlKey = process.env.FIRECRAWL_API_KEY || '';
+  const urls = organic.map(o => o.link).filter(Boolean);
+
+  const scrapeOne = async (url) => {
+    try {
+      if (firecrawlKey) {
+        const r = await fetch('https://api.firecrawl.dev/v1/scrape', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, formats: ['markdown', 'html'], onlyMainContent: true, timeout: 12000 }),
+        });
+        if (r.ok) {
+          const j = await r.json();
+          return {
+            url,
+            text: j?.data?.markdown || j?.data?.content || '',
+            html: j?.data?.html || '',
+            source: 'firecrawl',
+          };
+        }
+      }
+      // Jina Reader fallback (free, no auth)
+      const jr = await fetch(`https://r.jina.ai/${url}`, {
+        headers: { 'X-Return-Format': 'markdown' },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (jr.ok) {
+        const text = await jr.text();
+        return { url, text, html: '', source: 'jina' };
+      }
+    } catch (e) { /* swallow per-doc; continue with what we got */ }
+    return { url, text: '', html: '', error: 'scrape_failed' };
+  };
+
+  const settled = await Promise.allSettled(urls.map(scrapeOne));
+  const docs = settled
+    .map(r => r.status === 'fulfilled' ? r.value : null)
+    .filter(d => d && d.text && d.text.length > 300);
+
+  if (docs.length === 0) return null;
+
+  // 3. BM25 corpus
+  const bm25 = bm25Corpus(
+    docs.map(d => d.text),
+    language,
+    { k1: 1.5, b: 0.75, maxTerms }
+  );
+
+  // 4. H2 patterns
+  const h2 = commonH2Patterns(docs.map(d => d.html || ''));
+
+  // 5. Word count stats
+  const wcs = docs.map(d => wordCount(d.text, language)).filter(n => n > 100);
+  const sorted = [...wcs].sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+  const avg = wcs.length ? Math.round(wcs.reduce((a, b) => a + b, 0) / wcs.length) : 0;
+
+  const out = {
+    keyword, country, language,
+    eligible_count: docs.length,
+    urls: docs.map(d => ({ url: d.url, source: d.source })),
+    terms: bm25.terms,
+    h2_patterns: h2,
+    paa_questions: paa,
+    word_count: { avg, min: sorted[0] || 0, max: sorted[sorted.length - 1] || 0, median },
+    stats: {
+      scraped: docs.length,
+      serp_returned: organic.length,
+      avg_doc_length: bm25.avgDocLength,
+      unique_terms: bm25.stats.uniqueTerms,
+      k1: bm25.stats.k1, b: bm25.stats.b,
+      tier: isPro ? 'pro' : 'free',
+    },
+    cached: false,
+    generated_at: new Date().toISOString(),
+  };
+
+  CONTENT_BRIEF_CACHE.set(cacheKey, { t: Date.now(), data: out });
+  if (CONTENT_BRIEF_CACHE.size > 1000) {
+    const firstKey = CONTENT_BRIEF_CACHE.keys().next().value;
+    CONTENT_BRIEF_CACHE.delete(firstKey);
+  }
+
+  return out;
 }

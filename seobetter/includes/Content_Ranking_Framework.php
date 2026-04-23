@@ -73,7 +73,8 @@ class Content_Ranking_Framework {
             $report['phases'][5] = $this->phase_quality_gate(
                 $options['content'],
                 $keyword,
-                $options['content_type'] ?? ''
+                $options['content_type'] ?? '',
+                $options['content_brief'] ?? null
             );
             $report['passed'] = $report['phases'][5]['passed'];
         } else {
@@ -113,7 +114,7 @@ class Content_Ranking_Framework {
      *
      * @return array { passed: bool, score: int, reason: string }
      */
-    public function quality_gate( string $content, string $keyword, string $content_type = '' ): array {
+    public function quality_gate( string $content, string $keyword, string $content_type = '', ?array $content_brief = null ): array {
         $analyzer = new GEO_Analyzer();
         $result = $analyzer->analyze( $content, $keyword, $content_type );
 
@@ -127,21 +128,34 @@ class Content_Ranking_Framework {
             $passed = false;
         }
 
+        // v1.5.208 — Term Coverage check (Competitive Content Brief, §28.1).
+        // WARN-BUT-ALLOW per product decision: does NOT block the quality
+        // gate even when coverage < 60. Reasons:
+        //   (a) §6 rubric weights are already tuned; stacking a second gate
+        //       risks over-rejecting articles that pass everything else.
+        //   (b) Poor coverage is a signal the pre-gen brief didn't steer
+        //       the AI well — the right fix is regenerating, not post-gen
+        //       rewriting (AI-rewrite buttons were removed).
+        //   (c) Presence is a minimum threshold, not a quality guarantee.
+        // Stored on the report for UI display + future analytics.
+        $term_coverage = $analyzer->check_term_coverage( $content, $content_brief );
+
         return [
-            'passed'      => $passed,
-            'score'       => $result['geo_score'],
-            'grade'       => $result['grade'],
-            'veto_hit'    => (bool) ( $audit['veto'] ?? false ),
-            'vetoes'      => $audit['vetoes'] ?? [],
-            'core_eeat'   => $audit['normalized'] ?? 0,
-            'min_score'   => self::QUALITY_GATE_MIN_SCORE,
-            'reason'      => $passed
-                ? sprintf( 'GEO %d/100, CORE-EEAT %d/100 — passes quality gate', $result['geo_score'], $audit['normalized'] ?? 0 )
+            'passed'        => $passed,
+            'score'         => $result['geo_score'],
+            'grade'         => $result['grade'],
+            'veto_hit'      => (bool) ( $audit['veto'] ?? false ),
+            'vetoes'        => $audit['vetoes'] ?? [],
+            'core_eeat'     => $audit['normalized'] ?? 0,
+            'min_score'     => self::QUALITY_GATE_MIN_SCORE,
+            'term_coverage' => $term_coverage,
+            'reason'        => $passed
+                ? sprintf( 'GEO %d/100, CORE-EEAT %d/100, Term Coverage %d/100 — passes quality gate', $result['geo_score'], $audit['normalized'] ?? 0, $term_coverage['score'] ?? 0 )
                 : ( ! empty( $audit['veto'] )
                     ? 'BLOCKED by VETO items: ' . implode( ', ', array_column( $audit['vetoes'], 'id' ) )
                     : sprintf( 'Score %d below minimum %d', $result['geo_score'], self::QUALITY_GATE_MIN_SCORE )
                 ),
-            'suggestions' => $result['suggestions'] ?? [],
+            'suggestions'   => $result['suggestions'] ?? [],
         ];
     }
 
@@ -265,8 +279,8 @@ class Content_Ranking_Framework {
      * The only phase that can FAIL and block publication. Calls GEO_Analyzer
      * + CORE_EEAT_Auditor veto check.
      */
-    private function phase_quality_gate( string $content, string $keyword, string $content_type ): array {
-        $result = $this->quality_gate( $content, $keyword, $content_type );
+    private function phase_quality_gate( string $content, string $keyword, string $content_type, ?array $content_brief = null ): array {
+        $result = $this->quality_gate( $content, $keyword, $content_type, $content_brief );
 
         return array_merge(
             [

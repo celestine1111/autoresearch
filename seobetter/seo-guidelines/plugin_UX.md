@@ -189,6 +189,32 @@ Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validat
 - `<style>` block extracted and output separately
 - Inside `<div class="seobetter-content-preview">`
 
+### 3.5B Competitive Content Brief Card (v1.5.208 — REQUIRED when `res.content_brief` is populated)
+
+**Purpose:** Show the author the BM25-distilled competitor intelligence the AI already used during generation. Read-only, informational. Implements SEO-GEO-AI-GUIDELINES.md §28.1 surface.
+
+**Rendered in `renderResult()` immediately after the content preview, as an HTML `<details>` collapsible element** (closed by default to avoid overwhelming users who don't need it).
+
+**Summary line** (always visible, on the `<summary>` row):
+- 🔬 `Competitive Content Brief (top N Google results)` title
+- Right-aligned Term Coverage pill badge from Phase 5 report: `XX/100 coverage` with color (green ≥80, amber ≥60, red <60)
+
+**Expanded contents (read-only — NO action buttons):**
+1. **Informational caption** — "Based on BM25 analysis of the top N Google results for this keyword. The article generator already used this data to steer coverage; this panel shows what was considered."
+2. **Competitor Word Count card** — `Avg X words (range min-max, median M)`
+3. **Term Coverage card** — Phase 5 `term_coverage.detail` + list of up to 8 missing concepts. Labelled "informational — no action button" to set expectations (AI rewrite was removed from the plugin entirely).
+4. **Top Distinctive Concepts chips** — up to 20 pill-style chips of the highest BM25 terms with title-attr tooltip `BM25 score · in N competitors`.
+5. **Common H2 Patterns list** — up to 8 `<li>` items, each with competitor frequency in parentheses.
+6. **People Also Ask list** — up to 6 `<li>` items.
+7. **Footer metadata line** — `Cached hit/fresh · BM25 k1=1.5 b=0.75 · scraped N pages`.
+
+**What's explicitly NOT shown (by design):**
+- No "Fix / Rewrite / Add missing terms" button — AI rewrite was removed; users regenerate if coverage is too low.
+- No density target, no keyword-per-100-words metric — these would incentivize stuffing (§1 Princeton −9%).
+- No publish-blocking coverage gate — the brief is "warn-but-allow" per the §28.5 Quality Gate implementation.
+
+**Data sources:** `res.content_brief` and `res.framework.phase_5_quality_gate.term_coverage` from the Async_Generator response.
+
 ### 3.6 Headline Selector (REQUIRED)
 - Container with header: "Select Headline (ranked by SEO + GEO + AI snippet score)"
 - Subtext: "Click to select as your post title. #1 is recommended."

@@ -48,6 +48,35 @@
 
 **Env vars (Vercel):** `SERPER_API_KEY`, `FIRECRAWL_API_KEY`, `EXTRACTION_MODEL` (optional, default `openai/gpt-4.1-mini`)
 
+### 1.2B Competitive Content Brief (BM25 over top SERP — v1.5.208)
+
+Runs in parallel with §1.2 on every research call. Implements SEO-GEO-AI-GUIDELINES.md §28.1 (Topic Selection via Competitor Analysis), which was documented-but-unimplemented before v1.5.208.
+
+| Step | Service | What It Does |
+|---|---|---|
+| **SERP fetch** | Serper `/search` with `gl={country}` + `hl={language}` | Top 5 (Free) / 10 (Pro) organic Google results for the keyword, matching the user's Layer 6 locale settings. |
+| **Body scrape** | Firecrawl primary → Jina Reader fallback | Main-content extraction per URL (no nav/ads/footer). Parallel via `Promise.allSettled`. |
+| **BM25 analysis** | `cloud-api/api/_bm25_util.js` (pure JS, zero deps) | Okapi BM25 with k1=1.5, b=0.75. Ranks terms by distinctiveness across the corpus. |
+| **Heading extraction** | `commonH2Patterns()` | H2s used by ≥2 competitors. Passed to outline prompt as OPTIONAL hints. |
+| **PAA fetch** | Serper `peopleAlsoAsk` | Questions Google surfaces for the keyword. |
+| **Word-count stats** | `wordCount()` | avg / min / max / median across competitors. Fed to section prompt as guidance. |
+
+**Multilingual tokenizer** (29 languages):
+- **Latin / Cyrillic / Greek / Arabic / Hebrew / Hindi / Vietnamese / Indonesian / Malay**: Unicode `\p{L}\p{N}+` word boundaries.
+- **CJK + Thai** (`ja`, `ko`, `zh`, `th`): 2-char + 3-char sliding-window n-grams — no word boundaries to rely on.
+- Per-language stopword lists for all 29 supported locales inlined in `_bm25_util.js`.
+
+**Free tier:** top 5 scraped, 20 BM25 terms returned, 7-day cache.
+**Pro tier:** top 10 scraped, 50 BM25 terms returned, 24-hour cache (fresher).
+
+**Standalone endpoint:** `POST /api/content-brief` — body `{ keyword, country, language, tier }`, response `{ terms, h2_patterns, paa_questions, word_count, urls, stats }`. Useful for future UI surfaces (e.g. a standalone "Preview brief" button).
+
+**Integrated path:** `fetchContentBrief()` inside `research.js` runs in parallel with the aggregator and attaches `content_brief` to the research response.
+
+**Env vars:** `SERPER_API_KEY` (required), `FIRECRAWL_API_KEY` (optional — Jina Reader fallback if missing).
+
+**Anti-stuffing guard:** The brief is surfaced to the AI as "concepts competitors cover" with explicit instructions per §1 Princeton (-9% for stuffing). Never a density target. See `Async_Generator::format_content_brief_for_prompt()`.
+
 **Recipe pipeline (v1.5.133):** After Tavily finds recipe URLs, PHP calls `/api/scrape` to get clean Firecrawl markdown. `extract_recipe_from_raw()` works much better on clean structured markdown than on messy Tavily raw HTML.
 
 ### 1.3 Optional Pro Source
@@ -344,12 +373,12 @@ Separate endpoint from the main `/api/research` used for generation. Pulls real 
 
 | Step | What Happens |
 |---|---|
-| 1. **Trends** | Calls Vercel research endpoint with keyword + domain + country. Stores research data. Detects search intent. |
-| 2. **Outline** | AI generates H2 heading list based on: content type prose template, search intent, tone, audience, domain, research data, keyword |
-| 3-N. **Sections** | Each section generated individually with: heading, keyword rules, content type guidance, tone guidance, research data, humanizer rules |
+| 1. **Trends** | Calls Vercel research endpoint with keyword + domain + country + language. Returns: research aggregator bundle (Reddit/HN/Wiki/Trends/category APIs/Sonar-backed Serper+Firecrawl) + **Competitive Content Brief** (v1.5.208 — BM25 over top 5-10 Google results: 20-50 distinctive concepts, common H2 patterns, PAA questions, competitor word-count stats). Stores both. Detects search intent. |
+| 2. **Outline** | AI generates H2 heading list based on: content type prose template (§3.1 / §3.1A), search intent, tone, audience, domain, research data, keyword, **competitor H2 patterns** (v1.5.208 — passed as OPTIONAL hints; the prose template's REQUIRED SECTIONS stays the structural contract). |
+| 3-N. **Sections** | Each section generated individually with: heading, keyword rules, content type guidance, tone guidance, research data, **COMPETITIVE CONCEPT COVERAGE block** (v1.5.208 — top 20 BM25 terms + competitor word-count guidance, with explicit anti-stuffing instructions per §1 Princeton), humanizer rules. |
 | N+1. **Headlines** | AI generates 5 title variations scored by SEO criteria |
 | N+2. **Meta** | AI generates SEO title + meta description |
-| N+3. **Assemble** | Markdown assembled, images inserted, citations injected, GEO enforced (table/FAQ/keyword density/readability), formatted to HTML, GEO scored |
+| N+3. **Assemble** | Markdown assembled, images inserted, citations injected, GEO enforced (table/FAQ/keyword density/readability), formatted to HTML, GEO scored, **Term Coverage computed** (v1.5.208 — `GEO_Analyzer::check_term_coverage()` counts top-20 BM25 terms in the rendered HTML; WARN-BUT-ALLOW in §28.5 Quality Gate; reporting only, not in §6 rubric). |
 
 ### 2.2 System Prompt (Applied to Every Section)
 

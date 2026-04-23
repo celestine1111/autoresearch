@@ -1237,6 +1237,82 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         }
         h += '<div class="seobetter-content-preview">' + content + '</div>';
 
+        // v1.5.208 — Competitive Content Brief (read-only, informational).
+        // Implements SEO-GEO-AI-GUIDELINES.md §28.1 UI surface. BM25 terms +
+        // competitor H2 patterns + PAA + word-count stats from the top-N
+        // Google SERP for the keyword. No action buttons — AI rewrite was
+        // removed. Users who want coverage to change regenerate the article.
+        // See Framework Phase 5 term_coverage report alongside it.
+        var cb = res.content_brief;
+        if (cb && cb.terms && cb.terms.length) {
+            var termCoverage = (res.framework && res.framework.phase_5_quality_gate && res.framework.phase_5_quality_gate.term_coverage) || null;
+            var coverageScore = termCoverage ? termCoverage.score : null;
+            var coverageColor = coverageScore >= 80 ? '#22c55e' : (coverageScore >= 60 ? '#f59e0b' : '#ef4444');
+
+            h += '<details style="margin-top:24px;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px">';
+            h += '<summary style="cursor:pointer;font-weight:600;font-size:14px;color:#111827;display:flex;justify-content:space-between;align-items:center;gap:8px">';
+            h += '<span>🔬 Competitive Content Brief (top ' + (cb.eligible_count || 0) + ' Google results)</span>';
+            if (coverageScore !== null) {
+                h += '<span style="font-size:12px;padding:3px 10px;border-radius:999px;background:' + coverageColor + '20;color:' + coverageColor + ';font-weight:700">' + coverageScore + '/100 coverage</span>';
+            }
+            h += '</summary>';
+
+            h += '<div style="margin-top:14px;font-size:12px;color:#6b7280;line-height:1.5">Informational only. Based on BM25 analysis of the top ' + (cb.eligible_count || 0) + ' Google results for this keyword. The article generator already used this data to steer coverage; this panel shows what was considered.</div>';
+
+            // Word count guidance
+            if (cb.word_count && cb.word_count.avg) {
+                h += '<div style="margin-top:12px;padding:10px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px">';
+                h += '<div style="font-size:11px;color:#6b7280;font-weight:600;margin-bottom:4px">COMPETITOR WORD COUNT</div>';
+                h += '<div style="font-size:13px;color:#111827">Avg <strong>' + cb.word_count.avg + '</strong> words (range ' + cb.word_count.min + '–' + cb.word_count.max + ', median ' + cb.word_count.median + ')</div>';
+                h += '</div>';
+            }
+
+            // Term coverage detail
+            if (termCoverage) {
+                h += '<div style="margin-top:12px;padding:10px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px">';
+                h += '<div style="font-size:11px;color:#6b7280;font-weight:600;margin-bottom:4px">TERM COVERAGE</div>';
+                h += '<div style="font-size:13px;color:#111827">' + esc(termCoverage.detail || '') + '</div>';
+                if (termCoverage.missing_terms && termCoverage.missing_terms.length) {
+                    h += '<div style="margin-top:6px;font-size:12px;color:#6b7280">Missing concepts (informational — no action button): <em>' + termCoverage.missing_terms.slice(0, 8).map(esc).join(', ') + '</em></div>';
+                }
+                h += '</div>';
+            }
+
+            // Top BM25 terms
+            h += '<div style="margin-top:12px">';
+            h += '<div style="font-size:11px;color:#6b7280;font-weight:600;margin-bottom:6px">TOP DISTINCTIVE CONCEPTS (BM25)</div>';
+            h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+            cb.terms.slice(0, 20).forEach(function(t) {
+                h += '<span style="font-size:11px;padding:3px 8px;background:#eef2ff;color:#4338ca;border-radius:999px;border:1px solid #c7d2fe" title="BM25 ' + t.score + ' · in ' + t.df + ' competitors">' + esc(t.term) + '</span>';
+            });
+            h += '</div></div>';
+
+            // H2 patterns
+            if (cb.h2_patterns && cb.h2_patterns.length) {
+                h += '<div style="margin-top:12px">';
+                h += '<div style="font-size:11px;color:#6b7280;font-weight:600;margin-bottom:6px">COMMON H2 PATTERNS (competitors used ≥2×)</div>';
+                h += '<ul style="margin:0;padding-left:18px;font-size:12px;color:#374151;line-height:1.6">';
+                cb.h2_patterns.slice(0, 8).forEach(function(h2) {
+                    h += '<li>' + esc(h2.text) + ' <span style="color:#9ca3af">(' + h2.count + ')</span></li>';
+                });
+                h += '</ul></div>';
+            }
+
+            // PAA questions
+            if (cb.paa_questions && cb.paa_questions.length) {
+                h += '<div style="margin-top:12px">';
+                h += '<div style="font-size:11px;color:#6b7280;font-weight:600;margin-bottom:6px">PEOPLE ALSO ASK</div>';
+                h += '<ul style="margin:0;padding-left:18px;font-size:12px;color:#374151;line-height:1.6">';
+                cb.paa_questions.slice(0, 6).forEach(function(q) {
+                    h += '<li>' + esc(q) + '</li>';
+                });
+                h += '</ul></div>';
+            }
+
+            h += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af">Cached ' + (cb.cached ? 'hit' : 'fresh') + ' · BM25 k1=' + (cb.stats && cb.stats.k1 || 1.5) + ' b=' + (cb.stats && cb.stats.b || 0.75) + ' · scraped ' + (cb.stats && cb.stats.scraped || 0) + ' pages</div>';
+            h += '</details>';
+        }
+
         // Headlines — score, rank, and make selectable
         if (res.headlines && res.headlines.length) {
             var keyword = (res.keyword||'').toLowerCase();
@@ -1322,6 +1398,9 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             // available for all users). Passed to inject-fix + optimize-all
             // so they use cached Sonar data instead of making new API calls.
             sonar_data: res.sonar_data || null,
+            // v1.5.208 — Competitive Content Brief persistence. Implements
+            // SEO-GEO-AI-GUIDELINES.md §28.1 surface. Read-only on the client.
+            content_brief: res.content_brief || null,
             // 5-Part Framework phase report (§28) — persisted to post meta
             // so future audits can see which phases passed/failed.
             framework: res.framework || {}
