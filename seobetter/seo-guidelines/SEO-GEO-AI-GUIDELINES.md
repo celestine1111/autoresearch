@@ -79,6 +79,8 @@ When the user selects a non-Western target country (CN / JP / KR / RU / DE / FR 
 
 **Language-aware headline generation (v1.5.206d-fix7):** `AI_Content_Generator::generate_headlines()` now accepts `$language` and produces headlines in the target language for non-English articles. Previously English templates ("How to Choose X: Expert Guide") wrapped a non-English keyword, producing mixed-language titles like "How to Find 서울 최고의 카페 2026: The Ultimate Insider Guide". Does not affect schema mapping or genre overrides.
 
+**Centralized language-name table (v1.5.206d-fix7.1):** The BCP-47 → human-readable language name mapping (46 languages) previously lived in two places: `Async_Generator::get_system_prompt()` (46 entries) and `AI_Content_Generator::generate_headlines()` (35 entries). The two drifted — Swahili / Urdu / Sinhala / Nepali / Mongolian / Kazakh / Uzbek / Icelandic / Estonian / Latvian / Lithuanian were missing from the second and fell back to "English" in headline prompts. Extracted into `Localized_Strings::get_language_name( $lang )` as single source of truth. No effect on §3.1A Genre Overrides or §10 Schema Mapping — pure refactor of the lang-name lookup, no template or schema behaviour changed.
+
 ### Google AI Overviews (45% of Google searches)
 - Strong correlation with traditional rankings
 - Cited sources = +132% visibility boost

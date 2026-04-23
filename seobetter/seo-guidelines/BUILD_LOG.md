@@ -16,6 +16,50 @@
 
 ---
 
+## v1.5.206d-fix7.1 — Centralize language-name table (eliminates the 11-language gap)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+v1.5.206d-fix7 shipped `generate_headlines( $keyword, $article_text, $language )` with a 35-entry `$lang_names` table. `Async_Generator::get_system_prompt()` has its own 46-entry `$lang_names` table. The two tables drifted — 11 languages (Swahili, Urdu, Sinhala, Nepali, Mongolian, Kazakh, Uzbek, Icelandic, Estonian, Latvian, Lithuanian) were in Async_Generator but not in AI_Content_Generator. Users selecting one of those 11 got an English headline despite the article body being correctly in their language.
+
+Ben flagged this during review: *"does this work with all languages?"*
+
+### Shipped
+
+- **`includes/Localized_Strings.php::get_language_name( $lang )`** — NEW static helper. Single source of truth mapping 46 BCP-47 codes → human-readable English language names. Union of what Async_Generator + AI_Content_Generator previously duplicated. Unknown codes return `'English'` as safe fallback.
+- **`includes/AI_Content_Generator.php::generate_headlines()`** — dropped the inline 35-entry table; calls `\SEOBetter\Localized_Strings::get_language_name( $language )` instead.
+- **`includes/Async_Generator.php::get_system_prompt()`** — dropped the inline 46-entry table; calls `Localized_Strings::get_language_name( $language )` instead.
+
+### Safety
+
+- **English articles byte-identical** — `get_language_name('en')` returns `'English'`, matches previous behavior.
+- **46-language parity** — the union table ensures both files see the same human-readable name for every supported language.
+- **Unknown codes gracefully degrade** — any BCP-47 code not in the central table returns `'English'`, same as old fallback behavior in both callers.
+- **Single point of maintenance** — adding a new language is one edit in `Localized_Strings.php`; both callers pick it up automatically.
+
+### Verify
+
+```bash
+# 1. Central helper exists
+grep -n "get_language_name" /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php
+
+# 2. Both callers use it
+grep -n "get_language_name" /Users/ben/Documents/autoresearch/seobetter/includes/AI_Content_Generator.php /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+
+# 3. No orphan \$lang_names tables remain
+grep -n '\$lang_names\s*=\s*\[' /Users/ben/Documents/autoresearch/seobetter/includes/AI_Content_Generator.php /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+# Expect: zero matches
+```
+
+### Verified by user
+
+UNTESTED — no behavioural change for the 35 languages that worked in fix7; 11 languages (sw/ur/si/ne/mn/kk/uz/is/et/lv/lt) now receive the correct language name in the headline prompt.
+
+---
+
 ## v1.5.206d-fix7 — Language-aware headline generation + absolute-rule against English H2s in non-English articles
 
 **Date:** 2026-04-23

@@ -2293,21 +2293,11 @@ class Async_Generator {
         $year = wp_date( 'Y' );
         $month_year = wp_date( 'F Y' );
 
-        $lang_names = [
-            'en' => 'English', 'fr' => 'French', 'de' => 'German', 'es' => 'Spanish',
-            'pt' => 'Portuguese', 'it' => 'Italian', 'nl' => 'Dutch', 'sv' => 'Swedish',
-            'no' => 'Norwegian', 'da' => 'Danish', 'fi' => 'Finnish', 'pl' => 'Polish',
-            'cs' => 'Czech', 'sk' => 'Slovak', 'hu' => 'Hungarian', 'ro' => 'Romanian',
-            'bg' => 'Bulgarian', 'hr' => 'Croatian', 'sr' => 'Serbian', 'sl' => 'Slovenian',
-            'uk' => 'Ukrainian', 'ru' => 'Russian', 'tr' => 'Turkish', 'el' => 'Greek',
-            'ja' => 'Japanese', 'ko' => 'Korean', 'zh' => 'Chinese (Simplified)',
-            'ar' => 'Arabic', 'he' => 'Hebrew', 'hi' => 'Hindi', 'bn' => 'Bengali',
-            'th' => 'Thai', 'vi' => 'Vietnamese', 'id' => 'Indonesian', 'ms' => 'Malay',
-            'sw' => 'Swahili', 'ur' => 'Urdu', 'si' => 'Sinhala', 'ne' => 'Nepali',
-            'mn' => 'Mongolian', 'kk' => 'Kazakh', 'uz' => 'Uzbek', 'is' => 'Icelandic',
-            'et' => 'Estonian', 'lv' => 'Latvian', 'lt' => 'Lithuanian',
-        ];
-        $lang_name = $lang_names[ $language ] ?? 'English';
+        // v1.5.206d-fix7.1 — single source of truth in Localized_Strings.
+        // The local table previously duplicated here drifted from
+        // AI_Content_Generator's similar-but-smaller table; both now read
+        // the same 46-language map so adding a new language is one edit.
+        $lang_name = Localized_Strings::get_language_name( $language );
         // v1.5.46 — language rule now ALWAYS fires, including for English.
         // Before, language='en' produced no rule, so if the research data
         // contained non-English content (e.g. Sonar returns Italian place

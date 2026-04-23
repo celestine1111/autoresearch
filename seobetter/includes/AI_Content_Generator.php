@@ -106,22 +106,21 @@ class AI_Content_Generator {
      * written in the article's language, not English templates wrapping a
      * foreign-language keyword. Fixes the "How to Find 서울 최고의 카페 2026:
      * The Ultimate Insider Guide" bug where the Korean keyword was embedded
-     * in an English headline. Every language in the system prompt's
-     * $lang_names table is supported.
+     * in an English headline.
+     *
+     * v1.5.206d-fix7.1 — Every language in Localized_Strings::get_language_name()
+     * is supported (46 languages, single source of truth shared with
+     * Async_Generator::get_system_prompt).
      */
     public function generate_headlines( string $keyword, string $article_text = '', string $language = 'en' ): array {
-        $lang_names = [
-            'en' => 'English', 'fr' => 'French', 'de' => 'German', 'es' => 'Spanish',
-            'pt' => 'Portuguese', 'it' => 'Italian', 'nl' => 'Dutch', 'sv' => 'Swedish',
-            'no' => 'Norwegian', 'da' => 'Danish', 'fi' => 'Finnish', 'pl' => 'Polish',
-            'cs' => 'Czech', 'sk' => 'Slovak', 'hu' => 'Hungarian', 'ro' => 'Romanian',
-            'bg' => 'Bulgarian', 'hr' => 'Croatian', 'sr' => 'Serbian', 'sl' => 'Slovenian',
-            'uk' => 'Ukrainian', 'ru' => 'Russian', 'tr' => 'Turkish', 'el' => 'Greek',
-            'ja' => 'Japanese', 'ko' => 'Korean', 'zh' => 'Chinese (Simplified)',
-            'ar' => 'Arabic', 'he' => 'Hebrew', 'hi' => 'Hindi', 'bn' => 'Bengali',
-            'th' => 'Thai', 'vi' => 'Vietnamese', 'id' => 'Indonesian', 'ms' => 'Malay',
-        ];
-        $lang_name  = $lang_names[ $language ] ?? 'English';
+        // v1.5.206d-fix7.1 — single source of truth for BCP-47 → human name.
+        // Guarantees AI_Content_Generator and Async_Generator see the same
+        // language-name table, so all 46 supported languages produce matching
+        // prompt text. Previously had a 35-entry table that missed 11 languages
+        // (Swahili, Urdu, Sinhala, Nepali, Mongolian, Kazakh, Uzbek, Icelandic,
+        // Estonian, Latvian, Lithuanian) — those got "English" as the lang
+        // name in the headline prompt.
+        $lang_name  = \SEOBetter\Localized_Strings::get_language_name( $language );
         $is_english = $language === 'en';
 
         $context = $article_text ? "\n\nArticle summary: " . substr( $article_text, 0, 300 ) : '';

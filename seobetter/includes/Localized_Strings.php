@@ -142,6 +142,39 @@ class Localized_Strings {
     }
 
     /**
+     * v1.5.206d-fix7.1 — Single source of truth for BCP-47 → human-readable
+     * language name. Used by `Async_Generator::get_system_prompt()`,
+     * `AI_Content_Generator::generate_headlines()`, and anywhere else the
+     * plugin needs to render a language name to the AI or the user.
+     *
+     * Covers 46 languages — the union of what Regional_Context supports,
+     * what Localized_Strings already translates UI labels for, and what
+     * Async_Generator ships in its per-language writing rule.
+     *
+     * Fallback: returns 'English' for unknown codes (safe default — AI still
+     * writes in the target language because the LANGUAGE rule has other
+     * enforcement mechanisms beyond the name).
+     */
+    public static function get_language_name( string $lang ): string {
+        $lang = strtolower( substr( trim( $lang ), 0, 2 ) );
+        $names = [
+            'en' => 'English', 'fr' => 'French', 'de' => 'German', 'es' => 'Spanish',
+            'pt' => 'Portuguese', 'it' => 'Italian', 'nl' => 'Dutch', 'sv' => 'Swedish',
+            'no' => 'Norwegian', 'da' => 'Danish', 'fi' => 'Finnish', 'pl' => 'Polish',
+            'cs' => 'Czech', 'sk' => 'Slovak', 'hu' => 'Hungarian', 'ro' => 'Romanian',
+            'bg' => 'Bulgarian', 'hr' => 'Croatian', 'sr' => 'Serbian', 'sl' => 'Slovenian',
+            'uk' => 'Ukrainian', 'ru' => 'Russian', 'tr' => 'Turkish', 'el' => 'Greek',
+            'ja' => 'Japanese', 'ko' => 'Korean', 'zh' => 'Chinese (Simplified)',
+            'ar' => 'Arabic', 'he' => 'Hebrew', 'hi' => 'Hindi', 'bn' => 'Bengali',
+            'th' => 'Thai', 'vi' => 'Vietnamese', 'id' => 'Indonesian', 'ms' => 'Malay',
+            'sw' => 'Swahili', 'ur' => 'Urdu', 'si' => 'Sinhala', 'ne' => 'Nepali',
+            'mn' => 'Mongolian', 'kk' => 'Kazakh', 'uz' => 'Uzbek', 'is' => 'Icelandic',
+            'et' => 'Estonian', 'lv' => 'Latvian', 'lt' => 'Lithuanian',
+        ];
+        return $names[ $lang ] ?? 'English';
+    }
+
+    /**
      * v1.5.206d — Locale-aware "Month Year" string used in freshness signal.
      *
      * Uses wp_date() with locale hints so Japanese produces "2026年4月",
