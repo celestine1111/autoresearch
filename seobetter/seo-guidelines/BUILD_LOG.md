@@ -19,7 +19,7 @@
 ## v1.5.206d-fix14 — hl= language param + CJK/Thai character overlap filter
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `0f01142`
 
 ### Why this patch exists
 
