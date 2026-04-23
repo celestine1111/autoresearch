@@ -19,7 +19,7 @@
 ## v1.5.207 — Rich Results tab redesign as 4-subview visual catalog (Google Search / Discover / AI Overviews / LLM Citations)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `fb97a26`
 
 ### Why this ships
 
