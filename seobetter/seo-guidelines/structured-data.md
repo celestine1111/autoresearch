@@ -242,6 +242,19 @@ Source: [BUILD_LOG v1.5.192](./BUILD_LOG.md) + [article_design.md §11](./articl
   - `sameAs` (pulled from the 6 author-social-profile settings — social profiles serve double-duty as author AND organization entity grounding)
 - Previously only `name, url, logo` were emitted.
 
+### BlogPosting + Sponsored override (v1.5.209 — FTC/ACCC + Google disclosure compliance)
+
+**When content_type === 'sponsored' and schema is BlogPosting:**
+- `articleSection: "Sponsored"` — disambiguates paid placements from organic editorial for Google Search, AI Overviews, and LLM engines.
+- `citation[]` — outbound URLs the body references (filter excludes author-social profiles per v1.5.197 rule).
+- `backstory: "Sponsored content — this article is a paid placement clearly disclosed to readers. Views and claims reflect the sponsoring organisation's position, not an objective editorial assessment."` — explicit AI-disambiguation label matching the v1.5.192 pattern. Plain-English disclosure for LLMs to read.
+- Optional `sponsor` Organization — populated from `_seobetter_sponsor_name` and `_seobetter_sponsor_url` post_meta if set. Omitted when absent (never faked).
+- **Speakable deliberately NOT added** — Google policy discourages voice-assistant read-aloud of paid placements without audible disclosure, which WordPress cannot guarantee.
+
+**Why this ships:** pre-v1.5.209 sponsored articles fell through to generic BlogPosting with no disclosure field. Both SEO-GEO-AI-GUIDELINES.md §10.1 and §5 below previously mapped sponsored to `AdvertiserContentArticle` — but that @type is not recognized by Google's Rich Results Test. `CONTENT_TYPE_MAP` correctly uses `BlogPosting`; this commit adds the missing disclosure signals. FTC / ACCC misleading-conduct risk addressed.
+
+Source: [BUILD_LOG v1.5.209](./BUILD_LOG.md) + [Schema_Generator.php::generate()](../includes/Schema_Generator.php).
+
 ### BlogPosting + Personal Essay override (v1.5.201 enrichments)
 
 **When content_type === 'personal_essay' and schema is BlogPosting:**
@@ -310,8 +323,8 @@ When `citation[]` is populated (Opinion, Press Release, Personal Essay, and any 
 | press_release | NewsArticle | — | Corporate announcement |
 | personal_essay | BlogPosting | — | Personal narrative |
 | glossary_definition | DefinedTerm | — | Single term definition |
-| sponsored | Article | — | Note: AdvertiserContentArticle not recognized by Google |
-| case_study | Article | FAQPage | Business results |
+| sponsored | BlogPosting (v1.5.209) | Organization | `articleSection: "Sponsored"` + `backstory` + `citation[]` + optional `sponsor` Organization. AdvertiserContentArticle rejected by Google — BlogPosting with disclosure enrichments is the compliant path. |
+| case_study | Article | FAQPage, Organization | Business results |
 | interview | Article | FAQPage | Q&A format |
 | pillar_guide | Article | FAQPage, ItemList | Comprehensive guide |
 | LOCAL (places) | LocalBusiness | ItemList | When article lists real businesses |

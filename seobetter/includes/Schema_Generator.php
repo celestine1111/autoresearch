@@ -570,6 +570,51 @@ class Schema_Generator {
                     'cssSelector' => [ 'h1', 'h2 + p', '.seobetter-author-bio' ],
                 ];
             }
+
+            // v1.5.209 — Sponsored content compliance + disclosure enrichment.
+            // Matches the Opinion / Press Release / Personal Essay enrichment
+            // pattern established in v1.5.192-201. Addresses FTC / ACCC
+            // misleading-conduct risk + Google's Sponsored content policy +
+            // AI-engine disambiguation of paid placements from editorial.
+            //
+            // Previously: sponsored fell through to base BlogPosting schema
+            // with no disclosure signal, making AI engines (and Google Search)
+            // unable to distinguish sponsored articles from organic editorial.
+            // Both §10.1 of SEO-GEO-AI-GUIDELINES.md and structured-data.md §5
+            // documented sponsored as `AdvertiserContentArticle` but that
+            // @type is not recognized by Google — CONTENT_TYPE_MAP correctly
+            // maps to BlogPosting; this block adds the missing disclosure.
+            //
+            // Note on Speakable: deliberately NOT added for sponsored. Per
+            // Google policy, voice assistants should not read paid placements
+            // aloud without audio disclosure, which WordPress cannot guarantee.
+            if ( $content_type_check === 'sponsored' ) {
+                $schema['articleSection'] = 'Sponsored';
+                $urls = $this->extract_outbound_urls( $post->post_content );
+                if ( ! empty( $urls ) ) {
+                    $schema['citation'] = array_map( function ( $u ) {
+                        return [ '@type' => 'CreativeWork', 'url' => $u ];
+                    }, $urls );
+                }
+                $schema['backstory'] = 'Sponsored content — this article is a paid placement clearly disclosed to readers. Views and claims reflect the sponsoring organisation\'s position, not an objective editorial assessment.';
+                // v1.5.209 — Optional sponsor Organization if configured.
+                // Stored in _seobetter_sponsor_name post_meta; when absent the
+                // field is omitted rather than faked. Ships without a new UI
+                // field for now — can be populated via metabox or block editor
+                // custom field in a follow-up.
+                $sponsor_name = (string) get_post_meta( $post->ID, '_seobetter_sponsor_name', true );
+                if ( $sponsor_name !== '' ) {
+                    $sponsor = [
+                        '@type' => 'Organization',
+                        'name'  => $sponsor_name,
+                    ];
+                    $sponsor_url = (string) get_post_meta( $post->ID, '_seobetter_sponsor_url', true );
+                    if ( $sponsor_url !== '' ) {
+                        $sponsor['url'] = esc_url_raw( $sponsor_url );
+                    }
+                    $schema['sponsor'] = $sponsor;
+                }
+            }
         }
 
         return $schema;

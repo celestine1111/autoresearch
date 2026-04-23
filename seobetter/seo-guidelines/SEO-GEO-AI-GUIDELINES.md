@@ -683,7 +683,7 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 | Press Release | NewsArticle (`articleSection: "Press Release"`) + Organization | **v1.5.195 (research-backed):** Headline (≤70 chars, active verb, no cliché words) → Subheadline → Dateline + 5-Ws Lede (first 25 words) → Body (inverted pyramid, 2-3 sentence paragraphs) → Key Facts (3-5 bullet list for AI snippets) → Quotes (1-2 named-exec quotes) → FAQ (2-3 Q&A) → About/Boilerplate (50-100 words) → Media Contact → References. Sources: Muck Rack 2025, Cision journalist survey, Empathy First Media, pr.co LLM-native template, Google 2025 PR guidelines. Pickup-rate levers: quotes +40%, multimedia up to 9.7× engagement, Tuesday/Wednesday +30%. | 400 target, 500 max |
 | Personal Essay | BlogPosting (`articleSection: "Personal Essay"`) + `citation[]` + `backstory` + `speakable` | **v1.5.201 (research-backed):** Opening Scene (in media res) → The Central Event → Scenes and Sensory Detail (3 sensory points + named places/dates/people) → Reflection → Resolution or Lesson. First-person required. Transformation required. E-E-A-T Experience signals baked into prompt (dated specifics, named people/places, sensory triplets, attributed dialogue). BAN LIST on generic openings and vague placeholders. Distinctive literary CSS: serif body, narrow column, drop cap, italic centered pull-quotes. Sources: Modern Love/Longreads/MasterClass/Jane Friedman/Google E-E-A-T 2025. | 1200-2500 (target 1500) |
 | Glossary | Article + FAQPage | Definition → Explanation → Examples → Related Terms | 400-1200 |
-| Sponsored | AdvertiserContentArticle | Disclosure → Intro → Body → Sponsor CTA | 600-1500 |
+| Sponsored | BlogPosting (`articleSection: "Sponsored"` + `backstory` + `citation[]` + optional `sponsor` Organization — v1.5.209) | Disclosure → Intro → Body → Sponsor CTA | 600-1500 |
 
 ### 10.2 Schema Implementation (v1.5.118)
 - JSON-LD format only (not microdata)
@@ -693,23 +693,42 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 - Content type selection determines which schemas are generated
 - Multi-schema stacking: each article gets primary + secondary schemas automatically
 
-### 10.3 Schema Stacking per Content Type (v1.5.118)
+### 10.3 Schema Stacking per Content Type (v1.5.209 — full 21-type matrix)
 
-| Content Type | Primary | Secondary Schemas |
-|---|---|---|
-| Blog Post | BlogPosting | FAQPage, Speakable, BreadcrumbList |
-| How-To | Article | FAQPage, BreadcrumbList |
-| Listicle | Article | ItemList, FAQPage, BreadcrumbList |
-| Review | Product+Review (with pros/cons) | FAQPage, BreadcrumbList |
-| Comparison | Article | FAQPage, BreadcrumbList |
-| Buying Guide | Article | ItemList, FAQPage, BreadcrumbList |
-| Recipe | Recipe | ItemList (carousel), FAQPage, BreadcrumbList |
-| FAQ Page | FAQPage | BreadcrumbList |
-| News Article | NewsArticle | Speakable, FAQPage, BreadcrumbList |
-| Opinion | OpinionNewsArticle | Speakable, FAQPage, BreadcrumbList |
-| Tech Article | TechArticle | FAQPage, BreadcrumbList |
-| Pillar Guide | Article | ItemList, FAQPage, Speakable, BreadcrumbList |
-| Places articles | + LocalBusiness per business | Auto-detected from addresses in content |
+Complete matrix showing primary @type + secondary schemas + v1.5.192-209 per-type enrichments. **This table is now the master spec — structured-data.md §4 and article_design.md §11 mirror this.** When Schema_Generator changes, update this table first.
+
+| Content Type | Primary | Secondary Schemas | Per-type Enrichments |
+|---|---|---|---|
+| Blog Post | BlogPosting | FAQPage, Speakable, BreadcrumbList | — |
+| How-To | Article | FAQPage, BreadcrumbList | — |
+| Listicle | Article | ItemList, FAQPage, BreadcrumbList | — |
+| Review | Review (with smart `itemReviewed` @type — v1.5.136) | FAQPage, BreadcrumbList | `positiveNotes` / `negativeNotes` from Pros/Cons; country-aware currency |
+| Comparison | Article | FAQPage, BreadcrumbList | — |
+| Buying Guide | Article | ItemList, FAQPage, BreadcrumbList | — |
+| Recipe | Recipe × N | ItemList (carousel when ≥3 recipes), FAQPage, BreadcrumbList | `recipeCuisine` country-mapped (40+ countries); 3-image array (1:1, 4:3, 16:9); `HowToStep` per instruction |
+| FAQ Page | FAQPage | BreadcrumbList | — |
+| News Article | NewsArticle | Speakable, FAQPage, BreadcrumbList | `articleSection: "News"` |
+| Opinion | OpinionNewsArticle (v1.5.192) | Speakable, FAQPage, BreadcrumbList | `citation[]`, `backstory: "Opinion piece..."`, `speakable.cssSelector: [h1, .key-takeaways, h2 + p]`; ClaimReview explicitly excluded |
+| Press Release | NewsArticle (v1.5.195) | Organization (enriched), FAQPage, BreadcrumbList | `articleSection: "Press Release"`, `citation[]`, `speakable.cssSelector: [h1, h2 + p, .seobetter-author-bio]` |
+| Personal Essay | BlogPosting (v1.5.201) | BreadcrumbList | `articleSection: "Personal Essay"`, `citation[]`, `backstory: "Personal essay..."`, `speakable.cssSelector: [h1, h2 + p, .seobetter-author-bio]` |
+| **Sponsored** | **BlogPosting (v1.5.209 — was incorrectly documented as AdvertiserContentArticle pre-v1.5.209)** | Organization (enriched), BreadcrumbList | `articleSection: "Sponsored"`, `citation[]`, `backstory: "Sponsored content..."`, optional `sponsor` Organization (from `_seobetter_sponsor_name` post_meta). **Speakable deliberately NOT added** — Google policy discourages voice read-aloud of paid placements |
+| Tech Article | TechArticle | FAQPage, BreadcrumbList | — |
+| White Paper | Article | FAQPage, BreadcrumbList | — |
+| Scholarly Article | ScholarlyArticle | FAQPage, BreadcrumbList | — |
+| Case Study | Article | Organization (enriched), FAQPage, BreadcrumbList | — |
+| Interview | Article | Organization (enriched), QAPage, FAQPage, BreadcrumbList | — |
+| Pillar Guide | Article | ItemList, FAQPage, Speakable, BreadcrumbList | — |
+| Live Blog | LiveBlogPosting | BreadcrumbList | — |
+| Glossary | DefinedTerm | FAQPage, BreadcrumbList | — |
+| Places articles (any type with local businesses) | + LocalBusiness per business | Auto-detected from addresses in content | — |
+
+**Universal fields on every top-level schema** (v1.5.206a Layer 6):
+- `inLanguage` (BCP-47) on every @type in `Schema_Generator::INLANGUAGE_ACCEPTED_TYPES` — gated per Schema.org (CreativeWork + Event descendants only; skipped for BreadcrumbList / ItemList / DefinedTerm / LocalBusiness / Organization / Product / Person / PostalAddress)
+- `@context: "https://schema.org"`, `headline`, `image` (3-ratio array), `datePublished`, `dateModified`, `author` (Person), `publisher` (Organization), `mainEntityOfPage`, `description` (via `build_clean_description()`)
+
+**Enrichment pattern** (for future content types): match the v1.5.192+ template of `articleSection` (disambiguation) + `citation[]` (outbound source graph) + `backstory` (plain-English label for AI engines) + `speakable.cssSelector` (voice-assistant selectors, where appropriate).
+
+**Gaps (known, parked):** `citation[]` universal rollout to tech_article / white_paper / scholarly / case_study / interview / comparison / buying_guide / review / how_to / pillar_guide is still pending — logged for future release. Shipping requires code + §10 + structured-data.md sync.
 
 ### 10.4 Schema Notes
 - **HowTo** rich results DEPRECATED by Google (Sept 2023) — mapped to Article instead

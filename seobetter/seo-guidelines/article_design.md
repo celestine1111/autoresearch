@@ -724,7 +724,7 @@ Top-level schemas whose `@type` accepts `inLanguage` per Schema.org (CreativeWor
 | `press_release` | `NewsArticle` | — | Dateline, formal announcement |
 | `personal_essay` | `BlogPosting` | — | First person, longer paragraphs |
 | `glossary_definition` | `DefinedTerm` + `DefinedTermSet` | — | Short, definition-first |
-| `sponsored` | `BlogPosting` (AdvertiserContent) | — | Disclosure block |
+| `sponsored` | `BlogPosting` (v1.5.209: `articleSection: "Sponsored"` + `backstory` + `citation[]` + optional `sponsor` Organization — AdvertiserContentArticle rejected by Google) | Organization | Disclosure block, disclosure bar, sponsor area |
 
 ### Design adjustments by type (v1.5.138 — visual differentiation)
 

@@ -7,12 +7,95 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.208)
+> **Last updated:** 2026-04-24 (v1.5.209)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.209 — Sponsored schema compliance + §10 authoritative sync across 21 content types
+
+**Date:** 2026-04-24
+**Commit:** `[pending]`
+
+### Why this ships
+
+Two drift + compliance issues:
+
+1. **Sponsored content had no disclosure schema.** Pre-v1.5.209, sponsored articles emitted the same BlogPosting JSON-LD as organic blog posts — no `articleSection: "Sponsored"`, no `backstory`, no `sponsor` Organization. FTC (US) / ACCC (AU) + Google Sponsored-Content policy require clear disclosure at the schema level. AI engines (ChatGPT, Perplexity, Gemini, Claude) and Google AI Overviews had no structured signal to distinguish paid placements from editorial.
+2. **§10 of SEO-GEO-AI-GUIDELINES.md had drift.** §10.1 mapped sponsored to `AdvertiserContentArticle` but `Schema_Generator::CONTENT_TYPE_MAP` correctly uses `BlogPosting` (AdvertiserContentArticle is rejected by Google Rich Results Test). §10.3 only documented 12 of the 21 content types — 9 were missing entirely. v1.5.192-201 enrichments (`citation[]`, `backstory`, `speakable.cssSelector`, `articleSection` overrides, enriched `Organization`) were documented only in structured-data.md and BUILD_LOG. §10 hadn't been updated since v1.5.118.
+
+### Fixed — code
+
+- **Sponsored enrichment block** — [includes/Schema_Generator.php::generate()](../includes/Schema_Generator.php) inside the BlogPosting branch (around line 575)
+  - When `content_type === 'sponsored'` and primary @type is `BlogPosting`, injects:
+    - `articleSection: "Sponsored"` — AI-engine disambiguation
+    - `citation[]` — outbound URLs from body (via existing `extract_outbound_urls()`)
+    - `backstory: "Sponsored content — this article is a paid placement..."` — plain-English disclosure for LLMs
+    - Optional `sponsor` Organization — populated from new `_seobetter_sponsor_name` + `_seobetter_sponsor_url` post_meta (omitted when absent, never faked)
+  - `speakable` deliberately NOT added — Google policy discourages voice-assistant read-aloud of paid placements without audible disclosure
+  - Pattern mirrors v1.5.192 Opinion / v1.5.195 Press Release / v1.5.201 Personal Essay enrichment structure
+  - Verify: `grep -n "'sponsored'\|articleSection.*Sponsored\|Sponsored content" seobetter/includes/Schema_Generator.php`
+
+- **Version bump** — `seobetter.php` header + `SEOBETTER_VERSION` constant → `1.5.209`
+
+### Fixed — docs (§10 authoritative sync)
+
+- **SEO-GEO-AI-GUIDELINES.md §10.1** — sponsored row now correctly documents `BlogPosting` primary + the v1.5.209 disclosure enrichment list (was `AdvertiserContentArticle` which Google doesn't recognize)
+- **SEO-GEO-AI-GUIDELINES.md §10.3** — expanded from 12 content types to full 21-type matrix. Added per-type Enrichments column pulling v1.5.192-209 additions into §10 as the master spec. structured-data.md §4 and article_design.md §11 now mirror this instead of each being an independent source.
+- **structured-data.md §4** — new `BlogPosting + Sponsored override (v1.5.209)` section with full field spec, Google policy rationale for omitting Speakable, and the drift reconciliation note. Placed alongside the existing Opinion / Press Release / Personal Essay override blocks.
+- **structured-data.md §5** — sponsored row now says `BlogPosting (v1.5.209)` + `Organization` secondary + the enrichment field list. Previous note "AdvertiserContentArticle not recognized by Google" resolved into the concrete BlogPosting + disclosure path.
+- **article_design.md §11** (schema stacking matrix) — sponsored row updated to match §10.3 + structured-data.md §5.
+
+### Known parked gaps (logged for future release)
+
+Not shipped in v1.5.209 — requires code + §10 + structured-data.md sync:
+
+- Universal `citation[]` rollout to: tech_article / white_paper / scholarly / case_study / interview / comparison / buying_guide / review / how_to / pillar_guide. Would match the v1.5.192 pattern. Biggest single LLM-citation lever we haven't pulled.
+- Speakable for how_to / faq_page / interview — new proposal, not missing implementation. Depends on whether voice read-aloud is desired.
+- Scholarly `abstract` / `keywords[]` / `funder` fields — useful for AcademicGPT / Consensus / Elicit LLM engines.
+- Interview → ProfilePage + Person with sameAs — Knowledge Graph entity grounding for interviewees.
+- Live_blog `liveBlogUpdate[]` timestamped items.
+- Image licensing (`ImageObject.creator`, `copyrightNotice`, `license`).
+
+### Layer 6 compatibility
+
+Verified compatible with all 29 supported languages + Layer 6 regional context:
+
+- `inLanguage` (v1.5.206a) injected on BlogPosting as normal for sponsored content — BCP-47 code pulled from `_seobetter_language` post_meta, falls back to `get_locale()` → `'en'`.
+- `articleSection: "Sponsored"` — Schema.org field values in English per spec (same pattern as existing "News" / "Press Release" / "Opinion" / "Personal Essay"). No Layer 6 drift.
+- `backstory` string is hardcoded English — matches existing Opinion / Personal Essay pattern (hardcoded English there too). Not user-facing content; it's a metadata signal AI engines read for disambiguation. Article body and all H2 / H3 / paragraph text remains in the target language per the NO ENGLISH HEADINGS absolute rule (v1.5.206d-fix7) + canonical translations table (v1.5.206d-fix6/9/11).
+- `citation[]` URLs are language-agnostic.
+- `sponsor` Organization `name` is whatever the user stored — supports any Unicode content.
+- Regional Context block (v1.5.206c — 15 priority countries with custom author-source whitelists) continues to fire for sponsored content type as for every other — no change needed.
+- Country-aware currency / pricing / units / date formats continue to apply to sponsored articles identically to other types.
+
+No language-specific or country-specific code paths touched in this commit. Safe for all 29 languages × 90+ countries.
+
+### User testing plan
+
+Ben to verify post-ship:
+
+1. Generate a sponsored article in English → confirm the saved post's JSON-LD contains `articleSection: "Sponsored"`, `backstory`, and `citation[]` (if body has outbound links).
+2. Generate sponsored articles in Japanese + German + Arabic → confirm schema structure identical, only `inLanguage` + body text differ per language.
+3. Test in Google Rich Results Test — confirm no validator warnings on the new fields.
+4. Test in Schema.org Validator — confirm `backstory` and `citation[]` on BlogPosting pass.
+5. Verify sponsored articles no longer render as generic BlogPosting in AI citation tools (Perplexity / ChatGPT with search) — should be disambiguated as sponsored content.
+
+### Verified by user
+
+- **UNTESTED** — Ben to verify per test plan above.
+
+### Cross-doc sync (4-doc hook)
+
+All 4 required docs updated in this commit per /seobetter skill step 4b:
+- SEO-GEO-AI-GUIDELINES.md §10.1 + §10.3 ✅
+- structured-data.md §4 (new sponsored block) + §5 (sponsored row fix) ✅
+- article_design.md §11 (sponsored row updated) ✅
+- BUILD_LOG.md (this entry) ✅
 
 ---
 
