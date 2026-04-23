@@ -16,6 +16,55 @@
 
 ---
 
+## v1.5.206d-fix15 — CJK/Thai tail-substring variations for Google Suggest
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Post-fix14 audit showed Japanese/Chinese still returning 0 secondary keywords. Root cause: `fetchGoogleSuggest()` tries 7 query variations — `query`, `'best ' + query`, `'how to ' + query`, etc. These English-prefix variations work for Latin languages but produce invalid mixed-language strings for CJK/Thai (`"best 最高のスマートフォン 2026"` → Google Suggest returns 0). Meanwhile the full query itself (`最高のスマートフォン 2026`) is too long-tail for Google Suggest; the Japanese noun that would get completions is `スマートフォン` at the tail.
+
+### Shipped
+
+`fetchGoogleSuggest( query, gl, hl )` — language-aware `variations` array:
+
+- **English/Latin-script** (unchanged): tries 7 variations (`query`, `'best '+query`, `'how to '+query`, `query+' for'`, `query+' vs'`, `'why '+query`, `'what is '+query`).
+- **CJK/Thai** (new): strips year + whitespace, then tries the full query + progressive tail lengths `[6, 5, 4, 8, 10]` characters. Typical CJK pattern like `最高のスマートフォン 2026` → cleaned `最高のスマートフォン` → tails `['スマートフォン', 'ートフォン', 'トフォン', '最高のスマート', '最高のスマートフォン']`. Google Suggest returns rich completions for `スマートフォン` (smartphone) alone.
+
+### Expected impact
+
+| Language | Pre-fix15 secondary | Post-fix15 expected |
+|---|---|---|
+| Japanese | 0 | 5–7 |
+| Chinese | 0 | 5–7 |
+| Korean | 7 (already worked — spaces in query) | 7 |
+| Thai | 6 | 6+ |
+
+Also benefits **Indonesian** indirectly — fix14 already sent `hl=id` (valid); a probe will confirm whether Indonesian now works.
+
+### Safety posture
+
+- **English + Latin-script byte-identical.** `isCjkOrThai` false → original 7-variation array unchanged.
+- **Backward-compatible.** Signature unchanged (only internal `variations` construction differs).
+- **Backend-only** — Vercel auto-deploys.
+
+### Verify
+
+```bash
+# Japanese — should now return secondary
+curl -sS -X POST "https://seobetter.vercel.app/api/topic-research" \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"最高のスマートフォン 2026","country":"JP","language":"ja","site_url":"test"}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('secondary:', d.get('keywords',{}).get('secondary', [])[:5])"
+```
+
+### Verified by user
+
+UNTESTED — pending Vercel auto-deploy + full 22-language re-probe.
+
+---
+
 ## v1.5.206d-fix14 — hl= language param + CJK/Thai character overlap filter
 
 **Date:** 2026-04-23

@@ -212,15 +212,39 @@ export default async function handler(req, res) {
 // Source 1: Google Suggest (real search queries)
 // ============================================================
 async function fetchGoogleSuggest(query, gl = '', hl = '') {
-  const variations = [
-    query,
-    'best ' + query,
-    'how to ' + query,
-    query + ' for',
-    query + ' vs',
-    'why ' + query,
-    'what is ' + query,
-  ];
+  // v1.5.206d-fix15 — CJK-aware variations. English prefixes like "best "
+  // appended to a Japanese/Chinese/Korean/Thai query produce invalid
+  // mixed-language strings that Google Suggest won't complete. For CJK/Thai
+  // use short substrings of the query instead (last N characters, which
+  // typically capture the noun tail — e.g. 最高のスマートフォン → スマートフォン).
+  const baseHl = (hl || '').toLowerCase().slice(0, 2);
+  const isCjkOrThai = ['ja', 'zh', 'ko', 'th', 'lo', 'km', 'my'].includes(baseHl);
+
+  let variations;
+  if (isCjkOrThai) {
+    // Clean: drop years and whitespace for truncation candidates
+    const cleaned = query.replace(/\b20\d{2}\b/g, '').replace(/\s+/g, '').trim();
+    const tails = [];
+    // Try progressive tail lengths — the noun is usually at the end in CJK
+    // ("best smartphone" translates to "最高のスマートフォン" where スマートフォン is the noun at the tail).
+    for (const n of [6, 5, 4, 8, 10]) {
+      if (cleaned.length > n) {
+        const tail = cleaned.slice(-n);
+        if (!tails.includes(tail)) tails.push(tail);
+      }
+    }
+    variations = [query, cleaned, ...tails].filter(Boolean);
+  } else {
+    variations = [
+      query,
+      'best ' + query,
+      'how to ' + query,
+      query + ' for',
+      query + ' vs',
+      'why ' + query,
+      'what is ' + query,
+    ];
+  }
 
   // v1.5.57 — geo-localize completions so "pet shops" for an AU user returns
   // Australian completions ("pet shops sydney", "pet shops melbourne") not
