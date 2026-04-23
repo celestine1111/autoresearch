@@ -19,7 +19,7 @@
 ## v1.5.206d-fix7 — Language-aware headline generation + absolute-rule against English H2s in non-English articles
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `064aede`
 
 ### Why this patch exists
 
