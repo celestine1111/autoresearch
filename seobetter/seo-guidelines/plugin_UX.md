@@ -456,7 +456,7 @@ AIOSEO-style settings panel that appears below the post content area on Post and
   - Section Openings (40-60 word rule)
   - Top 5 prioritized suggestions
 
-- [ ] **Rich Results Tab (PLANNED — redesign spec, v1.5.207 target, supersedes the current single-preview design):**
+- [ ] **Rich Results Tab (SHIPPED in v1.5.207 — 4-subview visual catalog, supersedes the old single-preview design):**
 
   > **Purpose:** Show the article author EVERY way their content could visually appear across Google surfaces AND LLM citation cards — not just one mock. A Recipe article could appear as a standalone Recipe card, inside a Recipe carousel, in Google Discover, in AI Overviews source overlays, and as a Perplexity/ChatGPT/Gemini citation. Each surface has its own visual treatment driven by different schema + metadata signals.
 

@@ -1981,6 +1981,307 @@ final class SEOBetter {
     }
 
     /**
+     * v1.5.207 — Render a single Rich-Result mock tile inside the Google Search
+     * gallery sub-view of the metabox Rich Results tab. Each appearance key gets
+     * its own distinctive visual (recipe card, product card, FAQ dropdowns, map
+     * pin, etc.) that approximates how Google renders the result in 2026.
+     *
+     * Receives a $ctx array with everything the mocks may reference:
+     *   meta_title, meta_desc, site_name, site_host, url_breadcrumb, favicon_url,
+     *   featured_image_url, recipe_data, review_data, product_data, video_data,
+     *   event_data, local_data, job_data, faq_questions, breadcrumbs,
+     *   published_date, keyword, eligible (bool).
+     */
+    private function render_rr_mock( string $key, array $ctx ): void {
+        $title         = (string) ( $ctx['meta_title'] ?? '' );
+        $desc          = (string) ( $ctx['meta_desc'] ?? '' );
+        $site_name     = (string) ( $ctx['site_name'] ?? '' );
+        $site_host     = (string) ( $ctx['site_host'] ?? '' );
+        $breadcrumb    = (string) ( $ctx['url_breadcrumb'] ?? $site_host );
+        $favicon       = (string) ( $ctx['favicon_url'] ?? '' );
+        $img           = (string) ( $ctx['featured_image_url'] ?? '' );
+        $keyword       = (string) ( $ctx['keyword'] ?? 'this topic' );
+        $published     = (string) ( $ctx['published_date'] ?? '' );
+        $recipe_data   = (array) ( $ctx['recipe_data'] ?? [] );
+        $product_data  = (array) ( $ctx['product_data'] ?? [] );
+        $faq_questions = (array) ( $ctx['faq_questions'] ?? [] );
+        $review_data   = (array) ( $ctx['review_data'] ?? [] );
+
+        $title_short = mb_strimwidth( $title ?: 'Your article title', 0, 55, '…' );
+        $desc_short  = mb_strimwidth( $desc ?: 'Your article description appears here.', 0, 100, '…' );
+
+        // Every mock opens with a minimal SERP-looking header (favicon + site + breadcrumb)
+        $header = sprintf(
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><img src="%s" alt="" width="14" height="14" style="border-radius:50%%" onerror="this.style.display=\'none\'"><div style="flex:1;min-width:0"><div style="font-size:10px;color:#202124">%s</div><div style="font-size:9px;color:#4d5156;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">%s</div></div></div>',
+            esc_url( $favicon ),
+            esc_html( $site_name ),
+            esc_html( $breadcrumb )
+        );
+        $title_line = '<div style="font-size:13px;color:#1a0dab;line-height:1.3;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">' . esc_html( $title_short ) . '</div>';
+        $desc_line  = '<div style="font-size:11px;color:#4d5156;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' . esc_html( $desc_short ) . '</div>';
+
+        switch ( $key ) {
+            case 'standard_article':
+                echo $header . $title_line . $desc_line;
+                if ( $published ) {
+                    echo '<div style="font-size:10px;color:#6b7280;margin-top:4px">' . esc_html( $published ) . '</div>';
+                }
+                break;
+
+            case 'article_with_image':
+                echo '<div style="display:flex;gap:10px">';
+                echo '<div style="flex:1;min-width:0">' . $header . $title_line . $desc_line . '</div>';
+                if ( $img ) {
+                    echo '<div style="width:80px;height:60px;background:url(\'' . esc_url( $img ) . '\') center/cover;border-radius:4px;flex-shrink:0"></div>';
+                } else {
+                    echo '<div style="width:80px;height:60px;background:#f3f4f6;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af">Image</div>';
+                }
+                echo '</div>';
+                break;
+
+            case 'recipe_card':
+                if ( $img ) {
+                    echo '<div style="width:100%;height:90px;background:url(\'' . esc_url( $img ) . '\') center/cover;border-radius:4px;margin-bottom:6px"></div>';
+                }
+                echo $title_line;
+                echo '<div style="font-size:11px;color:#4d5156;margin-top:4px">';
+                echo '<span style="color:#fbbc04">★★★★★</span> 4.8 (120)';
+                $prep = $recipe_data['prepTime'] ?? '';
+                if ( $prep ) {
+                    $mins = preg_replace( '/^PT(\d+)M$/', '$1 min', $prep );
+                    echo ' · ' . esc_html( $mins );
+                } else {
+                    echo ' · 30 min';
+                }
+                $cal = $recipe_data['nutrition']['calories'] ?? '';
+                echo ' · ' . esc_html( $cal ?: '~320 cal' );
+                echo '</div>';
+                break;
+
+            case 'recipe_carousel':
+                echo '<div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:6px">RECIPES FROM THIS SITE</div>';
+                echo '<div style="display:flex;gap:6px">';
+                for ( $i = 0; $i < 3; $i++ ) {
+                    $bg = $img && $i === 0 ? 'background:url(\'' . esc_url( $img ) . '\') center/cover' : 'background:linear-gradient(135deg,#fde68a,#f59e0b)';
+                    echo '<div style="flex:1;min-width:0"><div style="width:100%;height:55px;' . $bg . ';border-radius:4px;margin-bottom:3px"></div><div style="font-size:9px;color:#1a0dab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' . ( $i === 0 ? esc_html( mb_strimwidth( $title, 0, 20, '…' ) ) : 'Recipe #' . ( $i + 1 ) ) . '</div><div style="font-size:8px;color:#fbbc04">★★★★★</div></div>';
+                }
+                echo '</div>';
+                break;
+
+            case 'recipe_gallery':
+                echo '<div style="padding:10px;background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:4px;text-align:center">';
+                echo '<div style="font-size:10px;color:#78350f;font-weight:600;margin-bottom:4px">🍽 Recipe Gallery</div>';
+                echo '<div style="font-size:9px;color:#78350f">Appears in Google\'s multi-site recipe gallery when searched</div>';
+                echo '</div>';
+                break;
+
+            case 'product_card':
+                echo '<div style="display:flex;gap:10px">';
+                if ( $img ) {
+                    echo '<div style="width:70px;height:70px;background:url(\'' . esc_url( $img ) . '\') center/cover;border-radius:4px;flex-shrink:0;border:1px solid #e5e7eb"></div>';
+                } else {
+                    echo '<div style="width:70px;height:70px;background:#f3f4f6;border-radius:4px;border:1px solid #e5e7eb;flex-shrink:0"></div>';
+                }
+                echo '<div style="flex:1;min-width:0">';
+                echo $title_line;
+                $price = $product_data['offers']['price'] ?? '';
+                echo '<div style="font-size:14px;color:#202124;font-weight:700;margin-top:2px">' . ( $price ? '$' . esc_html( $price ) : '$29.99' ) . '</div>';
+                echo '<div style="font-size:10px;color:#4d5156"><span style="color:#fbbc04">★★★★★</span> 4.7 (1,234)</div>';
+                echo '<div style="font-size:10px;color:#188038;font-weight:600">✓ In stock</div>';
+                echo '</div></div>';
+                break;
+
+            case 'product_carousel':
+                echo '<div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:6px">PRODUCTS FROM THIS SITE</div>';
+                echo '<div style="display:flex;gap:6px">';
+                for ( $i = 0; $i < 3; $i++ ) {
+                    echo '<div style="flex:1;min-width:0;border:1px solid #e5e7eb;border-radius:4px;padding:4px"><div style="width:100%;height:45px;background:linear-gradient(135deg,#dbeafe,#93c5fd);border-radius:3px;margin-bottom:3px"></div><div style="font-size:9px;color:#111827;font-weight:600">$' . ( 19 + $i * 10 ) . '.99</div><div style="font-size:8px;color:#fbbc04">★★★★★</div></div>';
+                }
+                echo '</div>';
+                break;
+
+            case 'review_snippet':
+                echo $header;
+                echo $title_line;
+                $rating = $review_data['reviewRating']['ratingValue'] ?? '4.7';
+                echo '<div style="font-size:11px;color:#70757a;margin:2px 0 2px"><span style="color:#fbbc04">★★★★★</span> Rating: ' . esc_html( $rating ) . '/5 · Reviewed by ' . esc_html( $site_name ) . '</div>';
+                echo $desc_line;
+                break;
+
+            case 'faq':
+                echo $header;
+                echo $title_line;
+                echo '<div style="margin-top:4px;border-top:1px solid #e8eaed">';
+                $fallback_qs = [ 'What is ' . $keyword . '?', 'How does it work?', 'How much does it cost?' ];
+                $qs_to_show = [];
+                if ( ! empty( $faq_questions ) ) {
+                    foreach ( array_slice( $faq_questions, 0, 2 ) as $q ) {
+                        $qs_to_show[] = $q['name'] ?? '';
+                    }
+                } else {
+                    $qs_to_show = array_slice( $fallback_qs, 0, 2 );
+                }
+                foreach ( $qs_to_show as $q ) {
+                    echo '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:11px;color:#1a73e8"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' . esc_html( $q ) . '</span><span style="color:#5f6368">▾</span></div>';
+                }
+                echo '</div>';
+                break;
+
+            case 'howto':
+                echo $header;
+                echo $title_line;
+                echo '<div style="display:flex;gap:4px;margin-top:6px">';
+                for ( $i = 1; $i <= 4; $i++ ) {
+                    echo '<div style="flex:1;text-align:center"><div style="width:100%;height:40px;background:linear-gradient(135deg,#e0e7ff,#c7d2fe);border-radius:3px;margin-bottom:2px;display:flex;align-items:center;justify-content:center;color:#4338ca;font-size:10px;font-weight:700">' . $i . '</div><div style="font-size:8px;color:#4d5156">Step ' . $i . '</div></div>';
+                }
+                echo '</div>';
+                break;
+
+            case 'event_card':
+                echo '<div style="display:flex;gap:10px">';
+                echo '<div style="width:50px;text-align:center;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;flex-shrink:0"><div style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:2px">JUN</div><div style="font-size:16px;font-weight:700;color:#111827;padding:4px 0">15</div></div>';
+                echo '<div style="flex:1;min-width:0">';
+                echo $title_line;
+                echo '<div style="font-size:10px;color:#4d5156">📍 ' . esc_html( $site_name ) . ' · 7:00 PM</div>';
+                echo '<button type="button" style="margin-top:4px;padding:2px 10px;font-size:10px;border:1px solid #1a0dab;color:#1a0dab;background:#fff;border-radius:3px;cursor:default">Get tickets</button>';
+                echo '</div></div>';
+                break;
+
+            case 'event_carousel':
+                echo '<div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:6px">UPCOMING EVENTS</div>';
+                echo '<div style="display:flex;gap:6px">';
+                foreach ( [ 'JUN 15', 'JUL 02', 'AUG 10' ] as $date ) {
+                    list( $mon, $day ) = explode( ' ', $date );
+                    echo '<div style="flex:1;border:1px solid #e5e7eb;border-radius:4px;padding:6px;text-align:center"><div style="font-size:9px;color:#ef4444;font-weight:700">' . $mon . '</div><div style="font-size:14px;font-weight:700;color:#111827">' . $day . '</div><div style="font-size:8px;color:#6b7280">Event</div></div>';
+                }
+                echo '</div>';
+                break;
+
+            case 'local_business':
+                echo '<div style="display:flex;gap:10px">';
+                echo '<div style="width:60px;height:60px;background:linear-gradient(135deg,#e0f2fe,#7dd3fc);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">📍</div>';
+                echo '<div style="flex:1;min-width:0">';
+                echo '<div style="font-size:12px;color:#1a0dab;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' . esc_html( $site_name ) . '</div>';
+                echo '<div style="font-size:10px;color:#4d5156"><span style="color:#fbbc04">★★★★★</span> 4.6 · Open now</div>';
+                echo '<div style="display:flex;gap:4px;margin-top:3px">';
+                echo '<span style="font-size:9px;padding:2px 6px;background:#e0f2fe;color:#0369a1;border-radius:2px">Directions</span>';
+                echo '<span style="font-size:9px;padding:2px 6px;background:#ecfdf5;color:#166534;border-radius:2px">Call</span>';
+                echo '</div></div></div>';
+                break;
+
+            case 'video':
+                echo '<div style="position:relative;width:100%;height:80px;background:linear-gradient(135deg,#1f2937,#4b5563);border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center">';
+                echo '<div style="width:34px;height:34px;background:rgba(255,255,255,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#111827">▶</div>';
+                echo '<div style="position:absolute;bottom:3px;right:4px;background:rgba(0,0,0,0.7);color:#fff;font-size:9px;padding:1px 4px;border-radius:2px">5:12</div>';
+                echo '</div>';
+                echo $title_line;
+                echo '<div style="font-size:10px;color:#4d5156">YouTube · ' . esc_html( $site_name ) . '</div>';
+                break;
+
+            case 'video_carousel':
+                echo '<div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:6px">TOP VIDEOS</div>';
+                echo '<div style="display:flex;gap:6px">';
+                for ( $i = 0; $i < 3; $i++ ) {
+                    echo '<div style="flex:1"><div style="position:relative;width:100%;height:45px;background:linear-gradient(135deg,#1f2937,#4b5563);border-radius:3px;display:flex;align-items:center;justify-content:center"><div style="width:18px;height:18px;background:rgba(255,255,255,0.9);border-radius:50%;font-size:9px;color:#111827;display:flex;align-items:center;justify-content:center">▶</div></div><div style="font-size:8px;color:#4d5156;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Video ' . ( $i + 1 ) . '</div></div>';
+                }
+                echo '</div>';
+                break;
+
+            case 'top_stories':
+                echo '<div style="display:flex;gap:8px">';
+                if ( $img ) {
+                    echo '<div style="width:80px;height:60px;background:url(\'' . esc_url( $img ) . '\') center/cover;border-radius:4px;flex-shrink:0"></div>';
+                } else {
+                    echo '<div style="width:80px;height:60px;background:#dbeafe;border-radius:4px;flex-shrink:0"></div>';
+                }
+                echo '<div style="flex:1;min-width:0">';
+                echo '<div style="font-size:10px;color:#1a0dab;font-weight:600">' . esc_html( $site_name ) . '</div>';
+                echo $title_line;
+                echo '<div style="font-size:9px;color:#6b7280">' . esc_html( $published ?: '2 hours ago' ) . '</div>';
+                echo '</div></div>';
+                break;
+
+            case 'course_carousel':
+            case 'movie_carousel':
+                $label = $key === 'course_carousel' ? 'COURSES' : 'MOVIES';
+                echo '<div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:6px">' . $label . '</div>';
+                echo '<div style="display:flex;gap:6px">';
+                for ( $i = 0; $i < 3; $i++ ) {
+                    echo '<div style="flex:1;border:1px solid #e5e7eb;border-radius:4px;padding:4px;text-align:center"><div style="width:100%;height:50px;background:linear-gradient(135deg,#ddd6fe,#a78bfa);border-radius:3px;margin-bottom:3px"></div><div style="font-size:9px;color:#111827;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Item ' . ( $i + 1 ) . '</div></div>';
+                }
+                echo '</div>';
+                break;
+
+            case 'vacation_rental':
+                echo '<div style="display:flex;gap:8px">';
+                if ( $img ) {
+                    echo '<div style="width:80px;height:60px;background:url(\'' . esc_url( $img ) . '\') center/cover;border-radius:4px;flex-shrink:0"></div>';
+                } else {
+                    echo '<div style="width:80px;height:60px;background:linear-gradient(135deg,#fed7aa,#fb923c);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px">🏡</div>';
+                }
+                echo '<div style="flex:1;min-width:0">';
+                echo $title_line;
+                echo '<div style="font-size:11px;color:#111827;font-weight:700">$189 <span style="font-size:9px;color:#6b7280;font-weight:400">/ night</span></div>';
+                echo '<div style="font-size:10px;color:#4d5156"><span style="color:#fbbc04">★★★★★</span> 4.8 (42)</div>';
+                echo '</div></div>';
+                break;
+
+            case 'job_posting':
+                echo '<div style="display:flex;gap:8px">';
+                echo '<div style="width:40px;height:40px;background:#4338ca;border-radius:4px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0">' . esc_html( mb_substr( $site_name, 0, 1 ) ) . '</div>';
+                echo '<div style="flex:1;min-width:0">';
+                echo '<div style="font-size:12px;color:#111827;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' . esc_html( $title_short ) . '</div>';
+                echo '<div style="font-size:10px;color:#4d5156">' . esc_html( $site_name ) . ' · Remote</div>';
+                echo '<button type="button" style="margin-top:4px;padding:2px 10px;font-size:10px;background:#1a0dab;color:#fff;border:none;border-radius:3px;cursor:default">Apply now</button>';
+                echo '</div></div>';
+                break;
+
+            case 'software_app':
+                echo '<div style="display:flex;gap:8px">';
+                echo '<div style="width:40px;height:40px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📱</div>';
+                echo '<div style="flex:1;min-width:0">';
+                echo '<div style="font-size:12px;color:#111827;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' . esc_html( $title_short ) . '</div>';
+                echo '<div style="font-size:10px;color:#4d5156"><span style="color:#fbbc04">★★★★★</span> 4.7 · Free</div>';
+                echo '<button type="button" style="margin-top:4px;padding:2px 10px;font-size:10px;background:#22c55e;color:#fff;border:none;border-radius:3px;cursor:default">Get</button>';
+                echo '</div></div>';
+                break;
+
+            case 'breadcrumbs':
+                echo '<div style="font-size:11px;color:#4d5156;margin-bottom:3px">' . esc_html( $breadcrumb ) . '</div>';
+                echo $title_line;
+                echo $desc_line;
+                break;
+
+            case 'speakable':
+                echo '<div style="padding:12px;background:linear-gradient(135deg,#dbeafe,#93c5fd);border-radius:6px;text-align:center">';
+                echo '<div style="font-size:22px;margin-bottom:4px">📣</div>';
+                echo '<div style="font-size:11px;color:#1e3a8a;font-weight:600">Audio on Google Assistant</div>';
+                echo '<div style="font-size:9px;color:#1e40af;margin-top:2px">Voice read-aloud enabled</div>';
+                echo '</div>';
+                break;
+
+            case 'paywall':
+                echo $header;
+                echo '<div style="font-size:13px;color:#1a0dab;line-height:1.3;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="margin-right:4px">🔒</span>' . esc_html( $title_short ) . '</div>';
+                echo $desc_line;
+                echo '<div style="font-size:9px;color:#6b7280;margin-top:3px">Subscription required</div>';
+                break;
+
+            case 'dataset':
+            case 'qa_page':
+            case 'discussion_forum':
+            case 'profile_page':
+            default:
+                $icon_map = [ 'dataset' => '📊', 'qa_page' => '💬', 'discussion_forum' => '💭', 'profile_page' => '👤' ];
+                $icon = $icon_map[ $key ] ?? '📄';
+                echo $header;
+                echo '<div style="font-size:13px;color:#1a0dab;line-height:1.3;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="margin-right:4px">' . $icon . '</span>' . esc_html( $title_short ) . '</div>';
+                echo $desc_line;
+                break;
+        }
+    }
+
+    /**
      * v1.5.206d-fix19 — mb-safe truncation helper for SEO length enforcement.
      * Returns $text unchanged if within $max_chars; otherwise trims to
      * ($max_chars - 1) and appends a single ellipsis character (1 char = 1 "char" count).
@@ -4223,6 +4524,137 @@ final class SEOBetter {
                     }
                 }
                 $rich_types = $unique_rich_types;
+                $active_types = array_column( $rich_types, 'type' );
+
+                // v1.5.207 — Compute eligibility for all 28 Google Search / Discover /
+                // AI Overview appearance surfaces (see plugin_UX.md §Metabox Rich Results Tab).
+                $types_in_graph = [];
+                foreach ( $graph as $item ) {
+                    if ( ! is_array( $item ) ) continue;
+                    $t = $item['@type'] ?? '';
+                    if ( is_string( $t ) ) $types_in_graph[] = $t;
+                    if ( is_array( $t ) ) {
+                        foreach ( $t as $sub ) if ( is_string( $sub ) ) $types_in_graph[] = $sub;
+                    }
+                }
+                $types_in_graph = array_values( array_unique( $types_in_graph ) );
+                $has_type = function ( array $wanted ) use ( $types_in_graph ): bool {
+                    foreach ( $wanted as $w ) if ( in_array( $w, $types_in_graph, true ) ) return true;
+                    return false;
+                };
+                $article_types = [ 'Article','BlogPosting','NewsArticle','OpinionNewsArticle','ScholarlyArticle','TechArticle','ReportageNewsArticle','LiveBlogPosting','Report','AnalysisNewsArticle' ];
+                $local_business_types = [ 'LocalBusiness','Store','Restaurant','LodgingBusiness','FoodEstablishment','ProfessionalService','MedicalBusiness','AutomotiveBusiness','HealthAndBeautyBusiness' ];
+                $featured_image_id = (int) get_post_thumbnail_id( $post->ID );
+                $featured_image_url = $featured_image_id ? (string) wp_get_attachment_image_url( $featured_image_id, 'full' ) : '';
+                $featured_image_width = 0;
+                $featured_image_height = 0;
+                if ( $featured_image_id ) {
+                    $imeta = wp_get_attachment_metadata( $featured_image_id );
+                    $featured_image_width = (int) ( $imeta['width'] ?? 0 );
+                    $featured_image_height = (int) ( $imeta['height'] ?? 0 );
+                }
+                $has_speakable = false;
+                $is_paywalled = false;
+                foreach ( $graph as $item ) {
+                    if ( is_array( $item ) && isset( $item['speakable'] ) ) $has_speakable = true;
+                    if ( is_array( $item ) && isset( $item['isAccessibleForFree'] ) && $item['isAccessibleForFree'] === false ) $is_paywalled = true;
+                }
+                $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+                $published_date = get_the_date( 'M j, Y', $post );
+                $modified_date_mysql = $post->post_modified_gmt;
+                $days_since_modified = $modified_date_mysql ? floor( ( time() - strtotime( $modified_date_mysql ) ) / DAY_IN_SECONDS ) : 999;
+
+                $appearances = [
+                    'standard_article'   => [ 'label' => 'Standard Article',       'eligible' => $has_type( $article_types ), 'schema' => 'Article / BlogPosting / NewsArticle', 'why' => 'Basic blue-link Google result.' ],
+                    'article_with_image' => [ 'label' => 'Article + thumbnail',    'eligible' => $has_type( $article_types ) && $featured_image_url !== '', 'schema' => 'Article + featured image', 'why' => 'Adds a thumbnail next to the result.' ],
+                    'recipe_card'        => [ 'label' => 'Recipe card',            'eligible' => $has_type( [ 'Recipe' ] ), 'schema' => 'Recipe', 'why' => 'Full recipe card with image, rating, time, calories.' ],
+                    'recipe_carousel'    => [ 'label' => 'Recipe carousel',        'eligible' => $has_type( [ 'Recipe' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Recipe + ItemList ≥3', 'why' => 'Host-driven horizontal scroller.' ],
+                    'recipe_gallery'     => [ 'label' => 'Recipe gallery',         'eligible' => $has_type( [ 'Recipe' ] ), 'schema' => 'Recipe', 'why' => 'Google multi-site recipe gallery.' ],
+                    'product_card'       => [ 'label' => 'Product card',           'eligible' => $has_type( [ 'Product' ] ), 'schema' => 'Product + offers', 'why' => 'Image + price + rating + availability.' ],
+                    'product_carousel'   => [ 'label' => 'Product carousel',       'eligible' => $has_type( [ 'Product' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Product + ItemList ≥3', 'why' => 'Horizontal product gallery.' ],
+                    'review_snippet'     => [ 'label' => 'Review snippet',         'eligible' => $has_type( [ 'Review', 'AggregateRating' ] ), 'schema' => 'Review / AggregateRating', 'why' => 'Inline star rating below the title.' ],
+                    'faq'                => [ 'label' => 'FAQ rich result',        'eligible' => $has_type( [ 'FAQPage' ] ), 'schema' => 'FAQPage', 'why' => 'Expandable Q&A rows (desktop limited since 2023).' ],
+                    'howto'              => [ 'label' => 'HowTo step carousel',   'eligible' => $has_type( [ 'HowTo' ] ), 'schema' => 'HowTo', 'why' => 'Numbered step thumbnails (mobile + Assistant).' ],
+                    'event_card'         => [ 'label' => 'Event card',             'eligible' => $has_type( [ 'Event' ] ), 'schema' => 'Event', 'why' => 'Date + venue + Get tickets CTA.' ],
+                    'event_carousel'     => [ 'label' => 'Event carousel',         'eligible' => $has_type( [ 'Event' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Event + ItemList', 'why' => 'Horizontal multi-date cards.' ],
+                    'local_business'    => [ 'label' => 'Local Business / Map Pack', 'eligible' => $has_type( $local_business_types ), 'schema' => 'LocalBusiness + address', 'why' => 'Map pin + hours + Directions + Call.' ],
+                    'video'              => [ 'label' => 'Video rich result',      'eligible' => $has_type( [ 'VideoObject' ] ), 'schema' => 'VideoObject', 'why' => 'Large play-button thumbnail + duration.' ],
+                    'video_carousel'     => [ 'label' => 'Video carousel',         'eligible' => $has_type( [ 'VideoObject' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'VideoObject + ItemList', 'why' => 'Top Videos section.' ],
+                    'top_stories'        => [ 'label' => 'Top Stories (News)',     'eligible' => $has_type( [ 'NewsArticle','ReportageNewsArticle','AnalysisNewsArticle','OpinionNewsArticle' ] ), 'schema' => 'NewsArticle', 'why' => 'News carousel. Requires Google News inclusion.' ],
+                    'course_carousel'    => [ 'label' => 'Course carousel',        'eligible' => $has_type( [ 'Course' ] ), 'schema' => 'Course', 'why' => 'Provider + course + duration + price.' ],
+                    'movie_carousel'     => [ 'label' => 'Movie carousel',         'eligible' => $has_type( [ 'Movie' ] ), 'schema' => 'Movie', 'why' => 'Poster + title + year + director.' ],
+                    'vacation_rental'    => [ 'label' => 'Vacation Rental',        'eligible' => $has_type( [ 'VacationRental','LodgingBusiness' ] ), 'schema' => 'VacationRental', 'why' => 'Property + price/night + rating.' ],
+                    'job_posting'        => [ 'label' => 'Job posting',            'eligible' => $has_type( [ 'JobPosting' ] ), 'schema' => 'JobPosting', 'why' => 'Interactive job card with Apply CTA.' ],
+                    'software_app'       => [ 'label' => 'Software App',           'eligible' => $has_type( [ 'SoftwareApplication','MobileApplication','WebApplication' ] ), 'schema' => 'SoftwareApplication', 'why' => 'Icon + rating + price + download.' ],
+                    'dataset'            => [ 'label' => 'Dataset',                'eligible' => $has_type( [ 'Dataset' ] ), 'schema' => 'Dataset', 'why' => 'Appears in Google Dataset Search.' ],
+                    'qa_page'            => [ 'label' => 'Q&A page',               'eligible' => $has_type( [ 'QAPage' ] ), 'schema' => 'QAPage', 'why' => 'Accepted answer excerpt + upvote count.' ],
+                    'discussion_forum'   => [ 'label' => 'Discussion Forum',       'eligible' => $has_type( [ 'DiscussionForumPosting' ] ), 'schema' => 'DiscussionForumPosting', 'why' => 'Thread + top reply + reply count.' ],
+                    'profile_page'       => [ 'label' => 'Profile Page',           'eligible' => $has_type( [ 'ProfilePage' ] ), 'schema' => 'ProfilePage', 'why' => 'Author photo + name + bio excerpt.' ],
+                    'breadcrumbs'        => [ 'label' => 'Breadcrumb trail',       'eligible' => $has_type( [ 'BreadcrumbList' ] ), 'schema' => 'BreadcrumbList', 'why' => 'Path shown in URL line: site › category › article.' ],
+                    'speakable'          => [ 'label' => 'Speakable (voice)',      'eligible' => $has_speakable, 'schema' => 'Speakable within Article', 'why' => 'Google Assistant read-aloud.' ],
+                    'paywall'            => [ 'label' => 'Paywall indicator',      'eligible' => $is_paywalled, 'schema' => 'isAccessibleForFree=false', 'why' => '🔒 icon for subscription content.' ],
+                ];
+                $eligible_count = count( array_filter( array_column( $appearances, 'eligible' ) ) );
+                $total_appearances = count( $appearances );
+
+                $discover_checks = [
+                    [ 'label' => 'Featured image set',                 'ok' => $featured_image_url !== '' ],
+                    [ 'label' => 'Featured image ≥ 1200px wide',       'ok' => $featured_image_width >= 1200 ],
+                    [ 'label' => 'Article schema present',             'ok' => $has_type( $article_types ) ],
+                    [ 'label' => 'Recent publish/modify (≤30 days)',   'ok' => $days_since_modified <= 30 ],
+                    [ 'label' => 'Mobile-friendly (responsive theme)', 'ok' => true ],
+                ];
+                $discover_ready = count( array_filter( array_column( $discover_checks, 'ok' ) ) ) >= 4;
+
+                $h2_count = preg_match_all( '/<h2[^>]*>/i', $post->post_content );
+                $list_count = preg_match_all( '/<(ul|ol)[^>]*>/i', $post->post_content );
+                $aio_checks = [
+                    [ 'label' => 'FAQ, HowTo, or Article schema present',    'ok' => $has_type( array_merge( $article_types, [ 'FAQPage','HowTo' ] ) ) ],
+                    [ 'label' => 'Structured headings (≥3 H2 sections)',     'ok' => $h2_count >= 3 ],
+                    [ 'label' => 'Bulleted / numbered lists present',        'ok' => $list_count >= 1 ],
+                    [ 'label' => 'Organization or Person (E-E-A-T) schema',  'ok' => $has_type( [ 'Organization','Person' ] ) ],
+                    [ 'label' => 'Recent dateModified (≤90 days)',            'ok' => $days_since_modified <= 90 ],
+                ];
+                $aio_ready_count = count( array_filter( array_column( $aio_checks, 'ok' ) ) );
+                $aio_score = (int) round( ( $aio_ready_count / max( 1, count( $aio_checks ) ) ) * 100 );
+
+                $og_title_set = (bool) get_post_meta( $post->ID, '_seobetter_meta_title', true );
+                $og_desc_len = mb_strlen( $meta_desc );
+                $site_icon_id = (int) get_option( 'site_icon', 0 );
+                $llm_checks = [
+                    [ 'label' => 'SEO title set and ≤ 70 chars',              'ok' => $og_title_set && mb_strlen( $meta_title ) <= 70 ],
+                    [ 'label' => 'Description 120–200 chars',                 'ok' => $og_desc_len >= 120 && $og_desc_len <= 200 ],
+                    [ 'label' => 'Featured image ≥ 1200×630 (Perplexity)',    'ok' => $featured_image_width >= 1200 && $featured_image_height >= 630 ],
+                    [ 'label' => 'Favicon (site icon) configured',            'ok' => $site_icon_id > 0 ],
+                    [ 'label' => 'Site name configured',                      'ok' => $site_name !== '' ],
+                    [ 'label' => 'FAQ schema (Perplexity bonus)',             'ok' => $has_type( [ 'FAQPage' ] ) ],
+                    [ 'label' => 'HowTo / step-structured (ChatGPT bonus)',   'ok' => $has_type( [ 'HowTo' ] ) ],
+                    [ 'label' => 'Organization schema (Gemini bonus)',        'ok' => $has_type( [ 'Organization' ] ) ],
+                ];
+                $llm_ready_count = count( array_filter( array_column( $llm_checks, 'ok' ) ) );
+                $llm_score = (int) round( ( $llm_ready_count / max( 1, count( $llm_checks ) ) ) * 100 );
+
+                // Context array passed to render_rr_mock() for every tile.
+                $rr_ctx = [
+                    'meta_title'         => $meta_title,
+                    'meta_desc'          => $meta_desc,
+                    'site_name'          => $site_name,
+                    'site_host'          => $site_host,
+                    'url_breadcrumb'     => $url_breadcrumb ?? $site_host,
+                    'favicon_url'        => $favicon_url ?? home_url( '/favicon.ico' ),
+                    'featured_image_url' => $featured_image_url,
+                    'recipe_data'        => $recipe_data,
+                    'review_data'        => $review_data,
+                    'product_data'       => $product_data,
+                    'video_data'         => $video_data,
+                    'event_data'         => $event_data,
+                    'local_data'         => $local_data,
+                    'job_data'           => $job_data,
+                    'faq_questions'      => $faq_questions,
+                    'breadcrumbs'        => $breadcrumbs,
+                    'published_date'     => $published_date,
+                    'keyword'            => $keyword,
+                ];
                 ?>
 
                 <?php if ( empty( $graph ) ) : ?>
@@ -4233,76 +4665,210 @@ final class SEOBetter {
                     </div>
                 <?php else : ?>
 
-                <!-- SERP Preview with Rich Results -->
-                <div style="margin-bottom:20px">
-                    <div style="font-size:13px;font-weight:600;margin-bottom:8px">Google Search Preview</div>
-                    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-family:Arial,Helvetica,sans-serif">
-                        <!-- Breadcrumbs -->
-                        <div style="font-size:12px;color:#202124;margin-bottom:4px">
-                            <?php echo esc_html( ! empty( $breadcrumbs ) ? implode( ' > ', $breadcrumbs ) : wp_parse_url( home_url(), PHP_URL_HOST ) ); ?>
-                        </div>
-                        <!-- Title -->
-                        <div style="font-size:18px;color:#1a0dab;margin-bottom:4px;line-height:1.3"><?php echo esc_html( $meta_title ); ?></div>
+                <!-- v1.5.207 — 4-subview Rich Results Visual Catalog -->
+                <div class="sb-rr-subnav" style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">
+                    <button type="button" class="sb-rr-pill sb-rr-pill-active" data-rr="search" style="padding:6px 14px;font-size:12px;font-weight:600;border:1px solid #764ba2;background:#764ba2;color:#fff;border-radius:999px;cursor:pointer">🔎 Google Search</button>
+                    <button type="button" class="sb-rr-pill" data-rr="discover" style="padding:6px 14px;font-size:12px;font-weight:600;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:999px;cursor:pointer">📱 Google Discover</button>
+                    <button type="button" class="sb-rr-pill" data-rr="aio" style="padding:6px 14px;font-size:12px;font-weight:600;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:999px;cursor:pointer">🤖 AI Overviews</button>
+                    <button type="button" class="sb-rr-pill" data-rr="llm" style="padding:6px 14px;font-size:12px;font-weight:600;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:999px;cursor:pointer">💬 LLM Citations</button>
+                </div>
 
-                        <?php if ( $recipe_data ) : ?>
-                            <div style="font-size:12px;color:#70757a;margin-bottom:4px">
-                                <span style="color:#e67700">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
-                                <?php if ( ! empty( $recipe_data['prepTime'] ) ) echo ' &middot; ' . esc_html( preg_replace( '/^PT(\d+)M$/', '$1 min', $recipe_data['prepTime'] ) ); ?>
-                                <?php if ( ! empty( $recipe_data['nutrition']['calories'] ) ) echo ' &middot; ' . esc_html( $recipe_data['nutrition']['calories'] ); ?>
+                <!-- SUBVIEW 1: GOOGLE SEARCH GALLERY -->
+                <div class="sb-rr-subview" data-rr="search">
+                    <div style="padding:10px 14px;background:<?php echo $eligible_count >= 5 ? '#ecfdf5' : '#fffbeb'; ?>;border-left:3px solid <?php echo $eligible_count >= 5 ? '#22c55e' : '#f59e0b'; ?>;border-radius:0 4px 4px 0;font-size:13px;margin-bottom:16px">
+                        <strong><?php echo esc_html( $eligible_count ); ?> of <?php echo esc_html( $total_appearances ); ?></strong> Google Search appearances eligible. Greyed tiles show appearances to unlock by adding schema.
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:20px">
+                        <?php foreach ( $appearances as $key => $app ) :
+                            $eligible = (bool) $app['eligible'];
+                            $tile_border = $eligible ? '#22c55e' : '#e5e7eb';
+                            $tile_bg = $eligible ? '#fff' : '#f9fafb';
+                        ?>
+                            <div style="border:1px solid <?php echo $tile_border; ?>;border-radius:8px;padding:12px;background:<?php echo $tile_bg; ?>;<?php echo $eligible ? '' : 'opacity:0.7;'; ?>">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px">
+                                    <div style="font-size:12px;font-weight:700;color:#111827"><?php echo esc_html( $app['label'] ); ?></div>
+                                    <span style="font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap;<?php echo $eligible ? 'background:#dcfce7;color:#166534' : 'background:#e5e7eb;color:#6b7280'; ?>">
+                                        <?php echo $eligible ? '✓ Eligible' : '○ Add schema'; ?>
+                                    </span>
+                                </div>
+                                <?php $this->render_rr_mock( $key, $rr_ctx ); ?>
+                                <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6;font-size:10px;color:#6b7280;line-height:1.4">
+                                    <div><strong>Requires:</strong> <?php echo esc_html( $app['schema'] ); ?></div>
+                                    <div style="margin-top:2px"><?php echo esc_html( $app['why'] ); ?></div>
+                                </div>
                             </div>
-                        <?php endif; ?>
-
-                        <?php if ( $review_data && ! empty( $review_data['reviewRating']['ratingValue'] ) ) : ?>
-                            <div style="font-size:12px;color:#70757a;margin-bottom:4px">
-                                <span style="color:#e67700">&#9733;&#9733;&#9733;&#9733;<?php echo ( (float) $review_data['reviewRating']['ratingValue'] >= 4.5 ) ? '&#9733;' : '&#9734;'; ?></span>
-                                <?php echo esc_html( $review_data['reviewRating']['ratingValue'] ); ?>/5 &middot; Review
-                            </div>
-                        <?php endif; ?>
-
-                        <!-- Description -->
-                        <div style="font-size:13px;color:#4d5156;line-height:1.5"><?php echo esc_html( mb_substr( $meta_desc, 0, 160 ) ); ?></div>
-
-                        <?php if ( ! empty( $faq_questions ) ) : ?>
-                            <div style="margin-top:8px;border-top:1px solid #e8eaed;padding-top:6px">
-                                <?php foreach ( array_slice( $faq_questions, 0, 3 ) as $q ) : ?>
-                                    <div style="font-size:13px;color:#1a73e8;padding:4px 0;cursor:pointer">&#9660; <?php echo esc_html( $q['name'] ?? '' ); ?></div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if ( $product_data && ! empty( $product_data['offers']['price'] ) ) : ?>
-                            <div style="margin-top:6px;font-size:12px;color:#202124">
-                                <strong>$<?php echo esc_html( $product_data['offers']['price'] ); ?></strong>
-                                <span style="color:#188038"> &middot; In stock</span>
-                            </div>
-                        <?php endif; ?>
+                        <?php endforeach; ?>
                     </div>
                 </div>
 
-                <!-- Active Rich Result Types -->
-                <div style="margin-bottom:20px">
-                    <div style="font-size:13px;font-weight:600;margin-bottom:8px"><?php echo count( $rich_types ); ?> Rich Result Type<?php echo count( $rich_types ) !== 1 ? 's' : ''; ?> Active</div>
-                    <?php foreach ( $rich_types as $rt ) : ?>
-                        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;border-bottom:1px solid #f9fafb">
-                            <span style="color:#22c55e;font-weight:700">&#10003;</span>
-                            <span style="color:#374151"><?php echo esc_html( $rt['label'] ); ?></span>
-                            <?php if ( $rt['detail'] ) : ?>
-                                <span style="color:#9ca3af;font-size:11px">(<?php echo esc_html( $rt['detail'] ); ?>)</span>
+                <!-- SUBVIEW 2: GOOGLE DISCOVER -->
+                <div class="sb-rr-subview" data-rr="discover" style="display:none">
+                    <div style="padding:10px 14px;background:<?php echo $discover_ready ? '#ecfdf5' : '#fffbeb'; ?>;border-left:3px solid <?php echo $discover_ready ? '#22c55e' : '#f59e0b'; ?>;border-radius:0 4px 4px 0;font-size:13px;margin-bottom:16px">
+                        <?php echo $discover_ready ? '✅ Eligible for Google Discover feed' : '⚠️ Not yet eligible for Google Discover — see checklist'; ?>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+                        <div>
+                            <div style="font-size:11px;color:#6b7280;margin-bottom:8px;font-weight:600">PREVIEW (MOBILE)</div>
+                            <div style="max-width:360px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff">
+                                <?php if ( $featured_image_url ) : ?>
+                                    <div style="width:100%;padding-top:56.25%;background:url('<?php echo esc_url( $featured_image_url ); ?>') center/cover;border-bottom:1px solid #f3f4f6"></div>
+                                <?php else : ?>
+                                    <div style="width:100%;padding-top:56.25%;background:linear-gradient(135deg,#667eea,#764ba2);position:relative"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:11px;opacity:0.7">No featured image</div></div>
+                                <?php endif; ?>
+                                <div style="padding:12px">
+                                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                                        <img src="<?php echo esc_url( $favicon_url ?? '' ); ?>" alt="" width="14" height="14" style="border-radius:50%" onerror="this.style.display='none'">
+                                        <span style="font-size:10px;color:#6b7280"><?php echo esc_html( $site_name ); ?></span>
+                                    </div>
+                                    <div style="font-size:15px;font-weight:600;color:#202124;line-height:1.3;margin-bottom:4px"><?php echo esc_html( $meta_title ); ?></div>
+                                    <div style="font-size:12px;color:#4d5156;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"><?php echo esc_html( $meta_desc ); ?></div>
+                                    <div style="display:flex;gap:14px;margin-top:10px;padding-top:8px;border-top:1px solid #f3f4f6;font-size:13px;color:#9ca3af"><span>👍</span><span>🔖</span><span>⋯</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size:11px;color:#6b7280;margin-bottom:8px;font-weight:600">DISCOVER ELIGIBILITY</div>
+                            <?php foreach ( $discover_checks as $c ) : ?>
+                                <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+                                    <span style="color:<?php echo $c['ok'] ? '#22c55e' : '#ef4444'; ?>;font-weight:700"><?php echo $c['ok'] ? '✓' : '✗'; ?></span>
+                                    <span style="color:#374151"><?php echo esc_html( $c['label'] ); ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php if ( $featured_image_width > 0 && $featured_image_width < 1200 ) : ?>
+                                <div style="margin-top:10px;padding:8px 10px;background:#fef2f2;border-left:3px solid #ef4444;border-radius:0 4px 4px 0;font-size:11px;color:#7f1d1d">
+                                    Your featured image is <?php echo esc_html( $featured_image_width ); ?>px wide. Discover requires ≥1200px.
+                                </div>
                             <?php endif; ?>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
+                </div>
 
-                    <?php
-                    // Show what's NOT detected
-                    $all_possible = [ 'Recipe', 'FAQ', 'Review', 'Product', 'Video', 'Event', 'LocalBusiness', 'Job', 'FactCheck', 'Breadcrumb', 'ItemList', 'Speakable', 'Software', 'Course', 'VacationRental' ];
-                    $active_types = array_column( $rich_types, 'type' );
-                    $missing = array_diff( $all_possible, $active_types );
-                    if ( ! empty( $missing ) ) :
-                    ?>
-                        <div style="margin-top:8px;font-size:12px;color:#9ca3af">
-                            Not detected: <?php echo esc_html( implode( ', ', $missing ) ); ?>
+                <!-- SUBVIEW 3: AI OVERVIEWS -->
+                <div class="sb-rr-subview" data-rr="aio" style="display:none">
+                    <div style="padding:10px 14px;background:<?php echo $aio_score >= 80 ? '#ecfdf5' : ( $aio_score >= 60 ? '#fffbeb' : '#fef2f2' ); ?>;border-left:3px solid <?php echo $aio_score >= 80 ? '#22c55e' : ( $aio_score >= 60 ? '#f59e0b' : '#ef4444' ); ?>;border-radius:0 4px 4px 0;font-size:13px;margin-bottom:16px">
+                        <strong>AI Overview citation readiness: <?php echo esc_html( $aio_score ); ?>/100</strong> — Google AI Overviews appear on ~58% of informational queries (2026). High readiness removes structural blockers; it doesn't guarantee inclusion.
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+                        <div>
+                            <div style="font-size:11px;color:#6b7280;margin-bottom:8px;font-weight:600">CITATION OVERLAY (2026)</div>
+                            <div style="border:1px solid #e5e7eb;border-radius:8px;padding:14px;background:#fff">
+                                <div style="font-size:12px;color:#202124;line-height:1.6;margin-bottom:10px">
+                                    According to recent research, <span style="background:#e0e7ff;color:#4338ca;padding:2px 4px;border-radius:3px;border-bottom:2px dotted #4338ca"><?php echo esc_html( mb_strimwidth( $keyword ?: 'this topic', 0, 40, '…' ) ); ?></span> offers significant benefits when properly structured…
+                                </div>
+                                <div style="padding:10px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;box-shadow:0 4px 12px rgba(0,0,0,0.08)">
+                                    <div style="font-size:9px;color:#6b7280;font-weight:700;margin-bottom:6px;letter-spacing:0.5px">SOURCES (3)</div>
+                                    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6">
+                                        <img src="<?php echo esc_url( $favicon_url ?? '' ); ?>" alt="" width="14" height="14" onerror="this.style.display='none'">
+                                        <div style="flex:1;min-width:0">
+                                            <div style="font-size:10px;color:#6b7280"><?php echo esc_html( $site_name ); ?></div>
+                                            <div style="font-size:11px;color:#1a0dab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500"><?php echo esc_html( $meta_title ); ?></div>
+                                        </div>
+                                        <span style="font-size:8px;padding:2px 5px;background:#dcfce7;color:#166534;border-radius:999px;font-weight:600;white-space:nowrap">This site</span>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6;opacity:0.6">
+                                        <div style="width:14px;height:14px;background:#d1d5db;border-radius:2px"></div>
+                                        <div style="flex:1;min-width:0"><div style="font-size:10px;color:#9ca3af">example.com</div><div style="font-size:11px;color:#1a0dab">Related source page…</div></div>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;opacity:0.6">
+                                        <div style="width:14px;height:14px;background:#d1d5db;border-radius:2px"></div>
+                                        <div style="flex:1;min-width:0"><div style="font-size:10px;color:#9ca3af">wikipedia.org</div><div style="font-size:11px;color:#1a0dab">Background reference…</div></div>
+                                    </div>
+                                    <div style="width:100%;margin-top:8px;padding:6px;font-size:11px;border:1px solid #d1d5db;background:#fff;border-radius:6px;color:#4338ca;font-weight:600;text-align:center">💬 Ask about this</div>
+                                </div>
+                            </div>
                         </div>
-                    <?php endif; ?>
+                        <div>
+                            <div style="font-size:11px;color:#6b7280;margin-bottom:8px;font-weight:600">READINESS SIGNALS</div>
+                            <?php foreach ( $aio_checks as $c ) : ?>
+                                <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+                                    <span style="color:<?php echo $c['ok'] ? '#22c55e' : '#ef4444'; ?>;font-weight:700"><?php echo $c['ok'] ? '✓' : '✗'; ?></span>
+                                    <span style="color:#374151"><?php echo esc_html( $c['label'] ); ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                            <div style="margin-top:12px;padding:10px;background:#f0f9ff;border-left:3px solid #3b82f6;border-radius:0 4px 4px 0;font-size:11px;color:#1e40af;line-height:1.5">
+                                AI Overviews group multiple sources per hovered claim. You compete to be IN the group, not for a single click. Structured headings + bullet lists + citations raise inclusion probability.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBVIEW 4: LLM CITATIONS -->
+                <div class="sb-rr-subview" data-rr="llm" style="display:none">
+                    <div style="padding:10px 14px;background:<?php echo $llm_score >= 75 ? '#ecfdf5' : ( $llm_score >= 50 ? '#fffbeb' : '#fef2f2' ); ?>;border-left:3px solid <?php echo $llm_score >= 75 ? '#22c55e' : ( $llm_score >= 50 ? '#f59e0b' : '#ef4444' ); ?>;border-radius:0 4px 4px 0;font-size:13px;margin-bottom:12px">
+                        <strong>LLM Citation Readiness: <?php echo esc_html( $llm_score ); ?>/100</strong> — drives whether Perplexity, ChatGPT, Gemini, Claude <em>include</em> your page. Visual layout is uniform per platform regardless of schema.
+                    </div>
+                    <div style="padding:12px 14px;margin-bottom:16px;background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;font-size:12px;color:#92400e;line-height:1.5">
+                        <strong>💡 Key difference vs Google Search:</strong> LLMs render the SAME citation card layout whether your article is a Recipe, FAQ, or HowTo. Schema doesn't change the visual. What DOES change is inclusion probability — FAQ for Perplexity, HowTo for ChatGPT, Organization for Gemini.
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px">
+                        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#fff">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f3f4f6">
+                                <span style="width:20px;height:20px;background:#2cbec0;color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">P</span>
+                                <span style="font-size:11px;font-weight:600;color:#111827">Perplexity</span>
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <div style="flex:1;min-width:0">
+                                    <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+                                        <span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:1px 5px;border-radius:3px;font-weight:600">3</span>
+                                        <img src="<?php echo esc_url( $favicon_url ?? '' ); ?>" alt="" width="12" height="12" style="border-radius:50%" onerror="this.style.display='none'">
+                                        <span style="font-size:9px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?php echo esc_html( $site_name ); ?></span>
+                                    </div>
+                                    <div style="font-size:11px;font-weight:600;color:#111827;line-height:1.3;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"><?php echo esc_html( $meta_title ); ?></div>
+                                    <div style="font-size:10px;color:#6b7280;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"><?php echo esc_html( $meta_desc ); ?></div>
+                                </div>
+                                <?php if ( $featured_image_url ) : ?>
+                                    <div style="width:60px;height:60px;background:url('<?php echo esc_url( $featured_image_url ); ?>') center/cover;border-radius:6px;flex-shrink:0"></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#fff">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f3f4f6">
+                                <span style="width:20px;height:20px;background:#10a37f;color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">G</span>
+                                <span style="font-size:11px;font-weight:600;color:#111827">ChatGPT Search</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                                <img src="<?php echo esc_url( $favicon_url ?? '' ); ?>" alt="" width="12" height="12" style="border-radius:50%" onerror="this.style.display='none'">
+                                <span style="font-size:10px;color:#6b7280"><?php echo esc_html( $site_host ); ?></span>
+                            </div>
+                            <div style="font-size:12px;color:#1a0dab;line-height:1.3;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?php echo esc_html( $meta_title ); ?></div>
+                            <div style="font-size:10px;color:#6b7280;line-height:1.4;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden"><?php echo esc_html( $meta_desc ); ?></div>
+                        </div>
+                        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#fff">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f3f4f6">
+                                <span style="width:20px;height:20px;background:linear-gradient(135deg,#4285f4,#9c27b0);color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">✦</span>
+                                <span style="font-size:11px;font-weight:600;color:#111827">Gemini</span>
+                            </div>
+                            <div style="font-size:11px;color:#374151;line-height:1.5;margin-bottom:6px">...optimize for AI search<sup style="background:#e0e7ff;color:#4338ca;padding:1px 4px;border-radius:3px;font-size:8px;font-weight:700">1</sup>.</div>
+                            <div style="padding:6px 8px;background:#f9fafb;border-radius:6px">
+                                <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+                                    <img src="<?php echo esc_url( $favicon_url ?? '' ); ?>" alt="" width="10" height="10" style="border-radius:50%" onerror="this.style.display='none'">
+                                    <span style="font-size:9px;color:#6b7280"><?php echo esc_html( $site_name ); ?></span>
+                                </div>
+                                <div style="font-size:10px;color:#1a0dab;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?php echo esc_html( $meta_title ); ?></div>
+                            </div>
+                        </div>
+                        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#fff">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f3f4f6">
+                                <span style="width:20px;height:20px;background:#D97757;color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">A</span>
+                                <span style="font-size:11px;font-weight:600;color:#111827">Claude</span>
+                            </div>
+                            <div style="font-size:11px;color:#374151;line-height:1.5;margin-bottom:6px">...based on the referenced analysis.</div>
+                            <div style="margin-top:6px;padding-top:6px;border-top:1px solid #f3f4f6;font-size:9px;color:#6b7280">Footnote:</div>
+                            <div style="font-size:10px;color:#374151;margin-top:3px">[1] <span style="color:#1a0dab;font-weight:500"><?php echo esc_html( $site_name ); ?></span> – <?php echo esc_html( mb_strimwidth( $meta_title, 0, 40, '…' ) ); ?></div>
+                        </div>
+                    </div>
+                    <div style="font-size:11px;color:#6b7280;margin-bottom:10px;font-weight:600">READINESS SIGNALS (8 checks)</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;margin-bottom:12px">
+                        <?php foreach ( $llm_checks as $c ) : ?>
+                            <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:12px">
+                                <span style="color:<?php echo $c['ok'] ? '#22c55e' : '#ef4444'; ?>;font-weight:700"><?php echo $c['ok'] ? '✓' : '✗'; ?></span>
+                                <span style="color:#374151"><?php echo esc_html( $c['label'] ); ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div style="padding:10px 14px;background:#f0f9ff;border-left:3px solid #3b82f6;border-radius:0 4px 4px 0;font-size:11px;color:#1e40af;line-height:1.5">
+                        <strong>What drives each field:</strong> Title ← &lt;title&gt; → og:title → meta title. Description ← meta description → og:description → first-paragraph extract. Thumbnail ← og:image (Perplexity + ChatGPT only). Favicon ← site icon. Publisher ← og:site_name → domain.
+                    </div>
                 </div>
 
                 <!-- Schema Impact Estimate -->
@@ -4423,6 +4989,28 @@ final class SEOBetter {
                     this.classList.add('sb-meta-tab-active');
                     panels.forEach(function(p) {
                         p.style.display = p.getAttribute('data-panel') === target ? 'block' : 'none';
+                    });
+                });
+            });
+
+            // v1.5.207 — Rich Results sub-view switcher (Google Search / Discover / AI Overviews / LLM Citations)
+            var rrPills = document.querySelectorAll('.sb-rr-pill');
+            var rrSubviews = document.querySelectorAll('.sb-rr-subview');
+            rrPills.forEach(function(pill) {
+                pill.addEventListener('click', function() {
+                    var target = this.getAttribute('data-rr');
+                    rrPills.forEach(function(p) {
+                        p.classList.remove('sb-rr-pill-active');
+                        p.style.background = '#fff';
+                        p.style.color = '#374151';
+                        p.style.borderColor = '#d1d5db';
+                    });
+                    this.classList.add('sb-rr-pill-active');
+                    this.style.background = '#764ba2';
+                    this.style.color = '#fff';
+                    this.style.borderColor = '#764ba2';
+                    rrSubviews.forEach(function(sv) {
+                        sv.style.display = sv.getAttribute('data-rr') === target ? 'block' : 'none';
                     });
                 });
             });

@@ -7,12 +7,62 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d-fix19)
+> **Last updated:** 2026-04-23 (v1.5.207)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.207 — Rich Results tab redesign as 4-subview visual catalog (Google Search / Discover / AI Overviews / LLM Citations)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this ships
+
+The old Rich Results tab showed a single SERP preview mock plus a checklist of detected schema @types. Ben wanted a comprehensive visual catalog showing EVERY way the article could appear across Google surfaces AND LLM citation cards, with per-appearance mocks and eligibility status per surface.
+
+### Added
+
+- **`render_rr_mock( string $key, array $ctx ): void`** — [seobetter.php::render_rr_mock()](/Users/ben/Documents/autoresearch/seobetter/seobetter.php) line **~1988**
+  - Dispatches per-appearance HTML mock renderers for 28 Google Search rich-result types (standard_article, article_with_image, recipe_card, recipe_carousel, recipe_gallery, product_card, product_carousel, review_snippet, faq, howto, event_card, event_carousel, local_business, video, video_carousel, top_stories, course_carousel, movie_carousel, vacation_rental, job_posting, software_app, dataset, qa_page, discussion_forum, profile_page, breadcrumbs, speakable, paywall)
+  - Each mock uses Google's exact 2026 visual palette (title `#1a0dab`, snippet `#4d5156`, stars `#fbbc04`, body `#202124`, 1px borders `#e5e7eb`, 8px radius)
+  - Context `$ctx` array carries meta_title, meta_desc, site_name, site_host, url_breadcrumb, favicon_url, featured_image_url, recipe_data, review_data, product_data, faq_questions, breadcrumbs, published_date, keyword
+  - Verify: `grep -n 'private function render_rr_mock\|case .recipe_card.:\|case .faq.:' seobetter/seobetter.php`
+
+- **Rich Results tab sub-navigation + 4 sub-views** — [seobetter.php::render_metabox()](/Users/ben/Documents/autoresearch/seobetter/seobetter.php) Rich Results panel block
+  - Sub-view 1 — **Google Search gallery**: grid of 28 appearance tiles (2-col responsive), each tile has a label, eligibility badge (✓ Eligible / ○ Add schema), per-appearance mock visual via `render_rr_mock()`, and a "Requires: [schema]" + "Why: [plain-english]" footer. Summary bar at top shows `X of 28 eligible`.
+  - Sub-view 2 — **Google Discover**: single mobile feed card mock (16:9 full-width image, favicon + site name, bold 15px headline, 2-line description, 👍/🔖/⋯ interaction row) + 5-check eligibility panel (featured image set, image ≥1200px wide, Article schema, dateModified ≤30 days, mobile-friendly)
+  - Sub-view 3 — **AI Overviews**: 2026 contextual overlay link card mock (AI answer excerpt with hover-underlined phrase + expanded overlay showing 3 grouped sources with favicons + "This site" badge on the matching row + "Ask about" button) + 5-signal readiness scorecard outputting 0-100 score (FAQ/HowTo/Article schema, ≥3 H2 sections, bulleted lists, Organization/Person schema, dateModified ≤90 days)
+  - Sub-view 4 — **LLM Citations**: 4 side-by-side source-card mocks — Perplexity (numbered badge + thumbnail), ChatGPT Search (minimalist domain + blue title), Gemini (superscript ⁽¹⁾ + source panel), Claude (footnote format) + 8-check LLM Citation Readiness scorecard (og:title ≤70, description 120–200, image ≥1200×630, favicon, site_name, FAQ/HowTo/Organization bonuses) + key-insight callout explaining schema affects LLM *inclusion* not visual *display*
+  - Sub-view switching via JS extension to existing metabox script block
+  - Schema Impact Estimate, Validation section, Raw JSON-LD inspector preserved as shared bottom section
+  - Verify: `grep -n 'sb-rr-pill\|sb-rr-subview\|SUBVIEW 1: GOOGLE SEARCH\|SUBVIEW 4: LLM CITATIONS\|data-rr=.search\|\\\$appearances =' seobetter/seobetter.php`
+
+### Removed
+
+- Old single "Google Search Preview" mock at the top of Rich Results tab (now Sub-view 1 tile "Standard Article" + all other appearance tiles)
+- Old "Active Rich Result Types" checklist (superseded by eligibility-badged tile gallery showing BOTH active AND missing appearances)
+
+### Cross-doc sync
+
+- [plugin_UX.md §Metabox Rich Results Tab](/Users/ben/Documents/autoresearch/seobetter/seo-guidelines/plugin_UX.md) — header changed from `PLANNED — redesign spec` to `SHIPPED in v1.5.207`
+- [plugin_functionality_wordpress.md](/Users/ben/Documents/autoresearch/seobetter/seo-guidelines/plugin_functionality_wordpress.md) — no §8 "SEO PLUGIN INTEGRATION" changes; the new subviews touch metabox rendering only, not SEO-plugin integration
+
+### Research sources
+
+- [Google Search Central — Structured Data Gallery](https://developers.google.com/search/docs/appearance/structured-data/search-gallery) — 26-type enumeration
+- [Google Search Central — Visual Elements Gallery](https://developers.google.com/search/docs/appearance/visual-elements-gallery) — SERP element anatomy
+- [ALM Corp — Google AI Mode Ask About citation overlays (2026)](https://almcorp.com/blog/google-ai-mode-ask-about-citation-overlays/) — AI Overviews 2026 overlay design
+- [Yext — How ChatGPT / Perplexity / Gemini / Claude decide what to cite](https://www.yext.com/blog/how-chatgpt-perplexity-gemini-claude-decide-what-to-cite)
+- [Space & Story — Citation technical playbook](https://spaceandstory.co/blog/how-to-get-cited-by-chatgpt-gemini-perplexity/)
+
+### Verified by user
+
+- **UNTESTED** — Ben to verify on test site: (a) Rich Results tab shows 4 sub-nav pills + defaults to Google Search gallery, (b) eligible/ineligible tile coloring matches detected schema, (c) Discover sub-view flags <1200px featured images, (d) AI Overviews sub-view score updates with content structure, (e) LLM Citations sub-view shows all 4 platform mocks correctly.
 
 ---
 
