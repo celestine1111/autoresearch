@@ -36,7 +36,15 @@ class Decay_Alert_Manager {
      */
     public function run_check(): array {
         $settings = get_option( 'seobetter_settings', [] );
-        $alerts_enabled = $settings['decay_alerts'] ?? true;
+        // v1.5.206d-fix17 — default OFF. Previously defaulted true, sending
+        // weekly "SEOBetter content alert" emails to every user's admin
+        // address without explicit opt-in. This violates the email-marketing
+        // and GDPR rules documented in email-marketing.md §1 ("Never Block,
+        // Always Earn") and §6 ("Explicit opt-in — never pre-checked").
+        // Automated user emails must move through the centralised email-
+        // automation pipeline documented in automated-emails.md, which
+        // requires an explicit Settings toggle + Freemius consent flag.
+        $alerts_enabled = $settings['decay_alerts'] ?? false;
 
         if ( ! $alerts_enabled ) {
             return [];

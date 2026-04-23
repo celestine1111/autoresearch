@@ -3,7 +3,12 @@
 > **Purpose:** Brainstorm and track ideas for Pro-only features.
 > Everything is currently free for testing. Once validated, features will be gated behind a license key.
 >
-> **Last updated:** April 2026
+> **Last updated:** 2026-04-23
+>
+> **Related docs:**
+> - [`email-marketing.md`](email-marketing.md) — drip campaigns & capture touchpoints that funnel into these features
+> - [`automated-emails.md`](automated-emails.md) — the 8-category email pipeline; cross-references which Pro features own which categories
+> - [`website-ideas.md`](website-ideas.md) — website-side capture points + lead magnets
 
 ---
 
@@ -65,6 +70,252 @@
 - [ ] GEO Score column in Posts list (sortable)
 
 > **Internal linking — REINSTATED as a Pro feature (2026-04-19).** Previously out of scope. Now planned as "Internal Links Intelligence" with AI-powered placement suggestions. See detailed spec below.
+
+### Email Capture & Engagement Pro (NEW — added 2026-04-23)
+
+> **Purpose:** These Pro features exist BECAUSE of the email automation pipeline (see [`automated-emails.md`](automated-emails.md)) and the website capture strategy (see [`website-ideas.md §9`](website-ideas.md)). They are the Pro-gated upgrades to the Free-tier email surfaces. Every Pro customer's email is already captured via Freemius checkout (C1 transactional), so the focus here is *differentiating value* — giving Pro users richer, faster, more customizable email-driven features.
+
+---
+
+- [ ] **AI Citation Real-Time Alerts** (Pro tier, powers `automated-emails.md` B7 + dedicated Category 3 sub-category)
+
+  **What it does:** Monitors Google AI Overviews, ChatGPT, Perplexity, Gemini, Copilot (Bing Chat), Baidu ERNIE, Yandex Neural Search for citations of the user's published articles. When detected, emails the user within 5 minutes with:
+  - AI engine name + citation context (what the AI said about them)
+  - Link to the AI response
+  - Suggested follow-up action ("Your Recipe article was cited — here are 3 similar topics to cover next")
+
+  **How it works:**
+  - Vercel cron fires every 15 minutes, hits Serper AI Overviews endpoint + Perplexity + Gemini grounding APIs for each Pro user's top 50 articles
+  - Dedupes against previously-detected citations (stored in `_seobetter_ai_citations` post meta)
+  - When new citation detected: queues email via `Email_Router.php` → Category 3 → B7 email template
+
+  **Free tier equivalent:** Citation events batched into the weekly/monthly Usage Digest (U1/U2). Pro gets real-time email within 5 minutes — a dopamine notification with high delight value.
+
+  **Settings:** Users can filter which engines to track (e.g. "only ChatGPT + Perplexity, skip Bing") and set quiet hours.
+
+  **Integration point:** New file `includes/AI_Citation_Tracker.php` + Vercel endpoint `cloud-api/api/citation-check.js` + email template in `Email_Templates.php`.
+
+  **Why Pro:** requires Serper + Perplexity + Gemini API credits (paid by Ben), so metered via tier.
+
+  **Estimated effort:** ~40 hours (cron orchestration + dedup logic + 7 engine APIs + email template + settings UI).
+
+---
+
+- [ ] **Weekly Digest (Pro cadence + richer content)** (Pro tier, replaces killed Decay Alert)
+
+  **What it does:** Pro tier unlocks weekly digest cadence + deeper analytics vs Free tier's monthly digest.
+
+  **Free tier digest (monthly, `automated-emails.md` U2):**
+  - Top 3 articles by GEO score
+  - Stale posts count (no individual list)
+  - New features shipped this month
+  - One suggested next action
+
+  **Pro tier digest (weekly, `automated-emails.md` U1):**
+  - All Free tier content, plus:
+  - Full stale post list with one-click refresh buttons (deep-links to Content Updater)
+  - AI citation events detected in the last 7 days (engine + context + article)
+  - Score movement chart: articles that gained vs lost GEO score this week
+  - Keyword cannibalization findings (if detected)
+  - Competitor activity: top 3 competitors' new articles from Firecrawl scan
+  - Personalized next-action recommendation ("Your Recipe articles are averaging 82 — try adding Expert Quotes to push them above 90")
+
+  **Why this matters:** This replaces the old unsolicited Decay Alert email (killed in v1.5.206d-fix17 because it violated WP.org guidelines by sending without opt-in). The digest is the legitimate, consent-based successor — delivering useful weekly intelligence instead of a single-metric nag email.
+
+  **Settings:** Cadence toggle (weekly/monthly) + per-section include/exclude checkboxes.
+
+  **Integration point:** `Email_Router.php::render_digest()` reads tier from Freemius license, pulls more data for Pro.
+
+  **Estimated effort:** ~12 hours (template + data aggregation + tier branching).
+
+---
+
+- [ ] **White-Label Email Branding** (Agency tier only)
+
+  **What it does:** Agency tier customers can re-brand all outbound automated emails with their agency's logo, colors, and sender identity. When sending digest emails (C6), milestone emails (C3), and client reports (Category 8), the email appears as "from [Agency Name]" instead of "from SEOBetter."
+
+  **Customizable elements:**
+  - Email header logo (upload)
+  - Primary + accent brand colors (affects buttons, links, accents)
+  - Sender name + reply-to address (with SPF/DKIM verification)
+  - Footer text (agency's address, legal disclaimers, custom unsubscribe wording)
+  - "Powered by SEOBetter" footnote (optional — $30/mo removes it entirely)
+
+  **How it works:**
+  - New Agency → Branding page in plugin Settings
+  - Logo stored in media library, injected into email template's `{{agency_logo}}` merge tag
+  - Colors injected into email template's inline CSS
+  - Agency configures SPF/DKIM for their domain (Freemius supports custom sender domains on Enterprise)
+  - Emails sent via Freemius with custom from-address
+
+  **Why this matters:** Agencies resell SEOBetter to clients. Their clients should never see "SEOBetter" branding — the agency owns the relationship. This is a common Agency-tier differentiator (Yoast Agency, AIOSEO Agency plans all have white-label email).
+
+  **Integration point:** `Email_Templates.php` with merge-tag system; `admin/views/settings-agency-branding.php` new card; Freemius custom-sender-domain config.
+
+  **Estimated effort:** ~15 hours.
+
+---
+
+- [ ] **Team Member Invites + Role-Based Emails** (Agency tier)
+
+  **What it does:** Agency tier customers can invite team members (up to 10 in base Agency, unlimited at Enterprise). Each team member gets their own login + their own email preferences + role-specific email routing.
+
+  **Email categories per role:**
+  - **Owner / Admin:** receives everything (billing, renewal, all client reports, all digests)
+  - **Content Strategist:** receives digests + milestones + citations, NOT billing
+  - **Writer:** receives only article-specific milestones (their own articles), no digests
+  - **Client (read-only share):** receives monthly client report (C8-A3) only
+
+  **New emails:**
+  - Team invite email (when owner invites member)
+  - Role change notification (when member's role is updated)
+  - Team member removal notification
+  - Client view-link email (read-only dashboard share for clients)
+
+  **Why this matters:** Agency customers aren't single users — they're teams. Each role has different email needs. The Owner drowns in notifications if they receive every team member's article milestone; the Writer is confused if they get the agency's billing emails.
+
+  **Integration point:** New custom table `{prefix}seobetter_team_members` + role-based filter in `Email_Router.php::should_send()`.
+
+  **Estimated effort:** ~25 hours.
+
+---
+
+- [ ] **Lead Magnet Delivery Automation** (Pro, powers the website's LM1-LM7)
+
+  **What it does:** When a visitor submits a lead-magnet form on seobetter.com (see `website-ideas.md §9`), the plugin's automation pipeline delivers the PDF, adds them to Onboarding Category 2, tracks open/click, and flips them through the drip sequence.
+
+  **The 7 lead magnets (generated by SEOBetter, 1-click PDF export):**
+  1. "2026 GEO Checklist: 14 Factors That Make AI Cite You"
+  2. "21 Content Types That Rank Different"
+  3. "The AI Citation Playbook — ChatGPT, Perplexity, Gemini"
+  4. "Internal Linking Intelligence for WP Blogs"
+  5. "Schema Markup Cheatsheet for 12 WordPress Content Types"
+  6. "Multilingual SEO for WordPress: Rank in 29 Languages"
+  7. "Google AI Overviews Survival Guide for Bloggers"
+
+  **How it works:**
+  - Lead magnet form on website POSTs to `cloud-api/api/lead-magnet.js`
+  - Endpoint: verifies email, sends PDF via Freemius, adds to Onboarding drip, records UTM source
+  - Plugin admin dashboard shows lead-magnet funnel stats: downloads per magnet, downloaded → installed → activated conversion
+
+  **Why Pro:** the PDFs themselves are generated by SEOBetter with premium models (Claude Sonnet 4.6), so generation costs meter back to Ben's accounts. Free tier gets the 3 most generic magnets; Pro unlocks all 7 + custom lead magnets (agency can generate their own).
+
+  **Integration point:** New Vercel endpoint + Freemius mailing-list API + admin dashboard card.
+
+  **Estimated effort:** ~20 hours.
+
+---
+
+- [ ] **Email Preference Center + Preference-Based Resubscribe** (Free + Pro)
+
+  **What it does:** A dedicated `wp-admin/admin.php?page=seobetter-email-preferences` page (and matching seobetter.com/preferences web page) where users manage all email subscriptions in one place instead of unsubscribing from each email separately.
+
+  **Features:**
+  - 8 category toggles matching `automated-emails.md` categories
+  - Digest cadence dropdown (weekly / monthly / off)
+  - Milestone-specific filters ("only 90+ score milestones, skip article-count milestones")
+  - Quiet hours (pause emails 10pm-8am local time)
+  - One-click "Unsubscribe all" mega-button
+  - Re-subscribe path: lapsed users get a "We miss you — here's what changed" email every 90 days (max 3 total, then stop)
+
+  **Why this matters:** EU GDPR requires granular consent. A preference center is the gold-standard way to comply AND reduce unsubscribes (users throttle instead of quitting).
+
+  **Free vs Pro:**
+  - Free: 3 basic category toggles (onboarding / updates / digest)
+  - Pro: all 8 categories, quiet hours, milestone filters, Pro-only resubscribe campaign
+
+  **Integration point:** `admin/views/settings-email-preferences.php` + `cloud-api/api/email-preferences.js` (for non-logged-in unsubscribe token handling).
+
+  **Estimated effort:** ~18 hours.
+
+---
+
+- [ ] **A/B Test Subject Lines** (Pro, internal tool — not user-facing)
+
+  **What it does:** Every outbound email from the automation pipeline runs an A/B test on subject line variants. The winning variant becomes the default after 200 opens. This is an INTERNAL optimization — users never see the test, but open rates improve 15-30% over time.
+
+  **How it works:**
+  - Each email template in `Email_Templates.php` has `subject_variants` array
+  - `Email_Router::send()` randomly picks one variant per send
+  - `Email_Event_Log.php` records variant + open event
+  - After 200 opens on any template, variant with highest open-rate wins, set as default
+  - Losing variants archived for reference
+
+  **Why this matters:** Subject lines are the #1 lever for email engagement. Static subject lines stagnate; A/B-tested subjects improve indefinitely.
+
+  **This is NOT a user-facing feature** — it's infrastructure that improves everyone's engagement. Just exists behind the scenes once the email system is live.
+
+  **Integration point:** `Email_Templates.php::pick_subject()` + `Email_Event_Log.php::record_open()` + weekly cron that promotes winners.
+
+  **Estimated effort:** ~8 hours.
+
+---
+
+- [ ] **Email → In-App Deep Links** (Free + Pro polish)
+
+  **What it does:** Every CTA in every automated email deep-links directly to the action it suggests, with the right admin page, the right post, the right modal open. Eliminates friction between email → action.
+
+  **Examples:**
+  - Milestone B4 "You hit 90+" → deep link opens `/wp-admin/edit.php?post_id=X&seobetter_celebrate=1` which opens the post editor with a confetti banner and "Share on X" button
+  - Digest "3 articles went stale" → deep link opens `/wp-admin/admin.php?page=seobetter-freshness&filter=stale&auto_refresh=1` which opens the freshness tool with stale filter pre-applied
+  - Trial TR4 "2 days left" → deep link opens `/wp-admin/admin.php?page=seobetter-settings#trial-extend` which scrolls to the trial-extend offer card
+
+  **How it works:**
+  - Every CTA URL gets a query string like `?seobetter_action=celebrate&post_id=X&campaign_id=B4`
+  - Plugin's `init` hook reads the action param and triggers the right UI state on page load
+  - Tracked in analytics for click-through attribution
+
+  **Why this matters:** The gap between "email read" and "action taken" is where most engagement dies. Deep links collapse that gap to a single click. This is table-stakes for 2026+ email.
+
+  **Integration point:** Query-string handler in `seobetter.php::enqueue_admin_scripts()` + matching JS handlers per action type.
+
+  **Estimated effort:** ~10 hours.
+
+---
+
+- [ ] **Onboarding Progress Dashboard + Gamified Emails** (Free + Pro)
+
+  **What it does:** During the 7-email onboarding sequence (Category 2, O1-O7), each email includes a progress bar showing "You've completed 3 of 7 setup steps. Next: Try Optimize All." Every action the user takes (generate first article, hit 80+, run Optimize All) moves the bar forward and unlocks the next email.
+
+  **The 7 setup milestones:**
+  1. Plugin activated ✅
+  2. First article generated
+  3. Score ≥ 70 (proof the plugin works)
+  4. Used Optimize All (proof the Pro upsell feature works)
+  5. Published first article
+  6. Saw AI citation (if tracking enabled)
+  7. Generated article in 2nd language OR tried 2nd content type
+
+  **Email ties in:**
+  - If user skips a milestone, the next onboarding email lingers on that step with extra help content
+  - Milestone completion triggers a one-time "Achievement unlocked!" email (B1-B8 in Category 3)
+  - Progress bar also visible in the plugin admin dashboard header
+
+  **Why this matters:** Gamification drives completion. Duolingo, Codecademy, Notion onboarding all use this pattern. For WP plugins, it's underused and a differentiator.
+
+  **Integration point:** New `includes/Onboarding_Tracker.php` + progress bar in admin dashboard + hooks on article saved, Optimize All completed, score updated.
+
+  **Estimated effort:** ~20 hours.
+
+---
+
+- [ ] **SMS + Slack + Webhook Alerts** (Agency tier polish, powers critical alerts)
+
+  **What it does:** For critical alerts (site broken, license expiring in 24h, AI citation detected, client site score drop), Agency tier users can route notifications to SMS (via Twilio), Slack (via incoming webhook), or any custom webhook URL in addition to email.
+
+  **Why this matters:** Email is slow. A client's site scoring 20 at midnight needs an SMS or Slack ping, not a next-day email. Agency tier customers running critical infrastructure need faster channels.
+
+  **Channels:**
+  - Email (default, all users, C1-C8)
+  - SMS (Agency tier, $10/mo add-on for Twilio costs) — only for P2 (breaking change), T6 (payment failure), A2 (client site issue)
+  - Slack webhook (Agency tier, free) — all categories customizable
+  - Custom webhook URL (Agency tier, free) — POST JSON payload for custom integrations (Zapier, n8n, PagerDuty)
+
+  **Integration point:** `includes/Alert_Router.php` layer above `Email_Router.php` that fans out to multiple channels based on user preference.
+
+  **Estimated effort:** ~25 hours.
+
+---
 
 ### Content Freshness & Management Pro
 
@@ -614,6 +865,65 @@ Research-backed estimates (no API needed):
 - [ ] Content uniqueness signal: "92% original content"
 - [ ] Schema richness score: "4/6 rich result types active"
 - [ ] AI citation readiness: "High — has quotes, citations, FAQ, structured data"
+
+---
+
+---
+
+## GUTENBERG BLOCKS & SHORTCODES (New Feature Category)
+
+> **Why:** Makes SEOBetter useful for EVERY post (not just AI-generated), increases daily active usage, creates switching cost (posts depend on blocks), and provides natural free → Pro upgrade path.
+
+### Free Blocks (drives adoption)
+
+| Block | Shortcode | What it does |
+|---|---|---|
+| **Key Takeaways** | `[seobetter_takeaways]Point one\|Point two\|Point three[/seobetter_takeaways]` | Styled bullet box with icon — user types bullets. Every post should have one, creates habit. |
+| **Pros / Cons** | `[seobetter_proscons pros="Fast,Easy" cons="Expensive,Limited"]` | Two-column green/red with checkmark/X icons. Wirecutter-style, highly visual. |
+| **FAQ with Schema** | `[seobetter_faq]` | Accordion Q&A pairs, auto-injects FAQPage schema. Instant Google rich results — users see value in days. |
+| **Table of Contents** | `[seobetter_toc]` | Auto-generated from H2/H3 headings, smooth scroll links. Saves time, sticky usage. |
+| **Author Bio** | `[seobetter_author]` | E-E-A-T card with photo, social icons, Person schema. Uses SEOBetter settings author data. |
+| **Comparison Table** | `[seobetter_table]` | Styled table with accent header, zebra rows. Manual data entry — users fill in their own specs. |
+| **Code Block** | `[seobetter_code lang="python"]code here[/seobetter_code]` | Dark terminal with language label, traffic light dots, monospace font. |
+| **Callout Box** | `[seobetter_callout type="tip"]text[/seobetter_callout]` | Tip / Note / Warning styled boxes with custom SVG icons. Types: tip, note, warning, didyouknow. |
+
+### Pro Blocks (drives upgrades — require research API)
+
+| Block | Shortcode | What it does | Why Pro |
+|---|---|---|---|
+| **Live Statistic** | `[seobetter_stat keyword="topic"]` | Big number callout — pulls REAL stats from Serper/Firecrawl | Requires Ben's API keys, real research data |
+| **Expert Quote** | `[seobetter_quote keyword="topic"]` | Styled blockquote — fetches REAL expert quotes from research | Requires Serper/Firecrawl, not hallucinated |
+| **Citation Insert** | `[seobetter_cite keyword="topic"]` | Drop a verified citation inline — searches, verifies, formats | Requires Citation Pool + verification |
+| **GEO Score Badge** | `[seobetter_score]` | Live score ring for the current post, updates on save | Requires GEO Analyzer |
+| **Content Freshness** | `[seobetter_freshness]` | "Last verified: [date]" badge that auto-updates on save | Drives re-engagement, Pro retention |
+| **Schema Builder** | `[seobetter_schema type="Product"]` | Visual schema type picker (Product, Recipe, HowTo, etc.) with field inputs | Huge SEO value, visual builder |
+
+### Implementation Priority
+
+**Phase 1 — Start here (biggest impact, lowest effort):**
+1. FAQ Block with Schema — immediate Google rich results
+2. Key Takeaways Block — goes in every post, creates dependency
+3. GEO Score Badge (Pro) — the conversion lever
+
+**Phase 2 — Content blocks:**
+4. Pros/Cons Block
+5. Callout Box Block (Tip/Note/Warning)
+6. Comparison Table Block
+7. Code Block
+
+**Phase 3 — Research-powered Pro blocks:**
+8. Live Statistic Block
+9. Expert Quote Block
+10. Citation Insert Block
+
+### Technical Notes
+
+- All blocks exist as both Gutenberg blocks (`assets/js/blocks/`) AND shortcodes (`includes/Shortcodes.php`)
+- Free blocks use inline styles (same as Content_Formatter already does) — no external CSS dependencies
+- Pro blocks call the existing research pipeline (Serper/Firecrawl) on demand
+- Blocks render server-side (`register_block_type` with `render_callback`) so they work in Classic Editor too
+- Shortcode output is identical to block output — same HTML, same inline styles
+- All styling already exists in Content_Formatter — blocks just expose it as user-insertable elements
 
 ---
 

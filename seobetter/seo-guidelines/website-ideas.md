@@ -1,7 +1,13 @@
 # SEOBetter Website Ideas (seobetter.com)
 
 > **Status:** PLANNED — not yet built
-> **Last updated:** 2026-04-17
+> **Last updated:** 2026-04-23
+
+> **Related docs:**
+> - [`email-marketing.md`](email-marketing.md) — drip campaigns, outreach, opt-in touchpoints
+> - [`automated-emails.md`](automated-emails.md) — the 8 categories of automated plugin → user email and how the website feeds into them
+> - [`pro-features-ideas.md`](pro-features-ideas.md) — feature list the website markets
+> - [`SEO-GEO-AI-GUIDELINES.md`](SEO-GEO-AI-GUIDELINES.md) — write every landing page to the same standard the plugin generates articles to (dog-fooding)
 
 ---
 
@@ -214,3 +220,389 @@ Use SEOBetter to generate the blog posts about SEOBetter. Dog-food the product.
 - [ ] Blog: 3 launch posts ready
 - [ ] Social: Twitter/X, LinkedIn, maybe Bluesky
 - [ ] WordPress.org listing: hero screenshot, description, FAQ
+
+---
+
+## 8. Multilingual Website Strategy (The 29-Language Build)
+
+### Principle
+
+The plugin generates articles across 29 languages and 90+ countries. **The marketing website must match.** A Polish WordPress blogger landing on an English-only sales page won't convert — even if the plugin itself works perfectly in Polish. Dog-food the plugin: use SEOBetter to generate the localized landing pages in every language the plugin supports.
+
+### The 29 Languages We Support (locale codes + display names + country hints)
+
+| # | Code | Language | Primary country hints (for Google Suggest `gl=`) |
+|---|---|---|---|
+| 1 | `en` | English | US, UK, AU, CA, NZ, IE |
+| 2 | `es` | Spanish | ES, MX, AR, CO, PE, CL |
+| 3 | `fr` | French | FR, CA (QC), BE, CH |
+| 4 | `de` | German | DE, AT, CH |
+| 5 | `it` | Italian | IT, CH |
+| 6 | `pt` | Portuguese | PT, BR |
+| 7 | `nl` | Dutch | NL, BE |
+| 8 | `sv` | Swedish | SE |
+| 9 | `no` | Norwegian | NO |
+| 10 | `da` | Danish | DK |
+| 11 | `fi` | Finnish | FI |
+| 12 | `pl` | Polish | PL |
+| 13 | `cs` | Czech | CZ |
+| 14 | `hu` | Hungarian | HU |
+| 15 | `ro` | Romanian | RO |
+| 16 | `el` | Greek | GR |
+| 17 | `tr` | Turkish | TR |
+| 18 | `ru` | Russian | RU |
+| 19 | `uk` | Ukrainian | UA |
+| 20 | `ja` | Japanese | JP |
+| 21 | `ko` | Korean | KR |
+| 22 | `zh` | Chinese (Simplified) | CN, SG, TW (traditional variant) |
+| 23 | `ar` | Arabic | SA, AE, EG, MA, DZ |
+| 24 | `he` | Hebrew | IL |
+| 25 | `hi` | Hindi | IN |
+| 26 | `th` | Thai | TH |
+| 27 | `vi` | Vietnamese | VN |
+| 28 | `id` | Indonesian | ID |
+| 29 | `ms` | Malay | MY |
+
+**Source of truth:** the plugin's `Localized_Strings` helper + `cloud-api/api/topic-research.js` Google Suggest fetcher. If a language is supported there, it must be supported on the website.
+
+### URL Structure
+
+**Recommended: subdirectory (best for SEO consolidation).**
+
+```
+seobetter.com/                → English (default)
+seobetter.com/es/             → Spanish
+seobetter.com/fr/             → French
+seobetter.com/de/             → German
+seobetter.com/ja/             → Japanese
+seobetter.com/zh/             → Chinese Simplified
+seobetter.com/ar/             → Arabic (with RTL layout)
+seobetter.com/he/             → Hebrew (with RTL layout)
+seobetter.com/hi/             → Hindi (Devanagari)
+...
+```
+
+**Alternative considered and rejected:** `es.seobetter.com` subdomain → splits link equity 29 ways. `seobetter.es` country TLDs → would need 29 separate domains, bad economics.
+
+### Per-Language Page Scope (Phase 1 — don't boil the ocean)
+
+Not every page needs 29 translations. Tiered rollout:
+
+| Page | Languages | Why |
+|---|---|---|
+| Homepage | All 29 | First impression; conversion gate |
+| Pricing | All 29 | Conversion gate; currency localization too |
+| Features (top-level) | All 29 | Conversion gate |
+| Docs / Setup Guide | Top 10 (en, es, fr, de, it, pt, ja, ko, zh, ar) | High-intent users can translate the rest via browser |
+| Changelog | English only | Technical, internal terminology; users who read changelogs tolerate English |
+| Blog (marketing posts) | Top 10, rolling | Each language gets a curated subset of the English blog |
+| Feature requests (Canny) | English only | Canny doesn't support i18n easily; power-user audience |
+| About / Privacy / Terms | All 29 | Legal requirement in some jurisdictions (GDPR, LGPD, etc.) |
+
+Total page count: Homepage + Pricing + Features + About + Privacy + Terms = 6 pages × 29 languages = **174 translations** for Phase 1. Plus the top-10 Docs rollout adds ~40 more pages.
+
+### How the Pages Are Generated
+
+**Dog-food the plugin.** Each localized landing page is generated using SEOBetter itself with:
+
+- **Content type:** `Comparison` (benefits-driven format Google ranks well)
+- **Language:** target language (sets Native content-generation prompts, native-script headings, canonical translations)
+- **Country:** target country (pulls local examples, local stats, country-relevant case studies)
+- **Keyword:** `"SEO plugin WordPress"` translated to target language
+- **Layer 6 international optimization:** already shipped in v1.5.206d, so Korean pages use Korean-native secondary keywords, Arabic pages use Arabic LSI terms, etc.
+
+Result: 29 landing pages that rank on Google in each country AND get cited by regional LLMs (Baidu ERNIE for Chinese, HyperCLOVA X for Korean, YandexGPT for Russian, DeepSeek for Chinese, Mistral Le Chat for French) — because the plugin optimizes for those engines via Layer 6.
+
+### Implementation Options
+
+| Option | Pros | Cons |
+|---|---|---|
+| **WPML on WordPress** | Industry standard, supports 100+ languages, SEO-friendly hreflang, RTL built-in | $99/yr; manual translations unless paired with auto-translate |
+| **Polylang + Polylang Pro** | Free base + $99/yr Pro; lightweight; dog-foods SEOBetter to generate translations | Less polished UX than WPML |
+| **TranslatePress** | In-place visual translation editor; AI integration (DeepL/Google) | Cheaper but less mature than WPML |
+| **Static build (Astro/Next.js)** | Fastest load times; 29 markdown files per locale | Can't easily dog-food SEOBetter for in-site content generation |
+
+**Recommended:** WordPress + **Polylang Pro** ($99/yr). Cheap, SEO-clean, and lets us run SEOBetter on the marketing site itself to generate the translated landing pages. The website IS the product demo.
+
+### RTL (Right-to-Left) Languages
+
+**Arabic (`ar`) and Hebrew (`he`)** need dedicated RTL layout support:
+
+- [ ] Body `<html dir="rtl">` per locale
+- [ ] Mirrored navigation (logo moves to right, nav to left)
+- [ ] Flipped icons (arrows, chevrons)
+- [ ] Line-height increased 10-15% (Arabic/Hebrew glyphs are taller)
+- [ ] Fonts: `Noto Naskh Arabic` / `Noto Sans Hebrew` as safe web-safe fallbacks
+- [ ] CTA buttons keep left-to-right text direction when they contain brand names
+
+### CJK (Chinese/Japanese/Korean) Typography
+
+- [ ] Fonts: `Noto Sans SC` (Simplified Chinese), `Noto Sans JP`, `Noto Sans KR`
+- [ ] Line-height 1.6+ (CJK glyphs need more breathing room)
+- [ ] Avoid decorative fonts — CJK characters must be legible at small sizes
+- [ ] Numbers stay in Latin script (it's the global convention in CJK web design)
+
+### hreflang Tags (Critical for SEO)
+
+Every localized page must declare its language siblings in `<head>`:
+
+```html
+<link rel="alternate" hreflang="en" href="https://seobetter.com/" />
+<link rel="alternate" hreflang="es" href="https://seobetter.com/es/" />
+<link rel="alternate" hreflang="fr" href="https://seobetter.com/fr/" />
+... (29 total)
+<link rel="alternate" hreflang="x-default" href="https://seobetter.com/" />
+```
+
+Polylang Pro and WPML handle this automatically. If going custom: generate a `hreflang-map.json` and inject it server-side.
+
+### Language Switcher UX
+
+- [ ] Top-right of every page: globe icon + current language name (e.g. "🌐 English")
+- [ ] Click opens dropdown with all 29 languages shown in their native script: `English / Español / Français / Deutsch / 日本語 / 한국어 / 中文 / العربية / ...`
+- [ ] Remember selection in `localStorage` so next visit defaults to their last language
+- [ ] **First-visit auto-detect:** read `navigator.language` on first load, redirect to matching locale subdirectory. Show a one-line "Switched to X. [Change]" banner so user can override.
+- [ ] Search-engine-safe: auto-detect only runs client-side AFTER Googlebot has already crawled the canonical URL with its hreflang declarations.
+
+---
+
+## 9. Website Email Capture (Ties Into automated-emails.md Pipeline)
+
+Every visitor touchpoint on the website is an opportunity to capture email. Every captured email feeds into the 8-category automated email pipeline documented in [`automated-emails.md`](automated-emails.md).
+
+### The 7 Website Capture Points
+
+| # | Where | What | Opts into |
+|---|---|---|---|
+| 1 | Homepage hero | "Get the free 2026 GEO Checklist PDF" lead magnet | Onboarding (C2) + Product Updates (C7) |
+| 2 | Pricing page | "Start free trial" → Freemius checkout captures email | Transactional (C1) + Trial (C4) + Renewal (C5) |
+| 3 | Features page (per-feature) | "Get notified when [feature] ships" for unreleased features | Product Updates (C7) |
+| 4 | Blog articles | "Subscribe to weekly AI-SEO tips" inline after 30% scroll | Product Updates (C7) + Onboarding (C2 light) |
+| 5 | Changelog page | "Subscribe to release updates" | Product Updates (C7 only) |
+| 6 | Feature requests (Canny) | Email required to vote/submit | Product Updates (C7) |
+| 7 | Docs pages | "Get updates when these docs change" (rare, low-volume) | Product Updates (C7) |
+| 8 | Exit intent (desktop only, 3rd visit+) | "Wait — want the GEO Checklist before you leave?" | Onboarding (C2) |
+| 9 | Affiliate page | Sign-up captures email + creates Freemius affiliate record | Category 8 variant (agency/partner updates) |
+
+**Reference:** [`email-marketing.md §2`](email-marketing.md) — full conversion rate estimates per touchpoint (40-60% for Freemius activation, 10-20% for in-app banners, 2-5% for passive blog subscribe).
+
+### The Lead Magnets (What to Offer)
+
+A lead magnet is a free downloadable resource offered in exchange for an email. Each one is itself generated by SEOBetter (dog-food) and serves as a proof-of-quality for the plugin.
+
+| # | Lead magnet | Format | Audience |
+|---|---|---|---|
+| LM1 | "2026 GEO Checklist: 14 Factors That Make AI Cite You" | PDF (8 pages) | All WP site owners |
+| LM2 | "21 Content Types That Rank Different — When to Use Each" | PDF (12 pages) | Bloggers deciding content strategy |
+| LM3 | "The AI Citation Playbook — ChatGPT, Perplexity, Gemini" | PDF (15 pages) | SEO professionals |
+| LM4 | "Internal Linking Intelligence for WP Blogs" | PDF (10 pages) | Agencies with multi-site clients |
+| LM5 | "Schema Markup Cheatsheet for 12 WordPress Content Types" | PDF (6 pages) | Dev-focused WP users |
+| LM6 | "Multilingual SEO for WordPress: Rank in 29 Languages" | PDF (20 pages) | International bloggers + agencies |
+| LM7 | "Google AI Overviews Survival Guide for Bloggers" | PDF (12 pages) | All bloggers watching their traffic decline |
+
+**Localize the top 3.** LM1, LM2, and LM3 translated into the top 10 languages — matches the Phase 1 website rollout.
+
+### Email Capture Form Rules
+
+- [ ] Single field: email address only. Name is optional, never phone.
+- [ ] GDPR-compliant: unchecked privacy/marketing checkbox below field, with link to `/privacy`
+- [ ] Submit button: verb-driven, not "Subscribe" — e.g. "Send Me the Checklist"
+- [ ] Success state: confirmation message + immediate email delivery (no double opt-in unless EU law requires it; GDPR `legitimate interest` model is cleaner)
+- [ ] Honeypot spam trap (hidden `<input>` named `website`; bots fill it; real users don't)
+- [ ] Rate-limit per IP: 5 submissions/hour to prevent email-bombing
+- [ ] UTM tracking: every form tags the captured email with `utm_source=website`, `utm_medium=[hero|pricing|blog|exit]`, `utm_campaign=[lm1-lm7|trial]`
+
+---
+
+## 10. Marketing Funnels (Per-Persona + Per-Language Landing Pages)
+
+### Funnel-Level Strategy
+
+Three distinct user personas, each with its own entry path:
+
+| Persona | Entry path | Key message | Converts via |
+|---|---|---|---|
+| **Solo blogger** | Google search "AI WordPress SEO plugin" | "Write articles AI actually cites in 5 minutes" | Free tier → Pro trial |
+| **Agency / freelancer** | WP plugin directory + outreach | "Bulk generate for 50+ client sites" | Agency plan direct purchase |
+| **Enterprise / large publisher** | Direct sales + case studies | "Drop content ops costs 80%" | Agency + custom support |
+
+### Per-Content-Type Landing Pages (SEO Plays)
+
+21 content types × 29 languages = theoretical max of 609 landing pages. **Don't build 609.** Ship the high-intent subset:
+
+**Phase 1 (English only, ~21 pages):**
+- `seobetter.com/for/recipe-blogs`
+- `seobetter.com/for/review-sites`
+- `seobetter.com/for/comparison-content`
+- `seobetter.com/for/news-publishers`
+- `seobetter.com/for/buying-guides`
+- `seobetter.com/for/how-to-guides`
+- `seobetter.com/for/listicles`
+- `seobetter.com/for/local-business`
+- `seobetter.com/for/recipes` (global cuisine, localized examples)
+- ...up to 21 total
+
+**Phase 2 (top 5 content types × top 10 languages = 50 pages):**
+- Recipes, Reviews, Comparisons, Buying Guides, How-Tos × en/es/fr/de/it/pt/ja/ko/zh/ar
+
+Each landing page:
+- [ ] Hero headline with the content type name ("Generate Recipe Articles AI Cites")
+- [ ] Live demo GIF of that specific type being generated
+- [ ] 3 sample articles (real, published, with GEO score displayed)
+- [ ] Schema rich-result preview showing what the article looks like in Google
+- [ ] Content-type-specific CTA ("Generate your first recipe article →")
+- [ ] Testimonial from a user in that niche (recipe blogger for `/for/recipe-blogs`, etc.)
+
+### Per-Country Landing Pages (Local Intent Plays)
+
+Plugin supports 90+ countries with local Places APIs, regional LLMs, country-specific data sources. The website should have country landing pages for the top 20 markets:
+
+| Priority tier | Countries | URL pattern | Language shown |
+|---|---|---|---|
+| Tier 1 (English-speaking) | US, UK, AU, CA, NZ, IE | `/us/`, `/uk/`, etc. | English (country-specific examples) |
+| Tier 2 (EU + Japan + Korea) | DE, FR, ES, IT, NL, JP, KR | `/de/`, `/fr/`, etc. | Native language + country examples |
+| Tier 3 (Latin America) | BR, MX, AR | `/br/`, `/mx/`, etc. | Portuguese / Spanish |
+| Tier 4 (Emerging SEO markets) | IN, ID, VN, TH, MY, TR, SA, AE | `/in/`, `/id/`, etc. | Native language + local Places data demo |
+
+Each country landing page:
+- [ ] Showcases a locally-generated article (e.g. `/in/` shows "best ayurvedic brands India" with Indian Places + Hindi version available)
+- [ ] Currency localized in pricing panel (₹, ¥, €, $, R$, etc.)
+- [ ] Local payment methods highlighted (UPI for India, PayPay for Japan, Boleto for Brazil)
+- [ ] Compliance disclosures (GDPR for EU, LGPD for Brazil, PIPL for China)
+
+### The Universal Funnel Stages
+
+```
+DISCOVER → LAND → CONVINCE → CAPTURE → ACTIVATE → CONVERT → RETAIN
+
+1. DISCOVER   — Google search, WP directory, blog outreach, YouTube, Twitter/X
+2. LAND       — Homepage or per-persona/per-content-type page with matching headline
+3. CONVINCE   — Demo GIF, GEO score proof, testimonials, comparison vs Yoast/AIOSEO
+4. CAPTURE    — Lead magnet download OR free plugin install (Freemius captures email)
+5. ACTIVATE   — Onboarding sequence emails (C2) drive first article generation
+6. CONVERT    — Behavioral emails (C3) + trial (C4) drive free → Pro conversion
+7. RETAIN     — Digest (C6) + Product Updates (C7) + Milestones (C3) keep engagement high
+```
+
+---
+
+## 11. Feature Showcase — What the Site Must Demonstrate
+
+Every major plugin feature deserves a dedicated website section with a GIF/video showing it working. Group by the 5-layer optimization framework:
+
+### Layer 1 — Traditional SEO
+- [ ] Meta title + description auto-generation
+- [ ] URL slug suggestions
+- [ ] Keyword density tuning
+- [ ] Heading hierarchy
+
+### Layer 2 — AI SEO (Princeton GEO Boosts)
+- [ ] +41% visibility from quotations (Expert Quotes block)
+- [ ] +30% from citations (Citation Pool with verified URLs)
+- [ ] +40% from statistics (Live Statistic block, real Serper/Firecrawl data)
+- [ ] Structured reasoning + confidence language
+
+### Layer 3 — LLM Citations (Chat Answer Citations)
+- [ ] Island Test passing (short, self-contained answer blocks)
+- [ ] FAQ schema for Perplexity
+- [ ] International LLM optimization (Baidu ERNIE, HyperCLOVA, YandexGPT, DeepSeek, Doubao, GigaChat, Mistral Le Chat)
+
+### Layer 4 — Schema
+- [ ] 12+ schema types auto-detected per content type
+- [ ] Rich Results Test passing (`/rich-results-preview` demo page)
+- [ ] AIOSEO / Yoast / RankMath auto-population
+
+### Layer 5 — Article Design
+- [ ] 21 distinctive content-type layouts (side-by-side gallery on the features page)
+- [ ] Per-type CSS variations
+- [ ] AI featured images with brand alignment
+
+### Layer 6 — International Optimization (v1.5.206d)
+- [ ] 29 languages × 90+ countries demo
+- [ ] Native-script headings + secondary keywords
+- [ ] Country-localized Places data (OSM → Foursquare → HERE → Google Places waterfall)
+- [ ] Regional LLM optimization
+
+Each layer becomes a website section with concrete proof: live demo, real article examples, real GEO scores.
+
+---
+
+## 12. Messaging Architecture — Matching the Plugin's Voice
+
+Everything on the website is generated / reviewed through the lens of SEO-GEO-AI-GUIDELINES. Principles:
+
+- [ ] **Specific numbers over vague claims.** "+41% visibility" beats "better visibility."
+- [ ] **Research-backed citations.** Every statistic links to its source (Princeton, Searchmetrics, FirstPageSage, etc.).
+- [ ] **Plain-English model names.** "Claude Sonnet 4.6 — Best accuracy" not "claude-sonnet-4-6."
+- [ ] **Use the plugin's own terminology.** "GEO score," "Optimize All," "Content Type," "Places Waterfall" — these are product nouns and should be consistent across plugin + website + email.
+- [ ] **Dog-food every marketing article.** If SEOBetter can't generate the blog post about itself to a 90+ score, the plugin has a bug to fix.
+
+### Tone Per Page
+
+| Page | Tone | Example |
+|---|---|---|
+| Homepage | Confident, outcome-focused | "Get cited by AI. Rank on Google. Both." |
+| Pricing | Transparent, zero-pressure | "Free forever. Pro when you need it." |
+| Features | Technical-but-accessible | "21 content types, each with its own schema and layout." |
+| Docs | Instructional, precise | "Step 3: Click Generate. Wait 45 seconds. Review the score." |
+| Blog | Conversational, useful | "Here's what changed in ChatGPT's citation algorithm last week." |
+
+---
+
+## 13. Launch Checklist (Expanded for Multilingual)
+
+### Core infrastructure
+- [ ] Domain: seobetter.com (registered?)
+- [ ] Hosting: WP Engine or similar
+- [ ] SSL: Let's Encrypt or host-provided
+- [ ] CDN: Cloudflare (29-language site benefits from global CDN)
+- [ ] Polylang Pro license: $99/yr
+- [ ] DeepL API key (for initial auto-translation seed before SEOBetter dog-fooding)
+
+### Pages (English first, then top 10, then full 29)
+- [ ] Homepage, Pricing, Features, Docs, Changelog, Feature Requests, Blog, About, Support, Privacy, Terms
+- [ ] Per-persona: `/for/bloggers`, `/for/agencies`, `/for/publishers`
+- [ ] Per-content-type: 21 English pages → top 5 × top 10 languages
+- [ ] Per-country: 20 country landing pages
+
+### Integrations
+- [ ] Freemius: checkout, license verification, trial signup
+- [ ] Canny.io: feature requests board embedded
+- [ ] Analytics: GA4 + Plausible (privacy-friendly backup)
+- [ ] Email: Freemius native + ConvertKit (website-only list, separate from plugin pipeline)
+
+### Email capture (9 touchpoints)
+- [ ] Homepage hero LM1 form
+- [ ] Pricing Freemius checkout
+- [ ] Blog scroll-depth subscribe
+- [ ] Changelog subscribe
+- [ ] Exit-intent (desktop)
+- [ ] Feature request (Canny)
+- [ ] Docs change notification
+- [ ] 7 lead magnets (PDFs generated by SEOBetter itself)
+- [ ] Affiliate signup
+
+### SEO
+- [ ] hreflang tags (Polylang handles)
+- [ ] Sitemap per language
+- [ ] robots.txt allowing all crawlers
+- [ ] Schema markup on every landing page (Organization, WebSite, SoftwareApplication)
+- [ ] Speed: Core Web Vitals green on mobile for all top 10 languages
+
+### Dog-food verification
+- [ ] Homepage generated by SEOBetter scores 90+
+- [ ] Per-country landing pages score 85+ (lower tolerance because country-specific content)
+- [ ] All 29 localized homepages generated via SEOBetter + manually reviewed by native speakers
+
+### Launch sequencing
+- [ ] Week -4: English homepage + pricing live, Freemius checkout live
+- [ ] Week -3: Top 10 languages live
+- [ ] Week -2: Docs + Changelog + Feature requests live
+- [ ] Week -1: Blog with 3 launch posts live
+- [ ] Week 0: WordPress.org listing + social announcement
+- [ ] Week +2: Remaining 19 languages rolled out
+- [ ] Week +4: Per-country landing pages live
+
+---
+
+*Update this doc as the website evolves. The plugin and the website must move in lockstep — dog-food everything.*
