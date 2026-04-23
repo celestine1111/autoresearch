@@ -455,6 +455,183 @@ AIOSEO-style settings panel that appears below the post content area on Post and
   - Island Test status (no pronoun starts)
   - Section Openings (40-60 word rule)
   - Top 5 prioritized suggestions
+
+- [ ] **Rich Results Tab (PLANNED — redesign spec, v1.5.207 target, supersedes the current single-preview design):**
+
+  > **Purpose:** Show the article author EVERY way their content could visually appear across Google surfaces AND LLM citation cards — not just one mock. A Recipe article could appear as a standalone Recipe card, inside a Recipe carousel, in Google Discover, in AI Overviews source overlays, and as a Perplexity/ChatGPT/Gemini citation. Each surface has its own visual treatment driven by different schema + metadata signals.
+
+  > **Answer to the "do LLMs have this feature" question:** Rich-result *visual variations* (cards, carousels, galleries, knowledge panels) are a **Google Search feature only**. ChatGPT / Perplexity / Gemini / Claude render citations as uniform source cards (favicon + title + description + sometimes thumbnail). Schema affects whether an LLM *cites* your article (structured data helps the model parse content), but does NOT change how the citation is visually displayed. So the LLM sub-view below is about what an LLM-rendered citation would look like — not about per-schema visual variation.
+
+  **Sub-navigation at top of tab (radio-button / pill style):**
+  1. **Google Search** (default) — SERP appearance gallery
+  2. **Google Discover** — mobile feed card
+  3. **AI Overviews** — Google's generative citation overlay
+  4. **LLM Citations** — Perplexity / ChatGPT / Gemini / Claude source cards
+
+  ---
+
+  ### Sub-view 1 — Google Search (SERP Appearance Gallery)
+
+  Show a gallery grid of every rich-result appearance the article *could* get based on its schema. Each tile is a mock of how the appearance looks in Google's 2026 SERP.
+
+  **Eligibility logic:** Read `_seobetter_schema` post_meta → parse the schema @types → light up matching tiles in color, grey out non-matching tiles with an "Add [X] schema" CTA.
+
+  **The 26 Google Search appearances to mock (per Google Search Gallery 2026):**
+
+  | # | Appearance | Schema @type required | Mock visual |
+  |---|---|---|---|
+  | 1 | **Standard Article** | Article / BlogPosting / NewsArticle | Blue title · grey URL · description · byline date + author |
+  | 2 | **Article with image** | Article + ImageObject | Same as above + 120×120 thumbnail on right |
+  | 3 | **Recipe card** | Recipe | Large image + title + ⭐ 4.8 (120) · 30 min · ~320 cal |
+  | 4 | **Recipe carousel** (host-driven) | Recipe × ≥3 + ItemList | Horizontal 3-image scroller with per-card rating + time |
+  | 5 | **Recipe gallery** (multi-site) | Recipe (standalone) | Note: "Eligible to appear in Google's multi-site recipe gallery" |
+  | 6 | **Product card** | Product | Image + title + **$29.99** + ⭐ 4.7 (1,234) + In Stock badge |
+  | 7 | **Product carousel** | Product × ≥3 + ItemList | Horizontal product gallery with price + rating per card |
+  | 8 | **Review snippet** | Review / AggregateRating | ⭐⭐⭐⭐⭐ 4.7/5 rating appearing inline below the SERP title |
+  | 9 | **FAQ rich result** | FAQPage | 2–3 expandable Q&A rows with ▾ carets (note: desktop-limited since Aug 2023; still shows for authoritative sites) |
+  | 10 | **HowTo step carousel** | HowTo | Numbered step thumbnails (note: desktop deprecated Sep 2023, still renders in Google Assistant / mobile Android) |
+  | 11 | **Event card** | Event | Date badge · event name · venue · Get tickets button |
+  | 12 | **Event carousel** | Event × ≥3 + ItemList | Horizontal multi-date cards for a venue/site |
+  | 13 | **Local Business / Map Pack** | LocalBusiness | Map pin + business name + ⭐ rating + hours + Directions + Call |
+  | 14 | **Video rich result** | VideoObject | Large play-button thumbnail + title + duration + channel |
+  | 15 | **Video carousel** | VideoObject × ≥3 + ItemList | Top Videos section with 3 play-button thumbnails |
+  | 16 | **Top Stories card** (News) | NewsArticle | Small thumbnail + publisher + headline + "2 hours ago" |
+  | 17 | **Course carousel** | Course × ≥3 | Provider logo + course name + duration + price per card |
+  | 18 | **Movie carousel** | Movie × ≥3 | Poster + title + year + director per card |
+  | 19 | **Vacation Rental** | VacationRental | Property image + title + price per night + ⭐ + location |
+  | 20 | **Job posting** | JobPosting | Company logo + title + location + "Apply now" button |
+  | 21 | **Software App** | SoftwareApplication | Icon + name + ⭐ rating + price/Free + download button |
+  | 22 | **Dataset** | Dataset | Appears in Dataset Search panel (separate Google product) |
+  | 23 | **Q&A page** | QAPage | Accepted answer excerpt with upvote count |
+  | 24 | **Discussion Forum** | DiscussionForumPosting | Thread title + top reply excerpt + reply count |
+  | 25 | **Profile Page** | ProfilePage | Author headshot + name + bio excerpt |
+  | 26 | **Breadcrumbs** | BreadcrumbList | Path shown in URL line: `example.com › category › article` |
+  | 27 | **Speakable (voice)** | Speakable (within Article) | "📣 Audio available on Google Assistant" badge — no visible SERP treatment, activates voice read-aloud |
+  | 28 | **Subscription/Paywall** | ScholarlyArticle / NewsArticle + isAccessibleForFree=false | 🔒 icon next to result indicating subscription content |
+
+  **Tile layout:**
+  - 2-column grid on desktop (≥800px); 1 column on narrower screens
+  - Each tile has:
+    - Header: appearance name + eligibility badge (`✓ Eligible` green / `○ Requires [schema]` grey)
+    - Mock visual of the appearance (matches Google's 2026 visual style: blue `#1a0dab` titles, grey `#4d5156` snippets, yellow `#fbbc04` stars, #202124 body text, #e5e7eb 1px borders, 8px radius)
+    - Footer: "Schema required: [type]" + "Why: [plain-english explanation]"
+  - Greyed tiles show "Add this schema →" link opening a settings panel that activates the missing schema for the post (e.g. promoting the article's content type to trigger Recipe schema)
+
+  **Above the grid:** a summary bar showing `[X of 28 appearances active]` with color-coded badge.
+
+  ---
+
+  ### Sub-view 2 — Google Discover (Mobile Feed)
+
+  Google Discover is the mobile home-screen card feed. It prioritizes visually-rich content and doesn't use the usual SERP layout.
+
+  **Eligibility requirements Google documents for Discover:**
+  - Article / NewsArticle / BlogPosting schema
+  - High-quality featured image ≥1200px wide (checked via `wp_get_attachment_metadata()`)
+  - Content freshness signals (`datePublished`, `dateModified`)
+  - Mobile-friendly page
+
+  **Mock visual (single card):**
+  - Large image (16:9, edge-to-edge, ~375×210px mobile)
+  - Small favicon + publisher name in light grey below image
+  - Bold 18px headline
+  - 2-line grey description
+  - Interaction row: 👍 / 🔖 bookmark / ⋯ menu
+
+  **Eligibility indicator panel:**
+  - ✅/❌ for each requirement:
+    - Featured image set
+    - Featured image ≥1200px wide
+    - Article schema present
+    - Mobile-friendly (always ✓ for responsive themes)
+    - Recent publish/modify date (<30 days recommended)
+  - If any fail, show specific remediation ("Upload a 1200×630px featured image", etc.)
+
+  ---
+
+  ### Sub-view 3 — Google AI Overviews (Generative Citation Overlay)
+
+  Google's AI Overviews (2026) introduce **contextual overlay link cards** — when a user hovers a phrase in an AI-generated answer, a grouped card of 3–5 related sources appears.
+
+  **Mock visual:**
+  - Top of card: an AI Overview-style sentence excerpt with one phrase underlined/highlighted (representing the hoverable claim)
+  - Below: the overlay card that appears on hover — a vertical stack of 3 source rows, each with:
+    - Publisher favicon (16×16)
+    - Publisher name in small grey text
+    - Source page title in blue
+    - Optional 1-line relevance excerpt
+    - "This site" indicator on the row matching the current article
+  - An "Ask about" button at the bottom (new 2026 feature — lets users drill into related sources)
+
+  **Eligibility indicators:**
+  - Structured content required: bullet lists, numbered steps, FAQ, clear headings (Princeton GEO §1)
+  - Article / FAQPage / HowTo schema
+  - E-E-A-T signals (Author schema, Organization schema, dateModified)
+  - Citation density: ≥3 external citations in references
+  - Conversational query match (harder to mock — show note: "Only appears for queries where Google triggers AI Overviews, which is now ~58% of informational queries")
+
+  Show an "AI Overview citation readiness" score derived from these factors (0-100).
+
+  ---
+
+  ### Sub-view 4 — LLM Citations (Perplexity / ChatGPT / Gemini / Claude)
+
+  Four side-by-side mock cards showing how each major LLM displays the article as a source. **These are uniform per platform regardless of the article's schema @type** — the content of the citation varies, not the layout.
+
+  #### 4.1 Perplexity source card (most visually rich)
+  - Numbered badge (e.g. `3`) at top-left
+  - Favicon (20×20)
+  - Publisher name in small grey text
+  - Bold page title (2 lines max)
+  - Optional 3-line description excerpt
+  - Small thumbnail image on the right (uses og:image)
+  - "View source" button at bottom
+
+  #### 4.2 ChatGPT with Search source card
+  - Favicon (16×16)
+  - Small grey publisher/domain
+  - Blue hyperlinked title (1 line)
+  - Short 1-line description
+  - Minimalist — no thumbnail by default
+
+  #### 4.3 Gemini inline citation
+  - Cited text passage with superscript `⁽¹⁾` badge
+  - Source panel below answer showing: favicon + publisher + blue title + URL
+  - Thumbnail rarely shown
+
+  #### 4.4 Claude source reference (when web-enabled)
+  - Citation footnote at bottom of answer: `[1] Site name – Page title`
+  - On hover/click: panel with favicon + title + URL + description
+  - No thumbnail
+
+  **Drivers the tab should explain** (below the mock cards):
+  - **Title text** ← `<title>` tag → `og:title` → meta title
+  - **Description** ← meta description → `og:description` → first-paragraph extract
+  - **Thumbnail** ← `og:image` (Perplexity + occasionally ChatGPT only)
+  - **Favicon** ← `/favicon.ico` or `get_site_icon_url()`
+  - **Publisher name** ← `og:site_name` → `<title>` suffix → domain
+
+  **Key insight box** (prominent on this sub-view):
+  > **Schema doesn't change how LLMs display citations — they all render a uniform card per platform regardless of whether the article is a Recipe, FAQ, or How-To.** What schema DOES affect is whether the LLM picks your article as a source in the first place. FAQPage schema (Perplexity), Article + HowTo (ChatGPT), Organization + Article (Gemini), and well-structured content without schema (Claude) all drive *inclusion*, not *visual layout*.
+
+  **LLM Citation Readiness scorecard** (below the mocks) — 8 checks:
+  - [ ] `og:title` set and ≤70 chars
+  - [ ] `og:description` set and 120–200 chars
+  - [ ] `og:image` ≥1200×630 (required for Perplexity thumbnail)
+  - [ ] Favicon present and ≥32×32
+  - [ ] `og:site_name` set
+  - [ ] FAQ schema (Perplexity bonus)
+  - [ ] HowTo / step-structured content (ChatGPT bonus)
+  - [ ] Organization schema (Gemini bonus)
+
+  ---
+
+  **Shared tab behavior:**
+  - Sub-view switching via vanilla JS (stay with the no-React rule; extend the existing tab script)
+  - Each sub-view remembers the user's last device toggle (desktop/mobile where applicable) via `localStorage` key `seobetter_richresults_device`
+  - "Validate on Google Rich Results Test" button at bottom of tab — opens `https://search.google.com/test/rich-results?url={encodeURIComponent(post_url)}` in new tab
+  - "Validate OG/Twitter preview" button — opens `https://www.opengraph.xyz/?url={post_url}` in new tab
+
 - [ ] Tab switching via vanilla JS (no React dependency)
 - [ ] Focus keyword saves on `save_post` hook with nonce verification
 - [ ] Reads existing keyword from SEOBetter, Yoast, or RankMath meta keys
