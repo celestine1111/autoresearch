@@ -597,13 +597,23 @@ See **plugin_UX.md** for the complete UI specification including:
 
 ## 8. SEO PLUGIN INTEGRATION
 
-| Plugin | What SEOBetter Sets |
-|---|---|
-| **AIOSEO** | Title, description, keyphrases, OG title/desc, Twitter title/desc, schema (in wp_aioseo_posts table) |
-| **Yoast SEO** | Title, description, focus keyword (post meta) |
-| **RankMath** | Title, description, focus keyword (post meta) |
-| **SEOPress** | Not directly integrated (uses post meta fallback) |
-| **No plugin** | Schema via wp_head hook + post meta |
+**As of v1.5.206d-fix19** all 4 SEO plugins receive full SEO + Open Graph + Twitter Card field pushes, triggered from BOTH generation-time save and metabox-edit save. The single push entry point is [seobetter.php::sync_seo_plugin_meta()](../seobetter.php) (around line 2013). Length caps enforced at the boundary: SEO title ≤60, meta description ≤160, OG title ≤95, OG description ≤200, Twitter title ≤70, Twitter description ≤200.
+
+| Plugin | SEO fields | Open Graph fields | Twitter Card fields | Schema |
+|---|---|---|---|---|
+| **AIOSEO** | title, description, keyphrases (in `{prefix}_aioseo_posts` table; `_aioseo_*` post_meta fallback) | og_title, og_description, og_object_type, og_image_type, og_article_section, og_article_tags | twitter_title, twitter_description, twitter_card, twitter_image_type, twitter_use_og | Full schema JSON (see §4) |
+| **Yoast SEO** | `_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `_yoast_wpseo_focuskw` | `_yoast_wpseo_opengraph-title`, `_yoast_wpseo_opengraph-description`, `_yoast_wpseo_opengraph-image`, `_yoast_wpseo_opengraph-image-id` | `_yoast_wpseo_twitter-title`, `_yoast_wpseo_twitter-description`, `_yoast_wpseo_twitter-image`, `_yoast_wpseo_twitter-image-id` | Yoast outputs its own schema graph; SEOBetter does not override |
+| **RankMath** | `rank_math_title`, `rank_math_description`, `rank_math_focus_keyword` | `rank_math_facebook_title`, `rank_math_facebook_description`, `rank_math_facebook_image`, `rank_math_facebook_image_id` | `rank_math_twitter_title`, `rank_math_twitter_description`, `rank_math_twitter_image`, `rank_math_twitter_image_id`, `rank_math_twitter_use_facebook=off` | RankMath outputs its own schema; SEOBetter does not override |
+| **SEOPress** | `_seopress_titles_title`, `_seopress_titles_desc`, `_seopress_analysis_target_kw` | `_seopress_social_fb_title`, `_seopress_social_fb_desc`, `_seopress_social_fb_img` | `_seopress_social_twitter_title`, `_seopress_social_twitter_desc`, `_seopress_social_twitter_img` | SEOPress Pro outputs its own schema |
+| **No plugin** | Schema via `wp_head` hook + post_meta (`_seobetter_schema`); OG/Twitter output by [includes/Social_Meta_Generator.php](../includes/Social_Meta_Generator.php) | og:type, og:title, og:description, og:url, og:site_name, og:image (1200×627), article:published_time, article:modified_time | twitter:card=summary_large_image, twitter:title, twitter:description, twitter:image | `_seobetter_schema` → wp_head JSON-LD |
+
+**Featured image ID + URL** are pushed to every SEO plugin as the OG/Twitter image when a featured image is set (via `get_post_thumbnail_id()` → `wp_get_attachment_image_url()`). Yoast and RankMath accept image IDs; SEOPress and AIOSEO also accept image URLs.
+
+**Call sites:**
+- [seobetter.php::rest_save_draft()](../seobetter.php) around line 1503 — fires after article generation Save Draft click
+- [seobetter.php::save_metabox()](../seobetter.php) around line 3773 — fires on every WordPress post save when the metabox SERP preview inputs are present
+
+**SERP preview editability** (v1.5.206d-fix19): The SEOBetter metabox → General tab now contains an editable SEO title `<input>` + meta description `<textarea>` with live-updating preview card (favicon, site name, breadcrumb URL, blue title, grey snippet), mobile/desktop device toggle, content-type rich-result hint (Recipe stars/time/cal, Review stars, HowTo step badge, FAQ expandable Q&A, News top-stories date, Listicle count, Comparison side-by-side badge), and character counters with color-coded thresholds (desktop 60/160, mobile 45/120). Edits on save fire `save_metabox()` which calls `sync_seo_plugin_meta()` → mirrors into every active SEO plugin.
 
 ---
 

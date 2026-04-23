@@ -7,12 +7,80 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d-fix18)
+> **Last updated:** 2026-04-23 (v1.5.206d-fix19)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d-fix19 — Editable SERP preview + full OG/Twitter push to Yoast/RankMath/SEOPress + length caps
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben flagged three gaps in the metabox SERP preview / social-meta pipeline:
+
+1. The SERP preview on the General tab was **read-only** — no inputs for SEO title or meta description. Users who don't have AIOSEO/Yoast/RankMath installed had no UI path to edit those fields at all.
+2. The SERP preview was **visually incomplete** — no favicon, no breadcrumb-format URL, no mobile/desktop toggle, no content-type-aware rich-result hint (stars for Recipe/Review, expandable Q&A for FAQ, step badge for HowTo, top-stories label for News).
+3. **OG/Twitter fields were only pushed to AIOSEO.** Yoast got 3 post_meta keys (title/description/focus-kw); RankMath got the same 3; SEOPress got the same 3. None received OG title/description/image or Twitter title/description/image overrides — so users running those SEO plugins got generic auto-generated social cards instead of the SEOBetter-crafted ones.
+
+### Added
+
+- **`sb_truncate(string $text, int $max_chars): string`** — [seobetter.php::sb_truncate()](/Users/ben/Documents/autoresearch/seobetter/seobetter.php) line **1988**
+  - Multibyte-safe truncation helper used everywhere length caps apply
+  - Appends single `…` character (1 char count) when truncation occurs
+  - Verify: `grep -n 'private function sb_truncate' seobetter/seobetter.php`
+
+- **`sync_seo_plugin_meta( int $post_id, string $meta_title, string $meta_desc, string $keyword, string $content_type = '' ): void`** — [seobetter.php::sync_seo_plugin_meta()](/Users/ben/Documents/autoresearch/seobetter/seobetter.php) line **2013**
+  - Single entry point pushing SEO + OG + Twitter + image fields to AIOSEO, Yoast, RankMath, SEOPress
+  - Called from both `rest_save_draft()` (generation time) and `save_metabox()` (user edit time)
+  - Length caps enforced at the boundary: SEO title ≤60, meta desc ≤160, OG title ≤95, OG desc ≤200, Twitter title ≤70, Twitter desc ≤200
+  - Pushes featured image ID + URL to OG image / Twitter image fields when featured image is set
+  - Verify: `grep -n 'sync_seo_plugin_meta\|_yoast_wpseo_opengraph\|rank_math_facebook_title\|_seopress_social_fb_title' seobetter/seobetter.php`
+
+### Changed
+
+- **SERP preview in `render_metabox()` (General tab)** — [seobetter.php::render_metabox()](/Users/ben/Documents/autoresearch/seobetter/seobetter.php) around line **3892**
+  - Replaced static `echo esc_html()` with full editable preview:
+    - Real favicon from `get_site_icon_url(32)` with `home_url('/favicon.ico')` fallback
+    - Site name + breadcrumb-style URL (host › path1 › path2), ellipsis-truncated
+    - Live-preview blue title (`#1a0dab`, 20px desktop / 18px mobile) with single-line overflow ellipsis
+    - Live-preview grey snippet (`#4d5156`, 14px desktop / 13px mobile) with 2-line clamp desktop / 3-line mobile
+    - Content-type rich-result hint for Recipe, Review, HowTo, FAQ, News, Listicle, Comparison/Buying Guide (reads from `_seobetter_content_type` post_meta)
+    - Mobile ↔ Desktop toggle button
+    - Editable `<input name="seobetter_meta_title">` with char counter `0/60` (green ≤60, amber ≤70, red >70)
+    - Editable `<textarea name="seobetter_meta_description">` with char counter `0/160` desktop, `0/120` mobile
+    - Sync notice: "Edits sync to AIOSEO, Yoast, RankMath, and SEOPress when active"
+  - New JS block at end of metabox script wires `input` events to live-update the preview card and swap truncation caps when toggling device mode
+  - Verify: `grep -n 'sb-serp-block\|sb-meta-title-input\|sb-meta-desc-input\|sb-serp-device' seobetter/seobetter.php`
+
+- **`save_metabox()`** — [seobetter.php::save_metabox()](/Users/ben/Documents/autoresearch/seobetter/seobetter.php) line **3766**
+  - Now reads `$_POST['seobetter_meta_title']` and `$_POST['seobetter_meta_description']`
+  - Falls back to post title / 25-word content excerpt if a field is empty
+  - Calls `sync_seo_plugin_meta()` so metabox edits propagate to every active SEO plugin
+  - Verify: `grep -n "\$_POST\['seobetter_meta_title'\]\|sync_seo_plugin_meta( \$post_id" seobetter/seobetter.php`
+
+- **`rest_save_draft()` SEO-plugin population** — [seobetter.php](/Users/ben/Documents/autoresearch/seobetter/seobetter.php) line **1503**
+  - Replaced 4 inline blocks (AIOSEO + Yoast + RankMath + SEOPress) with a single `sync_seo_plugin_meta()` call. Yoast / RankMath / SEOPress now receive the same OG + Twitter + image fields that AIOSEO already did.
+  - Verify: `grep -n 'sync_seo_plugin_meta(' seobetter/seobetter.php`
+
+- **`populate_aioseo()`** — [seobetter.php::populate_aioseo()](/Users/ben/Documents/autoresearch/seobetter/seobetter.php) line **2100**
+  - Title is now length-capped to 60 chars at entry via `sb_truncate()` (was previously passed through unchanged)
+  - All social truncations use the new `sb_truncate()` helper for consistency
+
+### Cross-doc sync
+
+- [seo-guidelines/plugin_functionality_wordpress.md §8 "SEO PLUGIN INTEGRATION"](/Users/ben/Documents/autoresearch/seobetter/seo-guidelines/plugin_functionality_wordpress.md) — rewrote table to show full OG/Twitter matrix across AIOSEO/Yoast/RankMath/SEOPress; documented `sync_seo_plugin_meta()` as the single push point with length caps spelled out
+- [seo-guidelines/plugin_UX.md §8B Metabox](/Users/ben/Documents/autoresearch/seobetter/seo-guidelines/plugin_UX.md) — updated General Tab checklist to cover the editable inputs, favicon, breadcrumb, device toggle, content-type rich-result hint, char counters, and sync notice
+
+### Verified by user
+
+- **UNTESTED** — Ben to verify on his test site: (a) metabox SERP preview shows favicon + breadcrumb + blue title + snippet, (b) typing in SEO Title input live-updates the preview, (c) mobile toggle narrows the card, (d) saving the post with edited values mirrors into AIOSEO / Yoast / RankMath / SEOPress post_meta + OG/Twitter fields.
 
 ---
 

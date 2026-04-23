@@ -411,14 +411,31 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 - [ ] Registered via `add_meta_box()` on `add_meta_boxes` hook
 - [ ] Title: "SEOBetter Settings" (normal context, low priority)
 - [ ] Renders on both `post` and `page` screens
-- [ ] **3 Tabs in header:**
+- [ ] **4 Tabs in header:**
   - General (default active)
   - Page Analysis
   - Readability
+  - Rich Results
 - [ ] **Score badge** in top-right of header — XX/100 + grade letter, color-coded
-- [ ] **General Tab:**
-  - SERP Preview card (site name + URL + blue title + description)
-  - Focus Keyword input (saves to `_seobetter_focus_keyword` post meta)
+- [ ] **General Tab (v1.5.206d-fix19 — editable SERP preview):**
+  - **SERP Preview card** with:
+    - Real site favicon (`get_site_icon_url(32)` fallback to `home_url('/favicon.ico')`)
+    - Site name + breadcrumb-style URL (host › path1 › path2) at top
+    - Blue title (#1a0dab) — **single-line truncation via CSS overflow ellipsis**, 20px desktop / 18px mobile
+    - Grey snippet (#4d5156) — **2-line clamp on desktop, 3-line on mobile** via `-webkit-line-clamp`
+    - Content-type rich-result hint below snippet:
+      - Recipe → ⭐ 4.8 (120) · 30 min · ~320 cal
+      - Review / product_review → ⭐ 4.7/5 · Reviewed by author
+      - HowTo → 📋 Step-by-step · ~15 min
+      - FAQ → 2 stacked expandable Q&A rows with ▾ caret (first Q uses focus keyword)
+      - News / live_blog / press_release → Top stories · [post date]
+      - Listicle → 📋 List article · 10 items
+      - Comparison / buying_guide → ⚖ Comparison · Side-by-side
+    - **Mobile ↔ Desktop toggle** (top-right of preview) — narrows card to 380px, tightens truncation caps to 45/120 chars
+  - **Editable SEO Title `<input>`** — `name="seobetter_meta_title"`, saves to `_seobetter_meta_title` post_meta. Live-updates the preview blue title. Char counter `0/60` with color thresholds (≤60 green, ≤70 amber, >70 red).
+  - **Editable Meta Description `<textarea>`** — `name="seobetter_meta_description"`, saves to `_seobetter_meta_description`. Live-updates the preview snippet. Char counter `0/160` desktop / `0/120` mobile.
+  - **Sync notice** below inputs: "Edits sync to AIOSEO, Yoast, RankMath, and SEOPress when active (title, description, Open Graph, Twitter Card)."
+  - Focus Keyword input (saves to `_seobetter_focus_keyword` post meta) — unchanged
   - 4-stat grid: GEO Score, Words, Citations, Quotes
 - [ ] **Page Analysis Tab — 12 SEO checks with ✓/✗ icons:**
   1. Focus Keyword in content

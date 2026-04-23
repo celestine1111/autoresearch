@@ -1500,29 +1500,19 @@ final class SEOBetter {
             }
         }
 
-        // Populate AIOSEO fields if the plugin is active
-        if ( defined( 'AIOSEO_VERSION' ) || function_exists( 'aioseo' ) ) {
-            $content_type = sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' );
-            $this->populate_aioseo( $post_id, $keyword, $meta_title ?: $title, $meta_desc, $og_title ?: $meta_title ?: $title, $post_content, $content_type );
-        }
-
-        // Also populate Yoast and RankMath if active (covers all SEO plugins)
-        if ( defined( 'WPSEO_VERSION' ) ) {
-            update_post_meta( $post_id, '_yoast_wpseo_title', $meta_title ?: $title );
-            update_post_meta( $post_id, '_yoast_wpseo_metadesc', $meta_desc );
-            update_post_meta( $post_id, '_yoast_wpseo_focuskw', $keyword );
-        }
-        if ( class_exists( 'RankMath' ) ) {
-            update_post_meta( $post_id, 'rank_math_title', $meta_title ?: $title );
-            update_post_meta( $post_id, 'rank_math_description', $meta_desc );
-            update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
-        }
-        // v1.5.97 — SEOPress support
-        if ( function_exists( 'seopress_init' ) || defined( 'SEOPRESS_VERSION' ) ) {
-            update_post_meta( $post_id, '_seopress_titles_title', $meta_title ?: $title );
-            update_post_meta( $post_id, '_seopress_titles_desc', $meta_desc );
-            update_post_meta( $post_id, '_seopress_analysis_target_kw', $keyword );
-        }
+        // v1.5.206d-fix19 — single push point for all SEO plugins. Yoast and RankMath
+        // previously only got title/description/focus-keyword; now they also get OG +
+        // Twitter title/description/image fields (parity with AIOSEO). SEOPress also
+        // receives OG/Twitter social fields. Length caps enforced inside sync_seo_plugin_meta:
+        // SEO title ≤60, meta desc ≤160, OG title ≤95, OG desc ≤200, Twitter title ≤70, TW desc ≤200.
+        $content_type = sanitize_text_field( $request->get_param( 'content_type' ) ?? 'blog_post' );
+        $this->sync_seo_plugin_meta(
+            $post_id,
+            $meta_title ?: $title,
+            $meta_desc,
+            $keyword,
+            $content_type
+        );
 
         // v1.5.117 — Use Schema_Generator for all schema (replaces build_aioseo_schema).
         // This ensures the Google-compliant fixes (no hardcoded Recipe times,
@@ -1991,16 +1981,132 @@ final class SEOBetter {
     }
 
     /**
+     * v1.5.206d-fix19 — mb-safe truncation helper for SEO length enforcement.
+     * Returns $text unchanged if within $max_chars; otherwise trims to
+     * ($max_chars - 1) and appends a single ellipsis character (1 char = 1 "char" count).
+     */
+    private function sb_truncate( string $text, int $max_chars ): string {
+        $text = trim( $text );
+        if ( mb_strlen( $text ) <= $max_chars ) {
+            return $text;
+        }
+        return rtrim( mb_substr( $text, 0, $max_chars - 1 ) ) . '…';
+    }
+
+    /**
+     * v1.5.206d-fix19 — Single push point that mirrors SEO title + description +
+     * focus keyword + OG title/desc/image + Twitter title/desc/image into every
+     * active SEO plugin (AIOSEO, Yoast, RankMath, SEOPress).
+     *
+     * Called from:
+     *  - rest_save_draft() at generation time (first save)
+     *  - save_metabox() whenever a user edits the SERP preview fields
+     *
+     * Length contract per Google + social network guidance:
+     *  - SEO title:         ≤60 chars (Google SERP desktop)
+     *  - Meta description:  ≤160 chars (Google SERP desktop; ~120 mobile)
+     *  - OG title:          ≤95 chars (Facebook ~88 visible)
+     *  - OG description:    ≤200 chars (Facebook ~200 visible)
+     *  - Twitter title:     ≤70 chars
+     *  - Twitter desc:      ≤200 chars
+     */
+    private function sync_seo_plugin_meta( int $post_id, string $meta_title, string $meta_desc, string $keyword, string $content_type = '' ): void {
+        $featured_id  = (int) get_post_thumbnail_id( $post_id );
+        $featured_url = $featured_id ? (string) wp_get_attachment_image_url( $featured_id, 'full' ) : '';
+
+        // Length-enforce every surface at the boundary so we never write over-limit.
+        $title_seo = $this->sb_truncate( $meta_title, 60 );
+        $desc_seo  = $this->sb_truncate( $meta_desc, 160 );
+        $fb_title  = $this->sb_truncate( $meta_title, 95 );
+        $fb_desc   = $this->sb_truncate( $meta_desc, 200 );
+        $tw_title  = $this->sb_truncate( $meta_title, 70 );
+        $tw_desc   = $this->sb_truncate( $meta_desc, 200 );
+
+        // Persist SEOBetter canonical copies (source of truth for Social_Meta_Generator)
+        if ( $title_seo !== '' ) {
+            update_post_meta( $post_id, '_seobetter_meta_title', $title_seo );
+        }
+        if ( $desc_seo !== '' ) {
+            update_post_meta( $post_id, '_seobetter_meta_description', $desc_seo );
+        }
+
+        // --- Yoast SEO (OG + Twitter now populated — prior to fix19 only title/desc/focus-kw were set)
+        if ( defined( 'WPSEO_VERSION' ) ) {
+            if ( $title_seo !== '' ) update_post_meta( $post_id, '_yoast_wpseo_title', $title_seo );
+            if ( $desc_seo !== '' )  update_post_meta( $post_id, '_yoast_wpseo_metadesc', $desc_seo );
+            if ( $keyword !== '' )   update_post_meta( $post_id, '_yoast_wpseo_focuskw', $keyword );
+            if ( $fb_title !== '' )  update_post_meta( $post_id, '_yoast_wpseo_opengraph-title', $fb_title );
+            if ( $fb_desc !== '' )   update_post_meta( $post_id, '_yoast_wpseo_opengraph-description', $fb_desc );
+            if ( $tw_title !== '' )  update_post_meta( $post_id, '_yoast_wpseo_twitter-title', $tw_title );
+            if ( $tw_desc !== '' )   update_post_meta( $post_id, '_yoast_wpseo_twitter-description', $tw_desc );
+            if ( $featured_id ) {
+                update_post_meta( $post_id, '_yoast_wpseo_opengraph-image-id', $featured_id );
+                update_post_meta( $post_id, '_yoast_wpseo_twitter-image-id', $featured_id );
+                if ( $featured_url !== '' ) {
+                    update_post_meta( $post_id, '_yoast_wpseo_opengraph-image', $featured_url );
+                    update_post_meta( $post_id, '_yoast_wpseo_twitter-image', $featured_url );
+                }
+            }
+        }
+
+        // --- RankMath (OG + Twitter now populated)
+        if ( class_exists( 'RankMath' ) ) {
+            if ( $title_seo !== '' ) update_post_meta( $post_id, 'rank_math_title', $title_seo );
+            if ( $desc_seo !== '' )  update_post_meta( $post_id, 'rank_math_description', $desc_seo );
+            if ( $keyword !== '' )   update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
+            if ( $fb_title !== '' )  update_post_meta( $post_id, 'rank_math_facebook_title', $fb_title );
+            if ( $fb_desc !== '' )   update_post_meta( $post_id, 'rank_math_facebook_description', $fb_desc );
+            if ( $tw_title !== '' )  update_post_meta( $post_id, 'rank_math_twitter_title', $tw_title );
+            if ( $tw_desc !== '' )   update_post_meta( $post_id, 'rank_math_twitter_description', $tw_desc );
+            update_post_meta( $post_id, 'rank_math_twitter_use_facebook', 'off' );
+            if ( $featured_id ) {
+                update_post_meta( $post_id, 'rank_math_facebook_image_id', $featured_id );
+                update_post_meta( $post_id, 'rank_math_twitter_image_id', $featured_id );
+                if ( $featured_url !== '' ) {
+                    update_post_meta( $post_id, 'rank_math_facebook_image', $featured_url );
+                    update_post_meta( $post_id, 'rank_math_twitter_image', $featured_url );
+                }
+            }
+        }
+
+        // --- SEOPress (OG + Twitter now populated)
+        if ( function_exists( 'seopress_init' ) || defined( 'SEOPRESS_VERSION' ) ) {
+            if ( $title_seo !== '' ) update_post_meta( $post_id, '_seopress_titles_title', $title_seo );
+            if ( $desc_seo !== '' )  update_post_meta( $post_id, '_seopress_titles_desc', $desc_seo );
+            if ( $keyword !== '' )   update_post_meta( $post_id, '_seopress_analysis_target_kw', $keyword );
+            if ( $fb_title !== '' )  update_post_meta( $post_id, '_seopress_social_fb_title', $fb_title );
+            if ( $fb_desc !== '' )   update_post_meta( $post_id, '_seopress_social_fb_desc', $fb_desc );
+            if ( $tw_title !== '' )  update_post_meta( $post_id, '_seopress_social_twitter_title', $tw_title );
+            if ( $tw_desc !== '' )   update_post_meta( $post_id, '_seopress_social_twitter_desc', $tw_desc );
+            if ( $featured_url !== '' ) {
+                update_post_meta( $post_id, '_seopress_social_fb_img', $featured_url );
+                update_post_meta( $post_id, '_seopress_social_twitter_img', $featured_url );
+            }
+        }
+
+        // --- AIOSEO (full push incl. schema; unchanged from pre-fix19 except title is now length-capped)
+        if ( defined( 'AIOSEO_VERSION' ) || function_exists( 'aioseo' ) ) {
+            $ct = $content_type !== '' ? $content_type : ( (string) get_post_meta( $post_id, '_seobetter_content_type', true ) ?: 'blog_post' );
+            $post_content = (string) get_post_field( 'post_content', $post_id );
+            $this->populate_aioseo( $post_id, $keyword, $title_seo, $desc_seo, $fb_title, $post_content, $ct );
+        }
+    }
+
+    /**
      * Populate AIOSEO fields for a post.
      */
     private function populate_aioseo( int $post_id, string $keyword, string $seo_title, string $meta_desc, string $og_title, string $content = '', string $content_type = '' ): void {
         global $wpdb;
 
+        // v1.5.206d-fix19 — enforce length at the boundary even when called directly.
+        $seo_title = $this->sb_truncate( $seo_title, 60 );
+        $meta_desc = $this->sb_truncate( $meta_desc, 160 );
+
         // Social meta
-        $fb_title = mb_strlen( $og_title ) > 95 ? mb_substr( $og_title, 0, 92 ) . '...' : $og_title;
-        $fb_desc = mb_strlen( $meta_desc ) > 200 ? mb_substr( $meta_desc, 0, 197 ) . '...' : $meta_desc;
-        $tw_title = mb_strlen( $og_title ) > 70 ? mb_substr( $og_title, 0, 67 ) . '...' : $og_title;
-        $tw_desc = mb_strlen( $meta_desc ) > 200 ? mb_substr( $meta_desc, 0, 197 ) . '...' : $meta_desc;
+        $fb_title = $this->sb_truncate( $og_title, 95 );
+        $fb_desc  = $this->sb_truncate( $meta_desc, 200 );
+        $tw_title = $this->sb_truncate( $og_title, 70 );
+        $tw_desc  = $this->sb_truncate( $meta_desc, 200 );
 
         // Article Tags
         $tags = array_filter( array_map( 'trim', explode( ' ', strtolower( $keyword ) ) ), fn( $t ) => strlen( $t ) > 2 );
@@ -3659,9 +3765,36 @@ final class SEOBetter {
         if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) return;
         if ( ! current_user_can( 'edit_post', $post_id ) ) return;
 
+        $keyword = '';
         if ( isset( $_POST['seobetter_focus_keyword'] ) ) {
             $keyword = sanitize_text_field( wp_unslash( $_POST['seobetter_focus_keyword'] ) );
             update_post_meta( $post_id, '_seobetter_focus_keyword', $keyword );
+        } else {
+            $keyword = (string) get_post_meta( $post_id, '_seobetter_focus_keyword', true );
+        }
+
+        // v1.5.206d-fix19 — persist SERP preview edits (SEO title + meta description)
+        // and mirror them into every active SEO plugin via sync_seo_plugin_meta().
+        // Length caps (60 title, 160 desc) enforced inside the helper.
+        $has_title_edit = isset( $_POST['seobetter_meta_title'] );
+        $has_desc_edit  = isset( $_POST['seobetter_meta_description'] );
+        if ( $has_title_edit || $has_desc_edit ) {
+            $meta_title = $has_title_edit
+                ? sanitize_text_field( wp_unslash( $_POST['seobetter_meta_title'] ) )
+                : (string) get_post_meta( $post_id, '_seobetter_meta_title', true );
+            $meta_desc  = $has_desc_edit
+                ? sanitize_textarea_field( wp_unslash( $_POST['seobetter_meta_description'] ) )
+                : (string) get_post_meta( $post_id, '_seobetter_meta_description', true );
+
+            // Fall back to post_title / first-25-words if the field is now empty
+            if ( $meta_title === '' ) {
+                $meta_title = $post->post_title;
+            }
+            if ( $meta_desc === '' ) {
+                $meta_desc = wp_trim_words( wp_strip_all_tags( $post->post_content ), 25 );
+            }
+
+            $this->sync_seo_plugin_meta( $post_id, $meta_title, $meta_desc, $keyword );
         }
     }
 
@@ -3784,14 +3917,105 @@ final class SEOBetter {
 
             <!-- General Tab -->
             <div class="sb-meta-panel" data-panel="general" style="padding:20px">
+                <?php
+                // v1.5.206d-fix19 — editable SERP preview with favicon, breadcrumb,
+                // mobile/desktop toggle, content-type-aware rich-result hint, and live
+                // character counters. Edits persist to _seobetter_meta_title /
+                // _seobetter_meta_description and mirror into AIOSEO/Yoast/RankMath/SEOPress
+                // via sync_seo_plugin_meta() fired from save_metabox().
+                $favicon_url = function_exists( 'get_site_icon_url' ) ? get_site_icon_url( 32 ) : '';
+                if ( ! $favicon_url ) {
+                    $favicon_url = home_url( '/favicon.ico' );
+                }
+                $parsed_url   = wp_parse_url( $url );
+                $url_host     = $parsed_url['host'] ?? '';
+                $url_path     = trim( (string) ( $parsed_url['path'] ?? '' ), '/' );
+                $url_breadcrumb = $url_host . ( $url_path !== '' ? ' › ' . str_replace( '/', ' › ', $url_path ) : '' );
+                $content_type_saved = (string) get_post_meta( $post->ID, '_seobetter_content_type', true );
+                $post_date    = get_the_date( 'M j, Y', $post );
+                ?>
                 <!-- SERP Preview -->
-                <div style="margin-bottom:20px">
-                    <div style="font-size:13px;font-weight:600;margin-bottom:8px">SERP Preview</div>
-                    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#fff">
-                        <div style="font-size:12px;color:#202124;margin-bottom:2px"><?php echo esc_html( $site_name ); ?> | <?php echo esc_url( $url ); ?></div>
-                        <div style="font-size:18px;color:#1a0dab;margin-bottom:4px;cursor:pointer"><?php echo esc_html( $meta_title ); ?></div>
-                        <div style="font-size:13px;color:#4d5156;line-height:1.5"><?php echo esc_html( $meta_desc ); ?></div>
+                <div style="margin-bottom:20px" id="sb-serp-block">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <div style="font-size:13px;font-weight:600">SERP Preview</div>
+                        <div style="display:inline-flex;border:1px solid #d1d5db;border-radius:6px;overflow:hidden" role="tablist">
+                            <button type="button" class="sb-serp-device sb-serp-device-active" data-device="desktop" style="padding:4px 10px;font-size:11px;border:none;background:#f3f4f6;color:#111827;cursor:pointer">🖥 Desktop</button>
+                            <button type="button" class="sb-serp-device" data-device="mobile" style="padding:4px 10px;font-size:11px;border:none;background:#fff;color:#6b7280;cursor:pointer">📱 Mobile</button>
+                        </div>
                     </div>
+                    <div id="sb-serp-card" data-device="desktop" style="padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;max-width:600px">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                            <img src="<?php echo esc_url( $favicon_url ); ?>" alt="" width="20" height="20" style="border-radius:50%;background:#f3f4f6;flex-shrink:0" onerror="this.style.display='none'" />
+                            <div style="flex:1;min-width:0">
+                                <div style="font-size:13px;color:#202124;line-height:1.2"><?php echo esc_html( $site_name ); ?></div>
+                                <div style="font-size:12px;color:#4d5156;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?php echo esc_html( $url_breadcrumb ); ?></div>
+                            </div>
+                        </div>
+                        <div id="sb-serp-title" style="font-size:20px;line-height:1.3;color:#1a0dab;font-weight:400;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer"><?php echo esc_html( $meta_title ); ?></div>
+                        <div id="sb-serp-desc" style="font-size:14px;color:#4d5156;line-height:1.58;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"><?php echo esc_html( $meta_desc ); ?></div>
+                        <?php
+                        // Content-type rich-result hints. These mock the likely Google enhancement
+                        // for the article's @type based on _seobetter_content_type. They're visual
+                        // approximations — actual rich results depend on the schema validating.
+                        $rich_badge = '';
+                        $ct = strtolower( $content_type_saved );
+                        if ( in_array( $ct, [ 'recipe' ], true ) ) {
+                            $rich_badge = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:#202124"><span style="color:#fbbc04;letter-spacing:-1px">★★★★★</span><span style="color:#4d5156">4.8 (120) · 30 min · ~320 cal</span></div>';
+                        } elseif ( in_array( $ct, [ 'review', 'product_review' ], true ) ) {
+                            $rich_badge = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:#202124"><span style="color:#fbbc04;letter-spacing:-1px">★★★★★</span><span style="color:#4d5156">Rating: 4.7/5 · Reviewed by author</span></div>';
+                        } elseif ( in_array( $ct, [ 'how_to', 'howto', 'how-to' ], true ) ) {
+                            $rich_badge = '<div style="margin-top:8px;font-size:13px;color:#4d5156">📋 Step-by-step guide · ~15 min</div>';
+                        } elseif ( in_array( $ct, [ 'faq' ], true ) ) {
+                            $kw_safe = $keyword ? esc_html( $keyword ) : 'this';
+                            $rich_badge  = '<div style="margin-top:10px;font-size:13px">';
+                            $rich_badge .= '<div style="border-top:1px solid #ececec;padding:8px 0;color:#202124;display:flex;justify-content:space-between"><span>What is ' . $kw_safe . '?</span><span style="color:#5f6368">▾</span></div>';
+                            $rich_badge .= '<div style="border-top:1px solid #ececec;padding:8px 0;color:#202124;display:flex;justify-content:space-between"><span>How does it work?</span><span style="color:#5f6368">▾</span></div>';
+                            $rich_badge .= '</div>';
+                        } elseif ( in_array( $ct, [ 'news', 'live_blog', 'press_release' ], true ) ) {
+                            $rich_badge = '<div style="margin-top:8px;font-size:12px;color:#70757a">Top stories · ' . esc_html( $post_date ) . '</div>';
+                        } elseif ( in_array( $ct, [ 'listicle' ], true ) ) {
+                            $rich_badge = '<div style="margin-top:8px;font-size:12px;color:#70757a">📋 List article · 10 items</div>';
+                        } elseif ( in_array( $ct, [ 'comparison', 'buying_guide' ], true ) ) {
+                            $rich_badge = '<div style="margin-top:8px;font-size:12px;color:#70757a">⚖ Comparison · Side-by-side</div>';
+                        }
+                        if ( $rich_badge ) {
+                            echo $rich_badge; // already-escaped content
+                        }
+                        ?>
+                    </div>
+
+                    <!-- Editable SEO Title -->
+                    <div style="margin-top:16px">
+                        <label for="sb-meta-title-input" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">SEO Title</label>
+                        <input type="text"
+                               name="seobetter_meta_title"
+                               id="sb-meta-title-input"
+                               value="<?php echo esc_attr( $meta_title ); ?>"
+                               maxlength="120"
+                               placeholder="Title that appears in Google search results"
+                               style="width:100%;height:38px;padding:0 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;font-family:inherit" />
+                        <div style="display:flex;justify-content:space-between;margin-top:4px">
+                            <div style="font-size:11px;color:#6b7280">Ideal 50–60 chars. Google truncates at ~60 desktop.</div>
+                            <div id="sb-meta-title-count" style="font-size:11px;font-weight:600">0/60</div>
+                        </div>
+                    </div>
+
+                    <!-- Editable Meta Description -->
+                    <div style="margin-top:12px">
+                        <label for="sb-meta-desc-input" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Meta Description</label>
+                        <textarea name="seobetter_meta_description"
+                                  id="sb-meta-desc-input"
+                                  rows="3"
+                                  maxlength="320"
+                                  placeholder="Description that appears under the title in search results"
+                                  style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5"><?php echo esc_textarea( $meta_desc ); ?></textarea>
+                        <div style="display:flex;justify-content:space-between;margin-top:4px">
+                            <div style="font-size:11px;color:#6b7280">Ideal 150–160 chars. Google truncates at ~160 desktop, ~120 mobile.</div>
+                            <div id="sb-meta-desc-count" style="font-size:11px;font-weight:600">0/160</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:8px;font-size:11px;color:#6b7280">Edits sync to AIOSEO, Yoast, RankMath, and SEOPress when active (title, description, Open Graph, Twitter Card).</div>
                 </div>
 
                 <!-- Focus Keyword -->
@@ -4181,7 +4405,7 @@ final class SEOBetter {
             </div>
         </div>
 
-        <!-- Tab switching JS -->
+        <!-- Tab switching + SERP preview live editor JS (v1.5.206d-fix19) -->
         <script>
         (function() {
             var tabs = document.querySelectorAll('.sb-meta-tab');
@@ -4200,6 +4424,75 @@ final class SEOBetter {
                     panels.forEach(function(p) {
                         p.style.display = p.getAttribute('data-panel') === target ? 'block' : 'none';
                     });
+                });
+            });
+
+            // v1.5.206d-fix19 — SERP preview live editor
+            var titleInput   = document.getElementById('sb-meta-title-input');
+            var descInput    = document.getElementById('sb-meta-desc-input');
+            var titleCount   = document.getElementById('sb-meta-title-count');
+            var descCount    = document.getElementById('sb-meta-desc-count');
+            var titleDisplay = document.getElementById('sb-serp-title');
+            var descDisplay  = document.getElementById('sb-serp-desc');
+            var card         = document.getElementById('sb-serp-card');
+            if (!titleInput || !descInput || !card) return;
+
+            // Separate caps per device since Google truncates differently.
+            var caps = { desktop: { title: 60, desc: 160 }, mobile: { title: 45, desc: 120 } };
+            var currentDevice = 'desktop';
+
+            function colorFor(len, ideal, max) {
+                if (len === 0) return '#9ca3af';
+                if (len <= max) return '#22c55e';
+                if (len <= max + 10) return '#f59e0b';
+                return '#ef4444';
+            }
+            function updateTitle() {
+                var v = titleInput.value || '';
+                titleDisplay.textContent = v;
+                var cap = caps[currentDevice].title;
+                titleCount.textContent = v.length + '/' + cap;
+                titleCount.style.color = colorFor(v.length, cap, cap);
+            }
+            function updateDesc() {
+                var v = descInput.value || '';
+                descDisplay.textContent = v;
+                var cap = caps[currentDevice].desc;
+                descCount.textContent = v.length + '/' + cap;
+                descCount.style.color = colorFor(v.length, cap, cap);
+            }
+            titleInput.addEventListener('input', updateTitle);
+            descInput.addEventListener('input', updateDesc);
+            updateTitle();
+            updateDesc();
+
+            // Device toggle — mobile narrows the preview card + tightens truncation caps
+            var devices = document.querySelectorAll('.sb-serp-device');
+            devices.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    devices.forEach(function(b) {
+                        b.classList.remove('sb-serp-device-active');
+                        b.style.background = '#fff';
+                        b.style.color = '#6b7280';
+                    });
+                    this.classList.add('sb-serp-device-active');
+                    this.style.background = '#f3f4f6';
+                    this.style.color = '#111827';
+                    currentDevice = this.getAttribute('data-device');
+                    card.setAttribute('data-device', currentDevice);
+                    if (currentDevice === 'mobile') {
+                        card.style.maxWidth = '380px';
+                        titleDisplay.style.fontSize = '18px';
+                        descDisplay.style.fontSize = '13px';
+                        descDisplay.style.webkitLineClamp = '3';
+                    } else {
+                        card.style.maxWidth = '600px';
+                        titleDisplay.style.fontSize = '20px';
+                        descDisplay.style.fontSize = '14px';
+                        descDisplay.style.webkitLineClamp = '2';
+                    }
+                    updateTitle();
+                    updateDesc();
                 });
             });
         })();
