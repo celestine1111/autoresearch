@@ -143,6 +143,14 @@ class Localized_Strings {
             'analysis'           => 'Analysis',
             'recommendations'    => 'Recommendations',
             'how_we_chose'       => 'How We Chose',
+            // v1.5.206d-fix11 — additional commonly-leaked anchors
+            'numbered_steps'         => 'Numbered Steps',
+            'step_by_step'           => 'Step-by-Step',
+            'quick_comparison_table' => 'Quick Comparison Table',
+            'closing_thoughts'       => 'Closing Thoughts',
+            'verdict_and_rating'     => 'Verdict and Rating',
+            'table_of_contents'      => 'Table of Contents',
+            'key_highlights'         => 'Key Highlights',
         ];
         $lines = [];
         foreach ( $keys as $key => $english ) {
@@ -992,6 +1000,82 @@ class Localized_Strings {
                 'pt-br' => 'Como escolhemos', 'ar' => 'كيف اخترنا',
                 'hi' => 'हमने कैसे चुना', 'nl' => 'Hoe we hebben gekozen',
                 'pl' => 'Jak wybieraliśmy', 'tr' => 'Nasıl seçtik',
+            ],
+
+            // v1.5.206d-fix11 — additional template anchors that leaked as
+            // colon-bilingual headings in Ben's Russian how-to test
+            // ("Step-by-Step: Как выбрать..."). Adds the most common remaining
+            // section names from the 21 prose templates.
+
+            'numbered_steps' => [
+                'en' => 'Numbered Steps', 'ja' => '手順', 'ko' => '단계별 안내',
+                'zh' => '步骤', 'zh-cn' => '步骤', 'zh-tw' => '步驟',
+                'ru' => 'Пошаговая инструкция', 'de' => 'Schritt-für-Schritt-Anleitung',
+                'fr' => 'Étapes détaillées', 'es' => 'Pasos numerados',
+                'it' => 'Procedura passo passo', 'pt' => 'Passo a passo',
+                'pt-br' => 'Passo a passo', 'ar' => 'الخطوات',
+                'hi' => 'चरण-दर-चरण निर्देश', 'nl' => 'Stappenplan',
+                'pl' => 'Instrukcja krok po kroku', 'tr' => 'Adım adım talimatlar',
+            ],
+            'step_by_step' => [
+                'en' => 'Step-by-Step', 'ja' => 'ステップバイステップ', 'ko' => '단계별',
+                'zh' => '一步一步', 'zh-cn' => '一步一步', 'zh-tw' => '一步一步',
+                'ru' => 'Пошагово', 'de' => 'Schritt für Schritt',
+                'fr' => 'Étape par étape', 'es' => 'Paso a paso',
+                'it' => 'Passo per passo', 'pt' => 'Passo a passo',
+                'pt-br' => 'Passo a passo', 'ar' => 'خطوة بخطوة',
+                'hi' => 'चरण-दर-चरण', 'nl' => 'Stap voor stap',
+                'pl' => 'Krok po kroku', 'tr' => 'Adım adım',
+            ],
+            'quick_comparison_table' => [
+                'en' => 'Quick Comparison Table', 'ja' => '簡易比較表', 'ko' => '빠른 비교 표',
+                'zh' => '快速对比表', 'zh-cn' => '快速对比表', 'zh-tw' => '快速比較表',
+                'ru' => 'Быстрая сравнительная таблица', 'de' => 'Schneller Vergleich',
+                'fr' => 'Tableau comparatif rapide', 'es' => 'Tabla comparativa rápida',
+                'it' => 'Tabella di confronto rapido', 'pt' => 'Tabela comparativa rápida',
+                'pt-br' => 'Tabela comparativa rápida', 'ar' => 'جدول مقارنة سريع',
+                'hi' => 'त्वरित तुलना तालिका', 'nl' => 'Snelle vergelijkingstabel',
+                'pl' => 'Szybka tabela porównawcza', 'tr' => 'Hızlı karşılaştırma tablosu',
+            ],
+            'closing_thoughts' => [
+                'en' => 'Closing Thoughts', 'ja' => '結びの言葉', 'ko' => '맺음말',
+                'zh' => '结语', 'zh-cn' => '结语', 'zh-tw' => '結語',
+                'ru' => 'Заключительные мысли', 'de' => 'Abschließende Gedanken',
+                'fr' => 'Réflexions finales', 'es' => 'Reflexiones finales',
+                'it' => 'Considerazioni finali', 'pt' => 'Considerações finais',
+                'pt-br' => 'Considerações finais', 'ar' => 'الأفكار الختامية',
+                'hi' => 'अंतिम विचार', 'nl' => 'Slotgedachten',
+                'pl' => 'Końcowe przemyślenia', 'tr' => 'Kapanış düşünceleri',
+            ],
+            'verdict_and_rating' => [
+                'en' => 'Verdict and Rating', 'ja' => '評価とレーティング', 'ko' => '판정 및 평가',
+                'zh' => '评价与评分', 'zh-cn' => '评价与评分', 'zh-tw' => '評價與評分',
+                'ru' => 'Вердикт и оценка', 'de' => 'Urteil und Bewertung',
+                'fr' => 'Verdict et note', 'es' => 'Veredicto y puntuación',
+                'it' => 'Verdetto e valutazione', 'pt' => 'Veredito e avaliação',
+                'pt-br' => 'Veredito e avaliação', 'ar' => 'الحكم والتقييم',
+                'hi' => 'निर्णय और रेटिंग', 'nl' => 'Oordeel en beoordeling',
+                'pl' => 'Werdykt i ocena', 'tr' => 'Karar ve değerlendirme',
+            ],
+            'table_of_contents' => [
+                'en' => 'Table of Contents', 'ja' => '目次', 'ko' => '목차',
+                'zh' => '目录', 'zh-cn' => '目录', 'zh-tw' => '目錄',
+                'ru' => 'Содержание', 'de' => 'Inhaltsverzeichnis',
+                'fr' => 'Table des matières', 'es' => 'Índice',
+                'it' => 'Indice', 'pt' => 'Índice',
+                'pt-br' => 'Sumário', 'ar' => 'جدول المحتويات',
+                'hi' => 'विषय-सूची', 'nl' => 'Inhoudsopgave',
+                'pl' => 'Spis treści', 'tr' => 'İçindekiler',
+            ],
+            'key_highlights' => [
+                'en' => 'Key Highlights', 'ja' => '主なハイライト', 'ko' => '주요 하이라이트',
+                'zh' => '主要亮点', 'zh-cn' => '主要亮点', 'zh-tw' => '主要亮點',
+                'ru' => 'Ключевые моменты', 'de' => 'Wichtigste Highlights',
+                'fr' => 'Points forts', 'es' => 'Aspectos destacados',
+                'it' => 'Punti salienti', 'pt' => 'Destaques principais',
+                'pt-br' => 'Destaques principais', 'ar' => 'أبرز النقاط',
+                'hi' => 'प्रमुख विशेषताएं', 'nl' => 'Belangrijkste hoogtepunten',
+                'pl' => 'Najważniejsze punkty', 'tr' => 'Önemli noktalar',
             ],
         ];
     }

@@ -16,6 +16,76 @@
 
 ---
 
+## v1.5.206d-fix11 — 7 more canonical anchors + REQUIRED SECTIONS rule
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Russian how-to test on fix9 + fix10 surfaced two residual issues:
+
+1. **Colon-bilingual leak still happening on `Step-by-Step:`**
+   The how_to prose template lists `Numbered Steps` as a section. Fix9's canonical-translations table (28 keys) didn't include `numbered_steps` or `step_by_step`. Result: AI rendered `Step-by-Step: Как выбрать эргономичное офисное кресло 2026` — English connector + Russian title.
+2. **Article omitted FAQ / Conclusion / References sections entirely.**
+   The how_to template's required sections list has 8 entries. AI generated only 5 — skipped FAQ, Conclusion, References. Downstream consequence: no FAQPage schema (the auto-detector can't find Q&A pairs), no References anchor for the plugin to populate, no closing CTA.
+
+Both are universal across non-English languages.
+
+### Shipped
+
+**Layer 1 expansion — 7 new canonical translation keys × 15 priority languages = 105 new translations:**
+- `numbered_steps` (e.g. Russian `Пошаговая инструкция`, Japanese `手順`)
+- `step_by_step` (e.g. Russian `Пошагово`, Japanese `ステップバイステップ`)
+- `quick_comparison_table` (e.g. Russian `Быстрая сравнительная таблица`)
+- `closing_thoughts` (e.g. Russian `Заключительные мысли`)
+- `verdict_and_rating` (e.g. Russian `Вердикт и оценка`)
+- `table_of_contents` (e.g. Russian `Содержание`)
+- `key_highlights` (e.g. Russian `Ключевые моменты`)
+
+`canonical_translation_block()` now covers 35 total keys (28 from fix9 + 7 new).
+
+**Layer 2 strengthening — REQUIRED SECTIONS rule appended to LANGUAGE clause:**
+
+> REQUIRED SECTIONS — DO NOT SKIP — The section list provided below for this content type is the MINIMUM REQUIRED structure. Every named section MUST appear as an H2 in the article — no exceptions. If you compress to fit a word budget, shorten OTHER sections, never omit Key Takeaways, FAQ, References, Conclusion, or any other named anchor.
+>
+> - Key Takeaways must be the second H2, with 3-5 bullet points each containing a data point.
+> - FAQ must contain at least 3 question-answer pairs (H3 questions ending in '?', H3-following paragraph answers 50-100 words). Without this, the FAQPage schema cannot be auto-generated.
+> - References H2 must be present in your output as an empty placeholder so the plugin can populate it.
+> - Conclusion H2 wraps up in 80-150 words with a clear CTA sentence.
+> - If the section list says 8 H2s, produce ALL EIGHT. Do not collapse two into one. Do not skip FAQ because the topic feels too technical — invent reasonable questions.
+
+### Doc sync (4-doc parity)
+
+- `SEO-GEO-AI-GUIDELINES.md §2 International engines` — fix11 note appended documenting both the canonical-anchor expansion and the REQUIRED SECTIONS rule. Explicitly notes no effect on §3.1A Genre Overrides / §10 Schema Mapping — fix11 is pure LANGUAGE-rule strengthening + Localized_Strings expansion. The §3.1 Required Sections list itself is the underlying contract; fix11 enforces it harder at prompt time.
+- BUILD_LOG v1.5.206d-fix11 entry.
+
+### Safety posture
+
+- **English articles byte-identical.** REQUIRED SECTIONS rule is part of the non-English LANGUAGE clause; English articles never see it (they already follow §3.1 reliably without enforcement).
+- **Backward-compatible Localized_Strings expansion.** 7 new keys added; existing 28 untouched.
+- **Stronger AI compliance, not stricter validation.** No new code-level gate that would reject articles. The rule influences AI output; if AI still skips a section, the article still saves (just lower quality). A future post-gen validator could enforce hard, but fix11 stays at prompt-level.
+
+### Verify
+
+```bash
+# 1. 7 new canonical keys present
+grep -c "'numbered_steps' =>\|'step_by_step' =>\|'quick_comparison_table' =>\|'closing_thoughts' =>\|'verdict_and_rating' =>\|'table_of_contents' =>\|'key_highlights' =>" /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php
+# Expect: 7
+
+# 2. canonical_translation_block now covers 35 keys
+grep -c "=> '" /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php | head -1
+
+# 3. REQUIRED SECTIONS rule in prompt
+grep -n "REQUIRED SECTIONS — DO NOT SKIP" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+```
+
+### Verified by user
+
+UNTESTED — Ben to retest Russian how-to or any non-English content type.
+
+---
+
 ## v1.5.206d-fix10 — Google Suggest charset detection (fixes Russian/Greek/Hebrew/Arabic/Thai mojibake)
 
 **Date:** 2026-04-23
