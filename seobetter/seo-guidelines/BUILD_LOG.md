@@ -19,7 +19,7 @@
 ## v1.5.206d-fix19 — Editable SERP preview + full OG/Twitter push to Yoast/RankMath/SEOPress + length caps
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `812b192`
 
 ### Why this patch exists
 
