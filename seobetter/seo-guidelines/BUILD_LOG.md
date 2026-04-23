@@ -19,7 +19,7 @@
 ## v1.5.208 — Competitive Content Brief (BM25) — implements §28.1 Topic Selection
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `c0cedbf`
 
 ### Why this ships
 
