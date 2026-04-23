@@ -16,6 +16,74 @@
 
 ---
 
+## v1.5.206d-fix16 — 3-char n-gram overlap + language-aware extractCoreTopic
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Two findings from the 29-language × compound-keyword (`best solana meme coins 2026` translated to each language) audit:
+
+1. **Japanese false match** — compound query `ソラナの最高のミームコイン 2026` returned one pharmaceutical Japanese term `ムコダイン カルボシステイン` as a secondary. Root cause: fix14's overlap filter required only 2 shared characters; pharmaceutical name `ムコダイン` shares `ム/コ/ダ/イ/ン` with the niche's `ミームコイン` → false positive.
+2. **Compound non-Latin queries return weak Google Suggest results** — Japanese/Chinese/Korean/Thai/Cyrillic/Arabic/Hindi compound queries (e.g. `найкращі мем-коіни солана 2026`) had no useful Google Suggest completions because `extractCoreTopic()` only handled English stop-words. Non-English queries passed through unchanged and Google Suggest received the whole compound string.
+
+### Shipped
+
+**Fix A — 3-char n-gram overlap for CJK/Thai secondary-keyword filter:**
+
+Pre-fix16: filter accepted suggestions that shared ≥2 individual characters (set intersection) with the niche — too loose, permitted cross-word false matches. Post-fix16: filter requires a contiguous 3-char substring of the niche (`nicheLower.replace(/\s+|20\d{2}/g, '')`) to appear in the phrase. Pharmaceutical `ムコダイン` (substrings: `ムコダ / コダイ / ダイン`) has no overlap with the niche's 3-char windows (`ソラナ / ラナの / ナの最 / ... / ミーム / ームコ / ムコイ / コイン`) → rejected. Legitimate memecoin suggestions like `ミームコイン人気` keep `ミーム/ームコ/ムコイ/コイン` → accepted.
+
+**Fix B — language-aware `extractCoreTopic( query, lang )`:**
+
+Signature extended with `lang`. For 9 non-Latin languages (`ja / zh / ko / th / hi / ar / he / ru / uk / el`), strips common particles, determiners, adjectives that carry no topic signal. Examples:
+
+| Language | Particles/adjectives stripped |
+|---|---|
+| Japanese | の は が を に で と も や な から まで 最高 最も 最良 最適 良い 最新 おすすめ |
+| Chinese | 的 了 和 与 在 是 最 最好 最佳 最新 推荐 |
+| Korean | 의 은 는 이 가 을 를 에 에서 으로 와 과 최고 최고의 가장 베스트 추천 |
+| Thai | ที่ ของ และ ใน กับ จาก ไป มา ให้ ได้ ดีที่สุด ยอดนิยม |
+| Hindi | के का की को में पर से और या है हैं सर्वश्रेष्ठ सबसे अच्छा बेस्ट |
+| Arabic | ال في من على إلى عن مع أو و أفضل الأفضل |
+| Hebrew | ה של את ב מ ל עם או ו הטוב הטובים ביותר |
+| Russian | лучший лучшие самый хороший на для из по в к |
+| Ukrainian | найкращий найкращі кращий хороший на для з по в до |
+| Greek | καλύτερο κορυφαίο στο στη στην από για με ή |
+
+Plus for CJK/Thai (no-space scripts) with the stripped result still being one long token: takes the longest contiguous character run (the noun). Example:
+
+```
+Japanese:  ソラナの最高のミームコイン 2026  →  ソラナの最高のミームコイン  (year stripped)
+           → strip particles の/最高  →  ソラナ ミームコイン
+           → longest run  →  ミームコイン   ← feeds Google Suggest → rich Japanese results
+```
+
+Main handler now passes `baseLang` to `extractCoreTopic( niche, baseLang )`.
+
+### Safety posture
+
+- **English + Latin-script byte-identical.** No entry in `particleMap` for `en / de / fr / es / it / pt / nl / sv / no / da / fi / pl / cs / hu / ro / tr / vi / id / ms` → the new particle-stripping block is skipped → `extractCoreTopic` runs the existing English stop-word stripper only.
+- **Backward-compatible signature.** `extractCoreTopic( query, lang = '' )` — any caller not passing `lang` (like the one at line 1002 via buildKeywordSets) still works; only the main handler call at line 56 now passes `baseLang`.
+- **Conservative n-gram threshold.** 3 chars catches most false matches without rejecting legitimate semantic variants (a CJK word almost always has at least one 3-char n-gram shared with related terms).
+- **Backend-only.** Vercel auto-deploys.
+
+### Verify
+
+```bash
+# Japanese compound — should return 5-7 Japanese secondary (no pharmaceutical false match)
+curl -sS -X POST "https://seobetter.vercel.app/api/topic-research" \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"ソラナの最高のミームコイン 2026","country":"JP","language":"ja","site_url":"test"}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('secondary:', d.get('keywords',{}).get('secondary', [])[:5])"
+```
+
+### Verified by user
+
+UNTESTED — pending Vercel auto-deploy + Ben's re-run of the compound-keyword 29-language audit.
+
+---
+
 ## v1.5.206d-fix15 — CJK/Thai tail-substring variations for Google Suggest
 
 **Date:** 2026-04-23

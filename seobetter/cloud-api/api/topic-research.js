@@ -53,7 +53,12 @@ export default async function handler(req, res) {
     // Fix: strip location, year, generic qualifiers, then pass the core
     // 1-3 word topic to Datamuse. Wikipedia + Google Suggest get the full
     // phrase since they handle long queries correctly.
-    const coreTopic = extractCoreTopic(niche);
+    // v1.5.206d-fix16 — pass baseLang so CJK/Thai/Cyrillic/Arabic/Hebrew/
+    // Hindi compound queries get meaningful noun extraction (e.g. Japanese
+    // ソラナの最高のミームコイン 2026 → ミームコイン). Without this, non-Latin
+    // core-topic stripping does nothing and Google Suggest fed the whole
+    // compound string returns zero completions.
+    const coreTopic = extractCoreTopic(niche, baseLang);
 
     // v1.5.54 — Google Suggest also receives the core topic instead of the
     // full long-tail niche. Google's suggestqueries endpoint has no
@@ -357,12 +362,53 @@ const OTHER_CITY_BLOCKLIST = new Set([
   'tokyo','osaka','kyoto','seoul','beijing','shanghai','hong kong','singapore','bangkok','mumbai','delhi','dubai','manila','jakarta',
 ]);
 
-function extractCoreTopic(query) {
+function extractCoreTopic(query, lang = '') {
   if (!query || typeof query !== 'string') return query || '';
   let q = query.toLowerCase().trim();
 
   // Drop year (4-digit number)
   q = q.replace(/\b20\d{2}\b/g, '');
+
+  // v1.5.206d-fix16 — language-aware core-topic extraction for non-Latin
+  // compound queries. Pre-fix16 the English stop-word lists below do
+  // nothing for Japanese/Chinese/Korean/Thai/Arabic/Hindi/Cyrillic queries,
+  // so the "core topic" for ソラナの最高のミームコイン 2026 was just the
+  // whole string minus the year. Google Suggest had no useful completions
+  // for that compound phrase → zero secondary. Fix: for each non-Latin
+  // language, strip common particles/determiners/adjectives that carry
+  // no topic signal, then fall back to the longest meaningful character
+  // run (most likely the noun).
+  const baseLang = (lang || '').toLowerCase().slice(0, 2);
+  const particleMap = {
+    ja: /の|は|が|を|に|で|と|も|や|な|から|まで|へ|より|こと|もの|最高|最も|最良|最適|良い|良質|最新|おすすめ/g,
+    zh: /的|了|和|与|在|是|最|最好|最佳|最新|推荐|最新款/g,
+    ko: /의|은|는|이|가|을|를|에|에서|으로|와|과|도|만|부터|까지|최고|최고의|가장|베스트|추천/g,
+    th: /ที่|ของ|และ|ใน|กับ|จาก|ไป|มา|ให้|ได้|ดีที่สุด|ที่ดี|ยอด|ยอดนิยม|ที่สุด|แนะนำ/g,
+    hi: /के|का|की|को|में|पर|से|और|या|है|हैं|सर्वश्रेष्ठ|सबसे|अच्छा|सबसे अच्छा|बेहतर|बेस्ट/g,
+    ar: /ال|في|من|على|إلى|عن|مع|أو|و|أفضل|الأفضل|أحسن|الأحسن/g,
+    he: /ה|של|את|ב|מ|ל|עם|או|ו|הטוב|הטובה|הטובים|ביותר|הטוב ביותר/g,
+    ru: /\b(лучший|лучшие|самый|самые|хороший|хорошие|лучших|лучшего|лучшая|на|для|из|по|в|к)\b/gi,
+    uk: /\b(найкращий|найкращі|найкращих|найкращого|найкраща|найкраще|кращий|кращі|хороший|хороші|на|для|з|по|в|до)\b/gi,
+    el: /\b(καλύτερο|καλύτερα|καλύτερος|καλύτερη|κορυφαίο|κορυφαία|κορυφαίος|κορυφαίοι|στο|στη|στην|στους|από|για|με|ή)\b/gi,
+  };
+  if (particleMap[baseLang]) {
+    q = q.replace(particleMap[baseLang], ' ').replace(/\s+/g, ' ').trim();
+    // If result is still one long no-space token (CJK/Thai), take the
+    // longest contiguous character run (the noun) as the core topic.
+    const noSpace = ['ja', 'zh', 'ko', 'th', 'lo', 'km', 'my'].includes(baseLang);
+    if (noSpace && !/\s/.test(q) && q.length > 6) {
+      // Longest run of native-script chars between whitespace/ASCII
+      const runs = q.split(/[\s -]+/).filter(Boolean);
+      if (runs.length > 0) {
+        q = runs.sort((a, b) => b.length - a.length)[0];
+      }
+    }
+    // Guard: if we over-stripped, restore original-minus-year
+    if (q.length < 2) {
+      q = query.toLowerCase().trim().replace(/\b20\d{2}\b/g, '').trim();
+    }
+    return q;
+  }
 
   // Drop generic SEO qualifiers
   const stopQualifiers = [
@@ -825,12 +871,25 @@ function buildKeywordSets(niche, suggest, datamuse, wiki, lang = 'en') {
   // These scripts have no inter-word whitespace, so `.split(/\s+/)` returns
   // the whole phrase as one token; Google Suggest completions rarely
   // contain the ENTIRE niche verbatim → word-level overlap fails → zero
-  // secondary keywords. Character-level overlap (phrase shares at least
-  // one meaningful character with the niche) is the right check for
-  // non-segmented scripts.
+  // secondary keywords.
+  //
+  // v1.5.206d-fix16 — upgrade from 2-char set-intersection to 3-char n-gram
+  // substring matching. Pre-fix16 any 2 shared characters would pass, which
+  // allowed false matches like ムコダイン (a pharmaceutical name) passing
+  // the filter for a ミームコイン query because both contain ム/コ. 3-char
+  // n-gram substring matching requires an UNBROKEN 3-character sequence
+  // of the niche to appear in the phrase — kills the cross-word false
+  // matches while keeping legitimate semantic matches.
   const baseLang = (lang || '').toLowerCase().slice(0, 2);
   const isNoSpace = ['ja', 'zh', 'ko', 'th', 'lo', 'km', 'my'].includes(baseLang);
-  const nicheCharsNoSpace = new Set(nicheLower.replace(/\s+/g, '').split('').filter(ch => /[一-鿿぀-ヿ가-힯฀-๿஀-௿ऀ-ॿЀ-ӿ؀-ۿ]/.test(ch) || /[a-z0-9]/.test(ch)));
+  // Build 3-char n-grams of the niche (no-space version, year stripped)
+  const nicheNoSpace = nicheLower.replace(/\s+|20\d{2}/g, '');
+  const nicheNgrams3 = new Set();
+  if (isNoSpace && nicheNoSpace.length >= 3) {
+    for (let i = 0; i <= nicheNoSpace.length - 3; i++) {
+      nicheNgrams3.add(nicheNoSpace.slice(i, i + 3));
+    }
+  }
 
   const targetLocationTokens = extractLocationTokens(niche);
   const hasTargetLocation = targetLocationTokens.length > 0;
@@ -842,13 +901,15 @@ function buildKeywordSets(niche, suggest, datamuse, wiki, lang = 'en') {
 
     // Must contain the niche or a piece of it (sanity filter)
     let overlaps = nicheParts.some(w => phrase.includes(w));
-    // v1.5.206d-fix14 — for CJK/Thai/etc, fall back to character overlap
-    if (!overlaps && isNoSpace && nicheCharsNoSpace.size > 0) {
-      const phraseChars = phrase.replace(/\s+/g, '').split('');
-      const shared = phraseChars.filter(ch => nicheCharsNoSpace.has(ch)).length;
-      // Require at least 2 shared characters for relevance (1 char would
-      // match any CJK suggestion containing any common character).
-      overlaps = shared >= 2;
+    // v1.5.206d-fix16 — for CJK/Thai/etc, fall back to 3-char n-gram match
+    if (!overlaps && isNoSpace && nicheNgrams3.size > 0) {
+      const phraseNoSpace = phrase.replace(/\s+/g, '');
+      for (const ng of nicheNgrams3) {
+        if (phraseNoSpace.includes(ng)) {
+          overlaps = true;
+          break;
+        }
+      }
     }
     if (!overlaps) continue;
 
