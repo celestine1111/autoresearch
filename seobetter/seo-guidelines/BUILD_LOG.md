@@ -19,7 +19,7 @@
 ## v1.5.206d-fix10 — Google Suggest charset detection (fixes Russian/Greek/Hebrew/Arabic/Thai mojibake)
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `738aeb1`
 
 ### Why this patch exists
 
