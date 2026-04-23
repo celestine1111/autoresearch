@@ -16,6 +16,67 @@
 
 ---
 
+## v1.5.206d-fix13 — Native-script LSI prioritization for non-Latin languages
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben's Hindi smartphone test post-fix12 returned LSI as `['galaxy','find','smartphone','video','ultra','vivo','mobile','iqoo','sabse','phone']` — Hindi `sabse` (romanized form of सबसे) appeared but the rest were English brand names. Indian smartphone SERP is dominantly English-titled, so Serper-extracted LSI fills with English even though fix12 made the tokenization Unicode-aware.
+
+Universal pattern affecting Hindi, Russian, Japanese, Korean, Chinese, Arabic, Thai, Hebrew when the article topic has English-dominant SERP results.
+
+### Shipped
+
+`cloud-api/api/topic-research.js` — new "native-script LSI prioritization" pass after Serper merge:
+
+1. Detect article-language script range via `SCRIPT_RANGES` table (Devanagari, Cyrillic, CJK, Hangul, Arabic, Hebrew, Thai, Lao, Greek, Armenian, Georgian, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Punjabi, Sinhala — covers ~24 non-Latin languages).
+2. Partition existing LSI into `native` (contains script range chars) and `latin` (everything else, including useful brand names).
+3. If `native.length < 5`, backfill from leftover Google Suggest completions that contain native-script characters.
+4. Reorder: `[...native, ...latin].slice(0, 10)` — native words first, brand names at the tail.
+
+For Hindi smartphone example post-fix13:
+- Native (Devanagari) words from Serper SERP + Google Suggest fill first
+- Latin brand names (Galaxy, iQOO, Vivo, etc.) follow — still useful for brand-aware searches
+- LSI now reads natively-Hindi-first to a Hindi reader
+
+### Universal coverage
+
+Languages with explicit script range entries:
+- **Indic:** Hindi (Devanagari), Marathi, Nepali, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Punjabi, Sinhala
+- **Cyrillic:** Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Mongolian
+- **CJK:** Japanese (Hiragana/Katakana/CJK), Chinese, Korean (Hangul)
+- **Semitic:** Arabic, Persian, Urdu, Hebrew, Yiddish
+- **Other:** Thai, Lao, Greek, Armenian, Georgian
+
+Latin-script languages (English/German/French/Spanish/Italian/Portuguese/Polish/etc.) bypass this block entirely — no behavioral change. English byte-identical.
+
+### Safety posture
+
+- **English + Latin-script articles byte-identical.** No `SCRIPT_RANGES` entry for `en`/`de`/`fr`/etc. → reorder block skipped → LSI behaves identically to fix12.
+- **Backward-compatible.** Pure post-processing of existing LSI; no API surface changes.
+- **Backend-only.** Vercel auto-deploys; plugin zip unchanged.
+
+### Verify
+
+After Vercel redeploys:
+
+```bash
+curl -sS -X POST "https://seobetter.vercel.app/api/topic-research" \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"सबसे अच्छा स्मार्टफोन 2026","country":"IN","language":"hi","site_url":"test"}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('lsi:', d.get('keywords',{}).get('lsi',[]))"
+```
+
+Expect Devanagari words first (e.g. `भारत`, `सबसे`, `कीमत`) then English brand names (`galaxy`, `iqoo`).
+
+### Verified by user
+
+UNTESTED — pending Vercel auto-deploy + Ben re-test.
+
+---
+
 ## v1.5.206d-fix12 — Unicode-aware Serper tokenization (fixes English-only LSI for Hindi/Cyrillic/CJK)
 
 **Date:** 2026-04-23

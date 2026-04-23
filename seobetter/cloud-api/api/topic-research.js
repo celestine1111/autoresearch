@@ -121,6 +121,65 @@ export default async function handler(req, res) {
       keywords.lsi = merged.slice(0, 10);
       keywords.lsi_string = keywords.lsi.join(', ');
     }
+
+    // v1.5.206d-fix13 — Native-script LSI prioritization for non-Latin
+    // languages. When the article language uses a non-Latin script (Hindi/
+    // Cyrillic/CJK/Arabic/Hebrew/Thai/Greek/Korean), Serper-extracted LSI
+    // tends to be English-dominant because Indian/Russian/Asian SERPs
+    // typically rank English-titled blog posts at the top. Result: Hindi
+    // article gets LSI like ['galaxy','smartphone','phone'] — readable but
+    // not in the article's script. This block detects the article-language
+    // script range and reorders LSI to put NATIVE-SCRIPT words first, with
+    // Latin words (brand names like Galaxy, iQOO) kept at the tail. If
+    // native LSI is sparse (<5), fills from leftover Google Suggest
+    // completions that contain native-script characters. Universal — works
+    // for any language with a defined script range.
+    const SCRIPT_RANGES = {
+      hi: /[ऀ-ॿ]/, mr: /[ऀ-ॿ]/, ne: /[ऀ-ॿ]/,
+      ru: /[Ѐ-ӿ]/, uk: /[Ѐ-ӿ]/, bg: /[Ѐ-ӿ]/,
+      sr: /[Ѐ-ӿ]/, mk: /[Ѐ-ӿ]/, mn: /[Ѐ-ӿ]/,
+      ja: /[぀-ヿ一-鿿]/, zh: /[一-鿿]/,
+      ko: /[가-힯]/,
+      ar: /[؀-ۿ]/, fa: /[؀-ۿ]/, ur: /[؀-ۿ]/,
+      he: /[֐-׿]/, yi: /[֐-׿]/,
+      th: /[฀-๿]/, lo: /[຀-໿]/,
+      el: /[Ͱ-Ͽ]/, hy: /[԰-֏]/, ka: /[Ⴀ-ჿ]/,
+      bn: /[ঀ-৿]/, ta: /[஀-௿]/, te: /[ఀ-౿]/,
+      kn: /[ಀ-೿]/, ml: /[ഀ-ൿ]/, gu: /[઀-૿]/,
+      pa: /[਀-੿]/, si: /[඀-෿]/,
+    };
+    const nativeRegex = SCRIPT_RANGES[baseLang];
+    if (nativeRegex && Array.isArray(keywords.lsi) && keywords.lsi.length > 0) {
+      const native = [];
+      const latin = [];
+      const seenNorm = new Set();
+      for (const w of keywords.lsi) {
+        const k = (w || '').toLowerCase().trim();
+        if (!k || seenNorm.has(k)) continue;
+        seenNorm.add(k);
+        (nativeRegex.test(w) ? native : latin).push(w);
+      }
+      // If native is sparse, fill from leftover Google Suggest phrases that
+      // contain native-script characters. `suggest` is the raw Google Suggest
+      // array from earlier; `secondary` is what already became user-facing
+      // secondary so we skip those.
+      if (native.length < 5 && Array.isArray(suggest)) {
+        const secondarySet = new Set((keywords.secondary || []).map(s => s.toLowerCase()));
+        for (const s of suggest) {
+          const phrase = (s || '').toLowerCase().trim();
+          if (!phrase || seenNorm.has(phrase) || secondarySet.has(phrase)) continue;
+          if (!nativeRegex.test(phrase)) continue;
+          if (phrase.length < 4 || phrase.length > 80) continue;
+          if (phrase === niche.toLowerCase()) continue;
+          seenNorm.add(phrase);
+          native.push(phrase);
+          if (native.length >= 7) break;
+        }
+      }
+      keywords.lsi = [...native, ...latin].slice(0, 10);
+      keywords.lsi_string = keywords.lsi.join(', ');
+    }
+
     // v1.5.173 — Target audience suggestion from Serper source analysis
     if (serperData && serperData.audience) {
       keywords.audience = serperData.audience;
