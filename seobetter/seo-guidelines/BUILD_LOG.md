@@ -19,7 +19,7 @@
 ## v1.5.206d-fix9 — Section-name canonical translations + anti-bilingual colon rule + freshness sanitizer
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `fcaa599`
 
 ### Why this patch exists
 
