@@ -171,7 +171,31 @@ async function fetchGoogleSuggest(query, gl = '') {
       const url = `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(v)}${geoParams}`;
       const resp = await fetch(url, { signal: AbortSignal.timeout(4000) });
       if (!resp.ok) continue;
-      const data = await resp.json();
+
+      // v1.5.206d-fix10 — Google Suggest returns regional encodings for
+      // non-Latin queries (e.g. Russian → Windows-1251, Greek → Windows-1253,
+      // Hebrew → Windows-1255, Arabic → Windows-1256, Thai → Windows-874).
+      // Calling resp.json() always decodes as UTF-8 → garbage replacement
+      // characters for those languages. Read raw bytes, detect charset from
+      // Content-Type header, decode with TextDecoder. Universal — works for
+      // any encoding the response declares. Defaults to UTF-8 when Content-
+      // Type doesn't specify a charset (modern responses).
+      const contentType = resp.headers.get('content-type') || '';
+      const charsetMatch = contentType.match(/charset=([^\s;]+)/i);
+      const charset = (charsetMatch ? charsetMatch[1] : 'utf-8').toLowerCase();
+      const buffer = await resp.arrayBuffer();
+      let text;
+      try {
+        text = new TextDecoder(charset).decode(buffer);
+      } catch (e) {
+        // TextDecoder rejects unknown labels — fall back to UTF-8 then Latin-1.
+        try {
+          text = new TextDecoder('utf-8').decode(buffer);
+        } catch (e2) {
+          text = new TextDecoder('iso-8859-1').decode(buffer);
+        }
+      }
+      const data = JSON.parse(text);
       // Format: ["query", ["suggestion1", "suggestion2", ...]]
       if (Array.isArray(data) && Array.isArray(data[1])) {
         data[1].forEach(s => {

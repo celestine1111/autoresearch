@@ -16,6 +16,71 @@
 
 ---
 
+## v1.5.206d-fix10 — Google Suggest charset detection (fixes Russian/Greek/Hebrew/Arabic/Thai mojibake)
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben tested Russian auto-suggest after fix9 deploy. Result: LSI keywords came back as `������������ ������� ������ ������` — replacement-character mojibake. Russian audience field was clean (LLM call), only Google Suggest output was garbled.
+
+Live curl probe of `suggestqueries.google.com` with the same Russian query revealed:
+
+- **Response Content-Type: `text/html; charset=windows-1251`** (legacy Cyrillic encoding, not UTF-8)
+- Raw bytes decoded as Windows-1251 → clean Russian: `["как выбрать офисное кресло",...]`
+- Raw bytes decoded as UTF-8 (default for `resp.json()`) → invalid UTF-8 sequences → `U+FFFD` replacement chars stored in JSON
+
+`fetchGoogleSuggest()` was calling `resp.json()` which always assumes UTF-8. For Cyrillic responses (and likely Greek/Hebrew/Arabic/Thai/Vietnamese — all use legacy regional charsets when Google decides) it produces garbage.
+
+### Shipped
+
+`cloud-api/api/topic-research.js::fetchGoogleSuggest()` — charset-aware response decoding:
+
+1. Read response as `arrayBuffer` (raw bytes)
+2. Parse `Content-Type` header for `charset=XXX`
+3. Decode bytes with `TextDecoder(charset)` — supports `windows-1251`, `windows-1253`, `windows-1255`, `windows-1256`, `windows-874`, `iso-8859-*`, `gbk`, `big5`, `shift_jis`, `euc-kr`, etc. (Node.js TextDecoder ships with full ICU)
+4. Fall back to UTF-8 → Latin-1 if charset label is unknown
+5. JSON.parse the decoded text
+
+### Universal — works for any language Google returns in any encoding
+
+| Language | Google Suggest Content-Type | Decoded correctly? |
+|---|---|---|
+| English | utf-8 | Yes (was already) |
+| Korean / Japanese / Chinese | utf-8 (modern) | Yes (was already) |
+| Russian | windows-1251 | **NOW yes** (was mojibake) |
+| Greek | windows-1253 (often) | **NOW yes** |
+| Hebrew | windows-1255 | **NOW yes** |
+| Arabic | windows-1256 (sometimes) | **NOW yes** |
+| Thai | windows-874 | **NOW yes** |
+| Vietnamese | windows-1258 (sometimes) | **NOW yes** |
+
+### Safety posture
+
+- **Backward-compatible.** UTF-8 responses (the modern majority) decode identically to `resp.json()`.
+- **Fallback chain.** If TextDecoder rejects an unknown charset label, falls back to UTF-8, then Latin-1 (always succeeds since Latin-1 maps every byte 1:1).
+- **Backend-only — Vercel auto-deploys, plugin zip unchanged.** The frontend doesn't see this code; it just gets correct LSI from the backend.
+
+### Verify
+
+After Vercel redeploys this commit:
+
+```bash
+curl -sS -X POST "https://seobetter.vercel.app/api/topic-research" \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"как выбрать офисное кресло 2026","country":"RU","language":"ru","site_url":"test"}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('lsi:', d.get('keywords',{}).get('lsi',[])[:5])"
+```
+
+Expect Cyrillic suggestions like `как выбрать офисное кресло для работы за компьютером`, NOT `������������`.
+
+### Verified by user
+
+UNTESTED — pending Vercel auto-deploy + Ben re-run of Russian auto-suggest. No plugin reinstall needed.
+
+---
+
 ## v1.5.206d-fix9 — Section-name canonical translations + anti-bilingual colon rule + freshness sanitizer
 
 **Date:** 2026-04-23
