@@ -19,7 +19,7 @@
 ## v1.5.206d-fix13 — Native-script LSI prioritization for non-Latin languages
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `b72f1b7`
 
 ### Why this patch exists
 
