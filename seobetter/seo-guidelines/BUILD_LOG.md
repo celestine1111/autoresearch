@@ -19,7 +19,7 @@
 ## v1.5.206d-fix18 — Strip dog-food framing from website-ideas.md + pro-features-ideas.md
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `ad93ba4`
 
 ### Why this patch exists
 
