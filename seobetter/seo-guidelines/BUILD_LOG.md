@@ -19,7 +19,7 @@
 ## v1.5.206d-fix17 — Disable unauthorized Decay Alert emails + full automated-email pipeline spec
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `0fffed7`
 
 ### Why this patch exists
 
