@@ -66,6 +66,82 @@ class Localized_Strings {
     }
 
     /**
+     * v1.5.206d-fix6 — Build a regex alternation matching the English form OR
+     * the article's localized form for a given key.
+     *
+     * Used by Content_Formatter detection (Tip/Note/Warning callouts, Key
+     * Takeaways block, References block) so the same code path works for
+     * every language: English articles match the English pattern, Korean
+     * articles ALSO match `팁`/`핵심 요약`/`참고 자료`, etc.
+     *
+     * @param string $key       Localized-Strings key (tip, note, warning, key_takeaways, references, last_updated, etc.).
+     * @param string $lang      Article language (en, ja, ko, ru, de, fr, etc.).
+     * @param string $english_pattern Optional English-side regex fragment (no delimiters).
+     *                                Defaults to preg_quote(Localized_Strings::get($key, 'en')).
+     * @return string Regex fragment — use inside your own delimiters.
+     */
+    public static function get_detection_pattern( string $key, string $lang = 'en', string $english_pattern = '' ): string {
+        $english = $english_pattern !== '' ? $english_pattern : preg_quote( self::get( $key, 'en' ), '/' );
+        $lang = strtolower( str_replace( '_', '-', trim( $lang ) ) );
+        if ( $lang === 'en' || strpos( $lang, 'en-' ) === 0 ) {
+            return $english;
+        }
+        $localized = self::get( $key, $lang );
+        $localized_en = self::get( $key, 'en' );
+        if ( $localized === $localized_en || $localized === '' ) {
+            return $english; // no localized variant (fell through to English)
+        }
+        // OR the English pattern with the localized literal
+        return '(?:' . $english . '|' . preg_quote( $localized, '/' ) . ')';
+    }
+
+    /**
+     * v1.5.206d-fix6 — Return a compact prompt-ready block that tells the AI
+     * to use EXACT canonical translations for the structural anchors the
+     * plugin detects (Key Takeaways, References, Last Updated, FAQ,
+     * Introduction, Conclusion, Tip, Note, Warning, Pros, Cons).
+     *
+     * Without this block, a non-English article may pick its own synonyms
+     * (e.g. Korean AI rendered `중요 포인트` instead of `핵심 요약` for Key
+     * Takeaways). Content_Formatter detects sections by exact localized
+     * label, so a synonym breaks the styled-block render AND the BLUF score.
+     *
+     * Returns empty string for English articles (byte-identical prompt).
+     */
+    public static function canonical_translation_block( string $lang = 'en' ): string {
+        $lang = strtolower( str_replace( '_', '-', trim( $lang ) ) );
+        if ( $lang === 'en' || strpos( $lang, 'en-' ) === 0 ) {
+            return '';
+        }
+        $keys = [
+            'last_updated'  => 'Last Updated',
+            'key_takeaways' => 'Key Takeaways',
+            'references'    => 'References',
+            'faq'           => 'Frequently Asked Questions',
+            'introduction'  => 'Introduction',
+            'conclusion'    => 'Conclusion',
+            'tip'           => 'Tip',
+            'note'          => 'Note',
+            'warning'       => 'Warning',
+            'pros'          => 'Pros',
+            'cons'          => 'Cons',
+        ];
+        $lines = [];
+        foreach ( $keys as $key => $english ) {
+            $translated = self::get( $key, $lang );
+            if ( $translated !== '' && $translated !== $english ) {
+                $lines[] = '- ' . $english . ' → ' . $translated;
+            }
+        }
+        if ( empty( $lines ) ) {
+            return '';
+        }
+        return "\n\nCANONICAL TRANSLATIONS (v1.5.206d-fix6 — USE THESE EXACT TERMS, NOT YOUR OWN VARIANTS): The plugin auto-detects these structural anchors via exact string matching. If you output a different synonym, the styled callout boxes will not render and the scoring rubric will miss the signal. Use the left-hand English term's right-hand translation VERBATIM:\n"
+            . implode( "\n", $lines )
+            . "\n\nThis rule applies to H2/H3 section headings (Key Takeaways, Introduction, Conclusion, Frequently Asked Questions, References), callout-box prefixes (\"Tip:\", \"Note:\", \"Warning:\"), the Last Updated freshness line at the top of the article, and pros/cons list headings. Use the translated term IN the heading or the prefix — do not invent synonyms.";
+    }
+
+    /**
      * v1.5.206d — Locale-aware "Month Year" string used in freshness signal.
      *
      * Uses wp_date() with locale hints so Japanese produces "2026年4月",
@@ -213,6 +289,296 @@ class Localized_Strings {
                 'id'    => 'Referensi',
                 'ms'    => 'Rujukan',
                 'he'    => 'הפניות',
+            ],
+
+            // v1.5.206d-fix6 — Callout-box labels (Content_Formatter renders these
+            // as the bold prefix inside Tip / Note / Warning blocks). Detection
+            // regex also matches these so AI-written non-English callouts are
+            // correctly recognised and styled.
+
+            'tip' => [
+                'en'    => 'Tip',
+                'ja'    => 'ヒント',
+                'zh'    => '提示',
+                'zh-cn' => '提示',
+                'zh-tw' => '提示',
+                'ko'    => '팁',
+                'ru'    => 'Совет',
+                'de'    => 'Tipp',
+                'fr'    => 'Astuce',
+                'es'    => 'Consejo',
+                'it'    => 'Suggerimento',
+                'pt'    => 'Dica',
+                'pt-br' => 'Dica',
+                'hi'    => 'सुझाव',
+                'ar'    => 'نصيحة',
+                'nl'    => 'Tip',
+                'pl'    => 'Wskazówka',
+                'tr'    => 'İpucu',
+                'sv'    => 'Tips',
+                'da'    => 'Tip',
+                'no'    => 'Tips',
+                'fi'    => 'Vinkki',
+                'cs'    => 'Tip',
+                'hu'    => 'Tipp',
+                'ro'    => 'Sfat',
+                'el'    => 'Συμβουλή',
+                'uk'    => 'Порада',
+                'vi'    => 'Mẹo',
+                'th'    => 'เคล็ดลับ',
+                'id'    => 'Tips',
+                'ms'    => 'Tip',
+                'he'    => 'טיפ',
+            ],
+
+            'note' => [
+                'en'    => 'Note',
+                'ja'    => '注意',
+                'zh'    => '注意',
+                'zh-cn' => '注意',
+                'zh-tw' => '注意',
+                'ko'    => '참고',
+                'ru'    => 'Примечание',
+                'de'    => 'Hinweis',
+                'fr'    => 'Remarque',
+                'es'    => 'Nota',
+                'it'    => 'Nota',
+                'pt'    => 'Nota',
+                'pt-br' => 'Nota',
+                'hi'    => 'ध्यान दें',
+                'ar'    => 'ملاحظة',
+                'nl'    => 'Opmerking',
+                'pl'    => 'Uwaga',
+                'tr'    => 'Not',
+                'sv'    => 'Obs',
+                'da'    => 'Bemærk',
+                'no'    => 'Merk',
+                'fi'    => 'Huomio',
+                'cs'    => 'Poznámka',
+                'hu'    => 'Megjegyzés',
+                'ro'    => 'Notă',
+                'el'    => 'Σημείωση',
+                'uk'    => 'Примітка',
+                'vi'    => 'Lưu ý',
+                'th'    => 'หมายเหตุ',
+                'id'    => 'Catatan',
+                'ms'    => 'Nota',
+                'he'    => 'הערה',
+            ],
+
+            'warning' => [
+                'en'    => 'Warning',
+                'ja'    => '警告',
+                'zh'    => '警告',
+                'zh-cn' => '警告',
+                'zh-tw' => '警告',
+                'ko'    => '경고',
+                'ru'    => 'Внимание',
+                'de'    => 'Warnung',
+                'fr'    => 'Attention',
+                'es'    => 'Advertencia',
+                'it'    => 'Attenzione',
+                'pt'    => 'Aviso',
+                'pt-br' => 'Aviso',
+                'hi'    => 'चेतावनी',
+                'ar'    => 'تحذير',
+                'nl'    => 'Waarschuwing',
+                'pl'    => 'Ostrzeżenie',
+                'tr'    => 'Uyarı',
+                'sv'    => 'Varning',
+                'da'    => 'Advarsel',
+                'no'    => 'Advarsel',
+                'fi'    => 'Varoitus',
+                'cs'    => 'Upozornění',
+                'hu'    => 'Figyelem',
+                'ro'    => 'Avertisment',
+                'el'    => 'Προσοχή',
+                'uk'    => 'Увага',
+                'vi'    => 'Cảnh báo',
+                'th'    => 'คำเตือน',
+                'id'    => 'Peringatan',
+                'ms'    => 'Amaran',
+                'he'    => 'אזהרה',
+            ],
+
+            // Common H2 section anchors — the AI translates these in non-English
+            // articles and Content_Formatter/GEO_Analyzer detection uses these
+            // canonical forms. Without a canonical table, AI variants (e.g. Korean
+            // "중요 포인트" for Key Takeaways instead of "핵심 요약") break detection.
+
+            'faq' => [
+                'en'    => 'Frequently Asked Questions',
+                'ja'    => 'よくある質問',
+                'zh'    => '常见问题',
+                'zh-cn' => '常见问题',
+                'zh-tw' => '常見問題',
+                'ko'    => '자주 묻는 질문',
+                'ru'    => 'Часто задаваемые вопросы',
+                'de'    => 'Häufig gestellte Fragen',
+                'fr'    => 'Questions fréquemment posées',
+                'es'    => 'Preguntas frecuentes',
+                'it'    => 'Domande frequenti',
+                'pt'    => 'Perguntas frequentes',
+                'pt-br' => 'Perguntas frequentes',
+                'hi'    => 'अक्सर पूछे जाने वाले प्रश्न',
+                'ar'    => 'الأسئلة الشائعة',
+                'nl'    => 'Veelgestelde vragen',
+                'pl'    => 'Często zadawane pytania',
+                'tr'    => 'Sıkça Sorulan Sorular',
+                'sv'    => 'Vanliga frågor',
+                'da'    => 'Ofte stillede spørgsmål',
+                'no'    => 'Ofte stilte spørsmål',
+                'fi'    => 'Usein kysytyt kysymykset',
+                'cs'    => 'Často kladené otázky',
+                'hu'    => 'Gyakran ismételt kérdések',
+                'ro'    => 'Întrebări frecvente',
+                'el'    => 'Συχνές ερωτήσεις',
+                'uk'    => 'Часті запитання',
+                'vi'    => 'Câu hỏi thường gặp',
+                'th'    => 'คำถามที่พบบ่อย',
+                'id'    => 'Pertanyaan yang sering diajukan',
+                'ms'    => 'Soalan lazim',
+                'he'    => 'שאלות נפוצות',
+            ],
+
+            'introduction' => [
+                'en'    => 'Introduction',
+                'ja'    => '序論',
+                'zh'    => '简介',
+                'zh-cn' => '简介',
+                'zh-tw' => '簡介',
+                'ko'    => '서론',
+                'ru'    => 'Введение',
+                'de'    => 'Einleitung',
+                'fr'    => 'Introduction',
+                'es'    => 'Introducción',
+                'it'    => 'Introduzione',
+                'pt'    => 'Introdução',
+                'pt-br' => 'Introdução',
+                'hi'    => 'परिचय',
+                'ar'    => 'مقدمة',
+                'nl'    => 'Inleiding',
+                'pl'    => 'Wstęp',
+                'tr'    => 'Giriş',
+                'sv'    => 'Introduktion',
+                'da'    => 'Introduktion',
+                'no'    => 'Introduksjon',
+                'fi'    => 'Johdanto',
+                'cs'    => 'Úvod',
+                'hu'    => 'Bevezetés',
+                'ro'    => 'Introducere',
+                'el'    => 'Εισαγωγή',
+                'uk'    => 'Вступ',
+                'vi'    => 'Giới thiệu',
+                'th'    => 'บทนำ',
+                'id'    => 'Pendahuluan',
+                'ms'    => 'Pengenalan',
+                'he'    => 'מבוא',
+            ],
+
+            'conclusion' => [
+                'en'    => 'Conclusion',
+                'ja'    => '結論',
+                'zh'    => '结论',
+                'zh-cn' => '结论',
+                'zh-tw' => '結論',
+                'ko'    => '결론',
+                'ru'    => 'Заключение',
+                'de'    => 'Fazit',
+                'fr'    => 'Conclusion',
+                'es'    => 'Conclusión',
+                'it'    => 'Conclusione',
+                'pt'    => 'Conclusão',
+                'pt-br' => 'Conclusão',
+                'hi'    => 'निष्कर्ष',
+                'ar'    => 'خلاصة',
+                'nl'    => 'Conclusie',
+                'pl'    => 'Wniosek',
+                'tr'    => 'Sonuç',
+                'sv'    => 'Slutsats',
+                'da'    => 'Konklusion',
+                'no'    => 'Konklusjon',
+                'fi'    => 'Johtopäätös',
+                'cs'    => 'Závěr',
+                'hu'    => 'Következtetés',
+                'ro'    => 'Concluzie',
+                'el'    => 'Συμπέρασμα',
+                'uk'    => 'Висновок',
+                'vi'    => 'Kết luận',
+                'th'    => 'สรุป',
+                'id'    => 'Kesimpulan',
+                'ms'    => 'Kesimpulan',
+                'he'    => 'סיכום',
+            ],
+
+            'pros' => [
+                'en'    => 'Pros',
+                'ja'    => 'メリット',
+                'zh'    => '优点',
+                'zh-cn' => '优点',
+                'zh-tw' => '優點',
+                'ko'    => '장점',
+                'ru'    => 'Плюсы',
+                'de'    => 'Vorteile',
+                'fr'    => 'Avantages',
+                'es'    => 'Ventajas',
+                'it'    => 'Vantaggi',
+                'pt'    => 'Vantagens',
+                'pt-br' => 'Vantagens',
+                'hi'    => 'फायदे',
+                'ar'    => 'المزايا',
+                'nl'    => 'Voordelen',
+                'pl'    => 'Zalety',
+                'tr'    => 'Artılar',
+                'sv'    => 'Fördelar',
+                'da'    => 'Fordele',
+                'no'    => 'Fordeler',
+                'fi'    => 'Edut',
+                'cs'    => 'Klady',
+                'hu'    => 'Előnyök',
+                'ro'    => 'Avantaje',
+                'el'    => 'Πλεονεκτήματα',
+                'uk'    => 'Плюси',
+                'vi'    => 'Ưu điểm',
+                'th'    => 'ข้อดี',
+                'id'    => 'Kelebihan',
+                'ms'    => 'Kelebihan',
+                'he'    => 'יתרונות',
+            ],
+
+            'cons' => [
+                'en'    => 'Cons',
+                'ja'    => 'デメリット',
+                'zh'    => '缺点',
+                'zh-cn' => '缺点',
+                'zh-tw' => '缺點',
+                'ko'    => '단점',
+                'ru'    => 'Минусы',
+                'de'    => 'Nachteile',
+                'fr'    => 'Inconvénients',
+                'es'    => 'Desventajas',
+                'it'    => 'Svantaggi',
+                'pt'    => 'Desvantagens',
+                'pt-br' => 'Desvantagens',
+                'hi'    => 'नुकसान',
+                'ar'    => 'العيوب',
+                'nl'    => 'Nadelen',
+                'pl'    => 'Wady',
+                'tr'    => 'Eksiler',
+                'sv'    => 'Nackdelar',
+                'da'    => 'Ulemper',
+                'no'    => 'Ulemper',
+                'fi'    => 'Haitat',
+                'cs'    => 'Zápory',
+                'hu'    => 'Hátrányok',
+                'ro'    => 'Dezavantaje',
+                'el'    => 'Μειονεκτήματα',
+                'uk'    => 'Мінуси',
+                'vi'    => 'Nhược điểm',
+                'th'    => 'ข้อเสีย',
+                'id'    => 'Kekurangan',
+                'ms'    => 'Kekurangan',
+                'he'    => 'חסרונות',
             ],
         ];
     }

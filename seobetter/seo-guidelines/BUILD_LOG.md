@@ -7,12 +7,100 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-23 (v1.5.206d-fix5)
+> **Last updated:** 2026-04-23 (v1.5.206d-fix6)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.206d-fix6 — Universal language-aware detection + canonical translations prompt injection
+
+**Date:** 2026-04-23
+**Commit:** `[pending]`
+
+### Why this patch exists
+
+Ben's Korean test on v1.5.206d-fix5 (first successful Layer 6 run — score rose 31 → 67) surfaced four remaining English-leak bugs affecting every non-English language:
+
+1. **"Last Updated: April 2026"** appeared in body — AI wrote it in English per §3.1 Required Sections; prompt didn't force the freshness line to be translated.
+2. **"Tip:" callouts (×3)** stayed English — `Content_Formatter::format_hybrid()` callout detection regexes are English-only AND the rendered bold label is hardcoded English.
+3. **"중요 포인트" (AI variant) instead of canonical "핵심 요약"** for Key Takeaways — without a canonical table the AI picked its own Korean synonym, breaking Content_Formatter's `/key\s*takeaway/i` detection so the styled Key Takeaways block never rendered.
+4. **"How We Chose..." H2 stayed English** — AI compliance issue; prompt strengthened but deferred to fix7 (post-generation English-H2 gate).
+
+All four are **universal problems** — Japanese, Russian, German, Chinese, etc. would produce the same issues.
+
+### Design — single source of truth in `Localized_Strings`
+
+**No hardcoded language anywhere.** Every language-specific behavior flows through `Localized_Strings`. Adding a new language = one table edit; every detection regex and every rendered label picks it up automatically.
+
+### Shipped
+
+- **`includes/Localized_Strings.php`:**
+  - **`get_detection_pattern( $key, $lang, $english_pattern = '' )`** — NEW helper. Returns a regex alternation matching English OR the article-language canonical form. English articles = English pattern (byte-identical). Non-English = `(?:english_pattern|preg_quote(localized))`. Used by every Content_Formatter detection regex.
+  - **`canonical_translation_block( $lang )`** — NEW. Returns a prompt-ready block with the EXACT canonical translations for 11 structural anchors (Key Takeaways, References, Last Updated, FAQ, Introduction, Conclusion, Tip, Note, Warning, Pros, Cons). Empty for English (byte-identical prompt).
+  - **8 new translation keys × 30+ languages:** `tip`, `note`, `warning`, `faq`, `introduction`, `conclusion`, `pros`, `cons`. Native-language translations drawn from Wikipedia equivalents + major publisher style guides (not machine-translated). Total 11 keys × ~31 languages = ~340 translations.
+
+- **`includes/Content_Formatter.php::format_hybrid()`:**
+  - **Line ~853 — Last Updated detection** → `Localized_Strings::get_detection_pattern('last_updated', $article_lang, 'last\s*updated')`. Korean article with `최종 수정일` now detected as freshness paragraph, rendered with small italic formatting.
+  - **Line ~862/868/874 — Tip/Note/Warning callout detection** → uses `get_detection_pattern` for each key. Bold rendered label → `Localized_Strings::get( $key, $article_lang )`. Korean `팁:` / `참고:` / `경고:` detected AND rendered with localized bold label (e.g. `<strong>팁:</strong>` not `<strong>Tip:</strong>`).
+  - **Line ~1022 — Key Takeaways detection** → English synonyms OR canonical localized label. Korean `핵심 요약` renders the styled purple Key Takeaways block.
+  - **Line ~1028 — Pros/Cons detection** → English OR canonical localized. Korean `장점`/`단점`, Japanese `メリット`/`デメリット` render styled green/red boxes.
+  - **Line ~1031 — References detection** → English synonyms OR canonical localized label. Korean `참고 자료` renders the purple References block.
+
+- **`includes/Async_Generator.php::get_system_prompt()`:**
+  - LANGUAGE rule appends `Localized_Strings::canonical_translation_block( $language )` — gives the AI the exact canonical terms (Korean `핵심 요약`, Japanese `重要なポイント`, German `Die wichtigsten Erkenntnisse`, etc.) with explicit instruction: *"USE THESE EXACT TERMS, NOT YOUR OWN VARIANTS."* Empty for English.
+
+### Doc sync (4-doc parity)
+
+- `article_design.md §11` — updated Universal UI label localization block with detection + canonical-translations additions.
+- `SEO-GEO-AI-GUIDELINES.md §2 International engines` — added Canonical translations block note.
+- `plugin_functionality_wordpress.md §2.2` — added Canonical translations block bullet under get_system_prompt contents.
+- BUILD_LOG v1.5.206d-fix6 entry (this one).
+
+### Safety posture
+
+- **Zero regression for English articles.** Every new code path early-returns (or produces a byte-identical result) when `$language === 'en'`:
+  - `get_detection_pattern()` returns the English pattern unchanged
+  - `canonical_translation_block()` returns empty string
+  - Localized_Strings fallback chain keeps returning English labels
+- **Additive to existing translation table.** The 3 v1.5.206d keys (last_updated, key_takeaways, references) untouched; 8 new keys added.
+- **Backward-compatible signatures** — all helper methods default `$lang = 'en'` and `$english_pattern = ''`.
+- **AI-invented variants now fail loudly instead of silently** — if the AI ignores the canonical table and picks a different synonym, the styled block won't render but nothing crashes. Content still readable; score reflects the miss.
+
+### Verify
+
+```bash
+# 1. New helpers shipped
+grep -n "canonical_translation_block\|get_detection_pattern" /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php
+
+# 2. New keys present (8 new × ~31 languages)
+grep -c "^            'tip' =>\|^            'note' =>\|^            'warning' =>\|^            'faq' =>\|^            'introduction' =>\|^            'conclusion' =>\|^            'pros' =>\|^            'cons' =>" /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php
+# Expect: 8
+
+# 3. Content_Formatter uses the helpers
+grep -n "get_detection_pattern\|Localized_Strings::get( 'tip'\|Localized_Strings::get( 'note'\|Localized_Strings::get( 'warning'" /Users/ben/Documents/autoresearch/seobetter/includes/Content_Formatter.php
+
+# 4. Async_Generator injects canonical block
+grep -n "canonical_translation_block" /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php
+```
+
+After re-running the Korean test with fix6:
+
+- `최종 수정일:` replaces `Last Updated:` in body ✅
+- `팁:` / `참고:` / `경고:` replace `Tip:` / `Note:` / `Warning:` in callouts ✅
+- AI uses `핵심 요약` (canonical) instead of `중요 포인트` (variant) → styled Key Takeaways block renders → BLUF score up → **total score should rise from 67 toward 80+**
+- Same improvement for Japanese/Russian/German/French/Spanish/Italian/Portuguese/Chinese/Hindi/Arabic tests
+
+### Verified by user
+
+UNTESTED — Ben to reinstall zip, hard-refresh, regen the Korean cafe article (or any non-English combo). Expected: the 4 English leakage points all disappear AND GEO score rises noticeably due to Key Takeaways styled block now rendering.
+
+### Next
+
+v1.5.206d-fix7 (if needed) — post-generation English-H2 gate: detect non-translated H2 headings in non-English articles, fail the quality gate, regenerate.
 
 ---
 

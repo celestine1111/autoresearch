@@ -850,7 +850,14 @@ CSS;
                     if ( empty( trim( $text ) ) ) continue 2;
                     $plain = strip_tags( $text );
 
-                    if ( preg_match( '/^last\s*updated/i', $plain ) ) {
+                    // v1.5.206d-fix6 — Last Updated detection accepts the localized
+                    // label (e.g. `최종 수정일`, `最終更新日`, `Последнее обновление`)
+                    // in addition to the English form. Without this the freshness
+                    // paragraph is styled via the default paragraph path and the
+                    // small-italic formatting is lost for non-English articles.
+                    $last_updated_en   = 'last\s*updated';
+                    $last_updated_pat  = Localized_Strings::get_detection_pattern( 'last_updated', $article_lang, $last_updated_en );
+                    if ( preg_match( '/^' . $last_updated_pat . '/iu', $plain ) ) {
                         $output[] = '<!-- wp:paragraph {"fontSize":"small"} -->';
                         $output[] = "<p class=\"has-small-font-size\"><em>{$text}</em></p>";
                         $output[] = '<!-- /wp:paragraph -->';
@@ -859,23 +866,31 @@ CSS;
                     // shows "Note: Note: ..." (the formatter's label PLUS the AI's literal prefix).
                     // We match against $section['content'] (raw markdown) so inline links survive
                     // the re-render via inline_markdown().
-                    } elseif ( preg_match( '/^(?:\*\*)?(pro\s*tip|tip)(?:\*\*)?\s*[:—-]\s*(.*)$/is', $section['content'], $tip_match ) ) {
-                        $body_text = $this->inline_markdown( trim( $tip_match[2] ) );
+                    //
+                    // v1.5.206d-fix6 — Detection regex and rendered label are now
+                    // language-aware via Localized_Strings. Korean articles match
+                    // "팁:", German "Tipp:", Russian "Совет:", etc. AND the rendered
+                    // bold label uses the localized form too. Single source of truth.
+                    } elseif ( preg_match( '/^(?:\*\*)?(?:' . Localized_Strings::get_detection_pattern( 'tip', $article_lang, 'pro\s*tip|tip' ) . ')(?:\*\*)?\s*[:—-]\s*(.*)$/ius', $section['content'], $tip_match ) ) {
+                        $body_text = $this->inline_markdown( trim( $tip_match[1] ) );
                         if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'tip' );
-                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\">{$icon}<strong>Tip:</strong> {$body_text}</div>";
+                        $tip_label = esc_html( Localized_Strings::get( 'tip', $article_lang ) );
+                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\">{$icon}<strong>{$tip_label}:</strong> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
-                    } elseif ( preg_match( '/^(?:\*\*)?(note|important)(?:\*\*)?\s*[:—-]\s*(.*)$/is', $section['content'], $note_match ) ) {
-                        $body_text = $this->inline_markdown( trim( $note_match[2] ) );
+                    } elseif ( preg_match( '/^(?:\*\*)?(?:' . Localized_Strings::get_detection_pattern( 'note', $article_lang, 'note|important' ) . ')(?:\*\*)?\s*[:—-]\s*(.*)$/ius', $section['content'], $note_match ) ) {
+                        $body_text = $this->inline_markdown( trim( $note_match[1] ) );
                         if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'note' );
-                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\">{$icon}<strong>Note:</strong> {$body_text}</div>";
+                        $note_label = esc_html( Localized_Strings::get( 'note', $article_lang ) );
+                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\">{$icon}<strong>{$note_label}:</strong> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
-                    } elseif ( preg_match( '/^(?:\*\*)?(warning|caution)(?:\*\*)?\s*[:—-]\s*(.*)$/is', $section['content'], $warn_match ) ) {
-                        $body_text = $this->inline_markdown( trim( $warn_match[2] ) );
+                    } elseif ( preg_match( '/^(?:\*\*)?(?:' . Localized_Strings::get_detection_pattern( 'warning', $article_lang, 'warning|caution' ) . ')(?:\*\*)?\s*[:—-]\s*(.*)$/ius', $section['content'], $warn_match ) ) {
+                        $body_text = $this->inline_markdown( trim( $warn_match[1] ) );
                         if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'warning' );
-                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\">{$icon}<strong>Warning:</strong> {$body_text}</div>";
+                        $warn_label = esc_html( Localized_Strings::get( 'warning', $article_lang ) );
+                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\">{$icon}<strong>{$warn_label}:</strong> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     }
                     // v1.5.14 — Did You Know box: paragraph starts with "Did you know" or "Fun fact"
@@ -1004,16 +1019,28 @@ CSS;
                     }
 
                     // v1.5.14 — widened regex catches synonyms the AI uses naturally
-                    $is_takeaways = (bool) preg_match( '/key\s*takeaway|key\s*insight|main\s*point|at\s*a\s*glance|tl;?dr|what\s*to\s*know|the\s*bottom\s*line/i', $prev_heading );
+                    // v1.5.206d-fix6 — ALSO match the localized Key Takeaways / References /
+                    // Pros / Cons labels for non-English articles. Korean/Japanese/etc. articles
+                    // that use the canonical translation (e.g. Korean `핵심 요약`) get their
+                    // styled Key Takeaways + References + Pros/Cons blocks rendered exactly
+                    // like English articles. Single source of truth: Localized_Strings.
+                    $takeaways_en = 'key\s*takeaway|key\s*insight|main\s*point|at\s*a\s*glance|tl;?dr|what\s*to\s*know|the\s*bottom\s*line';
+                    $is_takeaways = (bool) preg_match( '/' . Localized_Strings::get_detection_pattern( 'key_takeaways', $article_lang, $takeaways_en ) . '/iu', $prev_heading );
                     $prev_context = strtolower( $prev_heading );
-                    $is_pros = ( preg_match( '/\bpros?\b|advantage|strength|benefit|upside|highlight/i', $prev_context ) && ! preg_match( '/cons/i', $prev_context ) );
-                    $is_cons = (bool) preg_match( '/\bcons?\b|disadvantage|weakness|drawback|downside|limitation|trade-?off/i', $prev_context );
+                    $pros_en = '\bpros?\b|advantage|strength|benefit|upside|highlight';
+                    $cons_en = '\bcons?\b|disadvantage|weakness|drawback|downside|limitation|trade-?off';
+                    $pros_pat = Localized_Strings::get_detection_pattern( 'pros', $article_lang, $pros_en );
+                    $cons_pat = Localized_Strings::get_detection_pattern( 'cons', $article_lang, $cons_en );
+                    $is_pros = ( preg_match( '/' . $pros_pat . '/iu', $prev_heading ) && ! preg_match( '/' . $cons_pat . '/iu', $prev_heading ) );
+                    $is_cons = (bool) preg_match( '/' . $cons_pat . '/iu', $prev_heading );
                     $is_ingredients = (bool) preg_match( '/ingredient|you.ll need|what you need|supplies|materials|tools|prerequisite/i', $prev_context );
                     // v1.5.64 — detect References section so we can render it
                     // with styled numbered badges (purple circles + hover
                     // effect) instead of plain Gutenberg ordered list.
                     // Documented in article_design.md §10.
-                    $is_references = (bool) preg_match( '/^(references|sources|bibliography|further\s*reading|citations)\b/i', $prev_context );
+                    // v1.5.206d-fix6 — References detection also language-aware.
+                    $references_en = 'references|sources|bibliography|further\s*reading|citations';
+                    $is_references = (bool) preg_match( '/^' . Localized_Strings::get_detection_pattern( 'references', $article_lang, $references_en ) . '\b/iu', $prev_heading );
 
                     // v1.5.14 — HowTo step boxes: when content_type is how_to AND
                     // the list is ordered AND it's not already classified as

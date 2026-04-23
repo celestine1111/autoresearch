@@ -673,9 +673,22 @@ Each content type affects **three layers** of the generated article:
 2. **Styled block detection** — `Content_Formatter::format_hybrid()` applies different inline styles based on heading context
 3. **Schema output** — `Schema_Generator::generate()` in `includes/Schema_Generator.php` AND `build_aioseo_schema()` in `seobetter.php` emit different `@type` values and secondary schemas
 
-### Universal UI label localization (v1.5.206d) — `Localized_Strings`
+### Universal UI label localization (v1.5.206d → v1.5.206d-fix6) — `Localized_Strings`
 
-Plugin-rendered block labels (`References` and `Key Takeaways` block headers in `Content_Formatter::format_hybrid()`, `Last Updated:` prefix in `Content_Injector::inject_freshness()`) are now fetched via `Localized_Strings::get( $key, $language )` where `$language` is the article's language meta. 30+ languages pre-translated. Fallback chain: exact match → language family → English. When the article language is Japanese, the Key Takeaways block renders as `重要なポイント`, References as `参考文献`, and "Last Updated" becomes `最終更新日` with a `2026年4月`-pattern date. No matrix-per-content-type branching needed — all 21 types benefit automatically.
+Plugin-rendered block labels (`References` and `Key Takeaways` block headers in `Content_Formatter::format_hybrid()`, `Last Updated:` prefix in `Content_Injector::inject_freshness()`) are fetched via `Localized_Strings::get( $key, $language )` where `$language` is the article's language meta. 30+ languages pre-translated. Fallback chain: exact match → language family → English.
+
+**v1.5.206d-fix6 — detection + rendering are both language-aware now.** Previously (v1.5.206d) only the rendered label was localized; detection regexes were still English-only. If the AI translated the heading (`핵심 요약` instead of English `Key Takeaways`), detection missed it and the styled block never rendered. v1.5.206d-fix6 swaps every detection regex to `Localized_Strings::get_detection_pattern($key, $lang, $english_pattern)` which returns an OR-joined regex of the English form AND the article-language canonical form.
+
+Affected detection regexes in `Content_Formatter::format_hybrid()`:
+- **Key Takeaways** — accepts English synonyms (key takeaway / key insight / main point / TL;DR / etc.) OR the canonical localized label (e.g. Korean `핵심 요약`, Japanese `重要なポイント`, Russian `Ключевые выводы`)
+- **References** — accepts English (references / sources / bibliography / further reading / citations) OR canonical localized label (`참고 자료`, `参考文献`, `Источники`, etc.)
+- **Pros / Cons** — accepts English OR localized (`장점`/`단점`, `メリット`/`デメリット`, `Плюсы`/`Минусы`, `Vorteile`/`Nachteile`, etc.)
+- **Tip / Note / Warning callouts** — both detection AND rendered label use Localized_Strings (e.g. Korean `팁:`/`참고:`/`경고:`, German `Tipp:`/`Hinweis:`/`Warnung:`)
+- **Last Updated** — detection accepts English OR localized label (`최종 수정일`, `最終更新日`, `Zuletzt aktualisiert`, etc.)
+
+**Canonical translations block in the system prompt (v1.5.206d-fix6):** `Localized_Strings::canonical_translation_block( $language )` returns a prompt fragment instructing the AI to use the EXACT canonical translation for every structural anchor (not an AI-invented synonym). Prevents the v1.5.206d Korean-test bug where the AI rendered `중요 포인트` instead of canonical `핵심 요약` and the styled Key Takeaways block failed to render. Empty for English articles (byte-identical prompt).
+
+Translations cover (v1.5.206d-fix6): `last_updated`, `key_takeaways`, `references`, `tip`, `note`, `warning`, `faq`, `introduction`, `conclusion`, `pros`, `cons`. All 30+ languages already supported for the existing 3 keys now cover these 11 total.
 
 ### Universal schema field (v1.5.206a) — `inLanguage`
 
