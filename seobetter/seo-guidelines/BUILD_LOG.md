@@ -19,7 +19,7 @@
 ## v1.5.206d-fix8 — Localized content-type badges + mashed-URL sanitizer
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `012bc7b`
 
 ### Why this patch exists
 
