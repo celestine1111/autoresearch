@@ -19,7 +19,7 @@
 ## v1.5.206d-fix16 — 3-char n-gram overlap + language-aware extractCoreTopic
 
 **Date:** 2026-04-23
-**Commit:** `[pending]`
+**Commit:** `b92f053`
 
 ### Why this patch exists
 
