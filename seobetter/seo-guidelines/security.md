@@ -103,9 +103,33 @@ Daily $ caps per external API:
 
 Hit cap → endpoint returns 503 with `Retry-After: tomorrow`. Vercel spend alerts at 50% / 80% / 95%.
 
-### 1g. Environment variable hygiene — audited v1.5.211
+### 1g. Environment variable hygiene
 
-All keys marked "Sensitive" in Vercel. Never logged to stdout, never in responses, never in error messages. Audit pass done during v1.5.211 ship.
+**Policy:** Every third-party API key (OpenRouter / Anthropic / Groq / Serper / Firecrawl / Pexels), every internal secret (`SEOBETTER_SIGNING_SECRETS`, `SEOBETTER_PRO_KEYS`), and every new env var going forward MUST be created in Vercel with the **Sensitive** flag. Never logged to stdout, never interpolated into responses, never included in error messages.
+
+**Why:** Vercel's default behaviour is to show env var plaintext to anyone with project dashboard access. The Sensitive flag masks the value after first save (`••••••`) and forces delete-and-recreate to change — removing casual exposure via screen shares, team member view, browser history, etc.
+
+**Audit status:**
+
+| Date | Who | Finding | Action |
+|---|---|---|---|
+| 2026-04-24 | Vercel automated scan | `OPENROUTER_KEY` saved without Sensitive flag — plaintext value visible in dashboard. Pre-existing issue; not introduced by v1.5.211. | Ben rotated key at OpenRouter (revoked old, generated new), deleted+recreated in Vercel with Sensitive flag, redeployed. Plus audited all other env vars and recreated any without Sensitive flag. |
+
+**Procedure when adding a new env var:**
+1. Generate / rotate the secret at source
+2. Vercel dashboard → Project → Settings → Environment Variables → **Add New**
+3. Paste value → ✅ **check Sensitive** → apply to Production (+ Preview/Development if needed)
+4. Redeploy
+5. Never commit the plaintext value to source — only references like `process.env.MY_KEY`
+
+**Procedure when rotating an exposed secret** (values that were unmasked at any point):
+1. Revoke / delete the old key at the provider (OpenRouter dashboard, Serper dashboard, etc.) — not just rename, fully kill it
+2. Generate new key → store in password manager
+3. In Vercel: delete the existing env var → re-add with Sensitive flag → paste new value
+4. Redeploy
+5. If the secret is mirrored in plugin source (e.g. `SIGNING_SECRET` in `Cloud_API.php`), bump the plugin constant, release a version update, and follow the 7-day graceful rotation window documented in §1a.
+
+**Limitation for `SEOBETTER_SIGNING_SECRETS`:** this value is mirrored in `Cloud_API.php::SIGNING_SECRET` as a base64 constant. WP.org rules mean the free plugin code must be readable — so the plaintext signing secret is inherently visible to anyone reading the plugin source regardless of the Vercel Sensitive flag. The Sensitive flag still removes the secondary leakage path (Vercel dashboard / screen shares). True cryptographic per-license-key signing ships with Freemius Phase 1 per §2.
 
 ---
 

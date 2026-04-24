@@ -2,6 +2,7 @@
   "name": "seobetter-cloud-api",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "SEOBetter Cloud API proxy — AI content generation for WordPress plugin users without their own API keys",
   "scripts": {
     "dev": "vercel dev",
