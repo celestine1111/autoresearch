@@ -19,7 +19,7 @@
 ## v1.5.212 — Rich Results gap fixes + Pexels server-side hybrid + Upstash rate limits + cost circuit breaker
 
 **Date:** 2026-04-24
-**Commit:** `[pending]`
+**Commit:** `543f974`
 
 ### Why this ships
 
