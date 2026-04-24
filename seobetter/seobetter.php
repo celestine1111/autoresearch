@@ -1395,7 +1395,12 @@ final class SEOBetter {
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
 
         if ( $code !== 200 || ! is_array( $body ) ) {
-            return new \WP_REST_Response( [ 'success' => false, 'error' => $body['error'] ?? "HTTP {$code}" ], $code ?: 502 );
+            // v1.5.211-hotfix — include `reason` from _auth.js so "unauthorized" surfaces the specific cause.
+            return new \WP_REST_Response( [
+                'success' => false,
+                'error'   => $body['error'] ?? "HTTP {$code}",
+                'reason'  => $body['reason'] ?? null,
+            ], $code ?: 502 );
         }
 
         return new \WP_REST_Response( $body );
@@ -1439,7 +1444,11 @@ final class SEOBetter {
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
 
         if ( $code !== 200 || ! is_array( $body ) ) {
-            return new \WP_REST_Response( [ 'success' => false, 'error' => $body['error'] ?? "HTTP {$code}" ], $code ?: 502 );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'error'   => $body['error'] ?? "HTTP {$code}",
+                'reason'  => $body['reason'] ?? null,
+            ], $code ?: 502 );
         }
 
         return new \WP_REST_Response( $body );

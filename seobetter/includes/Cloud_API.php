@@ -76,7 +76,13 @@ class Cloud_API {
         $tier    = License_Manager::is_pro() ? 'pro' : 'free';
         $version = defined( 'SEOBETTER_VERSION' ) ? SEOBETTER_VERSION : 'dev';
 
-        $body_json = wp_json_encode( $body );
+        // v1.5.211-hotfix — use JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        // so the signed bytes match what Node.js reconstructs server-side.
+        // Without these flags, PHP's default json_encode outputs `"https:\/\/x"`
+        // while Node's JSON.stringify outputs `"https://x"`. Same logical data,
+        // different bytes, different HMAC → 401. Same issue with non-ASCII
+        // characters (PHP escapes to \uXXXX, Node doesn't).
+        $body_json = wp_json_encode( $body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
         $payload   = "{$time}.{$site}.{$tier}.{$body_json}";
         $secret    = base64_decode( self::SIGNING_SECRET );
         $sig       = hash_hmac( 'sha256', $payload, $secret );
