@@ -19,7 +19,7 @@
 ## v1.5.211 — Security Layer 1: HMAC request signing + SSRF protection + input sanitization
 
 **Date:** 2026-04-24
-**Commit:** `[pending]`
+**Commit:** `7363c0c`
 
 ### Why this ships
 
