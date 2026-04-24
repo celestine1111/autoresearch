@@ -605,9 +605,11 @@ window.sbSuggestTopics = function(btn) {
     btn.disabled=true; if(st) st.textContent='Researching real search demand...';
     var sbCountryEl2 = document.querySelector('[name="country"]') || document.getElementById('sb-country-val');
     var sbCountry2 = sbCountryEl2 ? (sbCountryEl2.value || '').toUpperCase() : '';
-    fetch(CLOUD + '/api/topic-research', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ niche: niche, site_url: SITE, country: sbCountry2 })
+    // v1.5.211 — route through WP REST so PHP signs the HMAC request.
+    // Browser JS can't sign (signing secret lives in PHP source).
+    fetch('<?php echo esc_js( rest_url( 'seobetter/v1/topic-research' ) ); ?>', {
+        method:'POST', headers:{'Content-Type':'application/json','X-WP-Nonce':'<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>'},
+        body: JSON.stringify({ niche: niche, country: sbCountry2 })
     }).then(function(r){return r.json();}).then(function(d) {
         btn.disabled=false;
         if (d && d.success && d.topics && d.topics.length) {
@@ -736,10 +738,11 @@ if (sbAutoBtn) sbAutoBtn.addEventListener('click', function() {
     // 3) ask the LLM audience inference to respond in the target language
     var sbLangEl = document.querySelector('[name="language"]');
     var sbLang = sbLangEl ? (sbLangEl.value || 'en') : 'en';
-    fetch(CLOUD + '/api/topic-research', {
+    // v1.5.211 — route through WP REST so PHP signs the HMAC request.
+    fetch('<?php echo esc_js( rest_url( 'seobetter/v1/topic-research' ) ); ?>', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ niche: kw, site_url: SITE, country: sbCountry, language: sbLang })
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
+        body: JSON.stringify({ niche: kw, country: sbCountry, language: sbLang })
     }).then(function(r) { return r.json(); }).then(function(d) {
         btn.disabled = false;
         if (!d || !d.success) {
@@ -823,9 +826,10 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
     var btn=this, st=document.getElementById('sb-social-status');
     btn.disabled=true; st.textContent='Generating (20-30s)...';
     var txt = <?php echo wp_json_encode( substr( wp_strip_all_tags( $result['content'] ?? '' ), 0, 2000 ) ); ?>;
-    fetch(CLOUD + '/api/generate', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ prompt:'Create social content from this article about "'+btn.dataset.keyword+'":\n'+txt+'\n\n=== TWITTER THREAD ===\n5 tweets\n\n=== LINKEDIN POST ===\n150-300 words\n\n=== INSTAGRAM CAPTION ===\nHook + takeaways + hashtags', system_prompt:'Social media expert.', max_tokens:2000, temperature:0.7, site_url:SITE })
+    // v1.5.211 — route through WP REST so PHP signs the HMAC request.
+    fetch('<?php echo esc_js( rest_url( 'seobetter/v1/generate-proxy' ) ); ?>', {
+        method:'POST', headers:{'Content-Type':'application/json','X-WP-Nonce':'<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>'},
+        body: JSON.stringify({ prompt:'Create social content from this article about "'+btn.dataset.keyword+'":\n'+txt+'\n\n=== TWITTER THREAD ===\n5 tweets\n\n=== LINKEDIN POST ===\n150-300 words\n\n=== INSTAGRAM CAPTION ===\nHook + takeaways + hashtags', system_prompt:'Social media expert.', max_tokens:2000, temperature:0.7 })
     }).then(r=>r.json()).then(d => {
         btn.disabled=false;
         if (d.content) {

@@ -595,6 +595,25 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
+        // v1.5.211 — Proxies for browser-initiated cloud-api calls.
+        // Browser JS can't sign HMAC requests — signing secret lives in PHP source
+        // and can't safely be exposed to JS. Route browser calls through WordPress
+        // REST → PHP signs via Cloud_API::signed_post() → Vercel accepts.
+        register_rest_route( 'seobetter/v1', '/topic-research', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_topic_research_proxy' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        // Proxy for /api/generate used by the Social Content Generator button.
+        register_rest_route( 'seobetter/v1', '/generate-proxy', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_generate_proxy' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
         // Full 80-item CORE-EEAT audit (guideline §15B)
         register_rest_route( 'seobetter/v1', '/core-eeat/(?P<post_id>\d+)', [
             'methods'             => 'GET',
@@ -1337,6 +1356,93 @@ final class SEOBetter {
 
     public function rest_generate_estimate( \WP_REST_Request $request ): \WP_REST_Response {
         return new \WP_REST_Response( SEOBetter\Async_Generator::get_estimate() );
+    }
+
+    /**
+     * v1.5.211 — Proxy for /api/topic-research (Auto-Suggest + Topic Discovery).
+     *
+     * Browser JS can't sign HMAC requests (the signing secret lives in PHP
+     * source; exposing it to JS defeats the purpose). This endpoint accepts
+     * the browser's form data via admin-ajax-style auth (nonce + edit_posts
+     * capability), signs the request via Cloud_API::signed_post(), and
+     * returns the Vercel response as-is.
+     *
+     * Replaces the direct browser→Vercel fetch() calls in
+     * [content-generator.php:608 + 739] which returned 401 after v1.5.211
+     * locked down the /api/topic-research endpoint.
+     */
+    public function rest_topic_research_proxy( \WP_REST_Request $request ): \WP_REST_Response {
+        $niche    = sanitize_text_field( $request->get_param( 'niche' ) ?? '' );
+        $country  = sanitize_text_field( $request->get_param( 'country' ) ?? '' );
+        $language = sanitize_text_field( $request->get_param( 'language' ) ?? 'en' );
+
+        if ( $niche === '' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'niche is required' ], 400 );
+        }
+
+        $response = SEOBetter\Cloud_API::signed_post( '/api/topic-research', [
+            'niche'    => $niche,
+            'site_url' => home_url(),
+            'country'  => $country,
+            'language' => $language,
+        ], [ 'timeout' => 30 ] );
+
+        if ( is_wp_error( $response ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $response->get_error_message() ], 502 );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code !== 200 || ! is_array( $body ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $body['error'] ?? "HTTP {$code}" ], $code ?: 502 );
+        }
+
+        return new \WP_REST_Response( $body );
+    }
+
+    /**
+     * v1.5.211 — Proxy for /api/generate (Social Content Generator).
+     * Same rationale as rest_topic_research_proxy: browser can't HMAC-sign.
+     */
+    public function rest_generate_proxy( \WP_REST_Request $request ): \WP_REST_Response {
+        $prompt        = (string) ( $request->get_param( 'prompt' ) ?? '' );
+        $system_prompt = (string) ( $request->get_param( 'system_prompt' ) ?? '' );
+        $max_tokens    = (int) ( $request->get_param( 'max_tokens' ) ?? 2000 );
+        $temperature   = (float) ( $request->get_param( 'temperature' ) ?? 0.7 );
+
+        if ( $prompt === '' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'prompt is required' ], 400 );
+        }
+        // Reasonable length cap to prevent accidental abuse
+        if ( strlen( $prompt ) > 20000 || strlen( $system_prompt ) > 5000 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'prompt too long' ], 400 );
+        }
+
+        $license = get_option( 'seobetter_license', [] );
+
+        $response = SEOBetter\Cloud_API::signed_post( '/api/generate', [
+            'prompt'         => $prompt,
+            'system_prompt'  => $system_prompt,
+            'max_tokens'     => min( max( $max_tokens, 100 ), 8000 ),
+            'temperature'    => max( 0.0, min( $temperature, 1.5 ) ),
+            'site_url'       => home_url(),
+            'license_key'    => $license['key'] ?? '',
+            'plugin_version' => SEOBETTER_VERSION,
+        ], [ 'timeout' => 120 ] );
+
+        if ( is_wp_error( $response ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $response->get_error_message() ], 502 );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code !== 200 || ! is_array( $body ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $body['error'] ?? "HTTP {$code}" ], $code ?: 502 );
+        }
+
+        return new \WP_REST_Response( $body );
     }
 
     public function rest_save_draft( \WP_REST_Request $request ): \WP_REST_Response {
