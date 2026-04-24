@@ -1075,11 +1075,8 @@ final class SEOBetter {
         ];
 
         try {
-            $response = wp_remote_post( $cloud_url . '/api/research', [
-                'timeout' => 60,
-                'headers' => [ 'Content-Type' => 'application/json' ],
-                'body'    => wp_json_encode( $body ),
-            ] );
+            // v1.5.211 — HMAC-signed via Cloud_API::signed_post()
+            $response = SEOBetter\Cloud_API::signed_post( '/api/research', $body, [ 'timeout' => 60 ] );
 
             if ( is_wp_error( $response ) ) {
                 return new \WP_REST_Response( [
@@ -1246,11 +1243,8 @@ final class SEOBetter {
             'keyword' => $test_keyword,
         ];
         try {
-            $response = wp_remote_post( $cloud_url . '/api/research', [
-                'timeout' => 60,
-                'headers' => [ 'Content-Type' => 'application/json' ],
-                'body'    => wp_json_encode( $body ),
-            ] );
+            // v1.5.211 — HMAC-signed via Cloud_API::signed_post()
+            $response = SEOBetter\Cloud_API::signed_post( '/api/research', $body, [ 'timeout' => 60 ] );
             if ( is_wp_error( $response ) ) {
                 $cloud['error'] = 'Cloud API request failed: ' . $response->get_error_message();
             } else {
