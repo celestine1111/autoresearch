@@ -12,7 +12,8 @@
  * Rate limiting: 5 requests/month per site_url (free), unlimited for Pro license keys
  */
 
-import { verifyRequest, rejectAuth, applyCorsHeaders } from './_auth.js';
+import { verifyRequest, rejectAuth, applyCorsHeaders, enforceRateLimit, enforceCostCap } from './_auth.js';
+import { recordCost, COSTS_CENTS } from './_upstash.js';
 
 // In-memory rate limiting store (resets on cold start — fine for testing)
 // For production, replace with Vercel KV or Upstash Redis
@@ -35,6 +36,12 @@ export default async function handler(req, res) {
   // v1.5.211 — HMAC request verification
   const auth = verifyRequest(req);
   if (!auth.ok) return rejectAuth(res, auth);
+
+  // v1.5.212 — Rate limit + cost cap (LLM calls are the most expensive)
+  const rlReject = await enforceRateLimit(req, res, 'generate', auth);
+  if (rlReject) return rlReject;
+  const costReject = await enforceCostCap(res, 'openrouter');
+  if (costReject) return costReject;
 
   const {
     prompt,

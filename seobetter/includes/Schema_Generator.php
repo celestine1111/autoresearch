@@ -130,6 +130,79 @@ class Schema_Generator {
         }
     }
 
+    /**
+     * v1.5.212 — Top-level Organization entity for the site publisher.
+     * Always emitted (unless a content-type-specific Organization already exists
+     * in the @graph, e.g. for press_release/case_study which emit a richer
+     * enriched Organization via detect_organization_schema()).
+     *
+     * Differs from nested `publisher` field in Article schemas: this top-level
+     * node gives the site a first-class Knowledge Graph entity AI engines can
+     * reference, and makes the AI Overview readiness check pass.
+     */
+    private function build_site_organization_schema(): array {
+        $org = [
+            '@type' => 'Organization',
+            '@id'   => trailingslashit( home_url() ) . '#organization',
+            'name'  => get_bloginfo( 'name' ),
+            'url'   => home_url(),
+        ];
+
+        $logo_url = get_site_icon_url( 512 );
+        if ( $logo_url ) {
+            $org['logo'] = [
+                '@type' => 'ImageObject',
+                'url'   => $logo_url,
+            ];
+        }
+
+        $tagline = get_bloginfo( 'description' );
+        if ( ! empty( $tagline ) ) {
+            $org['description'] = $tagline;
+        }
+
+        // sameAs from SEOBetter settings (author social profiles double as org links
+        // for solo-publisher sites — the common WP case)
+        $s = get_option( 'seobetter_settings', [] );
+        $same_as = [];
+        foreach ( [ 'author_linkedin', 'author_twitter', 'author_facebook', 'author_instagram', 'author_youtube', 'author_website' ] as $key ) {
+            if ( ! empty( $s[ $key ] ) ) {
+                $same_as[] = $s[ $key ];
+            }
+        }
+        if ( ! empty( $same_as ) ) {
+            $org['sameAs'] = $same_as;
+        }
+
+        return $org;
+    }
+
+    /**
+     * v1.5.212 — Top-level Person entity for the article author.
+     * Always emitted when the article has a Person author (vs Organization).
+     * Duplicates the full author info into a standalone top-level @graph node
+     * for AI-engine entity grounding + Knowledge Graph discovery.
+     *
+     * Shares schema fields with build_author_schema() (nested author field in
+     * Article schema) but emitted standalone with @id anchor.
+     */
+    private function build_site_author_person_schema( \WP_Post $post ): array {
+        // Reuse the full author schema builder (v1.5.139 — has sameAs, jobTitle,
+        // knowsAbout, worksFor, image, description) and add an @id anchor so
+        // Article.author nested fields can reference via @id instead of duplicating.
+        $person = $this->safe_build_author( $post );
+
+        // Anchor: site URL + author slug or user ID
+        $author_slug = '';
+        $author = get_userdata( $post->post_author );
+        if ( $author && $author->user_login ) {
+            $author_slug = $author->user_login;
+        }
+        $person['@id'] = trailingslashit( home_url() ) . '#author-' . ( $author_slug ?: $post->post_author );
+
+        return $person;
+    }
+
     private function build_author_schema( \WP_Post $post ): array {
         $s = get_option( 'seobetter_settings', [] );
 
@@ -388,6 +461,35 @@ class Schema_Generator {
         $vacation = $this->detect_vacation_rental_schema( $post, $content, $content_type, $category );
         if ( $vacation ) {
             $schemas[] = $vacation;
+        }
+
+        // v1.5.212 — Top-level E-E-A-T Organization + Person entities on every article.
+        // Pre-v1.5.212: Organization emitted only for press_release/case_study/sponsored/interview.
+        // Person only nested inside author/publisher fields — never a top-level @graph node.
+        // Result: AI Overview readiness check (Rich Results tab v1.5.207) failed for 17 of 21
+        // content types because $has_type(['Organization','Person']) looks at top-level @types.
+        //
+        // Fix: always emit top-level Organization (site publisher) + Person (article author)
+        // with @id anchors. Matches industry standard (Yoast / RankMath / AIOSEO all do this)
+        // and strengthens E-E-A-T signal to Google + AI engines.
+        //
+        // Duplicate guard: if generate_primary_schema already emitted Organization (for
+        // press_release/case_study/sponsored/interview content types), we skip the universal
+        // one to avoid two Organization nodes in the @graph. Same pattern for Person when the
+        // author is represented as an Organization (site-name fallback case).
+        $has_organization = false;
+        $has_person = false;
+        foreach ( $schemas as $s ) {
+            $t = $s['@type'] ?? '';
+            if ( $t === 'Organization' ) $has_organization = true;
+            if ( $t === 'Person' ) $has_person = true;
+        }
+
+        if ( ! $has_organization ) {
+            $schemas[] = $this->build_site_organization_schema();
+        }
+        if ( ! $has_person ) {
+            $schemas[] = $this->build_site_author_person_schema( $post );
         }
 
         // BreadcrumbList — always

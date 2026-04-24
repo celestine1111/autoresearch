@@ -14,7 +14,7 @@
  * No API keys required. No AI hallucination.
  */
 
-import { verifyRequest, rejectAuth, applyCorsHeaders } from './_auth.js';
+import { verifyRequest, rejectAuth, applyCorsHeaders, enforceRateLimit } from './_auth.js';
 
 const rateLimitStore = new Map();
 const RATE_LIMIT = 20;
@@ -28,6 +28,10 @@ export default async function handler(req, res) {
   // v1.5.211 — HMAC request verification
   const auth = verifyRequest(req);
   if (!auth.ok) return rejectAuth(res, auth);
+
+  // v1.5.212 — Rate limit
+  const rlReject = await enforceRateLimit(req, res, 'topic-research', auth);
+  if (rlReject) return rlReject;
 
   const { niche, site_url, country, language } = req.body || {};
   if (!niche) return res.status(400).json({ error: 'niche is required.' });

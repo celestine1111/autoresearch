@@ -10,7 +10,7 @@
  * v1.5.211: HMAC-signed requests required.
  */
 
-import { verifyRequest, rejectAuth, applyCorsHeaders } from './_auth.js';
+import { verifyRequest, rejectAuth, applyCorsHeaders, enforceRateLimit } from './_auth.js';
 
 export default async function handler(req, res) {
   applyCorsHeaders(req, res);
@@ -26,6 +26,10 @@ export default async function handler(req, res) {
   // v1.5.211 — HMAC request verification
   const auth = verifyRequest(req);
   if (!auth.ok) return rejectAuth(res, auth);
+
+  // v1.5.212 — Rate limit (60/hr uniform across tiers — license checks)
+  const rlReject = await enforceRateLimit(req, res, 'validate', auth);
+  if (rlReject) return rlReject;
 
   const { license_key = '', site_url = '', plugin_version = '' } = req.body || {};
 

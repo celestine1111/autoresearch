@@ -7,12 +7,116 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-24 (v1.5.211)
+> **Last updated:** 2026-04-24 (v1.5.212)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.212 — Rich Results gap fixes + Pexels server-side hybrid + Upstash rate limits + cost circuit breaker
+
+**Date:** 2026-04-24
+**Commit:** `[pending]`
+
+### Why this ships
+
+Three categories of work parked from earlier sessions now consolidated into one release:
+
+1. **Rich Results tab gaps** flagged during v1.5.207 review — misleading "Add Product schema" badge on blog posts, top-level Organization/Person missing so AI Overview readiness failed for 17 of 21 content types, no Site Icon warning, etc.
+2. **Pexels-by-default for free tier** (decision 2026-04-24 in pro-plan-pricing.md §12) — Picsum is random lorem-ipsum quality, Pexels via server-side key gives free users keyword-relevant images out of the box.
+3. **Persistent rate limiting + cost circuit breaker** (deferred from v1.5.211) — now that Upstash Redis is configured in Vercel, wire it into every endpoint to replace the in-memory `Map()` that resets on cold starts.
+
+### Added — Schema_Generator.php
+
+- **`build_site_organization_schema()`** — top-level Organization entity with `@id` anchor, logo from Site Icon, description from site tagline, sameAs from author social profiles. Emitted on every article unless a richer Organization was already emitted by `detect_organization_schema()` (press_release / case_study / sponsored / interview).
+- **`build_site_author_person_schema()`** — top-level Person entity reusing `safe_build_author()` (v1.5.139 sameAs/jobTitle/knowsAbout/worksFor/image) with an `@id` anchor: `home_url + '#author-' + user_login`.
+- **`generate()` orchestration** — after all type-specific schemas, checks if Organization/Person already present; if not, emits the site-wide entities. Fixes AI Overview readiness check + matches industry standard (Yoast / RankMath / AIOSEO all do this).
+
+### Added — Rich Results tab (metabox)
+
+- **3-state appearance badge** — replaces misleading 2-state "Eligible / Add schema" with "✓ Active / ● Available / ○ Not applicable":
+  - `active` (green) — schema detected
+  - `available` (amber) — applicable to this content type + adding schema would emit it
+  - `not_applicable` (grey, informational) — doesn't apply to this article type
+- **Per-content-type applicability matrix** — 21 content types × 28 appearances. Recipe card → only `recipe` content type. Product card → only review/buying_guide/comparison/sponsored/listicle. Etc. Stored as `$applicability` array in the metabox render.
+- **Legend + summary counts** below the grid: "Active: N · Available: N · Not applicable: N" so users see their position at a glance.
+- **AI Overview readiness check fix** — now detects nested `author` + `publisher` E-E-A-T in addition to top-level @types. With the top-level Org+Person rollout, the check should hit 100% for most articles.
+- **Site Icon warning** — shows in both the General tab (below SERP inputs) and at the top of the Rich Results tab when WordPress Site Icon isn't configured. Links to Customiser → Site Identity → Site Icon.
+
+### Added — Pexels server-side hybrid
+
+- **`cloud-api/api/pexels.js` (NEW)** — HMAC-protected endpoint that proxies Pexels search via Ben's `PEXELS_API_KEY`. Rate-limited (100/hr/site free, 500/hr Pro), 24h in-memory cache per keyword+orientation.
+- **`Stock_Image_Inserter::get_image_url()` — 3-tier fallback chain:**
+  1. User's own Pexels key if configured in Settings (dedicated quota)
+  2. SEOBetter Cloud `/api/pexels` via `Cloud_API::signed_post()` (shared pool, Ben's key)
+  3. Picsum as last-resort only
+- **`search_pexels_cloud()` method** — new helper for Tier 2 above. 1-hour transient cache per query, 5-min cache on failures to avoid hammering.
+
+### Added — Upstash Redis persistence
+
+- **`cloud-api/api/_upstash.js` (NEW)** — shared Upstash REST client with:
+  - `checkRateLimit(endpoint, siteUrl, tier)` — per-site per-endpoint per-hour counter. Keys: `rl:{siteHash}:{endpoint}:{YYYY-MM-DDTHH}`, 61-min TTL.
+  - `checkCostCap(service)` + `recordCost(service, cents)` — daily cumulative cents per upstream API. Keys: `cost:{service}:{YYYY-MM-DD}`, 48h TTL.
+  - Rate tiers: free 10-100/hr, Pro 100-500/hr, Agency unlimited (cost breaker still applies).
+  - Cost caps: Serper/Firecrawl $20/day, OpenRouter/Anthropic $50/day, Groq $10/day.
+  - Fail-open: if Upstash is down or not configured, endpoints pass through without limiting.
+
+- **`_auth.js` extensions:**
+  - `enforceRateLimit(req, res, endpoint, auth)` — call after `verifyRequest`; returns 429 response object if exceeded (with `Retry-After` header), null otherwise.
+  - `enforceCostCap(res, service)` — call before expensive upstream API; returns 503 with `cost_cap_exceeded` if daily budget hit.
+
+- **Every endpoint wired:**
+  - `research.js` — rate limit 'research'
+  - `content-brief.js` — rate limit 'content-brief'
+  - `topic-research.js` — rate limit 'topic-research'
+  - `scrape.js` — rate limit 'scrape' + cost cap 'firecrawl' + `recordCost('firecrawl', 0.1)` on success
+  - `generate.js` — rate limit 'generate' + cost cap 'openrouter'
+  - `validate.js` — rate limit 'validate' (60/hr uniform)
+  - `pexels.js` — rate limit 'pexels' (100/hr free, 500/hr Pro)
+
+### Required env vars (all set by Ben)
+
+- `SEOBETTER_SIGNING_SECRETS` (already set v1.5.211)
+- `SERPER_API_KEY` (already set)
+- `FIRECRAWL_API_KEY` (already set)
+- `OPENROUTER_KEY` (already set, rotated today)
+- `PEXELS_API_KEY` (NEW for v1.5.212)
+- `UPSTASH_REDIS_REST_URL` (NEW for v1.5.212)
+- `UPSTASH_REDIS_REST_TOKEN` (NEW for v1.5.212)
+
+### Testing plan (Ben)
+
+1. **Reinstall v1.5.212 zip** on test site
+2. **Top-level entities** — generate any article, view-source the post, confirm `@graph` contains a top-level Organization node AND a top-level Person node (in addition to nested author/publisher fields).
+3. **Rich Results tab** — open a Blog Post article's metabox → Rich Results tab. Should now show:
+   - Most "Not applicable" tiles greyed (Recipe, Product, Event, etc. for a blog post)
+   - Legend at bottom showing Active/Available/Not applicable counts
+   - If Site Icon not configured, warning banner at top with "Configure Site Icon →" link
+4. **AI Overview readiness** — navigate to AI Overviews sub-view. "Organization or Person (E-E-A-T) schema" check should now pass ✓ even for blog posts (thanks to top-level Person).
+5. **Pexels hybrid** — remove your own Pexels key from Settings temporarily, generate a new article, confirm article has Pexels-quality images (not Picsum random photos). Add your own key back — confirm it still takes precedence.
+6. **Rate limits** — open browser DevTools → Network tab → try triggering /api/research many times in succession (e.g. 15 Auto-Suggest clicks in 2 min). After ~10 requests, you should see 429 `rate_limit_exceeded` with `Retry-After` header. Wait an hour, counter resets.
+7. **Cost cap test** (optional, only if you want to force a 503) — on the Upstash dashboard, manually set `cost:firecrawl:YYYY-MM-DD` to 2500. Try scraping — endpoint returns 503 `cost_cap_exceeded`.
+
+### Cross-doc sync
+
+Required (per `/seobetter` skill step 4b):
+- `security.md` — Layer 1e (Rate limiting) + Layer 1f (Cost breaker) statuses flipped from "DEFERRED to v1.5.212" → "shipped v1.5.212" with implementation anchors
+- `pro-plan-pricing.md §12` — decision-log entry recording v1.5.212 scope + what shipped
+- `plugin_UX.md` — Rich Results tab 3-state badge + applicability matrix + Site Icon warning documented
+- `SEO-GEO-AI-GUIDELINES.md §10.3` — matrix updated (if any schema-stacking changed)
+- `structured-data.md §4` — top-level Organization + Person schemas documented
+
+### Verified by user
+
+- **UNTESTED** — Ben to reinstall + run test plan above.
+
+### Honest limitations
+
+- **Pexels free tier quota (20K req/mo) is shared across all users.** At scale this runs out. Rate limits per-site (100/hr free) cap single-user impact. Pro users bringing their own key fully isolate their quota. If Ben hits the 20K monthly wall, option: bump Pexels to paid plan, or tighten free-tier Pexels rate limits.
+- **Rate limiter is fail-open.** If Upstash has an outage, endpoints revert to unlimited (better than 500'ing article generation). Not a security risk — just means during an Upstash outage a motivated attacker could theoretically abuse rates. Mitigation: Upstash uptime is 99.95%+ on their SLA.
 
 ---
 

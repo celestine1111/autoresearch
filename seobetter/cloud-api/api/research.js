@@ -19,7 +19,7 @@
  */
 
 import { bm25Corpus, commonH2Patterns, wordCount } from './_bm25_util.js';
-import { verifyRequest, rejectAuth, applyCorsHeaders } from './_auth.js';
+import { verifyRequest, rejectAuth, applyCorsHeaders, enforceRateLimit } from './_auth.js';
 
 const rateLimitStore = new Map();
 const RATE_LIMIT = 10;
@@ -38,6 +38,10 @@ export default async function handler(req, res) {
   // SEOBETTER_DEV_BYPASS_AUTH=1 env var.
   const auth = verifyRequest(req);
   if (!auth.ok) return rejectAuth(res, auth);
+
+  // v1.5.212 — Upstash Redis persistent rate limit. Fails open if Upstash is down.
+  const rlReject = await enforceRateLimit(req, res, 'research', auth);
+  if (rlReject) return rlReject;
 
   const { keyword, site_url, brave_key, domain, country, places_keys, test_all_places_tiers, test_all_sources, content_type } = req.body || {};
 

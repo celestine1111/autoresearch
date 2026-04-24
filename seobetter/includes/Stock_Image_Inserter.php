@@ -143,13 +143,24 @@ class Stock_Image_Inserter {
         $settings = get_option( 'seobetter_settings', [] );
         $pexels_key = $settings['pexels_api_key'] ?? '';
 
+        $searches = [
+            $this->build_search_terms( $keyword, $heading ),
+            $keyword,
+            $this->build_search_terms( $keyword, '' ),
+        ];
+
+        // v1.5.212 — Fallback chain (hybrid option 3 per pro-plan-pricing.md §12):
+        //   1. User's own Pexels key if configured (dedicated quota, zero latency overhead)
+        //   2. SEOBetter Cloud server-side Pexels (/api/pexels) — shared pool via Ben's key
+        //      Makes Pexels the free-tier default; replaces Picsum as the realistic first tier
+        //   3. Picsum as last-resort fallback (generic placeholder — only if the first two fail)
+        //
+        // Implements the Sonar Backend Rule from memory: all research/media data routes
+        // through Ben's Vercel backend, not user-owned provider keys. User-owned Pexels
+        // keys remain supported for quota isolation but are no longer required for Pexels.
+
+        // Tier 1 — user's own Pexels key
         if ( ! empty( $pexels_key ) ) {
-            // Use different search terms per section for variety
-            $searches = [
-                $this->build_search_terms( $keyword, $heading ),
-                $keyword,
-                $this->build_search_terms( $keyword, '' ),
-            ];
             foreach ( $searches as $search ) {
                 $url = $this->search_pexels( $search, $pexels_key, $index );
                 if ( $url && ! in_array( $url, $this->used_urls, true ) ) {
@@ -159,11 +170,61 @@ class Stock_Image_Inserter {
             }
         }
 
-        // Fallback to Picsum — use different seeds to avoid duplicates
+        // Tier 2 — SEOBetter Cloud Pexels proxy (server-side, free for all users)
+        foreach ( $searches as $search ) {
+            $url = $this->search_pexels_cloud( $search, $index );
+            if ( $url && ! in_array( $url, $this->used_urls, true ) ) {
+                $this->used_urls[] = $url;
+                return $url;
+            }
+        }
+
+        // Tier 3 — Picsum last-resort fallback (generic placeholder)
         $seed = abs( crc32( $keyword . $heading . $index . 'unique' ) ) % 10000;
         $url = 'https://picsum.photos/seed/' . $seed . '/' . self::IMAGE_WIDTH . '/' . self::IMAGE_HEIGHT . '.jpg';
         $this->used_urls[] = $url;
         return $url;
+    }
+
+    /**
+     * v1.5.212 — Search Pexels via SEOBetter Cloud proxy (/api/pexels).
+     * Uses Ben's server-side Pexels key so free-tier users get keyword-relevant
+     * images without needing their own Pexels account. HMAC-signed request.
+     */
+    private function search_pexels_cloud( string $query, int $index ): string {
+        $cache_key = 'seobetter_pexels_cloud_' . md5( $query );
+        $cached = get_transient( $cache_key );
+
+        if ( $cached === false ) {
+            $response = Cloud_API::signed_post( '/api/pexels', [
+                'keyword'     => $query,
+                'orientation' => 'landscape',
+                'per_page'    => 10,
+            ], [ 'timeout' => 8 ] );
+
+            if ( is_wp_error( $response ) ) {
+                return '';
+            }
+
+            $code = wp_remote_retrieve_response_code( $response );
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+            if ( $code !== 200 || empty( $body['success'] ) || empty( $body['photos'] ) ) {
+                // Cache empty result briefly to avoid hammering on failures
+                set_transient( $cache_key, [], 5 * MINUTE_IN_SECONDS );
+                return '';
+            }
+
+            $cached = $body['photos'];
+            set_transient( $cache_key, $cached, HOUR_IN_SECONDS );
+        }
+
+        if ( ! is_array( $cached ) || empty( $cached ) ) {
+            return '';
+        }
+
+        $photo = $cached[ $index % count( $cached ) ];
+        return $photo['url'] ?? $photo['url_large'] ?? '';
     }
 
     /**

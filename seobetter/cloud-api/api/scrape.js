@@ -12,7 +12,8 @@
  * v1.5.211: HMAC-signed requests required. SSRF protection on URL input.
  */
 
-import { verifyRequest, rejectAuth, applyCorsHeaders, isSafeScrapeUrl } from './_auth.js';
+import { verifyRequest, rejectAuth, applyCorsHeaders, isSafeScrapeUrl, enforceRateLimit, enforceCostCap } from './_auth.js';
+import { recordCost, COSTS_CENTS } from './_upstash.js';
 
 export default async function handler(req, res) {
   applyCorsHeaders(req, res);
@@ -23,6 +24,12 @@ export default async function handler(req, res) {
   // v1.5.211 — HMAC request verification
   const auth = verifyRequest(req);
   if (!auth.ok) return rejectAuth(res, auth);
+
+  // v1.5.212 — Rate limit + cost cap
+  const rlReject = await enforceRateLimit(req, res, 'scrape', auth);
+  if (rlReject) return rlReject;
+  const costReject = await enforceCostCap(res, 'firecrawl');
+  if (costReject) return costReject;
 
   const { url } = req.body || {};
 
@@ -70,6 +77,9 @@ export default async function handler(req, res) {
     if (!data?.success || !data?.data?.markdown) {
       return res.status(502).json({ success: false, error: 'No content returned from scrape.' });
     }
+
+    // v1.5.212 — record cost for circuit breaker
+    recordCost('firecrawl', COSTS_CENTS.firecrawl_scrape).catch(() => {});
 
     return res.status(200).json({
       success: true,

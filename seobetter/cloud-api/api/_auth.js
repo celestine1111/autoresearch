@@ -189,6 +189,54 @@ export function rejectAuth(res, authResult) {
 }
 
 /**
+ * v1.5.212 — Rate-limit enforcement. Call AFTER verifyRequest.
+ * Returns a response object if limit exceeded (caller should return immediately);
+ * returns null if within limit.
+ *
+ * Usage:
+ *   const auth = verifyRequest(req);
+ *   if (!auth.ok) return rejectAuth(res, auth);
+ *   const rl = await enforceRateLimit(req, res, 'research', auth);
+ *   if (rl) return rl;
+ */
+export async function enforceRateLimit(req, res, endpoint, auth) {
+  const { checkRateLimit } = await import('./_upstash.js');
+  const result = await checkRateLimit(endpoint, auth.site_url, auth.tier);
+  if (result.ok) {
+    if (!result.skipped) {
+      res.setHeader('X-RateLimit-Limit', result.limit);
+      res.setHeader('X-RateLimit-Remaining', result.remaining);
+      res.setHeader('X-RateLimit-Reset', result.reset_in);
+    }
+    return null;  // within limit, continue
+  }
+  res.setHeader('Retry-After', result.reset_in);
+  return res.status(429).json({
+    error: 'rate_limit_exceeded',
+    reason: `${endpoint} limit ${result.limit}/hr for ${auth.tier} tier — retry in ${Math.ceil(result.reset_in / 60)} minutes`,
+    tier: auth.tier,
+    retry_after_seconds: result.reset_in,
+  });
+}
+
+/**
+ * v1.5.212 — Cost circuit breaker. Call before making expensive upstream API calls.
+ * Returns response object if daily cap hit; null if budget OK.
+ */
+export async function enforceCostCap(res, service) {
+  const { checkCostCap } = await import('./_upstash.js');
+  const result = await checkCostCap(service);
+  if (result.ok) return null;
+  return res.status(503).json({
+    error: 'cost_cap_exceeded',
+    reason: `Daily ${service} budget hit ($${(result.cap_cents / 100).toFixed(2)}). Retry tomorrow.`,
+    service,
+    spent_cents: result.spent_cents,
+    cap_cents: result.cap_cents,
+  });
+}
+
+/**
  * v1.5.211 — Input sanitization at the endpoint gate.
  * Rejects oversized / malformed / suspicious inputs before they hit
  * downstream APIs. Returns { ok: true, sanitized } or { ok: false, reason }.

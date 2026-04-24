@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.211
+ * Version: 1.5.212
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.211' );
+define( 'SEOBETTER_VERSION', '1.5.212' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4333,7 +4333,10 @@ final class SEOBetter {
                 // character counters. Edits persist to _seobetter_meta_title /
                 // _seobetter_meta_description and mirror into AIOSEO/Yoast/RankMath/SEOPress
                 // via sync_seo_plugin_meta() fired from save_metabox().
-                $favicon_url = function_exists( 'get_site_icon_url' ) ? get_site_icon_url( 32 ) : '';
+                // v1.5.212 — track whether WordPress Site Icon is explicitly configured
+                // (vs falling back to /favicon.ico which may not exist). Used for warning UI.
+                $site_icon_configured = (bool) ( function_exists( 'has_site_icon' ) && has_site_icon() );
+                $favicon_url = $site_icon_configured ? get_site_icon_url( 32 ) : '';
                 if ( ! $favicon_url ) {
                     $favicon_url = home_url( '/favicon.ico' );
                 }
@@ -4426,6 +4429,15 @@ final class SEOBetter {
                     </div>
 
                     <div style="margin-top:8px;font-size:11px;color:#6b7280">Edits sync to AIOSEO, Yoast, RankMath, and SEOPress when active (title, description, Open Graph, Twitter Card).</div>
+
+                    <?php if ( ! $site_icon_configured ) : ?>
+                    <div style="margin-top:10px;padding:10px 12px;background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;font-size:11px;color:#92400e;line-height:1.5">
+                        <strong>⚠ Site Icon not configured.</strong> Google SERPs, Google Discover, AI engines (Perplexity / ChatGPT / Gemini / Claude), and social shares all display your site's favicon. Without it, your article looks unbranded in every channel that cites it.
+                        <br>
+                        <a href="<?php echo esc_url( admin_url( 'customize.php?autofocus[section]=title_tagline' ) ); ?>" target="_blank" style="color:#92400e;font-weight:600;text-decoration:underline">Configure Site Icon →</a>
+                        (WordPress Customiser → Site Identity → Site Icon. Upload a square 512×512+ image.)
+                    </div>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Focus Keyword -->
@@ -4706,6 +4718,54 @@ final class SEOBetter {
                 $eligible_count = count( array_filter( array_column( $appearances, 'eligible' ) ) );
                 $total_appearances = count( $appearances );
 
+                // v1.5.212 — Per-content-type applicability matrix.
+                // Fixes Ben's UX critique on v1.5.207: showing "Add Product schema" on a
+                // Blog Post is misleading since Product schema doesn't apply to blog posts.
+                //
+                // Three-state status per tile:
+                //   'active'          — schema detected in @graph (green)
+                //   'available'       — applicable to this content_type + adding schema
+                //                       (via block, settings, or content) would emit it (amber)
+                //   'not_applicable'  — this appearance doesn't fit the article's content_type;
+                //                       no action shown (grey, informational)
+                $appearances_universal = [ 'standard_article', 'article_with_image', 'breadcrumbs', 'speakable', 'paywall', 'video', 'local_business' ];
+                $applicability = [
+                    'recipe_card'       => [ 'recipe' ],
+                    'recipe_carousel'   => [ 'recipe' ],
+                    'recipe_gallery'    => [ 'recipe' ],
+                    'product_card'      => [ 'review', 'buying_guide', 'comparison', 'sponsored', 'listicle' ],
+                    'product_carousel'  => [ 'buying_guide', 'listicle', 'comparison' ],
+                    'review_snippet'    => [ 'review', 'buying_guide', 'comparison' ],
+                    'faq'               => [ 'blog_post', 'how_to', 'listicle', 'review', 'comparison', 'buying_guide', 'recipe', 'tech_article', 'white_paper', 'scholarly_article', 'glossary_definition', 'case_study', 'interview', 'pillar_guide', 'news_article', 'opinion', 'faq_page' ],
+                    'howto'             => [ 'how_to', 'tech_article' ],
+                    'event_card'        => [ 'news_article', 'opinion', 'press_release', 'blog_post' ],
+                    'event_carousel'    => [ 'news_article', 'listicle' ],
+                    'video_carousel'    => [ 'news_article', 'listicle' ],
+                    'top_stories'       => [ 'news_article', 'opinion', 'press_release' ],
+                    'course_carousel'   => [ 'tech_article', 'listicle', 'buying_guide' ],
+                    'movie_carousel'    => [ 'review', 'listicle', 'opinion' ],
+                    'vacation_rental'   => [ 'review', 'listicle', 'buying_guide' ],
+                    'job_posting'       => [ 'news_article', 'case_study' ],
+                    'software_app'      => [ 'review', 'buying_guide', 'tech_article', 'comparison' ],
+                    'dataset'           => [ 'white_paper', 'scholarly_article', 'tech_article' ],
+                    'qa_page'           => [ 'interview', 'faq_page', 'case_study' ],
+                    'discussion_forum'  => [],  // forum-post @type — not applicable to articles
+                    'profile_page'      => [ 'interview' ],
+                ];
+
+                // Compute 3-state status per appearance
+                foreach ( $appearances as $key => $app ) {
+                    if ( $app['eligible'] ) {
+                        $appearances[ $key ]['status'] = 'active';
+                    } elseif ( in_array( $key, $appearances_universal, true ) ) {
+                        $appearances[ $key ]['status'] = 'available';
+                    } elseif ( isset( $applicability[ $key ] ) && in_array( $content_type_saved, $applicability[ $key ], true ) ) {
+                        $appearances[ $key ]['status'] = 'available';
+                    } else {
+                        $appearances[ $key ]['status'] = 'not_applicable';
+                    }
+                }
+
                 $discover_checks = [
                     [ 'label' => 'Featured image set',                 'ok' => $featured_image_url !== '' ],
                     [ 'label' => 'Featured image ≥ 1200px wide',       'ok' => $featured_image_width >= 1200 ],
@@ -4717,11 +4777,30 @@ final class SEOBetter {
 
                 $h2_count = preg_match_all( '/<h2[^>]*>/i', $post->post_content );
                 $list_count = preg_match_all( '/<(ul|ol)[^>]*>/i', $post->post_content );
+
+                // v1.5.212 — E-E-A-T detection covers BOTH top-level Organization/Person
+                // schemas (now universal per v1.5.212 rollout) AND legacy nested author/publisher
+                // fields (for articles saved before v1.5.212, and as a belt-and-braces fallback
+                // during the v1.5.212 migration period).
+                $has_eeat = $has_type( [ 'Organization', 'Person' ] );
+                if ( ! $has_eeat ) {
+                    foreach ( $graph as $item ) {
+                        if ( isset( $item['author']['@type'] ) && in_array( $item['author']['@type'], [ 'Person', 'Organization' ], true ) ) {
+                            $has_eeat = true;
+                            break;
+                        }
+                        if ( isset( $item['publisher']['@type'] ) && $item['publisher']['@type'] === 'Organization' ) {
+                            $has_eeat = true;
+                            break;
+                        }
+                    }
+                }
+
                 $aio_checks = [
                     [ 'label' => 'FAQ, HowTo, or Article schema present',    'ok' => $has_type( array_merge( $article_types, [ 'FAQPage','HowTo' ] ) ) ],
                     [ 'label' => 'Structured headings (≥3 H2 sections)',     'ok' => $h2_count >= 3 ],
                     [ 'label' => 'Bulleted / numbered lists present',        'ok' => $list_count >= 1 ],
-                    [ 'label' => 'Organization or Person (E-E-A-T) schema',  'ok' => $has_type( [ 'Organization','Person' ] ) ],
+                    [ 'label' => 'Organization or Person (E-E-A-T) schema',  'ok' => $has_eeat ],
                     [ 'label' => 'Recent dateModified (≤90 days)',            'ok' => $days_since_modified <= 90 ],
                 ];
                 $aio_ready_count = count( array_filter( array_column( $aio_checks, 'ok' ) ) );
@@ -4774,6 +4853,14 @@ final class SEOBetter {
                     </div>
                 <?php else : ?>
 
+                <?php if ( ! $site_icon_configured ) : ?>
+                <!-- v1.5.212 — Site Icon warning at top of Rich Results tab -->
+                <div style="margin-bottom:16px;padding:10px 14px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 6px 6px 0;font-size:12px;color:#92400e;line-height:1.5">
+                    <strong>⚠ Site Icon not set.</strong> The previews below use a generic favicon placeholder. Google SERPs, Discover, AI Overviews, and every LLM citation card below will show a blank/broken favicon until Site Icon is configured.
+                    <a href="<?php echo esc_url( admin_url( 'customize.php?autofocus[section]=title_tagline' ) ); ?>" target="_blank" style="color:#92400e;font-weight:600;text-decoration:underline;margin-left:6px">Configure Site Icon →</a>
+                </div>
+                <?php endif; ?>
+
                 <!-- v1.5.207 — 4-subview Rich Results Visual Catalog -->
                 <div class="sb-rr-subnav" style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">
                     <button type="button" class="sb-rr-pill sb-rr-pill-active" data-rr="search" style="padding:6px 14px;font-size:12px;font-weight:600;border:1px solid #764ba2;background:#764ba2;color:#fff;border-radius:999px;cursor:pointer">🔎 Google Search</button>
@@ -4789,24 +4876,71 @@ final class SEOBetter {
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:20px">
                         <?php foreach ( $appearances as $key => $app ) :
-                            $eligible = (bool) $app['eligible'];
-                            $tile_border = $eligible ? '#22c55e' : '#e5e7eb';
-                            $tile_bg = $eligible ? '#fff' : '#f9fafb';
+                            // v1.5.212 — 3-state badge: Active / Available / Not applicable
+                            $status = $app['status'] ?? 'not_applicable';
+                            switch ( $status ) {
+                                case 'active':
+                                    $tile_border = '#22c55e';
+                                    $tile_bg = '#fff';
+                                    $tile_opacity = '';
+                                    $badge_bg = '#dcfce7';
+                                    $badge_color = '#166534';
+                                    $badge_text = '✓ Active';
+                                    break;
+                                case 'available':
+                                    $tile_border = '#f59e0b';
+                                    $tile_bg = '#fff';
+                                    $tile_opacity = '';
+                                    $badge_bg = '#fef3c7';
+                                    $badge_color = '#92400e';
+                                    $badge_text = '● Available';
+                                    break;
+                                default:  // not_applicable
+                                    $tile_border = '#e5e7eb';
+                                    $tile_bg = '#f9fafb';
+                                    $tile_opacity = 'opacity:0.55;';
+                                    $badge_bg = '#e5e7eb';
+                                    $badge_color = '#6b7280';
+                                    $badge_text = '○ Not applicable';
+                                    break;
+                            }
                         ?>
-                            <div style="border:1px solid <?php echo $tile_border; ?>;border-radius:8px;padding:12px;background:<?php echo $tile_bg; ?>;<?php echo $eligible ? '' : 'opacity:0.7;'; ?>">
+                            <div style="border:1px solid <?php echo $tile_border; ?>;border-radius:8px;padding:12px;background:<?php echo $tile_bg; ?>;<?php echo $tile_opacity; ?>">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px">
                                     <div style="font-size:12px;font-weight:700;color:#111827"><?php echo esc_html( $app['label'] ); ?></div>
-                                    <span style="font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap;<?php echo $eligible ? 'background:#dcfce7;color:#166534' : 'background:#e5e7eb;color:#6b7280'; ?>">
-                                        <?php echo $eligible ? '✓ Eligible' : '○ Add schema'; ?>
+                                    <span style="font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap;background:<?php echo $badge_bg; ?>;color:<?php echo $badge_color; ?>">
+                                        <?php echo $badge_text; ?>
                                     </span>
                                 </div>
                                 <?php $this->render_rr_mock( $key, $rr_ctx ); ?>
                                 <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6;font-size:10px;color:#6b7280;line-height:1.4">
                                     <div><strong>Requires:</strong> <?php echo esc_html( $app['schema'] ); ?></div>
                                     <div style="margin-top:2px"><?php echo esc_html( $app['why'] ); ?></div>
+                                    <?php if ( $status === 'not_applicable' ) : ?>
+                                        <div style="margin-top:4px;font-style:italic;color:#9ca3af">Doesn't apply to this content type (<?php echo esc_html( $content_type_saved ?: 'blog_post' ); ?>).</div>
+                                    <?php elseif ( $status === 'available' ) : ?>
+                                        <div style="margin-top:4px;font-style:italic;color:#92400e">Schema not yet emitted. Applicable to this content type — add via block or content detection.</div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
+                    </div>
+
+                    <?php
+                    // v1.5.212 — 3-state legend + summary counts above the grid
+                    $counts = [
+                        'active' => 0,
+                        'available' => 0,
+                        'not_applicable' => 0,
+                    ];
+                    foreach ( $appearances as $a ) {
+                        $counts[ $a['status'] ?? 'not_applicable' ]++;
+                    }
+                    ?>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#4b5563">
+                        <div><span style="color:#166534;font-weight:700">✓ Active</span> = <?php echo $counts['active']; ?> (schema detected, rich result eligible)</div>
+                        <div><span style="color:#92400e;font-weight:700">● Available</span> = <?php echo $counts['available']; ?> (applicable to this content type, add via block)</div>
+                        <div><span style="color:#6b7280;font-weight:700">○ Not applicable</span> = <?php echo $counts['not_applicable']; ?> (doesn't apply to this content type)</div>
                     </div>
                 </div>
 

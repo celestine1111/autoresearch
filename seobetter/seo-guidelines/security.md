@@ -80,28 +80,44 @@ Implementation: [`_auth.js::isSafeScrapeUrl()`](../cloud-api/api/_auth.js)
 
 Endpoints can opt-in per field. Still incremental rollout as we add fields per-endpoint.
 
-### 1e. Rate limiting — DEFERRED to v1.5.212
+### 1e. Rate limiting — SHIPPED v1.5.212
 
-Current state: in-memory `rateLimitStore = new Map()` per endpoint, resets on Vercel cold start. Attacker can wait ~15 min for cold start to get fresh quota.
+**Implementation:** [`cloud-api/api/_upstash.js::checkRateLimit()`](../cloud-api/api/_upstash.js) + `enforceRateLimit()` helper in `_auth.js`.
 
-v1.5.212 plan: Upstash Redis (free tier 10K commands/day, 256MB) persistent rate limits.
-- Key format: `rl:{site_url}:{endpoint}:{YYYY-MM-DD-HH}`
-- Free tier: 10 req/hr/endpoint
-- Pro tier: 100 req/hr
-- Agency tier: unlimited (soft cap via cost circuit breaker)
-- Survives serverless cold starts
+- Key format: `rl:{siteHash}:{endpoint}:{YYYY-MM-DDTHH}`, 61-min TTL (survives full hour)
+- Pipelined INCR + EXPIRE — single Upstash round-trip per check
+- Fail-open: Upstash outage → endpoint passes through without limiting (preserves UX during downtime; 99.95% SLA means brief windows)
+- Exceeded limit → HTTP 429 with `Retry-After` header + `X-RateLimit-*` diagnostic headers
 
-### 1f. Cost circuit breaker — DEFERRED to v1.5.212
+Tiers per endpoint (requests per hour):
 
-Ships with Upstash Redis since it shares the infrastructure.
+| Endpoint | Free | Pro | Agency |
+|---|---|---|---|
+| `/api/research` | 10 | 100 | Unlimited |
+| `/api/content-brief` | 10 | 100 | Unlimited |
+| `/api/topic-research` | 20 | 200 | Unlimited |
+| `/api/generate` | 5 | 100 | Unlimited |
+| `/api/scrape` | 30 | 300 | Unlimited |
+| `/api/pexels` | 100 | 500 | Unlimited |
+| `/api/validate` | 60 | 60 | 60 |
 
-Daily $ caps per external API:
-- Serper: $20/day
-- Firecrawl: $20/day
-- Pexels: free tier 20K req/month (tracked)
-- OpenRouter: $50/day
+### 1f. Cost circuit breaker — SHIPPED v1.5.212
 
-Hit cap → endpoint returns 503 with `Retry-After: tomorrow`. Vercel spend alerts at 50% / 80% / 95%.
+**Implementation:** [`cloud-api/api/_upstash.js::checkCostCap()` + `recordCost()`](../cloud-api/api/_upstash.js) + `enforceCostCap()` helper in `_auth.js`.
+
+Daily $ caps (expressed in cents — Upstash stores as INCRBYFLOAT):
+
+| Service | Daily cap | Recorded by |
+|---|---|---|
+| Serper | $20 | research.js on successful search |
+| Firecrawl | $20 | scrape.js on successful scrape |
+| OpenRouter | $50 | generate.js on successful generation |
+| Anthropic | $50 | generate.js (when ANTHROPIC_API_KEY used) |
+| Groq | $10 | generate.js (when GROQ_API_KEY used) |
+| Pexels | N/A (tracked at Pexels side via monthly free tier) | — |
+
+- Hit cap → endpoint returns 503 `cost_cap_exceeded` with `Retry-After: tomorrow` info
+- Vercel spend alerts recommended at 50% / 80% / 95% of each cap — configure in Vercel dashboard → Project → Usage → Alerts
 
 ### 1g. Environment variable hygiene
 

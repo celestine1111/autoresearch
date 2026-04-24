@@ -32,7 +32,7 @@
  */
 
 import { bm25Corpus, commonH2Patterns, wordCount } from './_bm25_util.js';
-import { verifyRequest, rejectAuth, applyCorsHeaders } from './_auth.js';
+import { verifyRequest, rejectAuth, applyCorsHeaders, enforceRateLimit } from './_auth.js';
 
 const CACHE = new Map(); // in-memory cache, keyed by sha-style hash
 const CACHE_TTL_MS_FREE = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -46,6 +46,10 @@ export default async function handler(req, res) {
   // v1.5.211 — HMAC request verification
   const auth = verifyRequest(req);
   if (!auth.ok) return rejectAuth(res, auth);
+
+  // v1.5.212 — Rate limit
+  const rlReject = await enforceRateLimit(req, res, 'content-brief', auth);
+  if (rlReject) return rlReject;
 
   const { keyword, country = '', language = 'en', top_n, tier } = req.body || {};
   if (!keyword) return res.status(400).json({ error: 'keyword is required' });
