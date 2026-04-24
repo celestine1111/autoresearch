@@ -91,24 +91,6 @@ export function verifyRequest(req) {
 
   const match = expected.some(exp => safeEquals(sig.replace(/^sha256=/, ''), exp));
   if (!match) {
-    // v1.5.211-debug — temporary logging to diagnose signature mismatch root cause.
-    // Logs payload (non-secret), received vs expected sig (first 16 hex chars only —
-    // enough to tell mismatches apart, not enough to forge), secret fingerprint
-    // (first 4 + last 4 chars of base64). Remove after diagnosis.
-    const sigShort = sig.replace(/^sha256=/, '').substring(0, 16);
-    const expShort = expected.map(e => e.substring(0, 16)).join(',');
-    const secretFp = secrets.map(s => `${s.substring(0, 4)}…${s.substring(s.length - 4)}`).join(',');
-    console.error('SIG_MISMATCH', JSON.stringify({
-      payload: payload.substring(0, 500),  // first 500 chars to avoid log truncation
-      payload_length: payload.length,
-      body_type: typeof req.body,
-      received_sig_first16: sigShort,
-      expected_sig_first16: expShort,
-      secret_fp: secretFp,
-      headers: {
-        time, site, tier, version,
-      },
-    }));
     return { ok: false, reason: 'signature mismatch', status: 401 };
   }
 
