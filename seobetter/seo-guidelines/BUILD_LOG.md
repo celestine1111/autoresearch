@@ -19,7 +19,7 @@
 ## v1.5.210 — Universal citation[] rollout (10 types) + Speakable expansion (how_to / faq_page / interview)
 
 **Date:** 2026-04-24
-**Commit:** `[pending]`
+**Commit:** `1499655`
 
 ### Why this ships
 
