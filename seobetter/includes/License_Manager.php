@@ -255,16 +255,14 @@ class License_Manager {
 
     /**
      * Validate license key against the licensing server.
+     * v1.5.211 — request now HMAC-signed via Cloud_API::signed_post().
      */
     private static function validate_license( string $key ): bool {
-        $response = wp_remote_post( self::get_validation_url(), [
-            'timeout' => 15,
-            'body'    => [
-                'license_key' => $key,
-                'site_url'    => home_url(),
-                'plugin_version' => SEOBETTER_VERSION,
-            ],
-        ] );
+        $response = Cloud_API::signed_post( '/api/validate', [
+            'license_key'    => $key,
+            'site_url'       => home_url(),
+            'plugin_version' => SEOBETTER_VERSION,
+        ], [ 'timeout' => 15 ] );
 
         if ( is_wp_error( $response ) ) {
             // Network error — use cached status with 48-hour grace period

@@ -7,12 +7,124 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-24 (v1.5.210)
+> **Last updated:** 2026-04-24 (v1.5.211)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.211 — Security Layer 1: HMAC request signing + SSRF protection + input sanitization
+
+**Date:** 2026-04-24
+**Commit:** `[pending]`
+
+### Why this ships
+
+Audit of the cloud-api endpoints (research.js, content-brief.js, scrape.js, topic-research.js, generate.js, validate.js) found:
+- `Access-Control-Allow-Origin: *` on every endpoint — anyone can call them
+- No HMAC signing on any request
+- Rate limiting is in-memory `Map()` that resets on Vercel cold starts (attacker waits ~15min for fresh quota)
+- `site_url` parameter is trusted (anyone can claim any site)
+- `/api/scrape` accepts arbitrary URLs — SSRF risk (attacker could probe internal services, cloud metadata endpoints)
+- No input length caps or character sanitization
+
+Cost-bombing risk: $5/hr attacker script could burn Ben's Serper/Firecrawl/Pexels/OpenRouter quotas once Vercel endpoint URLs are discovered via plugin network inspection.
+
+This is Layer 1 of the security plan (per new `security.md` master doc). Layers 2-4 ship progressively per Freemius / WP.org / post-launch phases.
+
+### Added
+
+- **`cloud-api/api/_auth.js` (NEW)** — shared auth + sanitization module used by every endpoint
+  - `verifyRequest(req)` — validates HMAC signature + timestamp replay window + site URL shape + tier
+  - `isValidWpSite(url)` — rejects localhost / IP / cloud metadata / IPv6 literal / bad scheme
+  - `isSafeScrapeUrl(url)` — stricter for scrape: additionally blocks RFC 1918 private IPv4 + IPv6 private + link-local + loopback + cloud metadata endpoints
+  - `sanitizeInput(body)` — validates keyword (≤200 chars, no control chars), country (ISO 2-char), language (BCP-47), domain, content_type, site_url
+  - `applyCorsHeaders(req, res)` — tighter CORS (echoes Origin only when it matches `isValidWpSite`)
+  - `rejectAuth(res, authResult)` — standard 401 response helper
+  - Verify: `grep -n 'verifyRequest\|isSafeScrapeUrl\|sanitizeInput' seobetter/cloud-api/api/_auth.js`
+
+- **Plugin-side HMAC signing** — [`includes/Cloud_API.php::sign_request()`](../includes/Cloud_API.php) + `Cloud_API::signed_post()` wrapper
+  - `sign_request($endpoint, $body)` returns `{ url, body, headers }` with HMAC-SHA256 signature over `time.site.tier.body`
+  - `signed_post($endpoint, $body, $args)` wraps `wp_remote_post()` with automatic signing
+  - `SIGNING_SECRET` class constant (base64-obfuscated) — rotatable per release
+  - Verify: `grep -n 'sign_request\|signed_post\|SIGNING_SECRET' seobetter/includes/Cloud_API.php`
+
+- **`seo-guidelines/security.md` (NEW)** — master security architecture doc covering:
+  - §1 Layer 1 (shipped v1.5.211): HMAC signing + origin validation + SSRF prevention + input sanitization
+  - §2 Layer 2 (Freemius Phase 1): server-side Pro gating + license verification
+  - §3 Layer 3 (WP.org submission): plugin split into free + Pro add-on
+  - §4 Layer 4 (post-launch): fingerprinting + self-hash + runtime license pings
+  - Env var reference, endpoint-to-auth matrix, incident response playbook
+
+### Changed
+
+- **All cloud-api endpoints now require HMAC** — added `verifyRequest()` + `applyCorsHeaders()` + `rejectAuth()` to:
+  - [`research.js`](../cloud-api/api/research.js)
+  - [`content-brief.js`](../cloud-api/api/content-brief.js)
+  - [`topic-research.js`](../cloud-api/api/topic-research.js)
+  - [`scrape.js`](../cloud-api/api/scrape.js) — PLUS SSRF protection via `isSafeScrapeUrl()`
+  - [`generate.js`](../cloud-api/api/generate.js)
+  - [`validate.js`](../cloud-api/api/validate.js)
+  - Wildcard `Access-Control-Allow-Origin: *` replaced on every endpoint
+
+- **Plugin callers now sign their cloud-api requests:**
+  - [`Cloud_API::generate()`](../includes/Cloud_API.php) uses new `signed_post()`
+  - [`License_Manager::validate_license()`](../includes/License_Manager.php) uses `signed_post()`
+  - [`Trend_Researcher::cloud_research()`](../includes/Trend_Researcher.php) uses `signed_post()`
+  - [`Async_Generator.php:341` Firecrawl scrape call](../includes/Async_Generator.php) uses `signed_post()`
+
+### Deferred to v1.5.212 (documented in security.md §1e/§1f)
+
+- Upstash Redis persistent rate limiting (requires external account setup — `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` env vars + Redis account)
+- Cost circuit breaker (daily $ caps per API; ships with Upstash since it shares infrastructure)
+
+Current rate limiting remains in-memory `Map()` — NOT persistent but still present as a first line. v1.5.212 makes it robust.
+
+### Deferred to v1.5.213 (documented in security.md §2-3)
+
+- 5 Schema Blocks (Product, Event, Local Business, Vacation Rental, Job Posting) with server-side Pro gate — need the full ~45 hrs + their own testing cycle
+- Rich Results tab gap fixes (3-state badge, top-level Org/Person, Site Icon check, AI Overview readiness) — bundled with blocks
+- Pexels server-side hybrid — bundled with blocks
+
+### Honest limitations (documented in security.md)
+
+- Signing secret lives in PHP source per WP.org rules — attacker who reads the plugin code extracts it trivially.
+- HMAC is NOT cryptographic security against a determined attacker. What it IS: stops random scripts, creates per-installation rate-limit signal, rotates per release.
+- Real cryptographic auth ships with Freemius Phase 1 (per-site license key + domain pair).
+
+### Required env var on Vercel (Ben to configure before deploy)
+
+```
+SEOBETTER_SIGNING_SECRETS=sb-v1-7284fe4c-b2bf-42c3-a479-da44ed65fbbe
+```
+
+The `SIGNING_SECRET` class constant in `Cloud_API.php` (`c2ItdjEtNzI4NGZlNGMtYjJiZi00MmMzLWE0NzktZGE0NGVkNjVmYmJl`) is base64 of the plaintext secret above. Plugin base64-decodes at sign time; server uses the plaintext value direct.
+
+Rotation procedure: bump the plugin constant to a new secret, add the NEW secret to the env var (keep OLD for 7 days for graceful rotation), release plugin, after 7 days remove old secret from env var → cracked/old copies stop working.
+
+### Testing plan (Ben)
+
+1. Set `SEOBETTER_SIGNING_SECRETS=sb-v1-7284fe4c-b2bf-42c3-a479-da44ed65fbbe` on Vercel production + redeploy
+2. Install v1.5.211 plugin on a test site
+3. Generate an article — confirm research + generation + save-draft all work (they should — signing is transparent)
+4. Try hitting `https://seobetter.vercel.app/api/research` directly with curl (no auth headers) — should return 401 "unauthorized, missing auth headers"
+5. Check Vercel logs — look for `X-Seobetter-Auth-Reason` rejection reasons for any failed requests
+6. Inspect network tab in plugin UI — all cloud-api requests should have `X-Seobetter-Sig`, `X-Seobetter-Time`, `X-Seobetter-Site`, `X-Seobetter-Tier`, `X-Seobetter-Version` headers
+
+### Verified by user
+
+- **UNTESTED** — Ben to configure `SEOBETTER_SIGNING_SECRETS` env var on Vercel + redeploy + run test plan above.
+
+### Cross-doc sync (4-doc hook)
+
+All 4 required docs:
+- BUILD_LOG (this entry) ✅
+- `security.md` (NEW — master reference) ✅
+- `pro-plan-pricing.md` §12 Decision Log entry added ✅
+- No code files other than Cloud_API + callers touched — no plugin_functionality_wordpress / plugin_UX changes needed
 
 ---
 

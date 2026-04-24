@@ -8,20 +8,29 @@
  * instead of parsing messy raw HTML.
  *
  * Requires FIRECRAWL_API_KEY env var on Vercel.
+ *
+ * v1.5.211: HMAC-signed requests required. SSRF protection on URL input.
  */
 
+import { verifyRequest, rejectAuth, applyCorsHeaders, isSafeScrapeUrl } from './_auth.js';
+
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  applyCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
 
+  // v1.5.211 — HMAC request verification
+  const auth = verifyRequest(req);
+  if (!auth.ok) return rejectAuth(res, auth);
+
   const { url } = req.body || {};
 
-  if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-    return res.status(400).json({ success: false, error: 'Valid URL required.' });
+  // v1.5.211 — SSRF protection. Rejects: non-http(s), private IP ranges,
+  // cloud metadata endpoints (169.254.169.254, metadata.google.internal, etc.),
+  // localhost, IPv6 literals, URLs >2048 chars.
+  if (!url || typeof url !== 'string' || !isSafeScrapeUrl(url)) {
+    return res.status(400).json({ success: false, error: 'Invalid or unsafe URL.' });
   }
 
   const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY;

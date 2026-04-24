@@ -23,6 +23,27 @@ class Cloud_API {
     private const DEFAULT_CLOUD_URL = 'https://seobetter.vercel.app';
 
     /**
+     * v1.5.211 — HMAC signing secret for cloud-api requests.
+     *
+     * This is NOT cryptographic security against a determined attacker — PHP
+     * source is visible per WP.org rules. What it IS:
+     *   - Stops random scripts that discover the Vercel endpoints from burning
+     *     Ben's Serper/Firecrawl/Pexels/OpenRouter quotas
+     *   - Creates per-installation signal so Vercel can rate-limit per site_url
+     *   - Rotates per release (server accepts multiple active secrets during
+     *     a 7-day rotation window) so old installs keep working briefly after
+     *     the secret changes, but long-lived cracked copies stop working
+     *
+     * When Freemius ships (Phase 1 per pro-plan-pricing.md §7), the real
+     * cryptographic signing secret becomes the per-site license key + domain
+     * pair. This constant is the pre-Freemius stop-gap.
+     *
+     * Format: base64(random 32 bytes). Vercel env var `SEOBETTER_SIGNING_SECRETS`
+     * is a comma-separated list of currently-accepted plaintext secrets.
+     */
+    private const SIGNING_SECRET = 'c2ItdjEtNzI4NGZlNGMtYjJiZi00MmMzLWE0NzktZGE0NGVkNjVmYmJl';
+
+    /**
      * Get the Cloud API URL (configurable via settings or constant).
      */
     public static function get_cloud_url(): string {
@@ -38,6 +59,59 @@ class Cloud_API {
         }
 
         return self::DEFAULT_CLOUD_URL;
+    }
+
+    /**
+     * v1.5.211 — Sign a cloud-api request body with HMAC-SHA256.
+     * Used by every wp_remote_post() call to a seobetter.vercel.app endpoint
+     * so the Vercel server can verify the request came from a legitimate
+     * plugin install (not a random script).
+     *
+     * @param array $body Request body (will be JSON-encoded before signing).
+     * @return array{url: string, body: string, headers: array} Pass to wp_remote_post().
+     */
+    public static function sign_request( string $endpoint, array $body ): array {
+        $time    = (string) time();
+        $site    = home_url();
+        $tier    = License_Manager::is_pro() ? 'pro' : 'free';
+        $version = defined( 'SEOBETTER_VERSION' ) ? SEOBETTER_VERSION : 'dev';
+
+        $body_json = wp_json_encode( $body );
+        $payload   = "{$time}.{$site}.{$tier}.{$body_json}";
+        $secret    = base64_decode( self::SIGNING_SECRET );
+        $sig       = hash_hmac( 'sha256', $payload, $secret );
+
+        return [
+            'url'     => self::get_cloud_url() . $endpoint,
+            'body'    => $body_json,
+            'headers' => [
+                'Content-Type'         => 'application/json',
+                'X-Seobetter-Sig'      => 'sha256=' . $sig,
+                'X-Seobetter-Time'     => $time,
+                'X-Seobetter-Site'     => $site,
+                'X-Seobetter-Tier'     => $tier,
+                'X-Seobetter-Version'  => $version,
+            ],
+        ];
+    }
+
+    /**
+     * v1.5.211 — Convenience wrapper: sign + wp_remote_post in one call.
+     * Returns the same shape as wp_remote_post() so callers can continue using
+     * wp_remote_retrieve_* helpers.
+     *
+     * @param string $endpoint Path (e.g. '/api/research', '/api/generate').
+     * @param array  $body     Request body array (auto-JSON-encoded).
+     * @param array  $args     Extra wp_remote_post args (timeout, etc.).
+     * @return array|\WP_Error wp_remote_post() result.
+     */
+    public static function signed_post( string $endpoint, array $body, array $args = [] ) {
+        $signed = self::sign_request( $endpoint, $body );
+        return wp_remote_post( $signed['url'], array_merge( [
+            'timeout' => 60,
+            'headers' => $signed['headers'],
+            'body'    => $signed['body'],
+        ], $args ) );
     }
 
     /**
@@ -61,24 +135,18 @@ class Cloud_API {
             );
         }
 
-        // Use SEOBetter Cloud
+        // Use SEOBetter Cloud — v1.5.211: signed request
         $license = get_option( 'seobetter_license', [] );
 
-        $response = wp_remote_post( self::get_cloud_url() . '/api/generate', [
-            'timeout' => 120,
-            'headers' => [
-                'Content-Type' => 'application/json',
-            ],
-            'body' => wp_json_encode( [
-                'prompt'        => $prompt,
-                'system_prompt' => $system_prompt,
-                'max_tokens'    => $options['max_tokens'] ?? 4096,
-                'temperature'   => $options['temperature'] ?? 0.7,
-                'site_url'      => home_url(),
-                'license_key'   => $license['key'] ?? '',
-                'plugin_version' => SEOBETTER_VERSION,
-            ] ),
-        ] );
+        $response = self::signed_post( '/api/generate', [
+            'prompt'         => $prompt,
+            'system_prompt'  => $system_prompt,
+            'max_tokens'     => $options['max_tokens'] ?? 4096,
+            'temperature'    => $options['temperature'] ?? 0.7,
+            'site_url'       => home_url(),
+            'license_key'    => $license['key'] ?? '',
+            'plugin_version' => SEOBETTER_VERSION,
+        ], [ 'timeout' => 120 ] );
 
         if ( is_wp_error( $response ) ) {
             return [ 'success' => false, 'error' => 'Cloud connection failed: ' . $response->get_error_message() ];

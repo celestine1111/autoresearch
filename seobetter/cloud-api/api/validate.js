@@ -6,9 +6,15 @@
  * Validates Pro license keys for the SEOBetter WordPress plugin.
  * For now: checks against SEOBETTER_PRO_KEYS env var.
  * Later: integrate with payment provider (Stripe, LemonSqueezy, etc.)
+ *
+ * v1.5.211: HMAC-signed requests required.
  */
 
+import { verifyRequest, rejectAuth, applyCorsHeaders } from './_auth.js';
+
 export default async function handler(req, res) {
+  applyCorsHeaders(req, res);
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -16,6 +22,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
+
+  // v1.5.211 — HMAC request verification
+  const auth = verifyRequest(req);
+  if (!auth.ok) return rejectAuth(res, auth);
 
   const { license_key = '', site_url = '', plugin_version = '' } = req.body || {};
 

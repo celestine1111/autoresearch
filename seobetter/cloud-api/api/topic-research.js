@@ -14,16 +14,20 @@
  * No API keys required. No AI hallucination.
  */
 
+import { verifyRequest, rejectAuth, applyCorsHeaders } from './_auth.js';
+
 const rateLimitStore = new Map();
 const RATE_LIMIT = 20;
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  applyCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
+
+  // v1.5.211 — HMAC request verification
+  const auth = verifyRequest(req);
+  if (!auth.ok) return rejectAuth(res, auth);
 
   const { niche, site_url, country, language } = req.body || {};
   if (!niche) return res.status(400).json({ error: 'niche is required.' });

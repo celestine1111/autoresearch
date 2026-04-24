@@ -336,13 +336,10 @@ class Async_Generator {
                             $raw = $recipe_result['raw_content'] ?? '';
 
                             // v1.5.133 — Try Firecrawl scrape for clean markdown (much better than Tavily raw HTML)
+                            // v1.5.211 — HMAC-signed via Cloud_API::signed_post().
                             $firecrawl_md = null;
                             if ( ! empty( $page_url ) && ! empty( $cloud_url ) ) {
-                                $scrape_resp = wp_remote_post( $cloud_url . '/api/scrape', [
-                                    'timeout' => 15,
-                                    'headers' => [ 'Content-Type' => 'application/json' ],
-                                    'body'    => wp_json_encode( [ 'url' => $page_url ] ),
-                                ] );
+                                $scrape_resp = Cloud_API::signed_post( '/api/scrape', [ 'url' => $page_url ], [ 'timeout' => 15 ] );
                                 if ( ! is_wp_error( $scrape_resp ) ) {
                                     $scrape_body = json_decode( wp_remote_retrieve_body( $scrape_resp ), true );
                                     if ( ! empty( $scrape_body['success'] ) && ! empty( $scrape_body['markdown'] ) ) {

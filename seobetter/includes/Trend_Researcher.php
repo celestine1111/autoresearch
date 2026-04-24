@@ -356,11 +356,9 @@ class Trend_Researcher {
         // places fields — which silently disabled the pre-gen switch and
         // Local Business Mode, letting the default listicle branch run and
         // hallucinate 6 fake businesses per article.
-        $response = wp_remote_post( $cloud_url . '/api/research', [
-            'timeout' => 60,
-            'headers' => [ 'Content-Type' => 'application/json' ],
-            'body'    => wp_json_encode( $body ),
-        ] );
+        // v1.5.211 — HMAC-signed via Cloud_API::signed_post(). $cloud_url is
+        // resolved inside signed_post() from Cloud_API::get_cloud_url().
+        $response = Cloud_API::signed_post( '/api/research', $body, [ 'timeout' => 60 ] );
 
         if ( is_wp_error( $response ) ) {
             return [ 'success' => false, 'error' => $response->get_error_message(), 'source' => 'cloud' ];

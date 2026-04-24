@@ -12,6 +12,8 @@
  * Rate limiting: 5 requests/month per site_url (free), unlimited for Pro license keys
  */
 
+import { verifyRequest, rejectAuth, applyCorsHeaders } from './_auth.js';
+
 // In-memory rate limiting store (resets on cold start — fine for testing)
 // For production, replace with Vercel KV or Upstash Redis
 const usageStore = new Map();
@@ -19,6 +21,8 @@ const usageStore = new Map();
 const FREE_MONTHLY_LIMIT = 50;
 
 export default async function handler(req, res) {
+  applyCorsHeaders(req, res);
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -27,6 +31,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
+
+  // v1.5.211 — HMAC request verification
+  const auth = verifyRequest(req);
+  if (!auth.ok) return rejectAuth(res, auth);
 
   const {
     prompt,
