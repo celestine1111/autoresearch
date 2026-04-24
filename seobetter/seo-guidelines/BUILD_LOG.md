@@ -7,12 +7,104 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-24 (v1.5.209)
+> **Last updated:** 2026-04-24 (v1.5.210)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.210 — Universal citation[] rollout (10 types) + Speakable expansion (how_to / faq_page / interview)
+
+**Date:** 2026-04-24
+**Commit:** `[pending]`
+
+### Why this ships
+
+Two parked gaps from v1.5.209 that Ben prioritised for immediate follow-up:
+
+1. **Universal `citation[]` rollout** — v1.5.209 BUILD_LOG flagged this as "the biggest LLM-citation lever still unused". Prior to v1.5.210, `citation[]` only fired for 4 content types (Opinion, Press Release, Personal Essay, Sponsored) despite Princeton GEO research (+30% visibility with declared citations) + 2026 hybrid BM25+vector retrieval making citation[] a first-class inclusion signal for Perplexity / ChatGPT / Gemini / Claude. 10 more types now get it.
+
+2. **Speakable for how_to / faq_page / interview** — voice-assistant read-aloud. FAQ is the most voice-native content type (Q&A matches the conversational pattern); how-to step-by-step works well for mobile Google Assistant; interview Q&A transcripts work for audio. Sponsored deliberately remains excluded per Google policy.
+
+### Added — Schema_Generator constants
+
+- **`CITATION_TYPES` constant** (NEW) — [includes/Schema_Generator.php](../includes/Schema_Generator.php) around line 240
+  - 10 content types: `how_to`, `review`, `comparison`, `buying_guide`, `tech_article`, `white_paper`, `scholarly_article`, `case_study`, `interview`, `pillar_guide`
+  - Explicitly excludes: recipe (has "Inspired by [Source]" per v1.5.124), glossary (single-term), live_blog (inline per-update citations), faq_page (FAQPage @type doesn't support citation at schema level), news_article base (only PR/Opinion subtypes get citation[])
+  - `blog_post` + `listicle` intentionally NOT in v1.5.210 scope — straightforward follow-up if desired
+  - Verify: `grep -n 'private const CITATION_TYPES' seobetter/includes/Schema_Generator.php`
+
+- **`SPEAKABLE_TYPES` expanded** — [includes/Schema_Generator.php](../includes/Schema_Generator.php) line 222
+  - Added: `how_to`, `faq_page`, `interview`
+  - Full list now: `[blog_post, news_article, opinion, pillar_guide, how_to, faq_page, interview]`
+  - Verify: `grep -n "private const SPEAKABLE_TYPES" seobetter/includes/Schema_Generator.php`
+
+### Added — Schema_Generator injection blocks
+
+- **Universal `citation[]` block in `build_article()`** — around line 648
+  - Fires AFTER all type-specific override branches so existing Opinion/PR/Personal Essay/Sponsored `citation[]` injection still wins
+  - Guards: `!isset( $schema['citation'] )` — existing overrides take precedence
+  - Fresh `get_post_meta()` call (not reusing $content_type_check) since this runs for TechArticle / ScholarlyArticle / LiveBlogPosting paths where the earlier Speakable branch didn't fire and left $content_type_check unset
+  - Uses existing `extract_outbound_urls()` — same URL-extraction + author-social-profile-exclusion rules as v1.5.192/197
+  - Verify: `grep -n 'ct_for_citation\|CITATION_TYPES' seobetter/includes/Schema_Generator.php`
+
+- **`citation[]` in `build_review()`** — around line 1348
+  - Review goes through its own builder (build_review), not build_article, so the universal rollout doesn't reach it automatically
+  - Mirror block added at end of `build_review()` with identical logic
+  - Verify: `grep -n 'citation.*for review\|// v1.5.210 — citation' seobetter/includes/Schema_Generator.php`
+
+- **`speakable` in `generate_faq_schema()`** — around line 1495
+  - FAQPage primary doesn't flow through `build_article()`, so the generic SPEAKABLE_TYPES check there can't inject Speakable for faq_page
+  - New block adds Speakable with custom Q&A-optimised selector `[h1, h2 + p, h3 + p]` (captures both H2-based and H3-based FAQ formats)
+  - Only fires when `content_type === 'faq_page'` — skipped when FAQPage is secondary inside a blog post / how-to / etc.
+  - Verify: `grep -n 'faq_schema.*speakable\|h3 + p' seobetter/includes/Schema_Generator.php`
+
+- **Speakable for how_to + interview** — no new code needed. Both content types map to `Article` @type per CONTENT_TYPE_MAP, which is already in the existing speakable check's `$type` whitelist. Adding to SPEAKABLE_TYPES is sufficient.
+
+### Changed — cross-doc sync
+
+All 4 docs updated in this commit per /seobetter skill step 4b:
+
+- **SEO-GEO-AI-GUIDELINES.md §10.3** — full 21-type matrix updated with v1.5.210 enrichments: citation[] marked on 10 types, Speakable marked on how_to / faq_page / interview, faq_page custom cssSelector noted, interview dual enrichment noted
+- **SEO-GEO-AI-GUIDELINES.md §10 "Gaps" list** — marked citation[] rollout + Speakable expansion as SHIPPED v1.5.210; remaining parked items (scholarly abstract/keywords/funder, interview ProfilePage+Person sameAs, live_blog liveBlogUpdate[], image licensing, optional blog_post/listicle citation[] rollout) kept for future release
+- **structured-data.md §4** — new subsections: "Universal `citation[]` rollout (v1.5.210)" with full type list + exclusion rationale; "Speakable expansion (v1.5.210)" explaining the 3 new types + faq_page custom selector rationale; FAQPage + HowTo sections updated to cross-reference v1.5.210
+- **article_design.md §11** — schema stacking matrix expanded to include all 21 content types (previously missing how_to / review / comparison / buying_guide entries) with v1.5.210 enrichment markers
+
+### Layer 6 compatibility — verified
+
+Same analysis as v1.5.209:
+- `inLanguage` (v1.5.206a) continues to flow through every top-level @type per `INLANGUAGE_ACCEPTED_TYPES`
+- `citation[]` URLs are language-agnostic
+- Speakable cssSelector strings are CSS — language-agnostic
+- No new language-specific or country-specific code paths
+- Safe for all 29 languages × 90+ countries without modification
+
+### User testing plan
+
+Ben to verify post-ship:
+
+1. Generate a how-to article → confirm schema has `speakable` + `citation[]` (if body has outbound links)
+2. Generate a FAQ article → confirm schema has `speakable.cssSelector: [h1, h2 + p, h3 + p]`
+3. Generate an interview → confirm both `citation[]` and `speakable` present
+4. Generate one of each: tech_article / white_paper / scholarly / case_study / comparison / buying_guide / review / pillar_guide → confirm `citation[]` present in each
+5. Verify existing Opinion / Press Release / Personal Essay / Sponsored articles still emit their specific override `citation[]` (override wins over universal)
+6. Google Rich Results Test across the above — confirm no validator warnings on new fields
+7. Schema.org Validator — confirm `speakable` and `citation[]` structure valid
+
+### Verified by user
+
+- **UNTESTED** — Ben to verify per test plan above.
+
+### Remaining parked gaps (still logged for future)
+
+- Scholarly `abstract` / `keywords[]` / `funder` fields
+- Interview → ProfilePage + Person with `sameAs`
+- Live_blog `liveBlogUpdate[]` timestamped items
+- Image licensing (`ImageObject.creator` / `copyrightNotice` / `license`)
+- Optional citation[] rollout to blog_post + listicle (straightforward — same logic, not in v1.5.210 scope)
 
 ---
 

@@ -213,8 +213,36 @@ class Schema_Generator {
      * Each content type gets its primary schema + relevant secondary schemas.
      * All schemas output without individual @context (caller wraps in @graph).
      */
-    // Content types that get Speakable (voice assistants)
-    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide' ];
+    // Content types that get Speakable (voice assistants).
+    // v1.5.210 — added how_to, faq_page, interview per §10.3 enrichment rollout.
+    //   - how_to: voice assistants can read step-by-step sections (mobile + Google Assistant still supports HowTo voice even though the desktop rich result is deprecated)
+    //   - faq_page: Q&A format is voice-native — the highest-value voice-read type
+    //   - interview: Q&A transcript lends itself to audio consumption
+    // Sponsored deliberately excluded (Google policy — paid content shouldn't be voice-read without audible disclosure).
+    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview' ];
+
+    // Content types that get universal `citation[]` injection (v1.5.210).
+    // Implements the "biggest LLM-citation lever" rollout flagged in v1.5.209
+    // parked gaps. Pattern established in v1.5.192 (Opinion) + v1.5.195 (PR) +
+    // v1.5.201 (Personal Essay) + v1.5.209 (Sponsored) — every article type
+    // that references external sources benefits from a declared citation
+    // graph because hybrid BM25+vector retrievers (Perplexity / ChatGPT-with-
+    // search / Gemini / Claude) weight pages with citation[] higher.
+    // Excluded: recipe (recipe card format has its own source attribution via
+    // "Inspired by [Source]" suffix), glossary (single-term definition),
+    // live_blog (timestamped updates — citations inline per update),
+    // faq_page (FAQPage schema doesn't support citation at the @type level),
+    // news_article base (only press_release/opinion NewsArticle subtypes get citation[]).
+    // Exact 10 types from the v1.5.209 parked-gaps list. Blog_post + listicle
+    // intentionally NOT added — not in Ben's sign-off scope for this release,
+    // can be added in a follow-up if desired (they'd be straightforward since
+    // both go through build_article and would pick up the same logic).
+    private const CITATION_TYPES = [
+        'how_to', 'review', 'comparison', 'buying_guide',
+        'tech_article', 'white_paper', 'scholarly_article',
+        'case_study', 'interview', 'pillar_guide',
+    ];
+
     // Content types that get FAQPage secondary (when FAQ section detected)
     private const FAQ_TYPES = [
         'blog_post', 'how_to', 'listicle', 'review', 'comparison', 'buying_guide',
@@ -613,6 +641,34 @@ class Schema_Generator {
                         $sponsor['url'] = esc_url_raw( $sponsor_url );
                     }
                     $schema['sponsor'] = $sponsor;
+                }
+            }
+        }
+
+        // v1.5.210 — Universal citation[] rollout for 10 content types.
+        // Fires AFTER all type-specific override branches above so existing
+        // Opinion / Press Release / Personal Essay / Sponsored citation[]
+        // injection still wins. Only adds citation[] when:
+        //   (a) content_type is in CITATION_TYPES (how_to / review / comparison /
+        //       buying_guide / tech_article / white_paper / scholarly_article /
+        //       case_study / interview / pillar_guide),
+        //   (b) $schema['citation'] hasn't already been set by an override,
+        //   (c) extract_outbound_urls() returns at least one URL.
+        // Implements the "biggest LLM-citation lever still unused" parked gap
+        // logged in v1.5.209 BUILD_LOG. Pattern matches v1.5.192 Opinion:
+        //   [ { "@type": "CreativeWork", "url": "https://..." }, ... ]
+        // Fresh get_post_meta() call (not reusing $content_type_check from
+        // earlier branches) because this block runs for all @types including
+        // TechArticle / ScholarlyArticle / LiveBlogPosting where the earlier
+        // speakable branch didn't fire.
+        if ( ! isset( $schema['citation'] ) ) {
+            $ct_for_citation = (string) ( get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: '' );
+            if ( in_array( $ct_for_citation, self::CITATION_TYPES, true ) ) {
+                $urls = $this->extract_outbound_urls( $post->post_content );
+                if ( ! empty( $urls ) ) {
+                    $schema['citation'] = array_map( function ( $u ) {
+                        return [ '@type' => 'CreativeWork', 'url' => $u ];
+                    }, $urls );
                 }
             }
         }
@@ -1289,6 +1345,20 @@ class Schema_Generator {
             ];
         }
 
+        // v1.5.210 — citation[] for review. Review goes through its own
+        // builder (build_review), not build_article, so the universal
+        // CITATION_TYPES rollout block at the end of build_article doesn't
+        // cover it. Mirror the same logic here. Review's content_type IS
+        // in CITATION_TYPES so the check is just "do we have outbound URLs".
+        if ( ! isset( $schema['citation'] ) ) {
+            $urls = $this->extract_outbound_urls( $post->post_content );
+            if ( ! empty( $urls ) ) {
+                $schema['citation'] = array_map( function ( $u ) {
+                    return [ '@type' => 'CreativeWork', 'url' => $u ];
+                }, $urls );
+            }
+        }
+
         return $schema;
     }
 
@@ -1426,11 +1496,32 @@ class Schema_Generator {
             return null;
         }
 
-        return [
+        $faq_schema = [
             '@context'   => 'https://schema.org',
             '@type'      => 'FAQPage',
             'mainEntity' => $faq_items,
         ];
+
+        // v1.5.210 — Speakable for faq_page primary (voice-native format).
+        // FAQPage doesn't flow through build_article, so the generic
+        // SPEAKABLE_TYPES check in build_article can't reach it. Inject the
+        // speakable cssSelector directly here. Targets H3 + answer paragraph
+        // (typical FAQ format uses H3 for questions) plus H2 + paragraph
+        // (fallback for H2-based FAQ format). Voice assistants read each
+        // question followed by its direct answer — the highest-value
+        // voice-read type.
+        // Only inject when faq_page is the PRIMARY content type. When FAQPage
+        // is secondary (FAQ section inside a blog post / how-to / etc.), the
+        // primary schema handles speakable per its own type's selector.
+        $content_type_check = (string) ( get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: '' );
+        if ( $content_type_check === 'faq_page' ) {
+            $faq_schema['speakable'] = [
+                '@type'       => 'SpeakableSpecification',
+                'cssSelector' => [ 'h1', 'h2 + p', 'h3 + p' ],
+            ];
+        }
+
+        return $faq_schema;
     }
 
     /**

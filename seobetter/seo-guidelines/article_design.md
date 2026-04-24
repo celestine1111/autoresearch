@@ -712,18 +712,22 @@ Top-level schemas whose `@type` accepts `inLanguage` per Schema.org (CreativeWor
 | `review` | `Review` (with `itemReviewed` + `reviewRating`) | FAQPage | Pros/cons boxes (green/red) |
 | `comparison` | `Article` + `ItemList` | FAQPage | Mandatory comparison table |
 | `buying_guide` | `Article` + `Product` + `ItemList` | FAQPage | Product recommendations, pros/cons |
-| `pillar_guide` | `Article` + `ItemList` (TOC) | FAQPage | Deep multi-section structure |
-| `case_study` | `Article` | FAQPage | Research/results structure |
-| `interview` | `Article` | FAQPage | Blockquotes for quoted responses |
-| `faq_page` | `FAQPage` (primary) | — | All content as Q&A pairs |
+| `pillar_guide` | `Article` + `ItemList` (TOC) | FAQPage | Deep multi-section structure. v1.5.210: `citation[]` |
+| `case_study` | `Article` | FAQPage, Organization (enriched) | Research/results structure. v1.5.210: `citation[]` |
+| `interview` | `Article` | FAQPage, Organization (enriched) | Blockquotes for quoted responses. **v1.5.210: `citation[]` + Speakable** |
+| `faq_page` | `FAQPage` (primary) | — | All content as Q&A pairs. **v1.5.210: Speakable `cssSelector: [h1, h2 + p, h3 + p]`** (voice-native Q&A) |
 | `recipe` | `Recipe` (with ingredients, instructions, times, yield) | — | Ingredients box (amber), numbered steps |
-| `tech_article` | `TechArticle` | FAQPage | Code blocks, technical diagrams |
-| `white_paper` | `Article` | — | Formal tone, no drop cap |
-| `scholarly_article` | `ScholarlyArticle` | — | Citations, formal structure |
+| `tech_article` | `TechArticle` | FAQPage | Code blocks, technical diagrams. v1.5.210: `citation[]` |
+| `white_paper` | `Article` | — | Formal tone, no drop cap. v1.5.210: `citation[]` |
+| `scholarly_article` | `ScholarlyArticle` | — | Citations, formal structure. v1.5.210: `citation[]` |
 | `live_blog` | `LiveBlogPosting` | — | Reverse-chronological updates |
 | `press_release` | `NewsArticle` | — | Dateline, formal announcement |
 | `personal_essay` | `BlogPosting` | — | First person, longer paragraphs |
 | `glossary_definition` | `DefinedTerm` + `DefinedTermSet` | — | Short, definition-first |
+| `how_to` | `Article` (HowTo deprecated Sep 2023) | FAQPage | Step-by-step format. **v1.5.210: `citation[]` + Speakable** |
+| `review` | `Review` (smart `itemReviewed` @type) | FAQPage | Pros/cons box, rating badge. v1.5.210: `citation[]` |
+| `comparison` | `Article` | FAQPage | Side-by-side tables, VS styling. v1.5.210: `citation[]` |
+| `buying_guide` | `Article` + `ItemList` | FAQPage | Product picks, pick pills. v1.5.210: `citation[]` |
 | `sponsored` | `BlogPosting` (v1.5.209: `articleSection: "Sponsored"` + `backstory` + `citation[]` + optional `sponsor` Organization — AdvertiserContentArticle rejected by Google) | Organization | Disclosure block, disclosure bar, sponsor area |
 
 ### Design adjustments by type (v1.5.138 — visual differentiation)

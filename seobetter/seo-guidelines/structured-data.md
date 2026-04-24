@@ -276,11 +276,13 @@ When `citation[]` is populated (Opinion, Press Release, Personal Essay, and any 
 ### FAQPage
 **Required:** `mainEntity` (array of Question/Answer)
 **Note:** Rich results only for government/health authority sites. Schema still valid for semantics.
+**v1.5.210 enrichment:** when `content_type === 'faq_page'` (FAQPage is the primary @type, not a secondary section), `Schema_Generator::generate_faq_schema()` now injects `speakable.cssSelector: [h1, h2 + p, h3 + p]` so voice assistants read the Q&A pairs. FAQ is the most voice-native content type — the highest-value voice-read format. Not injected when FAQPage is secondary (blog post / how-to / etc.) since the primary schema's own Speakable handles those.
 
 ### HowTo — DEPRECATED
 **Status:** Google removed HowTo rich results September 14, 2023.
 **Action:** Use Article/BlogPosting schema instead. HowTo markup has zero Google benefit.
 **Keeping for:** Non-Google search engines (Bing, Yandex) may still use it.
+**v1.5.210 enrichment:** `how_to` content type (which maps to Article @type per `CONTENT_TYPE_MAP`) now gets `speakable.cssSelector: [h1, .key-takeaways, h2 + p]` via the default SPEAKABLE_TYPES path — voice assistants read the step-by-step sections. Google Assistant still supports HowTo voice read-aloud on mobile despite the desktop rich result deprecation.
 
 ### LocalBusiness
 **Required:** `name`, `address` (PostalAddress)
@@ -299,6 +301,36 @@ When `citation[]` is populated (Opinion, Press Release, Personal Essay, and any 
 ### BreadcrumbList (All types)
 **Required:** `itemListElement` (array of ListItem)
 - Each ListItem: `position`, `name`, `item` (URL)
+
+### Universal `citation[]` rollout (v1.5.210)
+
+Prior to v1.5.210, `citation[]` was injected only on Opinion (v1.5.192), Press Release (v1.5.195), Personal Essay (v1.5.201), and Sponsored (v1.5.209). v1.5.210 rolls it out to 10 more content types via the `CITATION_TYPES` constant in `Schema_Generator`:
+
+**Types now getting `citation[]`:** how_to, review, comparison, buying_guide, tech_article, white_paper, scholarly_article, case_study, interview, pillar_guide.
+
+**Excluded (and why):**
+- `recipe` — Recipe card format has its own source attribution via "Inspired by [Source]" suffix per v1.5.124
+- `glossary_definition` — single-term definition, no source graph
+- `live_blog` — timestamped updates, citations live inline per update not at the top-level schema
+- `faq_page` — FAQPage @type doesn't support citation at the schema level per Schema.org
+- `news_article` — base news type; only `press_release` and `opinion` subtypes get citation[]
+- `blog_post`, `listicle` — not in v1.5.210 sign-off scope; straightforward to add in a follow-up
+
+**Behavior:** fires AFTER all type-specific override branches in `build_article()` so Opinion / PR / Personal Essay / Sponsored citation[] injection still wins. Only adds when `$schema['citation']` is not already set AND `extract_outbound_urls()` returns at least one URL. Uses the same URL-extraction + author-social-profile-exclusion rules as v1.5.192/197.
+
+**For `review` specifically:** review goes through `build_review()` not `build_article()`, so a mirror citation[] block was added to the end of `build_review()` with identical logic.
+
+**LLM impact:** Hybrid BM25+vector retrievers (Perplexity / ChatGPT-with-search / Gemini / Claude) weight pages with declared `citation[]` higher. Per Princeton GEO (arxiv.org/pdf/2311.09735), citations are a +30% visibility lever. Rollout brings 10 content types from 0 citation[] → full citation[] graph.
+
+### Speakable expansion (v1.5.210)
+
+Prior to v1.5.210, `SPEAKABLE_TYPES` was `[blog_post, news_article, opinion, pillar_guide]`. v1.5.210 adds 3 more content types:
+
+- **how_to** — voice assistants can read step-by-step sections. Google Assistant still supports HowTo voice read-aloud on mobile despite the desktop rich result deprecation. Uses the default selector `[h1, .key-takeaways, h2 + p]`.
+- **faq_page** — Q&A format is voice-native, highest-value voice-read type. Custom selector `[h1, h2 + p, h3 + p]` captures both H2-based and H3-based FAQ formats. Injected directly in `generate_faq_schema()` because FAQPage primary doesn't flow through `build_article()`.
+- **interview** — Q&A transcript lends itself to audio consumption. Uses the default selector.
+
+Sponsored deliberately remains excluded per Google policy — voice assistants should not read paid placements without audible disclosure.
 
 ---
 

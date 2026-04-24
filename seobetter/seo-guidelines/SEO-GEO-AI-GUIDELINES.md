@@ -693,31 +693,31 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 - Content type selection determines which schemas are generated
 - Multi-schema stacking: each article gets primary + secondary schemas automatically
 
-### 10.3 Schema Stacking per Content Type (v1.5.209 — full 21-type matrix)
+### 10.3 Schema Stacking per Content Type (v1.5.210 — full 21-type matrix with universal citation[] rollout)
 
-Complete matrix showing primary @type + secondary schemas + v1.5.192-209 per-type enrichments. **This table is now the master spec — structured-data.md §4 and article_design.md §11 mirror this.** When Schema_Generator changes, update this table first.
+Complete matrix showing primary @type + secondary schemas + v1.5.192-210 per-type enrichments. **This table is the master spec — structured-data.md §4 and article_design.md §11 mirror this.** When Schema_Generator changes, update this table first.
 
 | Content Type | Primary | Secondary Schemas | Per-type Enrichments |
 |---|---|---|---|
 | Blog Post | BlogPosting | FAQPage, Speakable, BreadcrumbList | — |
-| How-To | Article | FAQPage, BreadcrumbList | — |
+| How-To | Article | FAQPage, BreadcrumbList, **Speakable (v1.5.210)** | **`citation[]` (v1.5.210)**, Speakable `cssSelector: [h1, .key-takeaways, h2 + p]` |
 | Listicle | Article | ItemList, FAQPage, BreadcrumbList | — |
-| Review | Review (with smart `itemReviewed` @type — v1.5.136) | FAQPage, BreadcrumbList | `positiveNotes` / `negativeNotes` from Pros/Cons; country-aware currency |
-| Comparison | Article | FAQPage, BreadcrumbList | — |
-| Buying Guide | Article | ItemList, FAQPage, BreadcrumbList | — |
+| Review | Review (with smart `itemReviewed` @type — v1.5.136) | FAQPage, BreadcrumbList | `positiveNotes` / `negativeNotes` from Pros/Cons; country-aware currency; **`citation[]` (v1.5.210)** |
+| Comparison | Article | FAQPage, BreadcrumbList | **`citation[]` (v1.5.210)** |
+| Buying Guide | Article | ItemList, FAQPage, BreadcrumbList | **`citation[]` (v1.5.210)** |
 | Recipe | Recipe × N | ItemList (carousel when ≥3 recipes), FAQPage, BreadcrumbList | `recipeCuisine` country-mapped (40+ countries); 3-image array (1:1, 4:3, 16:9); `HowToStep` per instruction |
-| FAQ Page | FAQPage | BreadcrumbList | — |
+| FAQ Page | FAQPage | BreadcrumbList, **Speakable (v1.5.210)** | **Speakable `cssSelector: [h1, h2 + p, h3 + p]` (v1.5.210)** — voice-native Q&A read-aloud |
 | News Article | NewsArticle | Speakable, FAQPage, BreadcrumbList | `articleSection: "News"` |
 | Opinion | OpinionNewsArticle (v1.5.192) | Speakable, FAQPage, BreadcrumbList | `citation[]`, `backstory: "Opinion piece..."`, `speakable.cssSelector: [h1, .key-takeaways, h2 + p]`; ClaimReview explicitly excluded |
 | Press Release | NewsArticle (v1.5.195) | Organization (enriched), FAQPage, BreadcrumbList | `articleSection: "Press Release"`, `citation[]`, `speakable.cssSelector: [h1, h2 + p, .seobetter-author-bio]` |
 | Personal Essay | BlogPosting (v1.5.201) | BreadcrumbList | `articleSection: "Personal Essay"`, `citation[]`, `backstory: "Personal essay..."`, `speakable.cssSelector: [h1, h2 + p, .seobetter-author-bio]` |
-| **Sponsored** | **BlogPosting (v1.5.209 — was incorrectly documented as AdvertiserContentArticle pre-v1.5.209)** | Organization (enriched), BreadcrumbList | `articleSection: "Sponsored"`, `citation[]`, `backstory: "Sponsored content..."`, optional `sponsor` Organization (from `_seobetter_sponsor_name` post_meta). **Speakable deliberately NOT added** — Google policy discourages voice read-aloud of paid placements |
-| Tech Article | TechArticle | FAQPage, BreadcrumbList | — |
-| White Paper | Article | FAQPage, BreadcrumbList | — |
-| Scholarly Article | ScholarlyArticle | FAQPage, BreadcrumbList | — |
-| Case Study | Article | Organization (enriched), FAQPage, BreadcrumbList | — |
-| Interview | Article | Organization (enriched), QAPage, FAQPage, BreadcrumbList | — |
-| Pillar Guide | Article | ItemList, FAQPage, Speakable, BreadcrumbList | — |
+| Sponsored | BlogPosting (v1.5.209) | Organization (enriched), BreadcrumbList | `articleSection: "Sponsored"`, `citation[]`, `backstory: "Sponsored content..."`, optional `sponsor` Organization. **Speakable deliberately NOT added** — Google policy |
+| Tech Article | TechArticle | FAQPage, BreadcrumbList | **`citation[]` (v1.5.210)** |
+| White Paper | Article | FAQPage, BreadcrumbList | **`citation[]` (v1.5.210)** |
+| Scholarly Article | ScholarlyArticle | FAQPage, BreadcrumbList | **`citation[]` (v1.5.210)** |
+| Case Study | Article | Organization (enriched), FAQPage, BreadcrumbList | **`citation[]` (v1.5.210)** |
+| Interview | Article | Organization (enriched), QAPage, FAQPage, BreadcrumbList, **Speakable (v1.5.210)** | **`citation[]` (v1.5.210)**, Speakable `cssSelector: [h1, .key-takeaways, h2 + p]` |
+| Pillar Guide | Article | ItemList, FAQPage, Speakable, BreadcrumbList | **`citation[]` (v1.5.210)** |
 | Live Blog | LiveBlogPosting | BreadcrumbList | — |
 | Glossary | DefinedTerm | FAQPage, BreadcrumbList | — |
 | Places articles (any type with local businesses) | + LocalBusiness per business | Auto-detected from addresses in content | — |
@@ -728,7 +728,14 @@ Complete matrix showing primary @type + secondary schemas + v1.5.192-209 per-typ
 
 **Enrichment pattern** (for future content types): match the v1.5.192+ template of `articleSection` (disambiguation) + `citation[]` (outbound source graph) + `backstory` (plain-English label for AI engines) + `speakable.cssSelector` (voice-assistant selectors, where appropriate).
 
-**Gaps (known, parked):** `citation[]` universal rollout to tech_article / white_paper / scholarly / case_study / interview / comparison / buying_guide / review / how_to / pillar_guide is still pending — logged for future release. Shipping requires code + §10 + structured-data.md sync.
+**Gaps (known, parked):** Remaining enrichments logged for future release, each requires code + §10 + structured-data.md sync:
+- ~~Universal `citation[]` rollout to 10 more types~~ **SHIPPED v1.5.210**
+- ~~Speakable for how_to / faq_page / interview~~ **SHIPPED v1.5.210**
+- Scholarly `abstract` / `keywords[]` / `funder` — for AcademicGPT / Consensus / Elicit LLM engines
+- Interview → ProfilePage + Person with `sameAs` — Knowledge Graph entity grounding for interviewees
+- Live_blog `liveBlogUpdate[]` — timestamped item structure
+- Image licensing (`ImageObject.creator`, `copyrightNotice`, `license`) — Google Images / AI Overviews licensing compliance
+- Optional `citation[]` rollout to blog_post + listicle (not in v1.5.210 sign-off scope; add in follow-up if desired)
 
 ### 10.4 Schema Notes
 - **HowTo** rich results DEPRECATED by Google (Sept 2023) — mapped to Article instead
