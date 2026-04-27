@@ -463,6 +463,10 @@ Generate articles with **zero icons** in body prose paragraphs. Icons appear ONL
 
 Alt text is clamped to 125 characters and never starts with "image of" or "picture of".
 
+**Non-English path (v1.5.213.2):** When the article `_seobetter_language` is non-English, the English templates above are skipped entirely and the alt text is set to the section heading directly. Headings are guaranteed to be in the target language by the v1.5.212.x heading guard, so this produces clean native-language alt with zero extra LLM calls. Pre-fix Japanese articles shipped mixed-language artefacts like `alt="Why このテーマ matter in japan - Best Slow Cooker Recipes for Winter 2026 visual guide"` because the keyword-density-translated pronoun (このテーマ) was slotted into the English template.
+
+**Author bio + featured image filter (v1.5.213.2):** `Schema_Generator::detect_image_schemas()` skips author bio photos (matched by Settings author_image URL), the featured image (already represented by `Article.image` / `Recipe.image`), and class-hinted non-content images (`avatar` / `wp-post-image` / `gravatar` / `author-bio` / `seobetter-author` / `icon` / `emoji` / `logo`). Pre-fix the author profile photo was emitting as a top-level ImageObject node with `name: "Ben Passo"` — duplicate identity data plus Schema.org Validator noise.
+
 ### 7.4 Rendered output
 
 ```html

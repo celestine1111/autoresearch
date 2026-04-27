@@ -7,12 +7,60 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.213.1)
+> **Last updated:** 2026-04-27 (v1.5.213.2)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.213.2 — Image alt text language coverage + author/featured image filter
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben's v1.5.213.1 re-test surfaced two image-related leaks that v1.5.213's ImageObject populate fix exposed for the first time:
+
+1. **Stock image alt text was generated from English-only templates** — a Japanese article ended up with `alt="Why このテーマ matter in japan - Best Slow Cooker Recipes for Winter 2026 visual guide"` (mixed-language artefact: keyword-density translated `このテーマ` slotted into the English template). The Stock_Image_Inserter::generate_alt_text method had 5 hardcoded English templates with no language awareness.
+
+2. **Author bio photo became a standalone ImageObject in the @graph** — `detect_image_schemas` picked up every `<img>` tag in the body including the author profile photo, emitting an ImageObject with `name: 'Ben Passo'` (the alt text from the bio image). Author photos belong inside the Person.image field, not as standalone schema nodes.
+
+### Added / Changed / Fixed
+
+- **`Stock_Image_Inserter::insert_images()` + `generate_alt_text()` accept `$language`** — `includes/Stock_Image_Inserter.php` lines **~32 + ~91**
+  - Non-English path skips the English templates entirely and uses the section heading directly as alt text. Headings are guaranteed to be in the target language by the v1.5.212.x heading guard, so this produces clean native-language alt automatically — no extra LLM call, no template translation table.
+  - Fail-open: empty heading falls back to the keyword. English path unchanged.
+  - Verify: `grep -n 'base_lang.*!== .en' seobetter/includes/Stock_Image_Inserter.php`
+
+- **`Async_Generator::run_step()` threads language to insert_images()** — `includes/Async_Generator.php` line **~2305**
+  - Verify: `grep -n "insert_images.*language" seobetter/includes/Async_Generator.php`
+
+- **`Schema_Generator::detect_image_schemas()` filters non-content images** — `includes/Schema_Generator.php` line **~1955**
+  - Skips: author bio photo (matched by Settings author_image URL), featured image (already in Article/Recipe.image), and class-hinted non-content images (avatar / wp-post-image / gravatar / icon / emoji / logo / author-bio / seobetter-author).
+  - Now captures the full `<img>` tag (not just src+alt regex pair) so we can inspect class attributes for the skip-list match.
+  - Verify: `grep -n "author-bio\\\\|seobetter-author\\\\|avatar" seobetter/includes/Schema_Generator.php`
+
+### Files touched
+
+- `includes/Stock_Image_Inserter.php` — language-aware alt text
+- `includes/Async_Generator.php` — caller threading
+- `includes/Schema_Generator.php` — image filter + tag-class inspection
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §3.1B addendum
+- `seo-guidelines/article_design.md` — §7 (images) addendum: language-aware alt text
+
+### Verified by user
+
+- **UNTESTED** — JP recipe re-test once more. Expected: (a) image alt text is pure Japanese (uses heading text directly), (b) standalone ImageObject @graph nodes show only article body images, NOT the author bio photo or featured image, (c) "this topic" leak is gone (closed in v1.5.213.1).
+
+### Open
+
+- **Schema.org Validator "unspecified type" + speakable cssSelector error** — awaiting exact validator output text. The current Article wrapper speakable selector `['h1', '.key-takeaways', 'h2 + p']` is valid Schema.org per the spec. Without the exact error message I can't pinpoint which field/node is being flagged.
 
 ---
 

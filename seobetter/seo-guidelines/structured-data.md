@@ -139,6 +139,8 @@ Every top-level schema emitted by `Schema_Generator::generate()` and the legacy 
 
 **`keywords` field translation (v1.5.213):** When article `_seobetter_language` is non-English, the focus keyword fed into Recipe `keywords` is translated via `Cloud_API::translate_strings_batch()` so the schema field language matches the article body. Fail-open: translation errors fall back to the original keyword.
 
+**`ImageObject` node filtering (v1.5.213.2):** `detect_image_schemas()` no longer emits standalone `ImageObject` nodes for the author bio photo or the featured image — those are already represented by `Person.image` (inside the top-level Person at @graph root) and `Article/Recipe.image` (per-Article). Class-hint skip list also rejects avatar / wp-post-image / gravatar / icon / emoji / logo / author-bio / seobetter-author images. Result: standalone `ImageObject` nodes only represent in-body content images, which is what Google + Schema.org Validator expect.
+
 | `nutrition.calories` | Regex: "X calories" or "X cal" in recipe section | `{"@type":"NutritionInformation","calories":"45 calories"}` |
 
 **BANNED:** Hardcoded times/yields/ratings/cuisine/calories. If the content doesn't state a value, the field is OMITTED.

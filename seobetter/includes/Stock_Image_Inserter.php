@@ -29,7 +29,7 @@ class Stock_Image_Inserter {
      * @param string $keyword  Primary keyword for image search and alt text.
      * @return string Markdown with images inserted.
      */
-    public function insert_images( string $markdown, string $keyword ): string {
+    public function insert_images( string $markdown, string $keyword, string $language = 'en' ): string {
         // Split content by H2 headings
         $parts = preg_split( '/(^## .+$)/m', $markdown, -1, PREG_SPLIT_DELIM_CAPTURE );
 
@@ -64,7 +64,9 @@ class Stock_Image_Inserter {
                     && in_array( $h2_count, [ 2, 5, 8 ], true ) ) {
                     // Get the section content (next part) for context
                     $section_context = isset( $parts[ $i + 1 ] ) ? substr( wp_strip_all_tags( $parts[ $i + 1 ] ), 0, 100 ) : '';
-                    $alt_text = $this->generate_alt_text( $keyword, $heading_text, $section_context );
+                    // v1.5.213.2 — thread language so non-English articles get
+                    // native-language alt text instead of English templates.
+                    $alt_text = $this->generate_alt_text( $keyword, $heading_text, $section_context, $language );
                     $image_url = $this->get_image_url( $keyword, $heading_text, $image_inserted );
 
                     $output .= "\n\n![{$alt_text}]({$image_url})\n";
@@ -88,10 +90,27 @@ class Stock_Image_Inserter {
      * - Never start with "image of" or "picture of"
      * - Format: "[What image shows] - [Context with keyword]"
      */
-    private function generate_alt_text( string $keyword, string $heading, string $context ): string {
+    private function generate_alt_text( string $keyword, string $heading, string $context, string $language = 'en' ): string {
         $heading = preg_replace( '/[#*_\[\]()]/', '', $heading );
         $heading = trim( $heading, '? ' );
         $keyword_clean = trim( $keyword );
+        $base_lang = strtolower( substr( $language ?: 'en', 0, 2 ) );
+
+        // v1.5.213.2 — Non-English path: skip the English template strings
+        // entirely and use the section heading directly as the alt text. The
+        // heading is already in the target language (heading-guard v1.5.212.x
+        // ensures this) and naturally describes the image. Pre-fix English
+        // templates produced ugly mixed-language alt like
+        // `Why このテーマ matter in japan - Best Slow Cooker Recipes for Winter 2026`.
+        // For non-English we accept a slightly less varied alt in exchange for
+        // pure native-language output.
+        if ( $base_lang !== 'en' && $base_lang !== '' ) {
+            $alt = $heading !== '' ? $heading : $keyword_clean;
+            if ( mb_strlen( $alt ) > 125 ) {
+                $alt = mb_substr( $alt, 0, 122 ) . '...';
+            }
+            return $alt;
+        }
 
         // Build varied, descriptive alt texts based on section position
         $templates = [

@@ -2301,8 +2301,10 @@ class Async_Generator {
         $markdown = self::assemble_markdown( $job );
 
         // Insert stock images
+        // v1.5.213.2 — thread language so alt text is generated in the
+        // article's target language, not the English templates.
         $image_inserter = new Stock_Image_Inserter();
-        $markdown = $image_inserter->insert_images( $markdown, $keyword );
+        $markdown = $image_inserter->insert_images( $markdown, $keyword, $options['language'] ?? 'en' );
 
         // v1.5.64 — append References section to the PREVIEW path too,
         // not just the save path. Previously append_references_section

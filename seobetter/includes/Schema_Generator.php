@@ -1945,20 +1945,38 @@ class Schema_Generator {
      */
     private function detect_image_schemas( \WP_Post $post, string $content ): array {
         $schemas = [];
-        preg_match_all( '/<img[^>]+src=["\']([^"\']+)["\'][^>]*alt=["\']([^"\']*)["\'][^>]*>/i', $content, $imgs );
-        if ( empty( $imgs[1] ) ) return [];
+        // v1.5.213.2 — capture the FULL <img> tag so we can inspect class /
+        // parent context and skip author bio + featured-image duplicates.
+        preg_match_all( '/<img[^>]+>/i', $content, $img_tags );
+        if ( empty( $img_tags[0] ) ) return [];
 
         $site_name = get_bloginfo( 'name' );
-        $post_url  = get_permalink( $post->ID );
-        foreach ( array_slice( $imgs[1], 0, 5 ) as $i => $src ) {
-            $alt = $imgs[2][ $i ] ?? '';
+        $featured_url = (string) get_the_post_thumbnail_url( $post->ID, 'full' );
+        // Author profile photo URL from Settings (used for skip-list matching).
+        $settings = get_option( 'seobetter_settings', [] );
+        $author_image_url = isset( $settings['author_image'] ) ? (string) $settings['author_image'] : '';
+
+        $count = 0;
+        foreach ( $img_tags[0] as $tag ) {
+            if ( $count >= 5 ) break;
+            // Extract src + alt from the tag.
+            if ( ! preg_match( '/src=["\']([^"\']+)["\']/i', $tag, $src_m ) ) continue;
+            $src = $src_m[1];
+            $alt = '';
+            if ( preg_match( '/alt=["\']([^"\']*)["\']/i', $tag, $alt_m ) ) {
+                $alt = $alt_m[1];
+            }
             if ( strlen( $alt ) < 5 ) continue;
-            // v1.5.213 — Populate `name` + `description` on standalone ImageObject
-            // nodes. Pre-fix these were emitted with empty name/description fields,
-            // which Schema.org Validator flagged as "incomplete entity" warnings.
-            // Now: name = the alt text (already authored for accessibility), and
-            // description = the alt text wrapped in article-context. Same data,
-            // proper population, no extra cost.
+
+            // v1.5.213.2 — Skip non-content images:
+            //   1. Author bio photo (matched by URL or author-bio container class)
+            //   2. Featured image (already represented by the Article/Recipe schema's `image` field)
+            //   3. Tiny/icon images (avatars, logos, sprite icons) by class hint
+            if ( $author_image_url && strpos( $src, $author_image_url ) === 0 ) continue;
+            if ( $featured_url && $src === $featured_url ) continue;
+            if ( preg_match( '/class=["\'][^"\']*(?:author-bio|seobetter-author|avatar|wp-post-image|gravatar|icon|emoji|logo)[^"\']*["\']/i', $tag ) ) continue;
+
+            // v1.5.213 — Populate `name` + `description` + `caption` from alt text.
             $schemas[] = [
                 '@type'            => 'ImageObject',
                 'contentUrl'       => $src,
@@ -1972,6 +1990,7 @@ class Schema_Generator {
                 ],
                 'copyrightNotice'  => $site_name . ' ' . wp_date( 'Y' ),
             ];
+            $count++;
         }
         return $schemas;
     }
