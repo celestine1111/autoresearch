@@ -19,7 +19,7 @@
 ## v1.5.215.1 — Hotfix: add 'openrouter' to branding-provider save allowlist
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `766f7ea`
 
 ### Why this ships
 
