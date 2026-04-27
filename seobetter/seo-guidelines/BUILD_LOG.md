@@ -19,7 +19,7 @@
 ## v1.5.215 — Featured image polish: OpenRouter routing + WebP + richer og:image meta
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `66bd4e9`
 
 ### Why this ships
 
