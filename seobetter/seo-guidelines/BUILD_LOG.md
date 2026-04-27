@@ -19,7 +19,7 @@
 ## v1.5.213.3 — Add `class="key-takeaways"` so SpeakableSpecification selector matches
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `e0235f9`
 
 ### Why this ships
 
