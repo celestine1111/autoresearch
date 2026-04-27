@@ -7,12 +7,69 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.212.2)
+> **Last updated:** 2026-04-27 (v1.5.212.3)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.212.3 — Headline + meta-tag + H1 language coverage (extends v1.5.212.2 guard)
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben's first JP-Japanese re-test of v1.5.212.2 showed three residual leaks the
+v1.5.212.2 guard didn't cover:
+
+1. **Body H1 not scanned** — the v1.5.212.2 guard's regex was `<(h[23])\b...>` so any AI-emitted body H1 (e.g. duplicate `Best Slow Cooker Recipes For Winter 2026`) was never inspected. Articles where the model emits an H1 in the body content in addition to the WP theme's post_title H1 still shipped pure English H1s.
+
+2. **Native-script ratio check too loose** — the v1.5.212.2 guard skipped any heading with at least one native-script char. Headings of the form `Best Slow Cooker Recipes for Winter 2026: アイリスオーヤマ編` (~50 Latin chars + 7 Japanese chars at the tail) passed the gate even though they're the colon-bilingual pattern v1.5.206d-fix9 explicitly forbids.
+
+3. **post_title and AIOSEO meta title bypass the guard entirely** — `AI_Content_Generator::generate_headlines()` plugged the raw English keyword into a Japanese template producing `best slow cooker recipes for winter 2026を使って簡単に絶品料理を作る方法` for post_title, and `generate_meta_tags()` had no `$language` parameter at all so the AIOSEO meta title came back pure English (`Best Slow Cooker Recipes For Winter 2026`) regardless of article language. Both fail the universal-rule test (must work for all 21 content types, all 29 languages).
+
+### Added / Changed / Fixed
+
+- **`Cloud_API::translate_strings_batch()`** — `includes/Cloud_API.php` line **~125**
+  - Public static helper. Wraps the `/api/translate-headings` cloud call as a reusable batch translator for any short string list (headings, headlines, meta titles, the keyword itself). Pads/truncates output to match input length so callers can index-align. Fail-graceful: returns originals on any error.
+  - Verify: `grep -n 'translate_strings_batch' seobetter/includes/Cloud_API.php`
+
+- **`Async_Generator::enforce_heading_language()` regex + ratio fixes** — `includes/Async_Generator.php` line **~1733**
+  - Regex extended from `<(h[23])\b` → `<(h[1-3])\b` so body H1 elements are scanned. Closing-tag rebuild regex follows the same change.
+  - Ratio-based detection replaces the "has any native char → skip" check. Now counts Latin runs of 4+ alphabetic letters (English words; brand acronyms like CNN/BMW/JP at 1-3 letters don't trigger) and native-script chars; flags for translation when Latin chars equal-or-exceed native chars OR the heading is pure Latin. The translator's system prompt preserves brand names so over-flagging is safe.
+  - Now uses `Cloud_API::translate_strings_batch()` instead of inlining the cloud call.
+  - Verify: `grep -n 'h\[1-3\]\|latin_word_count\|latin_chars' seobetter/includes/Async_Generator.php`
+
+- **`AI_Content_Generator::generate_headlines()` keyword translation** — `includes/AI_Content_Generator.php` line **~115**
+  - Pre-fix: rule "every headline MUST contain the exact phrase \"{$keyword}\"" forced the model to embed the English keyword verbatim into a non-English headline, producing mixed-language slugs.
+  - Now: when `$language` is non-English, translates the keyword via `Cloud_API::translate_strings_batch()` once at the top of the function. The translated form is threaded through the prompt, the keyword-presence filter, and the fallbacks. Fail-open — translation errors fall back to the original keyword (pre-fix behaviour).
+  - Verify: `grep -n 'keyword_for_prompt' seobetter/includes/AI_Content_Generator.php`
+
+- **`AI_Content_Generator::generate_meta_tags()` accepts `$language`** — `includes/AI_Content_Generator.php` line **~232**
+  - Pre-fix: no `$language` parameter; AIOSEO meta title / description / og_title for non-English articles were always English. Hard contradiction with article body.
+  - Now: accepts BCP-47 language code, translates keyword for non-English, appends a LANGUAGE clause to the prompt, swaps system_hint to a target-language-specific copy. Caller updated in `Async_Generator.php` line ~518.
+  - Verify: `grep -n 'generate_meta_tags( string \$keyword, string \$article_text' seobetter/includes/AI_Content_Generator.php`
+
+### Files touched
+
+- `includes/Cloud_API.php` — new `translate_strings_batch()` helper
+- `includes/Async_Generator.php` — regex fix, ratio check, generate_meta_tags caller now passes language
+- `includes/AI_Content_Generator.php` — generate_headlines + generate_meta_tags keyword translation + language threading
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — pending: §3.1B addendum noting headline + meta-tag pipelines now share the v1.5.212.2 guard
+
+### Verified by user
+
+- **UNTESTED** — re-run JP-Japanese article test. Expected:
+  - `post_title` is pure Japanese (no English keyword embedded)
+  - URL slug is pure Japanese (sanitize_title preserves CJK)
+  - AIOSEO meta title + description + og_title are Japanese
+  - Body has zero English H1 / H2 / H3 (the duplicate body H1 leak + the colon-bilingual H2s should both translate)
 
 ---
 

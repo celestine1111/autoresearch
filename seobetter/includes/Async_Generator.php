@@ -515,7 +515,10 @@ class Async_Generator {
             } elseif ( $step === 'meta' ) {
                 $step_label = 'Creating meta tags...';
                 $article_text = self::assemble_markdown( $job );
-                $meta = $generator->generate_meta_tags( $keyword, wp_strip_all_tags( $article_text ) );
+                // v1.5.212.3 — thread language so non-English articles get
+                // native-language meta title / description / og_title instead
+                // of an all-English meta title that contradicts the article body.
+                $meta = $generator->generate_meta_tags( $keyword, wp_strip_all_tags( $article_text ), $options['language'] ?? 'en' );
                 $job['results']['meta'] = $meta;
 
             } elseif ( $step === 'assemble' ) {
@@ -1808,10 +1811,10 @@ class Async_Generator {
         }
         $native_re = $SCRIPT_MAP[ $base ];
 
-        // Walk H2 + H3 elements with a non-greedy regex. We work on the raw
-        // string (not DOMDocument) because DOM parsing can rewrite quoting,
-        // re-encode entities, and break inline JSON-LD downstream.
-        if ( ! preg_match_all( '/<(h[23])\b[^>]*>(.*?)<\/\1>/is', $html, $matches, PREG_SET_ORDER ) ) {
+        // v1.5.212.3 — walk H1 too. Articles with an AI-emitted body H1 (in
+        // addition to the WP theme's post_title H1) were leaking English
+        // because the original h[23] regex skipped H1 entirely.
+        if ( ! preg_match_all( '/<(h[1-3])\b[^>]*>(.*?)<\/\1>/is', $html, $matches, PREG_SET_ORDER ) ) {
             return $html;
         }
 
@@ -1827,13 +1830,41 @@ class Async_Generator {
             // Skip the empty References placeholder (the plugin populates it
             // post-write so its inner text starts empty in some pipelines).
             if ( mb_strlen( $text, 'UTF-8' ) < 3 ) continue;
-            // Already has native characters → obeys the prompt rule, skip.
-            if ( preg_match( $native_re, $text ) ) continue;
-            // Pure ASCII / pure Latin → almost certainly an English leak.
-            // Edge case: a heading like "iPhone 16 Pro" is technically all-
-            // Latin but is the brand spelled in Latin characters (legitimate
-            // even in a Japanese article). The translator preserves brand
-            // names per its system prompt, so passing through is harmless.
+
+            // v1.5.212.3 — ratio-based Latin-vs-native detection.
+            // Pre-fix: `if (preg_match($native_re, $text)) continue` skipped
+            // any heading containing AT LEAST ONE native-script char, which
+            // let `Best Slow Cooker Recipes for Winter 2026: アイリスオーヤマ編`
+            // through (50+ Latin chars but 7 Japanese chars). Now we count:
+            //   - native_chars: matches of the language's script regex
+            //   - latin_words:  Latin runs of 4+ alphabetic letters (English
+            //                    words; brand acronyms like "CNN" / "BMW" /
+            //                    "JP" are 1-3 letters and don't trigger)
+            // If the heading has ANY 4+ letter Latin word AND those Latin
+            // chars equal-or-exceed the native chars, flag for translation.
+            // Brand-name edge case (e.g. "iPhone 16 Pro レビュー") still
+            // passes through — but the translator preserves brand names per
+            // its system prompt, so over-flagging is safe.
+            $native_chars = preg_match_all( $native_re, $text );
+            preg_match_all( '/[A-Za-z]{4,}/', $text, $latin_runs );
+            $latin_word_count = is_array( $latin_runs[0] ?? null ) ? count( $latin_runs[0] ) : 0;
+            $latin_chars = 0;
+            foreach ( $latin_runs[0] ?? [] as $run ) {
+                $latin_chars += strlen( $run );
+            }
+
+            $needs_fix = false;
+            if ( $native_chars === 0 ) {
+                // Pure Latin / no native chars at all → certainly an English leak.
+                $needs_fix = true;
+            } elseif ( $latin_word_count >= 1 && $latin_chars >= $native_chars ) {
+                // Mixed-language heading where Latin dominates → English leak
+                // wrapped in token native-script tail (the colon-bilingual
+                // pattern v1.5.206d-fix9 was supposed to forbid).
+                $needs_fix = true;
+            }
+            if ( ! $needs_fix ) continue;
+
             $needs_translation[] = $text;
             $original_full[]     = $full;
             $original_text[]     = $text;
@@ -1851,22 +1882,12 @@ class Async_Generator {
             $original_text     = array_slice( $original_text,     0, 30 );
         }
 
-        $response = \SEOBetter\Cloud_API::signed_post( '/api/translate-headings', [
-            'headings'        => $needs_translation,
-            'target_language' => $base,
-        ], [ 'timeout' => 20 ] );
-
-        if ( is_wp_error( $response ) ) {
-            error_log( 'SEOBetter translate-headings error (non-fatal): ' . $response->get_error_message() );
+        // v1.5.212.3 — uses shared Cloud_API helper so headlines + meta titles
+        // can route through the same batched LLM call shape.
+        $translations = \SEOBetter\Cloud_API::translate_strings_batch( $needs_translation, $base );
+        if ( ! is_array( $translations ) || count( $translations ) !== count( $needs_translation ) ) {
             return $html;
         }
-        $code = wp_remote_retrieve_response_code( $response );
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-        if ( $code !== 200 || ! is_array( $body ) || empty( $body['translations'] ) || ! is_array( $body['translations'] ) ) {
-            return $html;
-        }
-
-        $translations = $body['translations'];
         for ( $i = 0; $i < count( $original_full ); $i++ ) {
             $translated = isset( $translations[ $i ] ) && is_string( $translations[ $i ] ) ? trim( $translations[ $i ] ) : '';
             if ( $translated === '' || $translated === $original_text[ $i ] ) continue;
@@ -1877,10 +1898,10 @@ class Async_Generator {
 
             // Build replacement that preserves the original heading's tag
             // attributes (id="...", class="...") by swapping ONLY the inner
-            // text. The original_full string captured both <h2 ...> and
-            // </h2>; rebuild from $original_full[$i]'s opening tag.
+            // text. The original_full string captured both <hN ...> and
+            // </hN>; rebuild from $original_full[$i]'s opening tag.
             $orig = $original_full[ $i ];
-            if ( preg_match( '/^(<h[23]\b[^>]*>)(.*?)(<\/h[23]>)$/is', $orig, $parts ) ) {
+            if ( preg_match( '/^(<h[1-3]\b[^>]*>)(.*?)(<\/h[1-3]>)$/is', $orig, $parts ) ) {
                 $rebuilt = $parts[1] . esc_html( $translated ) . $parts[3];
                 // Replace ONE occurrence (the first match) to avoid clobbering
                 // duplicate-text headings elsewhere in the article.

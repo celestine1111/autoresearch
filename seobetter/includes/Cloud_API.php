@@ -121,6 +121,62 @@ class Cloud_API {
     }
 
     /**
+     * v1.5.212.3 — Translate an array of short strings (headings, headlines,
+     * meta titles, the article keyword itself) into a target language via the
+     * server-side `/api/translate-headings` endpoint.
+     *
+     * Single batched LLM call regardless of input count. Preserves proper
+     * nouns / brand names per the endpoint's system prompt, so passing
+     * already-native strings is safe (the model returns them unchanged).
+     *
+     * Used by:
+     *   - Async_Generator::enforce_heading_language() — body H1/H2/H3 guard
+     *   - AI_Content_Generator::generate_headlines() — keyword translation
+     *     for the post_title pipeline (non-English language paths)
+     *   - AI_Content_Generator::generate_meta_tags() — same, for meta title /
+     *     description / og_title generation
+     *
+     * @param string[] $strings        Plain text strings to translate (max 30).
+     * @param string   $target_language BCP-47 base code (ja/zh/ko/ru/etc).
+     * @return string[] Output array, same length as input. On any error,
+     *                   returns the original strings unchanged so callers
+     *                   never see a shortened/null array.
+     */
+    public static function translate_strings_batch( array $strings, string $target_language ): array {
+        if ( empty( $strings ) ) return $strings;
+        $base = strtolower( substr( $target_language ?: '', 0, 2 ) );
+        if ( $base === '' || $base === 'en' ) return $strings;
+
+        $clean = array_values( array_map( static function ( $s ) {
+            return is_string( $s ) ? trim( $s ) : '';
+        }, $strings ) );
+        // Bound payload — matches the cloud-side cap.
+        if ( count( $clean ) > 30 ) {
+            $clean = array_slice( $clean, 0, 30 );
+        }
+
+        $response = self::signed_post( '/api/translate-headings', [
+            'headings'        => $clean,
+            'target_language' => $base,
+        ], [ 'timeout' => 20 ] );
+
+        if ( is_wp_error( $response ) ) return $strings;
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( $code !== 200 || ! is_array( $body ) || empty( $body['translations'] ) || ! is_array( $body['translations'] ) ) {
+            return $strings;
+        }
+        $out = $body['translations'];
+        // Pad/truncate to match input length so callers can index-align.
+        $aligned = [];
+        for ( $i = 0; $i < count( $strings ); $i++ ) {
+            $t = isset( $out[ $i ] ) && is_string( $out[ $i ] ) ? trim( $out[ $i ] ) : '';
+            $aligned[ $i ] = ( $t !== '' && mb_strlen( $t, 'UTF-8' ) <= 300 ) ? $t : ( $strings[ $i ] ?? '' );
+        }
+        return $aligned;
+    }
+
+    /**
      * Generate content via SEOBetter Cloud.
      */
     public static function generate( string $prompt, string $system_prompt = '', array $options = [] ): array {

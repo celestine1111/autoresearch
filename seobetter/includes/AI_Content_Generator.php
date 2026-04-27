@@ -123,6 +123,23 @@ class AI_Content_Generator {
         $lang_name  = \SEOBetter\Localized_Strings::get_language_name( $language );
         $is_english = $language === 'en';
 
+        // v1.5.212.3 — Translate the user's keyword into the target language
+        // before threading it through the prompt + filter + fallbacks. Without
+        // this, the rule "every headline MUST contain the exact phrase
+        // {$keyword}" forces the AI to embed the English keyword verbatim
+        // inside a Japanese/Korean/etc headline, producing slugs like
+        // "best-slow-cooker-recipes-for-winter-2026を使って…". Translation
+        // happens server-side via Cloud_API::translate_strings_batch (single
+        // OpenRouter call). Fail-open: if translation errors, fall back to
+        // the original English keyword (pre-fix behaviour, no regression).
+        $keyword_for_prompt = $keyword;
+        if ( ! $is_english && trim( $keyword ) !== '' ) {
+            $translated = \SEOBetter\Cloud_API::translate_strings_batch( [ $keyword ], $language );
+            if ( is_array( $translated ) && ! empty( $translated[0] ) && $translated[0] !== $keyword ) {
+                $keyword_for_prompt = $translated[0];
+            }
+        }
+
         $context = $article_text ? "\n\nArticle summary: " . substr( $article_text, 0, 300 ) : '';
 
         // v1.5.206d-fix7 — universal language clause. For English articles the
@@ -137,26 +154,26 @@ class AI_Content_Generator {
             $lang_clause = "\n\nLANGUAGE: Write all 5 headlines ENTIRELY in {$lang_name}. Every word except the exact keyword phrase must be in {$lang_name}. Do NOT wrap a {$lang_name} keyword in English connector phrases like \"How to Find X: The Ultimate Guide\" — a {$lang_name} headline uses {$lang_name} connector phrases (e.g. Korean would use '{$lang_name}-appropriate wording' rather than 'How to Find X'). Use the five formulas below but express each formula in {$lang_name}.";
         }
 
-        $prompt = "Generate exactly 5 headline variations for an article about: \"{$keyword}\"{$context}{$lang_clause}
+        $prompt = "Generate exactly 5 headline variations for an article about: \"{$keyword_for_prompt}\"{$context}{$lang_clause}
 
-CRITICAL RULE: Every single headline MUST contain the exact phrase \"{$keyword}\" — no exceptions. If the keyword is multiple words, include ALL words.
+CRITICAL RULE: Every single headline MUST contain the exact phrase \"{$keyword_for_prompt}\" — no exceptions. If the keyword is multiple words, include ALL words.
 
 Rules:
 1. Each headline must be 50-60 characters (for full SERP display)
-2. The keyword \"{$keyword}\" must appear in ALL 5 headlines
+2. The keyword \"{$keyword_for_prompt}\" must appear in ALL 5 headlines
 3. Front-load the keyword (put it in the first half of the headline) in at least 3 of 5
 4. Use different headline formulas:
-   - #1: Number + \"{$keyword}\" + Benefit
-   - #2: How-to + \"{$keyword}\"
-   - #3: Question + \"{$keyword}\"
-   - #4: \"{$keyword}\" + Power words
-   - #5: \"{$keyword}\" + Current year
+   - #1: Number + \"{$keyword_for_prompt}\" + Benefit
+   - #2: How-to + \"{$keyword_for_prompt}\"
+   - #3: Question + \"{$keyword_for_prompt}\"
+   - #4: \"{$keyword_for_prompt}\" + Power words
+   - #5: \"{$keyword_for_prompt}\" + Current year
 
 Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
 
         $system_hint = $is_english
             ? 'You are an expert copywriter who writes headlines that get clicks. Return only the numbered list.'
-            : "You are an expert copywriter who writes headlines that get clicks. Write every headline in {$lang_name}, never in English (except the exact keyword phrase itself if the user's keyword is in English). Return only the numbered list.";
+            : "You are an expert copywriter who writes headlines that get clicks. Write every headline in {$lang_name}, never in English. Return only the numbered list.";
 
         $result = $this->send_ai_request( $prompt, $system_hint, [ 'max_tokens' => 400 ] );
 
@@ -170,8 +187,10 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
             $line = trim( $line );
             if ( preg_match( '/^\d+[\.\)]\s*(.+)$/', $line, $m ) ) {
                 $hl = trim( $m[1], '"\'*' );
-                // Only keep headlines that contain the keyword
-                if ( stripos( $hl, $keyword ) !== false ) {
+                // v1.5.212.3 — filter against the post-translation keyword.
+                // Pre-fix used the original English keyword which forced a
+                // verbatim English match in non-English headlines.
+                if ( stripos( $hl, $keyword_for_prompt ) !== false ) {
                     $headlines[] = $hl;
                 }
             }
@@ -183,17 +202,18 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
         // full native-language "Complete Guide" / "Expert Review" phrase without
         // a per-language template table. Keyword-only titles are common in
         // Korean/Japanese/Chinese editorial style anyway.
+        // v1.5.212.3 — fallbacks use the translated keyword too.
         if ( count( $headlines ) < 3 ) {
             if ( $is_english ) {
                 $fallbacks = [
-                    ucwords( $keyword ) . ': Complete Guide for ' . wp_date( 'Y' ),
-                    'Best ' . ucwords( $keyword ) . ' — Expert Review ' . wp_date( 'Y' ),
-                    'How to Choose ' . ucwords( $keyword ) . ': Buyer\'s Guide',
+                    ucwords( $keyword_for_prompt ) . ': Complete Guide for ' . wp_date( 'Y' ),
+                    'Best ' . ucwords( $keyword_for_prompt ) . ' — Expert Review ' . wp_date( 'Y' ),
+                    'How to Choose ' . ucwords( $keyword_for_prompt ) . ': Buyer\'s Guide',
                 ];
             } else {
                 $fallbacks = [
-                    $keyword . ' ' . wp_date( 'Y' ),
-                    $keyword,
+                    $keyword_for_prompt . ' ' . wp_date( 'Y' ),
+                    $keyword_for_prompt,
                 ];
             }
             foreach ( $fallbacks as $fb ) {
@@ -208,28 +228,56 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
     /**
      * Generate SEO meta title + description with CTR scoring.
      * Based on meta-tags-optimizer skill.
+     *
+     * v1.5.212.3 — Accept $language so non-English meta tags don't ship as
+     * pure-English copy. Pre-fix: AIOSEO meta title for a Japanese article
+     * came back `Best Slow Cooker Recipes For Winter 2026` because the LLM
+     * was given an English keyword and an English-only system prompt with
+     * no language clause. Now mirrors generate_headlines: translates the
+     * keyword first, threads $lang_name into the prompt + system_hint,
+     * and passes meta tags through the same language-guard pipeline as
+     * body headings.
      */
-    public function generate_meta_tags( string $keyword, string $article_text = '' ): array {
+    public function generate_meta_tags( string $keyword, string $article_text = '', string $language = 'en' ): array {
+        $is_english = ( $language === 'en' || $language === '' );
+        $lang_name  = $is_english ? 'English' : \SEOBetter\Localized_Strings::get_language_name( $language );
+
+        // v1.5.212.3 — translate keyword for non-English path so the "exact
+        // phrase MUST appear" rule doesn't force English into the meta title.
+        $keyword_for_prompt = $keyword;
+        if ( ! $is_english && trim( $keyword ) !== '' ) {
+            $translated = \SEOBetter\Cloud_API::translate_strings_batch( [ $keyword ], $language );
+            if ( is_array( $translated ) && ! empty( $translated[0] ) && $translated[0] !== $keyword ) {
+                $keyword_for_prompt = $translated[0];
+            }
+        }
+
         $summary = $article_text ? substr( $article_text, 0, 500 ) : '';
-        $prompt = "Generate SEO meta tags for an article about: \"{$keyword}\"
+        $lang_clause = $is_english ? '' : "\n\nLANGUAGE: Write TITLE, DESCRIPTION, and OG_TITLE entirely in {$lang_name}. Every word except proper nouns must be in {$lang_name}. Do not ship English copy.";
+
+        $prompt = "Generate SEO meta tags for an article about: \"{$keyword_for_prompt}\"{$lang_clause}
 
 Article summary: {$summary}
 
 Return in this exact format:
 TITLE: [50-60 chars, keyword front-loaded, power word included]
-DESCRIPTION: [150-160 chars, MUST include the exact phrase \"{$keyword}\", has a call-to-action, reads like an ad]
+DESCRIPTION: [150-160 chars, MUST include the exact phrase \"{$keyword_for_prompt}\", has a call-to-action, reads like an ad]
 OG_TITLE: [60-90 chars, slightly more compelling than TITLE, can be longer]
 
 Rules:
-- Title MUST be 50-60 characters and contain \"{$keyword}\"
-- Description MUST be 150-160 characters and MUST contain the exact phrase \"{$keyword}\"
-- Front-load the keyword \"{$keyword}\" in the title (first half)
+- Title MUST be 50-60 characters and contain \"{$keyword_for_prompt}\"
+- Description MUST be 150-160 characters and MUST contain the exact phrase \"{$keyword_for_prompt}\"
+- Front-load the keyword \"{$keyword_for_prompt}\" in the title (first half)
 - Include a number or year if relevant
 - Description should create urgency or curiosity
 - No clickbait, must be accurate to content
-- CRITICAL: The exact phrase \"{$keyword}\" must appear in both TITLE and DESCRIPTION";
+- CRITICAL: The exact phrase \"{$keyword_for_prompt}\" must appear in both TITLE and DESCRIPTION";
 
-        $result = $this->send_ai_request( $prompt, 'You are an SEO meta tag specialist. Return only the requested format.', [ 'max_tokens' => 300 ] );
+        $system_hint = $is_english
+            ? 'You are an SEO meta tag specialist. Return only the requested format.'
+            : "You are an SEO meta tag specialist. Write all output (TITLE / DESCRIPTION / OG_TITLE) in {$lang_name}, never in English. Return only the requested format.";
+
+        $result = $this->send_ai_request( $prompt, $system_hint, [ 'max_tokens' => 300 ] );
 
         if ( ! $result['success'] ) {
             return [ 'title' => '', 'description' => '', 'og_title' => '' ];
@@ -250,8 +298,8 @@ Rules:
         // CTR scoring
         $meta['title_length'] = mb_strlen( $meta['title'] );
         $meta['desc_length'] = mb_strlen( $meta['description'] );
-        $meta['title_score'] = $this->score_meta_title( $meta['title'], $keyword );
-        $meta['desc_score'] = $this->score_meta_description( $meta['description'], $keyword );
+        $meta['title_score'] = $this->score_meta_title( $meta['title'], $keyword_for_prompt );
+        $meta['desc_score'] = $this->score_meta_description( $meta['description'], $keyword_for_prompt );
 
         return $meta;
     }
