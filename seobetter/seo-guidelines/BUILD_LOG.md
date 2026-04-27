@@ -19,7 +19,7 @@
 ## v1.5.212.4 — Apply heading-language guard to the saved post_content (preview-vs-published parity)
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `cb6e2e4`
 
 ### Why this ships
 
