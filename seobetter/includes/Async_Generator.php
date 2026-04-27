@@ -1983,6 +1983,58 @@ class Async_Generator {
             $density = ( $kw_count * $kw_words / $word_count ) * 100;
 
             if ( $density > 2.5 ) {
+                // v1.5.213.1 — Language-aware "this topic" replacement.
+                // Pre-fix: a Japanese article whose body still contained the
+                // raw English keyword (because the AI leaked it on a fallback
+                // path) had those mentions replaced with the LITERAL English
+                // string "this topic", producing artefacts like
+                // 「this topic」を探しているなら... in otherwise-Japanese prose.
+                // Now: per-language native pronoun phrase. Fail-open: unknown
+                // languages keep the English "this topic".
+                $language     = strtolower( substr( $job['options']['language'] ?? 'en', 0, 2 ) );
+                $this_topic_i18n = [
+                    'en' => 'this topic',
+                    'ja' => 'このテーマ',
+                    'ko' => '이 주제',
+                    'zh' => '这个主题',
+                    'es' => 'este tema',
+                    'fr' => 'ce sujet',
+                    'de' => 'dieses Thema',
+                    'it' => 'questo argomento',
+                    'pt' => 'este tópico',
+                    'ru' => 'эта тема',
+                    'ar' => 'هذا الموضوع',
+                    'hi' => 'यह विषय',
+                    'th' => 'เรื่องนี้',
+                    'vi' => 'chủ đề này',
+                    'tr' => 'bu konu',
+                    'pl' => 'ten temat',
+                    'nl' => 'dit onderwerp',
+                    'id' => 'topik ini',
+                    'he' => 'נושא זה',
+                    'el' => 'αυτό το θέμα',
+                    'sv' => 'detta ämne',
+                    'da' => 'dette emne',
+                    'no' => 'dette emnet',
+                    'fi' => 'tämä aihe',
+                    'cs' => 'toto téma',
+                    'hu' => 'ez a téma',
+                    'ro' => 'acest subiect',
+                    'uk' => 'ця тема',
+                    'ms' => 'topik ini',
+                    'bg' => 'тази тема',
+                    'fa' => 'این موضوع',
+                    'ur' => 'یہ موضوع',
+                    'bn' => 'এই বিষয়',
+                ];
+                $this_topic_phrase = $this_topic_i18n[ $language ] ?? 'this topic';
+
+                // For non-English articles, the article-prefix branch
+                // (the/a/an + keyword → "it") is rarely useful — those
+                // English determiners shouldn't appear in non-English text.
+                // Skip it for non-English to avoid English "it" leaking too.
+                $is_english = ( $language === 'en' || $language === '' );
+
                 // Replace excess keyword mentions with variations
                 // Skip first mention, H2 headings, and Key Takeaways
                 $lines = explode( "\n", $markdown );
@@ -2000,20 +2052,25 @@ class Async_Generator {
                         // Old: replaced keyword with "this" → created "the this" artifacts.
                         // New: if preceded by "the/a/an", replace whole phrase including article.
                         $kw_escaped = preg_quote( $keyword, '/' );
-                        $line_new = preg_replace(
-                            '/\b(the|a|an)\s+' . $kw_escaped . '\b/i',
-                            'it',
-                            $lines[ $i ],
-                            1,
-                            $count_art
-                        );
-                        if ( $count_art > 0 ) {
-                            $lines[ $i ] = $line_new;
-                        } else {
-                            // No article prefix — replace keyword alone with "this topic"
+                        $count_art = 0;
+                        if ( $is_english ) {
+                            $line_new = preg_replace(
+                                '/\b(the|a|an)\s+' . $kw_escaped . '\b/i',
+                                'it',
+                                $lines[ $i ],
+                                1,
+                                $count_art
+                            );
+                            if ( $count_art > 0 ) {
+                                $lines[ $i ] = $line_new;
+                            }
+                        }
+                        if ( $count_art === 0 ) {
+                            // No article prefix (or non-English) — replace
+                            // keyword alone with the localized "this topic".
                             $lines[ $i ] = preg_replace(
                                 '/\b' . $kw_escaped . '\b/i',
-                                'this topic',
+                                $this_topic_phrase,
                                 $lines[ $i ],
                                 1
                             );

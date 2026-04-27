@@ -7,12 +7,42 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.213)
+> **Last updated:** 2026-04-27 (v1.5.213.1)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.213.1 — Localize keyword-density "this topic" replacement (close v1.5.213 leak)
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben's v1.5.213 re-test surfaced a long-standing PHP leak: the keyword-density enforcer at `Async_Generator::enforce_geo_requirements()` (added v1.5.159 / refined v1.5.172) replaces excess focus-keyword mentions with the literal English string `"this topic"` when the article body's keyword density exceeds 2.5%. For a non-English article (Japanese in this case) where the AI fell back to the English keyword in some paragraphs, the PHP replacer then inserted English `"this topic"` directly into Japanese prose, producing artefacts like `「this topic」を探しているなら...`. Pure English string injected into non-English body — a Layer 2 (PHP enforcement) language leak that the v1.5.212.x heading guard was never designed to catch.
+
+### Added / Changed / Fixed
+
+- **`Async_Generator::enforce_geo_requirements()` keyword-density block — language-aware** — `includes/Async_Generator.php` line **~1980**
+  - Adds a `$this_topic_i18n` map of native pronoun phrases for 33 BCP-47 base codes (ja → このテーマ, ko → 이 주제, zh → 这个主题, es → este tema, fr → ce sujet, de → dieses Thema, ru → эта тема, ar → هذا الموضوع, etc.)
+  - Skips the `the/a/an + keyword → "it"` branch for non-English (English determiners shouldn't appear in non-English text, and "it" would itself be an English leak)
+  - Fail-open: unknown language codes fall back to "this topic" (zero regression for English customers)
+  - Verify: `grep -n 'this_topic_i18n' seobetter/includes/Async_Generator.php`
+
+### Files touched
+
+- `includes/Async_Generator.php` — keyword-density block + new $this_topic_i18n map
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §3.1B addendum
+
+### Verified by user
+
+- **UNTESTED** — JP recipe re-test once more. Expected: zero "this topic" English-string artefacts in Japanese body. The replacer either picks このテーマ (native pronoun) or skips when the keyword is already in translated form.
 
 ---
 
