@@ -1753,12 +1753,19 @@ class Async_Generator {
      * the original headings. Phase 5 quality gate already warns on language
      * drift, surfacing the issue to the user even when this guard fails.
      *
+     * v1.5.212.4 — promoted from `private` to `public` so the save-post path
+     * (`seobetter.php::rest_save_post`) can run the same guard against the
+     * `'hybrid'`-mode post_content. Pre-fix: only the `'classic'`-mode preview
+     * was guarded, so the published article shipped with English H1/H2 leaks
+     * even when the preview rendered correctly. The two formatter modes
+     * produce different HTML, so each must be guarded independently.
+     *
      * @param string $html       Full article HTML (post-formatter, pre-save).
      * @param string $lang_code  BCP-47 base code (ja, ko, ru, ar, etc.).
      * @return string Modified HTML with English headings translated, or
      *                original HTML if no fix needed / fix failed.
      */
-    private static function enforce_heading_language( string $html, string $lang_code ): string {
+    public static function enforce_heading_language( string $html, string $lang_code ): string {
         if ( ! is_string( $html ) || $html === '' ) {
             return $html;
         }

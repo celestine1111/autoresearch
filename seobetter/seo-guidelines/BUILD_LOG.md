@@ -7,12 +7,55 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.212.3)
+> **Last updated:** 2026-04-27 (v1.5.212.4)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.212.4 — Apply heading-language guard to the saved post_content (preview-vs-published parity)
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben's v1.5.212.3 re-test showed dramatic improvement (post_title fully Japanese, slug fully Japanese, AIOSEO meta tags fully Japanese, last 3 body H2s fully Japanese) — but two leaks remained:
+
+1. **Body H1** — `<h1 class="wp-block-heading">Best Slow Cooker Recipes For Winter 2026</h1>` shipped pure English in the saved post_content
+2. **First Recipe H2** — `Best Slow Cooker Recipes for Winter 2026: アイリスオーヤマのとろとろ牛すじ煮込み` (colon-bilingual) shipped to both the body H2 and the corresponding `Recipe.name` schema field
+
+Root cause: there are TWO formatter calls and the v1.5.212.2 guard only ran on one of them.
+
+- `Async_Generator::run_step()` line 2382 — `format($markdown, 'classic', ...)` produces the **preview** HTML; v1.5.212.2 guard runs here ✓
+- `seobetter.php::rest_save_post()` line 1530 — `format($markdown, 'hybrid', ...)` produces the **actual published post_content**; NO guard ✗
+
+The two formatters output different HTML (different attribute structures, different H1 wrapping). The hybrid path was completely unguarded. Schema_Generator (line 1663) reads H2 names from the saved post_content for `Recipe.name` schema, so the leak propagated into structured data too. This also explains Ben's earlier "preview is not the same as the published article" complaint — same data, two pipelines, only one had the guard.
+
+### Added / Changed / Fixed
+
+- **`Async_Generator::enforce_heading_language()` promoted private → public** — `includes/Async_Generator.php` line **~1761**
+  - Reason: `seobetter.php::rest_save_post()` lives in a different namespace and needs to call the same guard against the hybrid-formatted post_content. No logic change inside the method itself.
+  - Verify: `grep -n 'public static function enforce_heading_language' seobetter/includes/Async_Generator.php`
+
+- **Heading-language guard wired into the save path** — `seobetter.php::rest_save_post()` line **~1540**
+  - Runs `SEOBetter\Async_Generator::enforce_heading_language( $post_content, $language )` immediately after `format($markdown, 'hybrid', ...)` produces `$post_content` and BEFORE `wp_insert_post()` saves it.
+  - Schema_Generator at line 1663 then reads the already-translated post_content, so `Recipe.name` / `Article.headline` schema fields stay in sync with the body.
+  - Verify: `grep -n 'enforce_heading_language' seobetter/seobetter.php`
+
+### Files touched
+
+- `includes/Async_Generator.php` — visibility change only
+- `seobetter.php` — guard call site + version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §3.1B addendum noting the dual-formatter coverage
+
+### Verified by user
+
+- **UNTESTED** — re-run JP-Japanese test once more. Expected: body H1 + colon-bilingual H2 both translate, schema `Recipe.name` matches the body H2.
 
 ---
 
