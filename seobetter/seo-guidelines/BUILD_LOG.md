@@ -7,12 +7,53 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.212.4)
+> **Last updated:** 2026-04-27 (v1.5.212.5)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.212.5 — Aggressive Latin-word detection in heading guard
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+v1.5.212.4 verified that the save-path guard runs correctly on the hybrid post_content. But Ben's next test shipped two recipe H2s with a short English prefix that the v1.5.212.3 ratio check was designed to allow through:
+
+- `Recipe 1: アイリスオーヤマスロークッカーで作るコージービーフシチュー`
+- `Recipe 4: アルコレで作るリッチトマトスープ`
+
+(Recipes 2 and 3 used the Japanese form `レシピ2：` / `レシピ3：` correctly — the model is non-deterministic, hence why the guard exists.)
+
+The v1.5.212.3 ratio check (`latin_chars >= native_chars`) calculated 6 Latin chars vs 30+ Japanese chars and skipped these. Wrong call — even one English word at the start of an otherwise-Japanese heading is a leak.
+
+### Added / Changed / Fixed
+
+- **`Async_Generator::enforce_heading_language()` aggressive Latin detection** — `includes/Async_Generator.php` line **~1788**
+  - Replaced the character-count ratio check with: ANY 4+ letter Latin word in a non-English heading triggers translation.
+  - Brand acronyms (CNN, BMW, JP, EU, NSW) are 1-3 letters and don't match. Brand names ≥4 letters (iPhone, Tesla, Toyota) DO trigger but the translator's system prompt preserves proper nouns, so it returns the brand string unchanged. Over-flagging is harmless; under-flagging ships leaks.
+  - Verify: `grep -n 'latin_word_count' seobetter/includes/Async_Generator.php`
+
+### Files touched
+
+- `includes/Async_Generator.php` — single method, ratio check replaced
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §3.1B addendum noting the aggressive detection upgrade
+
+### Verified by user
+
+- **UNTESTED** — JP re-test once more. Expected: `Recipe N:` and any other short English prefix in body H2/H3 translates to native form.
+
+### Open follow-ups (not in this patch)
+
+- Schema.org Validator "unspecified type" warning — awaiting Ben to share the exact field/node the validator flags
+- `keywords: "Best Slow Cooker Recipes for Winter 2026"` field in Recipe schema is still English even when article is Japanese (separate Schema_Generator path)
 
 ---
 

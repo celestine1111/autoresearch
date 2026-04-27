@@ -1838,39 +1838,21 @@ class Async_Generator {
             // post-write so its inner text starts empty in some pipelines).
             if ( mb_strlen( $text, 'UTF-8' ) < 3 ) continue;
 
-            // v1.5.212.3 — ratio-based Latin-vs-native detection.
-            // Pre-fix: `if (preg_match($native_re, $text)) continue` skipped
-            // any heading containing AT LEAST ONE native-script char, which
-            // let `Best Slow Cooker Recipes for Winter 2026: アイリスオーヤマ編`
-            // through (50+ Latin chars but 7 Japanese chars). Now we count:
-            //   - native_chars: matches of the language's script regex
-            //   - latin_words:  Latin runs of 4+ alphabetic letters (English
-            //                    words; brand acronyms like "CNN" / "BMW" /
-            //                    "JP" are 1-3 letters and don't trigger)
-            // If the heading has ANY 4+ letter Latin word AND those Latin
-            // chars equal-or-exceed the native chars, flag for translation.
-            // Brand-name edge case (e.g. "iPhone 16 Pro レビュー") still
-            // passes through — but the translator preserves brand names per
-            // its system prompt, so over-flagging is safe.
-            $native_chars = preg_match_all( $native_re, $text );
+            // v1.5.212.5 — Aggressive Latin-word detection.
+            // v1.5.212.3 used a Latin-vs-native CHARACTER COUNT ratio, which
+            // failed on short English prefixes like `Recipe 1: アイリスオーヤマ
+            // スロークッカーで作る…` — 6 Latin chars vs 30+ Japanese chars
+            // means Latin doesn't dominate, so the leak passed through.
+            // Now: ANY Latin word of 4+ letters in a non-English article
+            // triggers translation. Brand acronyms (CNN, BMW, JP, EU) are
+            // 1-3 letters and don't match. Brand names that ARE 4+ letters
+            // (iPhone, Tesla, Toyota, Honda) DO trigger but the translator's
+            // system prompt preserves proper nouns, so it returns the brand
+            // unchanged. Over-flagging is harmless; under-flagging ships
+            // English leaks. Choose the safer side.
             preg_match_all( '/[A-Za-z]{4,}/', $text, $latin_runs );
             $latin_word_count = is_array( $latin_runs[0] ?? null ) ? count( $latin_runs[0] ) : 0;
-            $latin_chars = 0;
-            foreach ( $latin_runs[0] ?? [] as $run ) {
-                $latin_chars += strlen( $run );
-            }
-
-            $needs_fix = false;
-            if ( $native_chars === 0 ) {
-                // Pure Latin / no native chars at all → certainly an English leak.
-                $needs_fix = true;
-            } elseif ( $latin_word_count >= 1 && $latin_chars >= $native_chars ) {
-                // Mixed-language heading where Latin dominates → English leak
-                // wrapped in token native-script tail (the colon-bilingual
-                // pattern v1.5.206d-fix9 was supposed to forbid).
-                $needs_fix = true;
-            }
-            if ( ! $needs_fix ) continue;
+            if ( $latin_word_count === 0 ) continue;
 
             $needs_translation[] = $text;
             $original_full[]     = $full;
