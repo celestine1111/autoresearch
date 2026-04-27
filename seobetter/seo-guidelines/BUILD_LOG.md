@@ -7,12 +7,45 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.213.2)
+> **Last updated:** 2026-04-27 (v1.5.213.3)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.213.3 — Add `class="key-takeaways"` so SpeakableSpecification selector matches
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben pasted the exact Schema.org Validator error text:
+> `.key-takeaways (No matches found for expression .key-takeaways.)`
+
+The SpeakableSpecification cssSelector at `build_article()` line 627 and `build_recipe_article_wrapper()` line 1276 references `.key-takeaways` — but the Key Takeaways block rendered by `Content_Formatter::format_hybrid()` line 1086 had ZERO classes (inline styles only). The selector pointed at a class that didn't exist on the page, so the validator correctly reported "no matches found."
+
+This has been a silent gap since v1.5.118 added Speakable; nobody noticed because Schema.org Validator runs on the live page, while the plugin's own validation only checks JSON-LD syntax. The fix is one-line.
+
+### Added / Changed / Fixed
+
+- **Add `class="key-takeaways"` to the takeaways div** — `includes/Content_Formatter.php::format_hybrid()` line **~1086**
+  - Visual styling stays inline (theme-proof). The class is a hook for the cssSelector to match.
+  - Verify: `grep -n 'class="key-takeaways"' seobetter/includes/Content_Formatter.php`
+
+### Files touched
+
+- `includes/Content_Formatter.php` — single class attribute added
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/article_design.md` — §5 Key Takeaways block documents the new class hook
+
+### Verified by user
+
+- **UNTESTED** — Schema.org Validator should now report zero errors. Recipe + Article wrapper Speakable selector picks up the rendered `<div class="key-takeaways">`.
 
 ---
 

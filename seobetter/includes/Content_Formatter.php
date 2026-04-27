@@ -1083,7 +1083,16 @@ CSS;
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } elseif ( $is_takeaways ) {
                         $icon = $this->sb_icon( 'takeaways', 18 );
-                        $html = '<div style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0;color:' . $accent . '">';
+                        // v1.5.213.3 — class="key-takeaways" added so the
+                        // SpeakableSpecification cssSelector `.key-takeaways`
+                        // (Schema_Generator build_article + build_recipe
+                        // _article_wrapper) actually matches an element on
+                        // the page. Pre-fix the selector pointed at a class
+                        // that didn't exist and Schema.org Validator flagged
+                        // "No matches found for expression .key-takeaways."
+                        // The visual styling stays inline (theme-proof) and
+                        // the class is a hook for selectors only.
+                        $html = '<div class="key-takeaways" style="border-left:4px solid ' . $accent . ';background:linear-gradient(135deg,#f8f9ff 0%,#f0f0ff 100%);padding:1.25em 1.5em;border-radius:0 8px 8px 0;margin:1.5em 0;color:' . $accent . '">';
                         $html .= '<div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:' . $accent . ' !important;margin-bottom:0.6em;display:flex;align-items:center">' . $icon . esc_html( Localized_Strings::get( 'key_takeaways', $article_lang ) ) . '</div>';
                         $html .= "<{$tag} style=\"line-height:1.8;padding-left:1.5em;margin:0;color:#374151 !important\">";
                         foreach ( $section['items'] as $item ) {

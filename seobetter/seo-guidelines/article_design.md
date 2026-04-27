@@ -175,11 +175,13 @@ The accent color comes from the user's color picker. All other colors are fixed 
 
 ## 5. CONTENT BLOCK STYLES
 
-### 5.1 Key Takeaways Box (`.sb-takeaways`)
+### 5.1 Key Takeaways Box (`.sb-takeaways` / `.key-takeaways`)
 - Left border: 4px solid accent
 - Background: linear gradient (subtle blue-white)
 - Padding: 1.25em 1.5em
 - Border radius: 0 8px 8px 0 (rounded right side only)
+
+**Class hook for Speakable (v1.5.213.3):** The takeaways div carries `class="key-takeaways"` so the SpeakableSpecification cssSelector at `Schema_Generator::build_article()` and `build_recipe_article_wrapper()` can target it. Pre-fix the selector pointed at `.key-takeaways` but the rendered div had no class, only inline styles — Schema.org Validator reported "No matches found for expression .key-takeaways." Visual styling stays inline (theme-proof); the class is purely a selector hook.
 
 ### 5.2 Pros Box (`.sb-pros`)
 - Background: light green (`#f0fdf4`)
