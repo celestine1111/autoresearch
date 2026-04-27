@@ -201,7 +201,14 @@ class AI_Image_Generator {
         if ( empty( $api_key ) ) {
             $api_key = defined( 'SEOBETTER_OPENROUTER_KEY' ) ? SEOBETTER_OPENROUTER_KEY : '';
         }
-        if ( empty( $api_key ) ) return '';
+        if ( empty( $api_key ) ) {
+            // v1.5.215.1 — verbose logging so users can self-diagnose. Pre-fix
+            // a missing OpenRouter key silently fell through to Pexels with no
+            // hint to the user — they thought OpenRouter was broken. Now WP
+            // debug.log shows exactly which path failed.
+            error_log( 'SEOBetter OpenRouter image: no API key — configure OpenRouter in Settings → AI Providers (BYOK section) first.' );
+            return '';
+        }
 
         // Model slug. As of late 2025 OpenRouter exposes Nano Banana as
         // `google/gemini-2.5-flash-image-preview`. If Google rotates the slug
@@ -283,6 +290,13 @@ class AI_Image_Generator {
             if ( $saved !== '' ) return $saved;
         }
 
+        // v1.5.215.1 — if we got here we hit OpenRouter successfully but
+        // couldn't parse an image out of the response. Log the response shape
+        // (truncated) so we can update the parser when OpenRouter rotates
+        // their schema. The model slug filter `seobetter_openrouter_image_model`
+        // also lets advanced users override the slug if Google moves it again.
+        $body_excerpt = substr( wp_remote_retrieve_body( $response ), 0, 400 );
+        error_log( 'SEOBetter OpenRouter image: 200 OK but no image found in response. Model=' . $model . '. Body excerpt: ' . $body_excerpt );
         return '';
     }
 

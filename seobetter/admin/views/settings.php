@@ -122,7 +122,12 @@ if ( isset( $_POST['seobetter_save_places'] ) && check_admin_referer( 'seobetter
 // AI_Image_Generator::generate() to produce article featured images.
 if ( isset( $_POST['seobetter_save_branding'] ) && check_admin_referer( 'seobetter_branding_nonce' ) ) {
     $existing = get_option( 'seobetter_settings', [] );
-    $allowed_providers = [ '', 'pollinations', 'gemini', 'dalle3', 'flux_pro' ];
+    // v1.5.215.1 — added 'openrouter' to the allowlist. Without this entry
+    // the save handler silently reset $provider to '' (Disabled), so users
+    // who picked OpenRouter from the dropdown got Pexels instead and the
+    // OpenRouter API never received a request — root cause of Ben's "I
+    // checked OpenRouter logs and no image generation hit" report.
+    $allowed_providers = [ '', 'pollinations', 'openrouter', 'gemini', 'dalle3', 'flux_pro' ];
     $provider = sanitize_text_field( $_POST['branding_provider'] ?? '' );
     if ( ! in_array( $provider, $allowed_providers, true ) ) {
         $provider = '';

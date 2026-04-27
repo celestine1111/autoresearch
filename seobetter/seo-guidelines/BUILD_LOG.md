@@ -7,12 +7,56 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.215)
+> **Last updated:** 2026-04-27 (v1.5.215.1)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.215.1 — Hotfix: add 'openrouter' to branding-provider save allowlist
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben tested v1.5.215 — picked OpenRouter from the new dropdown, generated an article, and saw NO request hit OpenRouter (verified via OpenRouter's activity logs). Articles got Pexels images instead.
+
+Root cause: `admin/views/settings.php` line 125 had a save-handler allowlist `['', 'pollinations', 'gemini', 'dalle3', 'flux_pro']` that didn't include `'openrouter'`. When the user picked OpenRouter and saved, lines 127-129 silently reset `$provider` to `''` (Disabled) → `update_option('seobetter_settings', ['branding_provider' => '', ...])` → next article generation fell through to the Pexels fallback chain.
+
+The dropdown OPTION was added in v1.5.215 but the SAVE allowlist was not updated. Classic missed-the-other-end bug.
+
+### Added / Changed / Fixed
+
+- **Allowlist now includes 'openrouter'** — `admin/views/settings.php` line **~125`
+  - One word added: `'openrouter'` between `'pollinations'` and `'gemini'`
+  - Verify: `grep -n "openrouter.*gemini.*dalle3" seobetter/admin/views/settings.php`
+
+- **Verbose error logging in `generate_openrouter()`** — `includes/AI_Image_Generator.php`
+  - When the OpenRouter BYOK key isn't configured, logs `'no API key — configure OpenRouter in Settings → AI Providers (BYOK section) first.'`
+  - When OpenRouter returns 200 OK but no image is in the response, logs the model slug + a 400-char body excerpt so we can update the parser if OpenRouter rotates their schema
+  - Pre-fix: every silent failure path returned '' with no log, so users couldn't self-diagnose
+  - Verify: `grep -n "SEOBetter OpenRouter image:" seobetter/includes/AI_Image_Generator.php`
+
+### Files touched
+
+- `admin/views/settings.php` — one allowlist entry
+- `includes/AI_Image_Generator.php` — two error_log statements
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — re-test:
+  1. Settings → Branding & AI Featured Image → AI Image Provider → "OpenRouter → Gemini Nano Banana"
+  2. Save settings
+  3. Reload Settings page → confirm OpenRouter is still selected (not silently reset to Disabled)
+  4. Generate an article
+  5. Check OpenRouter activity dashboard — should now show a request to `google/gemini-2.5-flash-image-preview`
+  6. If no request: check `wp-content/debug.log` for `SEOBetter OpenRouter image:` lines explaining why
 
 ---
 
