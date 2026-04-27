@@ -19,7 +19,7 @@
 ## v1.5.213 — Schema coverage release: Recipe Article wrapper + @id refs + Speakable expansion + cleanups
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `044cca6`
 
 ### Why this ships
 
