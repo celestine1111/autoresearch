@@ -19,7 +19,7 @@
 ## v1.5.213.1 — Localize keyword-density "this topic" replacement (close v1.5.213 leak)
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `8e7b5d1`
 
 ### Why this ships
 
