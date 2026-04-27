@@ -58,7 +58,7 @@
 
 ---
 
-## 3. Pro Tier — **$29/month or $249/year** (29% annual discount)
+## 3. Pro Tier — **$39/month or $349/year** (25% annual discount)
 
 **Target customer:** solo bloggers, small site owners, DIY SEO operators running 1 WordPress site.
 
@@ -78,11 +78,22 @@
 - Remove "Powered by SEOBetter" footer
 - 1 site license
 
-**Pricing psychology:** $29/mo is the anchor. Annual plan shown as "$29/month billed annually (save $99)" — loss-aversion framing beats percent-off framing. The upgrade CTA mentions the savings in dollars, not percentages.
+**Cloud generation included:** 50 articles/month using SEOBetter's centralized OpenRouter + Firecrawl + Serper + Pexels stack. Above 50 → overage billing at $0.50/article (74% margin on overage). BYOK users (own API key) get unlimited generations and don't consume the Cloud quota.
+
+**Pricing psychology:** $39/mo is the anchor — positioned alongside Jasper ($39/mo entry) and above Yoast Premium ($8/mo equivalent) since SEOBetter delivers AI generation + SEO + schema in one product. Annual plan shown as "$29/month billed annually (save $119)" — loss-aversion framing beats percent-off framing. The upgrade CTA mentions the savings in dollars, not percentages.
+
+**Unit economics at $39/mo (1 user, 50 articles/mo Cloud):**
+- LLM (OpenRouter mid-mix gpt-4.1-mini extractions + Sonnet content): ~$0.10/article × 50 = $5.00
+- Firecrawl scrape (5-10 pages × $0.004): ~$0.02/article × 50 = $1.00
+- Serper SERP (5-10 queries × $0.0003): ~$0.003/article × 50 = $0.15
+- Pexels free tier: $0
+- Upstash free tier: $0
+- Vercel/infra prorated: ~$0.50/user/mo (assumes 100 paid users sharing $48/mo fixed cost)
+- **Total cost: ~$6.65/user/mo. Margin: $39 − $6.65 = $32.35 (83%).**
 
 ---
 
-## 4. Agency Tier — **$99/month or $890/year** (25% annual discount)
+## 4. Agency Tier — **$129/month or $1,290/year** (17% annual discount)
 
 **Target customer:** freelance SEOs, content agencies, multi-site operators managing client WordPress sites.
 
@@ -99,26 +110,64 @@
 - Priority support (24h response)
 - Onboarding call (first month)
 
-**Pricing psychology:** $99 is the Pro anchor × 3.4 — justified by 10× sites + 5× seats. Positioned as "agency revenue tool" not "bigger individual plan".
+**Cloud generation included:** 250 articles/month bundled across all 10 sites (pooled, not per-site). Overage at $0.40/article (67% margin on overage — Agency rate, slight discount vs Pro overage to incentivize tier upgrade).
+
+**Pricing psychology:** $129 is the Pro anchor × 3.3 — justified by 10× sites + 5× seats + 5× Cloud articles. Positioned as "agency revenue tool" not "bigger individual plan". Annual price ($1,290) anchors against Surfer SEO Business ($219/mo = $2,628/yr) and ContentBot Premium ($99/mo).
+
+**Unit economics at $129/mo (1 agency, 250 articles/mo Cloud):**
+- LLM: $0.10 × 250 = $25.00
+- Firecrawl: $0.02 × 250 = $5.00
+- Serper: $0.003 × 250 = $0.75
+- Vercel/infra prorated (heavier usage): ~$2.00/user/mo
+- Support overhead (24h SLA, onboarding call): ~$3/user/mo amortized
+- **Total cost: ~$35.75/user/mo. Margin: $129 − $35.75 = $93.25 (72%).**
 
 ---
 
 ## 5. Cloud Credits Add-on (Hybrid Usage Layer)
 
-**Purpose:** capture users who don't want to manage API keys. Sell prepaid credit packs that cover Perplexity Sonar Pro + Claude/GPT-4o calls behind the scenes. Stacks on top of Pro or Agency. Never blocks users — acts like overage billing.
+**Purpose:** capture users who don't want to manage API keys but exceed their tier's monthly quota. Sell prepaid credit packs that cover OpenRouter LLM + Firecrawl + Serper + Pexels calls behind the scenes. Stacks on top of Pro or Agency. Never blocks users — acts like overage billing.
 
 **Model:** mirrors GitHub Copilot and Cursor's credit-pack approach. [Schematic HQ 2026](https://schematichq.com/blog/software-monetization-models) identifies this as the dominant AI-tool pricing pattern in 2026.
 
-**Packs:**
-| Pack | Price | Articles covered | Cost per article |
-|---|---|---|---|
-| Starter | $10 | ~50 articles | $0.20 |
-| Creator | $30 | ~200 articles | $0.15 |
-| Agency | $100 | ~800 articles | $0.125 |
+### Per-article cost reality (Ben's actual outflow — Sept 2025 baseline)
 
-**Margin:** each "article" uses ~$0.06 Sonar Pro + ~$0.03 Claude/GPT = $0.09 cost to us. Starter margin = 55%, Creator = 40%, Agency = 28%. Volume discounts drive users to larger packs.
+Calculated from the SEOBetter cloud-api pipeline (research → outline → content → schema → headings → meta tags) across 8-10 LLM calls per article:
 
-**UX:** credit balance always visible in the top bar ("❇ 43 credits"). One-click top-up when below 10.
+| Component | Per-article cost | Source |
+|---|---|---|
+| OpenRouter LLM (mid-mix: gpt-4.1-mini extractions + Sonnet content) | $0.08–0.15 | OpenRouter pricing 2025 |
+| Firecrawl scrape (5-10 pages) | $0.02–0.04 | Firecrawl Standard plan $26/mo ÷ 12K pages |
+| Serper SERP queries | $0.003 | Serper Starter $50/170K queries |
+| Pexels images | $0.00 | Free tier, 20K req/mo |
+| Upstash Redis | $0.00 | Free tier, 10K cmd/day |
+| **Total variable cost per article** | **~$0.13 mid-mix, $0.05 cheapest, $0.40 premium** | — |
+
+Plus fixed monthly costs amortized across paid user base:
+
+| Item | Monthly | Notes |
+|---|---|---|
+| Firecrawl Standard | $26 | Required for /api/scrape (replaces Jina Reader fallback for paid users) |
+| Vercel Pro hosting | $20 | When traffic exceeds Hobby tier |
+| Other infra | ~$2 | Domain, SSL, monitoring |
+| **Total fixed** | **~$48/mo** | Amortizes to ~$0.50/user at 100 paid users |
+
+### Credit packs (priced at 70%+ margin)
+
+| Pack | Price | Articles covered | Effective $/article | Cost to Ben | Margin |
+|---|---|---|---|---|---|
+| Starter | $19 | ~50 articles | $0.38 | $6.50 | **66%** |
+| Creator | $49 | ~150 articles | $0.33 | $19.50 | **60%** |
+| Agency | $129 | ~500 articles | $0.26 | $65.00 | **50%** |
+
+**Why these prices vs. the old $10/$30/$100 packs:**
+- Old Agency pack ($100 → 800 articles → $0.125/article) was a LOSS — Ben's actual cost is $0.13/article, so $0.125 is below break-even.
+- New scheme uses real per-article cost ($0.13) as floor, sets margin at 50-66% (volume discount on bigger packs but never below 50%).
+- Volume tiering still rewards bigger commitments (Starter $0.38 → Agency $0.26), just rebased to actually profitable numbers.
+
+**Cost-of-goods sanity check:** at the cheapest mix (gpt-4.1-mini + minimum scrape), Ben's cost drops to ~$0.05/article and Starter pack hits 87% margin. At the premium mix (Sonnet/Opus content), cost rises to ~$0.40/article and Starter is barely break-even at $0.38 — which is why the plugin defaults to mid-mix, not premium-mix, on Cloud generations. Agency tier is the only one where users can opt into premium models (priced into the higher overage rate).
+
+**UX:** credit balance always visible in the top bar ("❇ 43 credits"). One-click top-up when below 10. Show real per-article spend in the post-generation success card so users see the value ("This article cost 1 credit / $0.38 — Pro saves you 30%").
 
 ---
 
@@ -190,7 +239,7 @@ Research shows **personalized contextual CTAs beat default CTAs by 202%** ([WeCa
 |---|---|---|
 | 1 | User selects a Pro content type (Buying Guide / Comparison / Review) | **"Unlock all 21 content types + 🎯 comparison tables — start 7-day Pro trial"** |
 | 2 | User's article GEO score card shows Tables 0 with a locked "Add Table" button | **"Add a comparison table in one click — Pro fixes tables automatically (+5 GEO points)"** |
-| 3 | User enters a small-town keyword that Sonar-free tier can't cover | **"Unlock Perplexity Sonar Pro for any town worldwide — find real businesses in Mudgee, Lucignano, or any small city ($29/mo)"** |
+| 3 | User enters a small-town keyword that Sonar-free tier can't cover | **"Unlock Perplexity Sonar Pro for any town worldwide — find real businesses in Mudgee, Lucignano, or any small city ($39/mo)"** |
 | 4 | User enables AI Featured Image and picks a branded style | **"Upgrade to use DALL-E 3 and FLUX Pro for premium images (Pro)"** |
 | 5 | User's article has plain-text citations instead of clickable links | **"Pro users get clickable citations via Brave Search — fixes AIOSEO 'no outbound links' automatically"** |
 | 6 | User tries to generate a 4th article in a month (if we add usage cap to free tier later) | **"You've used all 3 free cloud articles this month. Upgrade to Pro for unlimited, or bring your own API key (still free)"** |
@@ -199,7 +248,7 @@ Research shows **personalized contextual CTAs beat default CTAs by 202%** ([WeCa
 **Copy rules (from SaaS CRO research):**
 - Benefit-led, not feature-led ("Find real businesses" not "Unlock Sonar")
 - Specific numbers ("+5 GEO points" not "improve your score")
-- Time/money framing ("Save $99 with annual")
+- Time/money framing ("Save $119 with annual")
 - Loss aversion ("Don't leave 15 points on the table")
 - Social proof where possible ("Join 2,387 sites using SEOBetter Pro")
 
@@ -211,23 +260,25 @@ Research shows **personalized contextual CTAs beat default CTAs by 202%** ([WeCa
 2. **Lock icons on Pro UI elements** (discovery-through-friction) — show the full UI greyed out with a lock, hover reveals the Pro tooltip. Users *see* what they're missing.
 3. **In-plugin email capture** on first activation — 5-7 email nurture sequence driving to Pro trial over 45 days.
 4. **Social proof counter** in upgrade modal, auto-incremented from real license count: *"Join 2,387 WordPress sites using SEOBetter Pro"*. If launching with 0 users, seed with beta tester quotes.
-5. **AppSumo LTD for first 500 buyers** at $149. Immediate $75k cash injection + 500 evangelist reviews.
+5. **AppSumo LTD for first 500 buyers** at $169 (Pro lifetime, capped 1 site). Immediate $85k cash injection + 500 evangelist reviews. LTD priced just under 1 year of Pro ($349) to feel like a steal but ensures buyer is paying ≥1.4× annual subscription cost.
 6. **Exit-intent modal** when a user tries to downgrade from trial — offer annual discount or credit-pack alternative.
 7. **GEO Score comparison in upgrade modal** — "Free tier users average 72. Pro users average 94. Upgrade to see your score rise."
-8. **Annual pricing dollar savings** not percent — *"Save $99/year"* beats *"29% off"*.
+8. **Annual pricing dollar savings** not percent — *"Save $119/year"* beats *"25% off"*.
 
 ---
 
 ## 10. Projected MRR (Scenario Planning)
 
-Assume 1,000 active free installs from WordPress.org + AppSumo aftermath by month 6:
+Assume 1,000 active free installs from WordPress.org + AppSumo aftermath by month 6. Pro = $39, Agency = $129, average Credits spend $25/active credit user/mo.
 
-| Conversion | Pro users | Agency users | Pro MRR | Agency MRR | Credits MRR | **Total MRR** |
-|---|---|---|---|---|---|---|
-| 5% (pessimistic) | 45 | 5 | $1,305 | $495 | $500 | **~$2,300** |
-| 8% (SaaS median) | 72 | 8 | $2,088 | $792 | $800 | **~$3,680** |
-| 15% (AI tools average) | 135 | 15 | $3,915 | $1,485 | $1,200 | **~$6,600** |
-| 20% (AI tools best) | 180 | 20 | $5,220 | $1,980 | $1,500 | **~$8,700** |
+| Conversion | Pro users | Agency users | Pro MRR | Agency MRR | Credits MRR | **Total Gross MRR** | Variable cost @ $7/Pro + $35/Agency + 60% credits margin | **Net MRR** |
+|---|---|---|---|---|---|---|---|---|
+| 5% (pessimistic) | 45 | 5 | $1,755 | $645 | $500 | **$2,900** | $490 | **~$2,410** |
+| 8% (SaaS median) | 72 | 8 | $2,808 | $1,032 | $800 | **$4,640** | $784 | **~$3,856** |
+| 15% (AI tools average) | 135 | 15 | $5,265 | $1,935 | $1,200 | **$8,400** | $1,470 | **~$6,930** |
+| 20% (AI tools best) | 180 | 20 | $7,020 | $2,580 | $1,500 | **$11,100** | $1,960 | **~$9,140** |
+
+Less fixed monthly infra cost (~$48/mo) → still 95-99% net margin at scale because fixed cost is dominated by variable cost as user count grows.
 
 Scaled to 10,000 installs (typical 2-year WP.org plugin), these numbers become **$23,000 – $87,000 MRR**.
 
@@ -240,7 +291,7 @@ AppSumo LTD launch adds a **one-time $45,000-$120,000 cash injection** in month 
 The pricing page on [seobetter.com](https://seobetter.com) should mirror this document exactly:
 
 - **Hero:** "The WordPress plugin that writes articles AI actually cites"
-- **3 pricing cards:** Free / Pro ($29) / Agency ($99), with annual toggle showing dollar savings
+- **3 pricing cards:** Free / Pro ($39) / Agency ($129), with annual toggle showing dollar savings
 - **Feature comparison table:** Free vs Pro vs Agency with ✅ / ❌ marks for every feature in §2-4
 - **Social proof:** install count from WP.org API, review stars, logos of sites using it
 - **FAQ:** refund policy, trial terms, BYOK explanation, WP.org free version vs paid
@@ -256,7 +307,8 @@ The pricing page on [seobetter.com](https://seobetter.com) should mirror this do
 |---|---|---|
 | 2026-04-15 | Chose feature-gated freemium over usage cap | Usage caps feel punitive, hurt reviews. Feature gating gives clear upgrade path without blocking core value. |
 | 2026-04-15 | BYOK free tier | Zero marginal cost on free users. Their own API keys pay for their own AI usage. |
-| 2026-04-15 | $29 Pro / $99 Agency pricing | Anchored against competitor plugins (Yoast $99/yr, RankMath $59/yr, Rank Math Pro $129/yr) and AI content tools ($20-50 solo, $100-300 SMB per Sight AI 2026 report). $29 is the sweet spot for solo bloggers. |
+| 2026-04-15 | $29 Pro / $99 Agency pricing | Original anchor against competitor plugins (Yoast $99/yr, RankMath $59/yr, Rank Math Pro $129/yr). |
+| 2026-04-27 | **Repricing: $39 Pro / $129 Agency** | Original $29/$99 pricing didn't account for actual unit economics. Real cost per Cloud article = $0.13 (LLM $0.10 + Firecrawl $0.02 + Serper $0.003). At 50 articles/mo Pro quota, COGS = $6.50/user. Original $29 only gave 78% margin BEFORE prorated fixed costs ($48/mo Firecrawl + Vercel + infra). New $39 hits 83% margin and positions alongside Jasper ($39/mo entry) — the actual peer in AI-generation space, not Yoast (which doesn't ship AI). Agency raised $99 → $129 because original pricing showed only 65% margin once Firecrawl scrape volume is factored in; $129 hits 72%. |
 | 2026-04-15 | 10 sites on Agency, not unlimited | Unlimited invites abuse. 10 covers most realistic agencies while leaving room for an Enterprise tier later. |
 | 2026-04-15 | Cloud Credits as hybrid add-on, not mandatory | Matches Cursor/GitHub Copilot model. Users who don't want to manage keys can pay for credits. Users who DO want BYOK still have the free escape hatch. |
 | 2026-04-15 | AppSumo LTD launch in Phase 3 | Proven WP-plugin launch tactic. $45-120k upfront funds operations. Trade: 3-month exclusivity, but worth it for cash + reviews. |
