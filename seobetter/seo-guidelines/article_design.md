@@ -469,6 +469,30 @@ Alt text is clamped to 125 characters and never starts with "image of" or "pictu
 
 **Author bio + featured image filter (v1.5.213.2):** `Schema_Generator::detect_image_schemas()` skips author bio photos (matched by Settings author_image URL), the featured image (already represented by `Article.image` / `Recipe.image`), and class-hinted non-content images (`avatar` / `wp-post-image` / `gravatar` / `author-bio` / `seobetter-author` / `icon` / `emoji` / `logo`). Pre-fix the author profile photo was emitting as a top-level ImageObject node with `name: "Ben Passo"` — duplicate identity data plus Schema.org Validator noise.
 
+### 7.3.1 AI featured image providers (v1.5.215)
+
+The plugin auto-generates a featured image from the article title using the user's configured Branding provider in Settings. 5 providers are supported as of v1.5.215:
+
+| Provider | Cost / image | Auth | When to pick |
+|---|---|---|---|
+| **Pollinations.ai** | Free (no key, no signup) | None | Default for new users — testing the workflow without committing to a paid key |
+| **OpenRouter → Gemini 2.5 Flash Image (Nano Banana)** | ~$0.04 (pass-through) | Reuses user's existing OpenRouter BYOK key from AI Providers section | When user already pays OpenRouter for article LLM calls — single dashboard, single bill |
+| **Google Gemini direct** | ~$0.04, free 10/day | Google AI Studio key | When user wants Google direct without OpenRouter middleman |
+| **OpenAI DALL-E 3** | $0.04 std / $0.08 HD | OpenAI key | Strong prompt adherence, conversational refinement |
+| **Black Forest Labs FLUX 1.1 Pro** | $0.055 | fal.ai key | Best photorealistic editorial quality |
+
+Featured image is just the article title rendered as a clickable image — no logo overlay, no text-on-image, no variations. Per Ben's v1.5.215 design call to keep the feature lean. Logo embedding, per-article style override, and content-type-filtered style libraries are documented in `pro-features-ideas.md` for future revisits.
+
+### 7.3.2 WebP conversion (v1.5.215)
+
+After `media_sideload_image` stores the AI-generated or stock featured image, the plugin attempts to convert it to WebP at quality 85. WebP is ~30% smaller than JPEG/PNG at equivalent visual quality:
+
+- WhatsApp link previews need <600KB to render the LARGE preview (vs. small thumbnail)
+- LCP / Core Web Vitals improve from smaller image
+- Mobile bandwidth on shared/cold caches
+
+Falls back silently when `wp_image_editor_supports(['mime_type' => 'image/webp'])` returns false (older PHP/GD without WebP, certain shared hosts). Already-WebP and SVG/GIF attachments are left alone. Original JPEG/PNG is kept on disk as fallback for non-WebP consumers.
+
 ### 7.4 Rendered output
 
 ```html

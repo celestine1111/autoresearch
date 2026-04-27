@@ -70,6 +70,11 @@ class AI_Image_Generator {
         switch ( $provider ) {
             case 'pollinations':
                 return self::generate_pollinations( $prompt );
+            case 'openrouter':
+                // v1.5.215 — OpenRouter routing for Nano Banana. Reuses the
+                // user's existing OpenRouter BYOK key from AI_Provider_Manager
+                // so users don't manage two keys for the same upstream account.
+                return self::generate_openrouter( $prompt );
             case 'gemini':
                 return self::generate_gemini( $prompt, $brand['api_key'] ?? '' );
             case 'dalle3':
@@ -171,6 +176,127 @@ class AI_Image_Generator {
         if ( empty( $body ) ) return '';
 
         return self::save_binary_to_temp( $body, 'jpg' );
+    }
+
+    /**
+     * v1.5.215 — Gemini 2.5 Flash Image ("Nano Banana") via OpenRouter.
+     *
+     * Uses the user's existing OpenRouter BYOK key (configured in Settings →
+     * AI Providers for article generation) — no separate key field needed.
+     * Same OpenRouter account is billed for both LLM calls and image calls;
+     * single dashboard, single rate limit, single failure mode.
+     *
+     * Endpoint: chat completions with multimodal output. Gemini Image returns
+     * the image as base64 inline_data inside the assistant message content,
+     * matching the direct-Google response shape closely enough that we share
+     * the parser path (with a small adapter for the OpenRouter wrapper).
+     *
+     * Cost: same ~$0.039/image as Google direct (OpenRouter pass-through
+     * pricing as of late 2025; OpenRouter takes a small flat margin).
+     */
+    private static function generate_openrouter( string $prompt ): string {
+        // Reuse the OpenRouter BYOK key the user already configured for article
+        // generation. Falls back to env var for dev/test.
+        $api_key = AI_Provider_Manager::get_provider_key( 'openrouter' );
+        if ( empty( $api_key ) ) {
+            $api_key = defined( 'SEOBETTER_OPENROUTER_KEY' ) ? SEOBETTER_OPENROUTER_KEY : '';
+        }
+        if ( empty( $api_key ) ) return '';
+
+        // Model slug. As of late 2025 OpenRouter exposes Nano Banana as
+        // `google/gemini-2.5-flash-image-preview`. If Google rotates the slug
+        // upstream, OpenRouter usually keeps a stable alias — but if the slug
+        // ever fails, surface it via error_log so we can update.
+        $model = apply_filters( 'seobetter_openrouter_image_model', 'google/gemini-2.5-flash-image-preview' );
+
+        $response = wp_remote_post( 'https://openrouter.ai/api/v1/chat/completions', [
+            'timeout' => 60,
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $api_key,
+                // OpenRouter requires HTTP-Referer + X-Title for app attribution.
+                'HTTP-Referer'  => home_url(),
+                'X-Title'       => 'SEOBetter',
+            ],
+            'body' => wp_json_encode( [
+                'model'    => $model,
+                'messages' => [
+                    [
+                        'role'    => 'user',
+                        'content' => 'Generate a high-quality image for: ' . $prompt,
+                    ],
+                ],
+                // Gemini-family image models honour these via OpenRouter's
+                // pass-through; non-image models will ignore safely.
+                'modalities' => [ 'image', 'text' ],
+            ] ),
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'SEOBetter OpenRouter image error: ' . $response->get_error_message() );
+            return '';
+        }
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( $code !== 200 ) {
+            error_log( 'SEOBetter OpenRouter image HTTP ' . $code . ': ' . substr( wp_remote_retrieve_body( $response ), 0, 200 ) );
+            return '';
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        // OpenRouter wraps the response in OpenAI-style choices[]. Inside, the
+        // assistant message content can be either:
+        //   (a) a string with image inlined as data URL, OR
+        //   (b) an array of parts (matching Gemini direct shape).
+        $message = $data['choices'][0]['message'] ?? [];
+        $content = $message['content'] ?? '';
+
+        // Some OpenRouter responses include an `images` array on the message
+        // (newer schema), each with `image_url.url` as a data URL.
+        if ( ! empty( $message['images'] ) && is_array( $message['images'] ) ) {
+            foreach ( $message['images'] as $img ) {
+                $url_or_data = $img['image_url']['url'] ?? '';
+                $saved = self::save_data_url( $url_or_data );
+                if ( $saved !== '' ) return $saved;
+            }
+        }
+
+        // Older schema: array of parts mirroring Gemini direct.
+        if ( is_array( $content ) ) {
+            foreach ( $content as $part ) {
+                if ( isset( $part['inlineData']['data'] ) ) {
+                    return self::save_base64_to_temp(
+                        $part['inlineData']['data'],
+                        $part['inlineData']['mimeType'] ?? 'image/png'
+                    );
+                }
+                if ( isset( $part['image_url']['url'] ) ) {
+                    $saved = self::save_data_url( $part['image_url']['url'] );
+                    if ( $saved !== '' ) return $saved;
+                }
+            }
+        }
+
+        // Last resort: scan a string content for an inline data URL.
+        if ( is_string( $content ) && $content !== '' ) {
+            $saved = self::save_data_url( $content );
+            if ( $saved !== '' ) return $saved;
+        }
+
+        return '';
+    }
+
+    /**
+     * v1.5.215 — Save a `data:image/...;base64,...` URL string to a temp
+     * file. Used by the OpenRouter response parser.
+     */
+    private static function save_data_url( string $data_url ): string {
+        if ( strpos( $data_url, 'data:image/' ) !== 0 ) return '';
+        if ( ! preg_match( '#^data:image/([a-z0-9+.-]+);base64,(.+)$#i', $data_url, $m ) ) return '';
+        $ext = strtolower( $m[1] );
+        $ext = ( $ext === 'jpeg' ) ? 'jpg' : preg_replace( '/[^a-z0-9]/', '', $ext );
+        if ( $ext === '' ) $ext = 'png';
+        return self::save_base64_to_temp( $m[2], 'image/' . $ext );
     }
 
     /**

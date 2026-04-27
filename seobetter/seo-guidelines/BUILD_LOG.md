@@ -7,12 +7,92 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.214)
+> **Last updated:** 2026-04-27 (v1.5.215)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.215 — Featured image polish: OpenRouter routing + WebP + richer og:image meta
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Two parallel research agents (internal AI image inventory + external 2025-2026 model/style/social-spec research) returned a 30-style content-type-filtered library + per-article overrides + Pinterest pin generation as the "ambitious" plan. After review, Ben chose the LEAN scope — confirm Nano Banana works through his existing OpenRouter key, polish the social meta, and add WebP. Park the bigger feature library until paying users actually ask for it.
+
+This is the YAGNI version of AI featured images: existing 4 providers + 7 style presets are kept exactly as-is. Just adds one more provider option (OpenRouter routing) so Ben can test Nano Banana without adding a second API key, plus social-meta polish that benefits ALL featured images (AI-generated or Pexels stock).
+
+### Added / Changed / Fixed
+
+- **OpenRouter as 5th AI image provider** — `includes/AI_Image_Generator.php` line **~71** + new method `generate_openrouter()` line **~177**
+  - Reuses the user's existing OpenRouter BYOK key from `AI_Provider_Manager` — no separate key field. Single OpenRouter dashboard, single bill.
+  - Calls `google/gemini-2.5-flash-image-preview` via OpenRouter's chat completions endpoint (model slug filterable via `seobetter_openrouter_image_model` filter for future-proofing).
+  - Parses both response schemas OpenRouter has used in 2025: `message.images[].image_url.url` (newer) and `message.content[].inlineData.data` (Gemini-direct mirror).
+  - Emits `HTTP-Referer` + `X-Title` headers per OpenRouter's app-attribution requirement.
+  - New helper `save_data_url()` parses `data:image/...;base64,...` strings into temp files.
+  - Verify: `grep -n 'generate_openrouter' seobetter/includes/AI_Image_Generator.php`
+
+- **OpenRouter dropdown entry** — `admin/views/settings.php` line **~782**
+  - Added "OpenRouter → Gemini Nano Banana — uses your existing OpenRouter key, ~$0.04/image" as the 2nd option (right after Pollinations)
+  - Help text explains the BYOK key reuse so users don't enter a key twice
+  - JS `updateBrandingKeyRow()` now hides the API key INPUT when OpenRouter is selected (still shows the row so help text is visible)
+  - Verify: `grep -n 'OpenRouter → Gemini Nano Banana' seobetter/admin/views/settings.php`
+
+- **Richer og:image meta** — `includes/Social_Meta_Generator.php` line **~41**
+  - Pre-fix: hardcoded `og:image:width=1200, og:image:height=627`. Wrong for Pinterest pins (1000×1500), square logos, or any non-OG-standard upload.
+  - Now: reads ACTUAL dimensions from `wp_get_attachment_metadata`. Falls back to 1200×630 (modern OG default, was 627) when metadata is missing (external URL, etc).
+  - Adds `og:image:type` (mime type from the attachment) — saves crawlers a HEAD request to detect format.
+  - Adds `og:image:alt` and `twitter:image:alt` — accessibility win + LinkedIn renders alt under the share preview.
+  - Verify: `grep -n 'og:image:type\|og:image:alt' seobetter/includes/Social_Meta_Generator.php`
+
+- **Featured image WebP conversion (best-effort)** — `seobetter.php::set_featured_image()` line **~4040** + new `convert_featured_to_webp()` line **~4050**
+  - After `media_sideload_image` stores the AI-generated or stock image, attempts to convert to WebP at quality 85.
+  - WebP at q85 is ~30% smaller than JPEG/PNG at equivalent visual quality. Direct wins:
+    - WhatsApp link previews need <600KB to render the LARGE preview vs. small thumb
+    - LCP / Core Web Vitals improve from smaller image
+    - Mobile bandwidth on shared/cold caches
+  - Falls back silently when `wp_image_editor_supports(['mime_type' => 'image/webp'])` returns false (older PHP/GD without WebP, certain shared hosts).
+  - Already-WebP and SVG/GIF attachments are left alone.
+  - Original JPEG/PNG file is kept on disk as fallback for non-WebP consumers (cached HTML, RSS feeds).
+  - Updates attachment `post_mime_type` to `image/webp` and regenerates metadata so future thumbnail requests serve WebP.
+  - Verify: `grep -n 'convert_featured_to_webp' seobetter/seobetter.php`
+
+### Files touched
+
+- `includes/AI_Image_Generator.php` — OpenRouter routing + data-URL parser
+- `admin/views/settings.php` — Branding dropdown entry + help text + JS toggle
+- `includes/Social_Meta_Generator.php` — actual-dimension og:image + type + alt
+- `seobetter.php` — featured image WebP conversion + version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/article_design.md` — §7.4 (rendered output) updated with WebP note
+
+### Verified by user
+
+- **UNTESTED** — install zip, expected:
+  - Settings → Branding → AI Image Provider dropdown shows new "OpenRouter → Gemini Nano Banana" option
+  - Picking it hides the API key input (uses BYOK key from AI Providers section instead)
+  - Generating an article with OpenRouter selected produces a featured image via Nano Banana
+  - Saved featured image is `.webp` extension when the host supports it (check media library)
+  - View source on a published article: `og:image:width` matches actual file width, `og:image:type` shows `image/webp`, `og:image:alt` is populated
+
+### Cut from scope per Ben's design review
+
+These were in the original research but explicitly dropped to keep the plugin focused:
+
+- ~~30-style content-type-filtered library~~ — 7 existing presets stay
+- ~~Per-article style picker on the form~~ — Settings-only is fine
+- ~~Pinterest pin separate generation~~ — single 1200×630 image only
+- ~~Logo overlay / multimodal logo input~~ — featured image is just a clean clickable representation of article title
+- ~~Variations (3 side-by-side)~~ — single image per generation
+- ~~Adding Ideogram 3.0 / Recraft V3 / GPT Image 1~~ — 5 providers (incl. OpenRouter) is enough for v1
+- ~~Renaming style preset labels~~ — kept as-is, users haven't complained
+
+These ideas are documented in `pro-features-ideas.md` for future revisits if/when paying users request them.
 
 ---
 

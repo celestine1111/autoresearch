@@ -39,9 +39,30 @@ class Social_Meta_Generator {
         echo '<meta property="og:site_name" content="' . esc_attr( $data['site_name'] ) . '" />' . "\n";
 
         if ( $data['image'] ) {
+            // v1.5.215 — use ACTUAL image dimensions when available (some users
+            // upload square 1200×1200 logos, Pinterest pins at 1000×1500, etc).
+            // og:image:type helps crawlers skip a HEAD request to detect mime;
+            // og:image:alt is an accessibility win + LinkedIn renders it under
+            // the share preview. Falls back to OG-standard 1200×630 when the
+            // featured image attachment metadata is missing (external URL).
+            $thumb_id = get_post_thumbnail_id( $post->ID );
+            $img_w = 1200; $img_h = 630; $img_mime = '';
+            if ( $thumb_id ) {
+                $meta_img = wp_get_attachment_metadata( $thumb_id );
+                if ( ! empty( $meta_img['width'] ) )  $img_w = (int) $meta_img['width'];
+                if ( ! empty( $meta_img['height'] ) ) $img_h = (int) $meta_img['height'];
+                $img_mime = (string) get_post_mime_type( $thumb_id );
+            }
+            $img_alt = $thumb_id ? (string) get_post_meta( $thumb_id, '_wp_attachment_image_alt', true ) : '';
+            if ( $img_alt === '' ) $img_alt = $data['title'];
+
             echo '<meta property="og:image" content="' . esc_url( $data['image'] ) . '" />' . "\n";
-            echo '<meta property="og:image:width" content="1200" />' . "\n";
-            echo '<meta property="og:image:height" content="627" />' . "\n";
+            echo '<meta property="og:image:width" content="' . (int) $img_w . '" />' . "\n";
+            echo '<meta property="og:image:height" content="' . (int) $img_h . '" />' . "\n";
+            if ( $img_mime !== '' ) {
+                echo '<meta property="og:image:type" content="' . esc_attr( $img_mime ) . '" />' . "\n";
+            }
+            echo '<meta property="og:image:alt" content="' . esc_attr( $img_alt ) . '" />' . "\n";
         }
 
         echo '<meta property="article:published_time" content="' . esc_attr( get_the_date( 'c', $post ) ) . '" />' . "\n";
@@ -54,6 +75,9 @@ class Social_Meta_Generator {
 
         if ( $data['image'] ) {
             echo '<meta name="twitter:image" content="' . esc_url( $data['image'] ) . '" />' . "\n";
+            // v1.5.215 — twitter:image:alt is the spec-compliant alt for the
+            // Twitter Card large image. Mirrors og:image:alt above.
+            echo '<meta name="twitter:image:alt" content="' . esc_attr( $img_alt ?? $data['title'] ) . '" />' . "\n";
         }
     }
 

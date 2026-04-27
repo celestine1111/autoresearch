@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.214
+ * Version: 1.5.215
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.214' );
+define( 'SEOBETTER_VERSION', '1.5.215' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4033,6 +4033,69 @@ final class SEOBetter {
             'ID'         => $image_id,
             'post_title' => ucwords( $keyword ) . ' Guide',
         ] );
+
+        // v1.5.215 — Best-effort WebP conversion at quality 85 for the
+        // featured image. WebP is ~30% smaller than JPEG/PNG at equivalent
+        // visual quality, which directly improves:
+        //   - WhatsApp link previews (need <600KB to render the LARGE preview)
+        //   - LCP / Core Web Vitals (smaller image = faster paint)
+        //   - Mobile bandwidth on shared/cold caches
+        // Falls back silently if WP_Image_Editor doesn't support WebP on the
+        // host (older PHP/GD without WebP, certain shared hosts). The original
+        // file is kept intact for fallback consumers — we only ADD a WebP
+        // sibling and update the attachment metadata to reference it.
+        $this->convert_featured_to_webp( $image_id );
+    }
+
+    /**
+     * v1.5.215 — Convert a featured image attachment to WebP quality 85.
+     *
+     * Best-effort: skips silently if the host's image editor can't write WebP,
+     * or if the source file is already WebP. Original JPEG/PNG file is kept
+     * on disk so existing references (e.g. cached HTML, RSS feeds) don't 404 —
+     * we just add a `.webp` sibling and let WordPress emit it via srcset for
+     * supporting clients.
+     */
+    private function convert_featured_to_webp( int $attachment_id ): void {
+        $file = get_attached_file( $attachment_id );
+        if ( ! $file || ! file_exists( $file ) ) return;
+
+        $mime = (string) get_post_mime_type( $attachment_id );
+        if ( $mime === 'image/webp' ) return; // already WebP, nothing to do
+
+        // Only convert raster formats. SVG / GIF stay as-is (animation).
+        if ( ! in_array( $mime, [ 'image/jpeg', 'image/png' ], true ) ) return;
+
+        // Check editor support before doing work. wp_image_editor_supports
+        // negotiates GD vs Imagick + WebP capability on the current host.
+        if ( ! function_exists( 'wp_image_editor_supports' ) ) return;
+        if ( ! wp_image_editor_supports( [ 'mime_type' => 'image/webp' ] ) ) return;
+
+        $editor = wp_get_image_editor( $file );
+        if ( is_wp_error( $editor ) ) return;
+        $editor->set_quality( 85 );
+
+        $webp_path = preg_replace( '/\.(jpe?g|png)$/i', '.webp', $file );
+        if ( $webp_path === $file ) return; // safety: preg_replace failed
+        $saved = $editor->save( $webp_path, 'image/webp' );
+        if ( is_wp_error( $saved ) ) return;
+
+        // Switch the attachment to point at the WebP file. WordPress will
+        // regenerate intermediate sizes on next thumbnail request. Original
+        // JPEG/PNG stays on disk as a fallback for non-WebP consumers.
+        update_attached_file( $attachment_id, $webp_path );
+        wp_update_post( [
+            'ID'             => $attachment_id,
+            'post_mime_type' => 'image/webp',
+        ] );
+        // Trigger metadata regen so wp_get_attachment_metadata returns
+        // dimensions for the new WebP file.
+        if ( function_exists( 'wp_generate_attachment_metadata' ) ) {
+            $new_meta = wp_generate_attachment_metadata( $attachment_id, $webp_path );
+            if ( is_array( $new_meta ) ) {
+                wp_update_attachment_metadata( $attachment_id, $new_meta );
+            }
+        }
     }
 
     /**

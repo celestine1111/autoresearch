@@ -780,12 +780,13 @@ $settings = get_option( 'seobetter_settings', [] );
                         <select name="branding_provider" id="branding_provider">
                             <option value="" <?php selected( $bp, '' ); ?>>— <?php esc_html_e( 'Disabled (use Pexels stock images: your key → Cloud pool → Picsum)', 'seobetter' ); ?> —</option>
                             <option value="pollinations" <?php selected( $bp, 'pollinations' ); ?>><?php esc_html_e( 'Pollinations.ai — FREE, no API key, no signup (Recommended to start)', 'seobetter' ); ?></option>
-                            <option value="gemini" <?php selected( $bp, 'gemini' ); ?>><?php esc_html_e( 'Google Gemini 2.5 Flash Image (Nano Banana) — ~$0.04/image, 10/day FREE on AI Studio', 'seobetter' ); ?></option>
+                            <option value="openrouter" <?php selected( $bp, 'openrouter' ); ?>><?php esc_html_e( 'OpenRouter → Gemini Nano Banana — uses your existing OpenRouter key, ~$0.04/image', 'seobetter' ); ?></option>
+                            <option value="gemini" <?php selected( $bp, 'gemini' ); ?>><?php esc_html_e( 'Google Gemini 2.5 Flash Image (Nano Banana) direct — ~$0.04/image, 10/day FREE on AI Studio', 'seobetter' ); ?></option>
                             <option value="dalle3" <?php selected( $bp, 'dalle3' ); ?>><?php esc_html_e( 'OpenAI DALL-E 3 — $0.04/image standard, strong prompt adherence', 'seobetter' ); ?></option>
                             <option value="flux_pro" <?php selected( $bp, 'flux_pro' ); ?>><?php esc_html_e( 'Black Forest Labs FLUX.1 Pro 1.1 (via fal.ai) — $0.055/image, best editorial quality', 'seobetter' ); ?></option>
                         </select>
                         <p class="description" style="margin-top:8px">
-                            <strong><?php esc_html_e( 'Recommended for most users:', 'seobetter' ); ?></strong> <?php esc_html_e( 'Start with Pollinations (free, zero setup). Upgrade to Gemini Nano Banana or FLUX Pro once you want consistent brand-aware quality.', 'seobetter' ); ?>
+                            <strong><?php esc_html_e( 'Recommended for most users:', 'seobetter' ); ?></strong> <?php esc_html_e( 'If you already use OpenRouter for article generation, pick "OpenRouter → Nano Banana" — same key, same dashboard, same billing. Otherwise start with Pollinations (free, zero setup) and upgrade once you want brand-aware quality.', 'seobetter' ); ?>
                         </p>
                     </td>
                 </tr>
@@ -797,6 +798,7 @@ $settings = get_option( 'seobetter_settings', [] );
                         <input type="password" name="branding_api_key" value="<?php echo esc_attr( $settings['branding_api_key'] ?? '' ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'Paste provider API key', 'seobetter' ); ?>" autocomplete="off" />
                         <p class="description" id="branding-api-key-help">
                             <span data-provider="pollinations"><?php esc_html_e( 'No API key required — Pollinations is free and anonymous.', 'seobetter' ); ?></span>
+                            <span data-provider="openrouter"><?php esc_html_e( 'No additional key needed — uses the OpenRouter key you configured for article generation in the BYOK section above. Single OpenRouter dashboard, single bill, ~$0.04/image (pass-through pricing).', 'seobetter' ); ?> <a href="https://openrouter.ai/google/gemini-2.5-flash-image-preview" target="_blank" rel="noopener"><?php esc_html_e( 'Model details', 'seobetter' ); ?></a></span>
                             <span data-provider="gemini"><?php esc_html_e( 'Get a free key at aistudio.google.com/apikey. Free tier: 10 images/day on gemini-2.5-flash-image. Paid: ~$0.04/image.', 'seobetter' ); ?> <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"><?php esc_html_e( 'Get Gemini Key', 'seobetter' ); ?></a></span>
                             <span data-provider="dalle3"><?php esc_html_e( 'Get a key at platform.openai.com. Billing required. $0.04 standard / $0.08 HD per image.', 'seobetter' ); ?> <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener"><?php esc_html_e( 'Get OpenAI Key', 'seobetter' ); ?></a></span>
                             <span data-provider="flux_pro"><?php esc_html_e( 'Get a fal.ai API key. $5 free credit on signup. $0.055 per image. Best editorial-quality realistic images.', 'seobetter' ); ?> <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener"><?php esc_html_e( 'Get fal.ai Key', 'seobetter' ); ?></a></span>
@@ -1094,9 +1096,19 @@ jQuery(function($) {
         $(this).hide();
     });
 
-    // Show/hide API key row based on provider (Pollinations needs no key)
+    // Show/hide API key row based on provider.
+    // - Pollinations needs no key (anonymous, no signup)
+    // - OpenRouter reuses the BYOK key configured in the AI Providers section
+    //   above, so the key INPUT is hidden but the help text still shows so
+    //   the user knows where the key comes from.
     function updateBrandingKeyRow() {
         var p = $('#branding_provider').val();
+        if (p === '' || p === 'pollinations' || p === 'openrouter') {
+            $('#branding-api-key-row .regular-text').hide();
+        } else {
+            $('#branding-api-key-row .regular-text').show();
+        }
+        // Always keep the row visible so the help text shows. Hide only the input.
         if (p === '' || p === 'pollinations') {
             $('#branding-api-key-row').hide();
         } else {
