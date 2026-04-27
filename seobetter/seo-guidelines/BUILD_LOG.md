@@ -7,12 +7,73 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-24 (v1.5.212)
+> **Last updated:** 2026-04-27 (v1.5.212.2)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.212.2 — Non-English language hardening (cross-script research + heading-language guard)
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Two related bugs surfaced during the JP-Japanese half of the v1.5.212 2-language comparison test (slow-cooker recipe keyword × JP × Japanese):
+
+1. **Cross-script research drift** — when the user typed an English keyword (`best slow cooker recipes for winter 2026`) but selected Country=JP + Language=Japanese, Auto-Suggest returned English secondary + LSI keywords. Root cause: Google Suggest, Serper, and Wikipedia all received the raw English keyword as their query string, so they returned English-dominant data even though the language plumbing (`hl=ja`, `gl=jp`, `ja.wikipedia.org`) was correct. Audience-LLM was Japanese (separate code path with explicit "respond in ${langName}" instruction) — that's why audience came back JP but secondary/LSI did not.
+
+2. **One English H2 leaked into a Japanese article** — `Async_Generator::get_system_prompt()` rules v1.5.206d-fix7 (`NO ENGLISH HEADINGS ANYWHERE`) and fix9 (`NO COLON-SEPARATED BILINGUAL HEADINGS`) forbid English in non-English articles; the model obeyed for 6 of 7 body H2s but leaked `Why Winter Slow Cooker Recipes Matter in 2026 (Stats & Trends)` for the introduction section. Adherence at the prompt layer is statistical, not deterministic — the rule has been there since v1.5.206 but ~10% of non-English articles still ship one English heading.
+
+Both fail the universal-rule test (must work for all keywords, all 21 content types, all AI models). Universal fixes — script detection + LLM call — are now server-side guarantees, no model adherence required.
+
+### Added / Changed / Fixed
+
+- **Cross-script keyword auto-translation** — `cloud-api/api/topic-research.js::translateKeywordToTargetLanguage()` line **~770**
+  - When input keyword has zero target-language script characters AND target language is non-English, calls OpenRouter `gpt-4.1-mini` once to translate the keyword into the target language, then routes Google Suggest / Serper / Wikipedia / Reddit through the translated form
+  - Hoists `SCRIPT_RANGES` + `LANG_NAMES` to module scope so both the audience LLM and the new translator share one source of truth
+  - Response payload gains `researched_as` (translated form) + `original_keyword` (English form) for UI traceability
+  - Fail-open: translation errors / missing OPENROUTER_KEY / non-target-script LLM output → fall back to original keyword (zero regression for English customers)
+  - Verify: `grep -n 'translateKeywordToTargetLanguage' seobetter/cloud-api/api/topic-research.js`
+
+- **Server-side heading-language guard** — `includes/Async_Generator.php::enforce_heading_language()` line **~1733**
+  - Runs after `Content_Formatter::format()` and before Places_Validator / GEO_Analyzer / Phase 5 quality gate
+  - Walks H2/H3 in the rendered HTML, detects any whose visible text contains zero target-language script characters
+  - Calls `Cloud_API::signed_post('/api/translate-headings', ...)` with the wrong-script headings batched into ONE LLM call
+  - Replaces each in-place via `str` splice (not DOMDocument — preserves inline JSON-LD byte-identicalness for HMAC-signed downstream)
+  - Skipped silently for English / Latin-script targets (de/fr/es/it/pt/nl/pl/tr/sv/da/no/fi/cs/hu/ro/vi/id/ms — no script-range gate possible)
+  - Fail-graceful: any error returns the HTML unchanged; Phase 5 quality gate still warns on language drift
+  - Verify: `grep -n 'enforce_heading_language' seobetter/includes/Async_Generator.php`
+
+- **New endpoint `/api/translate-headings`** — `cloud-api/api/translate-headings.js` (NEW)
+  - Accepts `{headings: [], target_language: 'ja'}`, returns `{translations: []}`
+  - HMAC-verified + rate-limited (free 30/hr, pro 300/hr — registered in `_upstash.js` RATE_LIMITS line ~154)
+  - Caps batch at 30 headings × 300 chars to prevent quota-burn from malformed clients
+  - Pads/truncates output array to match input length so caller can do index-aligned replacement
+  - Strips leading "1. " / "1) " numbering the model occasionally re-adds
+  - Verify: `node --check seobetter/cloud-api/api/translate-headings.js`
+
+- **Rate-limit registry update** — `cloud-api/api/_upstash.js::RATE_LIMITS` line **~154**
+  - Added `'translate-headings': { free: 30, pro: 300, agency: Infinity }`
+  - Verify: `grep -n 'translate-headings' seobetter/cloud-api/api/_upstash.js`
+
+### Files touched
+
+- `cloud-api/api/topic-research.js` — module-scope hoists, `translateKeywordToTargetLanguage()`, response payload `researched_as` field, all data-source calls now use `researchKeyword` instead of raw `niche`
+- `cloud-api/api/translate-headings.js` — NEW endpoint
+- `cloud-api/api/_upstash.js` — rate-limit registry entry for new endpoint
+- `includes/Async_Generator.php` — `enforce_heading_language()` method + call site after `Content_Formatter::format()`
+- `seobetter.php` — version header + `SEOBETTER_VERSION` constant bumped to `1.5.212.2`
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/security.md` — pending: document new `/api/translate-headings` endpoint in Layer 1 audit log (deferred to next pass)
+
+### Verified by user
+
+- **UNTESTED** — re-run JP-Japanese half of the 2-language comparison: keyword `best slow cooker recipes for winter 2026` (kept in English on purpose to exercise the cross-script translator), Country=JP, Language=Japanese. Expected: Auto-Suggest now shows secondary + LSI in Japanese script; generated article has zero English H2/H3 in the body.
 
 ---
 

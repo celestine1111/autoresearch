@@ -19,6 +19,36 @@ import { verifyRequest, rejectAuth, applyCorsHeaders, enforceRateLimit } from '.
 const rateLimitStore = new Map();
 const RATE_LIMIT = 20;
 
+// v1.5.212.2 — Hoisted from inline (was at fix13). Used by both LSI native-script
+// prioritization AND cross-script keyword translation gate. The regex tests
+// whether a string contains ANY character in the target language's script.
+const SCRIPT_RANGES = {
+  hi: /[ऀ-ॿ]/, mr: /[ऀ-ॿ]/, ne: /[ऀ-ॿ]/,
+  ru: /[Ѐ-ӿ]/, uk: /[Ѐ-ӿ]/, bg: /[Ѐ-ӿ]/,
+  sr: /[Ѐ-ӿ]/, mk: /[Ѐ-ӿ]/, mn: /[Ѐ-ӿ]/,
+  ja: /[぀-ヿ一-鿿]/, zh: /[一-鿿]/,
+  ko: /[가-힯]/,
+  ar: /[؀-ۿ]/, fa: /[؀-ۿ]/, ur: /[؀-ۿ]/,
+  he: /[֐-׿]/, yi: /[֐-׿]/,
+  th: /[฀-๿]/, lo: /[຀-໿]/,
+  el: /[Ͱ-Ͽ]/, hy: /[԰-֏]/, ka: /[Ⴀ-ჿ]/,
+  bn: /[ঀ-৿]/, ta: /[஀-௿]/, te: /[ఀ-౿]/,
+  kn: /[ಀ-೿]/, ml: /[ഀ-ൿ]/, gu: /[઀-૿]/,
+  pa: /[਀-੿]/, si: /[඀-෿]/,
+};
+
+// v1.5.212.2 — Map BCP-47 base codes to full language names for LLM prompts.
+// Hoisted from inferAudienceAndCategoryWithLLM so both the audience LLM and
+// the new translateKeywordIfNeeded() use one source of truth.
+const LANG_NAMES = {
+  en: 'English', ja: 'Japanese', zh: 'Chinese (Simplified)', ko: 'Korean',
+  ru: 'Russian', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian',
+  pt: 'Portuguese', hi: 'Hindi', ar: 'Arabic', nl: 'Dutch', pl: 'Polish',
+  tr: 'Turkish', sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish',
+  cs: 'Czech', hu: 'Hungarian', ro: 'Romanian', el: 'Greek', uk: 'Ukrainian',
+  vi: 'Vietnamese', th: 'Thai', id: 'Indonesian', ms: 'Malay', he: 'Hebrew',
+};
+
 export default async function handler(req, res) {
   applyCorsHeaders(req, res);
 
@@ -52,6 +82,27 @@ export default async function handler(req, res) {
   rateLimitStore.set(rateKey, count + 1);
 
   try {
+    // v1.5.212.2 — Cross-script keyword auto-translation.
+    // When the input keyword's script doesn't match the target language's script
+    // (e.g. English keyword "best slow cooker recipes" + lang=ja), Google Suggest /
+    // Serper / Wikipedia all return English-dominant data because they search by
+    // the input string. Result: secondary + LSI come back in English even though
+    // the article is generated in Japanese. Fix: translate the keyword to the
+    // target language ONCE before any data source is hit; downstream extractors
+    // then see native-script input and return native-script output.
+    // Fail-open: if translation fails or the LLM is unavailable, fall back to
+    // the original keyword (existing behaviour, no regression for English).
+    let researchKeyword = niche;
+    let translatedFrom = null;
+    const targetScript = SCRIPT_RANGES[baseLang];
+    if (!isEnglish && targetScript && !targetScript.test(niche)) {
+      const translated = await translateKeywordToTargetLanguage(niche, baseLang);
+      if (translated && targetScript.test(translated)) {
+        translatedFrom = niche;
+        researchKeyword = translated;
+      }
+    }
+
     // v1.5.35 — extract the core business/topic hint from the niche before
     // calling Datamuse. Datamuse's ml= endpoint is designed for 1-3 word
     // queries and returns nonsense (aborigines, balance of payments, lidl,
@@ -66,7 +117,7 @@ export default async function handler(req, res) {
     // ソラナの最高のミームコイン 2026 → ミームコイン). Without this, non-Latin
     // core-topic stripping does nothing and Google Suggest fed the whole
     // compound string returns zero completions.
-    const coreTopic = extractCoreTopic(niche, baseLang);
+    const coreTopic = extractCoreTopic(researchKeyword, baseLang);
 
     // v1.5.54 — Google Suggest also receives the core topic instead of the
     // full long-tail niche. Google's suggestqueries endpoint has no
@@ -82,19 +133,25 @@ export default async function handler(req, res) {
     // articles and rely on Google Suggest + language-specific Wikipedia for LSI.
     // fetchWikipedia now uses the article language subdomain (ru.wikipedia.org,
     // ja.wikipedia.org, de.wikipedia.org, etc.).
+    // v1.5.212.2 — When researchKeyword is a translation of an English niche,
+    // all five data sources receive the translated keyword so they return
+    // native-language secondary + LSI. Reddit is the only English-dominant
+    // source and stays useful as fallback context — it still receives the
+    // translated form (Reddit search just returns 0 hits if the translation
+    // has no community footprint, which is correct fail-open behaviour).
     const [suggestLong, suggestCore, datamuse, wiki, reddit, serperData] = await Promise.all([
       // v1.5.206d-fix14 — pass baseLang as hl separately from country gl.
       // Pre-fix14 sent `hl=${gl}` (country for both) which produced invalid
       // hl values for Vietnamese/Indonesian/Thai/Japanese etc. (hl=VN/ID/TH
       // are not valid language codes → Google returned no suggestions).
-      fetchGoogleSuggest(niche, gl, baseLang),
-      (niche !== coreTopic) ? fetchGoogleSuggest(coreTopic, gl, baseLang) : Promise.resolve([]),
+      fetchGoogleSuggest(researchKeyword, gl, baseLang),
+      (researchKeyword !== coreTopic) ? fetchGoogleSuggest(coreTopic, gl, baseLang) : Promise.resolve([]),
       isEnglish ? fetchDatamuse(coreTopic) : Promise.resolve([]),
-      fetchWikipedia(niche, baseLang),
-      fetchReddit(niche),
+      fetchWikipedia(researchKeyword, baseLang),
+      fetchReddit(researchKeyword),
       // v1.5.173 — Serper-powered keyword extraction (if key available)
       // v1.5.206d-fix2 — pass language so audience LLM responds in target language
-      fetchSerperKeywords(niche, gl, baseLang),
+      fetchSerperKeywords(researchKeyword, gl, baseLang),
     ]);
     // Merge core-topic suggestions into the main list, deduped
     const suggest = [...suggestLong];
@@ -103,14 +160,17 @@ export default async function handler(req, res) {
     }
 
     // Build topic candidates with scoring
-    const topics = buildTopics(niche, suggest, datamuse, wiki, reddit);
+    // v1.5.212.2 — use researchKeyword (post-translation) so the topic + keyword
+    // builders see the same input the data sources saw. Output payload still
+    // echoes the original `niche` for UI traceability.
+    const topics = buildTopics(researchKeyword, suggest, datamuse, wiki, reddit);
 
     // v1.5.173 — Build keywords from Serper titles + snippets (high quality)
     // then merge with existing Google Suggest + Datamuse results as fallback.
     // v1.5.206d-fix3 — pass language so non-English paths get Google Suggest
     // overflow into LSI and relaxed Wikipedia word-count filters (CJK titles
     // are phrases, not single words).
-    const keywords = buildKeywordSets(niche, suggest, datamuse, wiki, baseLang);
+    const keywords = buildKeywordSets(researchKeyword, suggest, datamuse, wiki, baseLang);
 
     // v1.5.173 — Serper-extracted keywords override when available
     if (serperData && serperData.secondary.length > 0) {
@@ -151,20 +211,6 @@ export default async function handler(req, res) {
     // native LSI is sparse (<5), fills from leftover Google Suggest
     // completions that contain native-script characters. Universal — works
     // for any language with a defined script range.
-    const SCRIPT_RANGES = {
-      hi: /[ऀ-ॿ]/, mr: /[ऀ-ॿ]/, ne: /[ऀ-ॿ]/,
-      ru: /[Ѐ-ӿ]/, uk: /[Ѐ-ӿ]/, bg: /[Ѐ-ӿ]/,
-      sr: /[Ѐ-ӿ]/, mk: /[Ѐ-ӿ]/, mn: /[Ѐ-ӿ]/,
-      ja: /[぀-ヿ一-鿿]/, zh: /[一-鿿]/,
-      ko: /[가-힯]/,
-      ar: /[؀-ۿ]/, fa: /[؀-ۿ]/, ur: /[؀-ۿ]/,
-      he: /[֐-׿]/, yi: /[֐-׿]/,
-      th: /[฀-๿]/, lo: /[຀-໿]/,
-      el: /[Ͱ-Ͽ]/, hy: /[԰-֏]/, ka: /[Ⴀ-ჿ]/,
-      bn: /[ঀ-৿]/, ta: /[஀-௿]/, te: /[ఀ-౿]/,
-      kn: /[ಀ-೿]/, ml: /[ഀ-ൿ]/, gu: /[઀-૿]/,
-      pa: /[਀-੿]/, si: /[඀-෿]/,
-    };
     const nativeRegex = SCRIPT_RANGES[baseLang];
     if (nativeRegex && Array.isArray(keywords.lsi) && keywords.lsi.length > 0) {
       const native = [];
@@ -205,6 +251,13 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       niche,
+      // v1.5.212.2 — When the input keyword was translated to the target
+      // language for cross-script research, expose both forms so the UI can
+      // show "researched as: 冬の人気スロークッカーレシピ" under the keyword
+      // field. Null when no translation occurred (English keyword + English
+      // article, OR keyword already contained native-script characters).
+      researched_as: translatedFrom ? researchKeyword : null,
+      original_keyword: translatedFrom,
       topics,
       keywords,
       sources: {
@@ -764,25 +817,76 @@ async function fetchSerperKeywords(keyword, gl = '', lang = 'en') {
  *          never a hard-coded fallback. The frontend shows empty fields
  *          and lets the user fill them manually.
  */
+/**
+ * v1.5.212.2 — Translate a search keyword from any script (typically English)
+ * into the target article language so downstream data sources (Google Suggest,
+ * Serper, Wikipedia) return native-language results.
+ *
+ * Triggered ONLY when:
+ *   - target language is non-English (en/empty short-circuits at the call site)
+ *   - input keyword contains zero characters in the target language's script
+ *
+ * Returns null on any error so the caller falls back to the original keyword
+ * (no regression). Single OpenRouter call per Auto-Suggest, gpt-4.1-mini,
+ * temperature 0, ~50 input tokens, ~30 output tokens, ~$0.0001 per call.
+ *
+ * @param {string} keyword Original keyword from the user.
+ * @param {string} baseLang BCP-47 base language code (ja/zh/ko/ru/ar/etc).
+ * @returns {Promise<string|null>} Translated keyword or null on error.
+ */
+async function translateKeywordToTargetLanguage(keyword, baseLang) {
+  const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+  if (!OPENROUTER_KEY || !keyword || !baseLang) return null;
+  const langName = LANG_NAMES[baseLang];
+  if (!langName) return null;
+
+  const prompt = `Translate this English search keyword into natural ${langName} that real ${langName} speakers would type into a search engine. Keep proper nouns (brand names, year numbers like 2026) in their original form. Output ONLY the translated keyword as a single line of text, no quotes, no explanation.
+
+Keyword: ${keyword}`;
+
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_KEY}`,
+      },
+      body: JSON.stringify({
+        model: process.env.EXTRACTION_MODEL || 'openai/gpt-4.1-mini',
+        messages: [
+          { role: 'system', content: `You translate English search keywords into natural ${langName} as a native ${langName} speaker would phrase them. Output the translated keyword only, nothing else.` },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 60,
+        temperature: 0.0,
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    let out = (data?.choices?.[0]?.message?.content || '').trim();
+    if (!out) return null;
+    // Strip surrounding quotes / fences / leading "Translation:" labels.
+    out = out.replace(/^["「『]+|["」』]+$/g, '').trim();
+    out = out.replace(/^(translation|翻訳|번역|перевод|traducción|traduction)\s*[:：]\s*/i, '').trim();
+    out = out.replace(/^```[a-z]*\s*\n?|\n?```$/g, '').trim();
+    // Sanity bound — keyword translations should be short.
+    if (out.length < 2 || out.length > 120) return null;
+    return out;
+  } catch (err) {
+    console.error('translateKeywordToTargetLanguage error (non-fatal):', err.message);
+    return null;
+  }
+}
+
 async function inferAudienceAndCategoryWithLLM(keyword, serpResults, lang = 'en') {
   const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
   if (!OPENROUTER_KEY || !Array.isArray(serpResults) || serpResults.length === 0) {
     return { audience: '', category: '' };
   }
 
-  // v1.5.206d-fix2 — map BCP-47 base code to full language name for the prompt.
-  // When the article is non-English, the audience description must come back
-  // in the target language so it renders correctly in the audience form field
-  // and threads through to the generation prompt without English leaks.
-  const langNames = {
-    en: 'English', ja: 'Japanese', zh: 'Chinese (Simplified)', ko: 'Korean',
-    ru: 'Russian', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian',
-    pt: 'Portuguese', hi: 'Hindi', ar: 'Arabic', nl: 'Dutch', pl: 'Polish',
-    tr: 'Turkish', sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish',
-    cs: 'Czech', hu: 'Hungarian', ro: 'Romanian', el: 'Greek', uk: 'Ukrainian',
-    vi: 'Vietnamese', th: 'Thai', id: 'Indonesian', ms: 'Malay', he: 'Hebrew',
-  };
-  const langName = langNames[lang] || 'English';
+  // v1.5.212.2 — Reuse module-level LANG_NAMES (hoisted from this function).
+  const langName = LANG_NAMES[lang] || 'English';
 
   const serpLines = serpResults.slice(0, 8).map((r, i) => {
     let host = '';

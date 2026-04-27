@@ -1731,6 +1731,170 @@ class Async_Generator {
     }
 
     /**
+     * v1.5.212.2 — Server-side heading-language guarantee.
+     *
+     * The Async_Generator system prompt (line 2421, v1.5.206d-fix7) forbids
+     * English headings inside non-English articles. Adherence is statistical
+     * — most articles obey, some leak one or two H2/H3 in English. This
+     * method runs AFTER the article HTML is assembled and BEFORE Phase 5
+     * quality gate runs. Any H2/H3 whose text contains zero characters in
+     * the target language's script gets sent to /api/translate-headings
+     * (one batched LLM call) and replaced in-place.
+     *
+     * Universal: works for all 21 content types and all 29 languages in the
+     * SCRIPT_MAP below. Skipped silently when language is en/empty (Latin
+     * scripts have no script-range gate, no false positives possible).
+     *
+     * Fail-graceful: any error (Cloud API down, OpenRouter timeout, JSON
+     * parse error) returns the HTML unchanged so the article saves with
+     * the original headings. Phase 5 quality gate already warns on language
+     * drift, surfacing the issue to the user even when this guard fails.
+     *
+     * @param string $html       Full article HTML (post-formatter, pre-save).
+     * @param string $lang_code  BCP-47 base code (ja, ko, ru, ar, etc.).
+     * @return string Modified HTML with English headings translated, or
+     *                original HTML if no fix needed / fix failed.
+     */
+    private static function enforce_heading_language( string $html, string $lang_code ): string {
+        if ( ! is_string( $html ) || $html === '' ) {
+            return $html;
+        }
+        $base = strtolower( substr( $lang_code ?: '', 0, 2 ) );
+        if ( $base === '' || $base === 'en' ) {
+            return $html;
+        }
+
+        // Native-script regex per BCP-47 base code. PCRE Unicode ranges in
+        // /u mode. Mirrors topic-research.js SCRIPT_RANGES so client and
+        // server agree on what counts as "native script" for each language.
+        static $SCRIPT_MAP = [
+            'ja' => '/[\x{3040}-\x{30FF}\x{4E00}-\x{9FFF}]/u',
+            'zh' => '/[\x{4E00}-\x{9FFF}]/u',
+            'ko' => '/[\x{AC00}-\x{D7AF}]/u',
+            'ru' => '/[\x{0400}-\x{04FF}]/u',
+            'uk' => '/[\x{0400}-\x{04FF}]/u',
+            'bg' => '/[\x{0400}-\x{04FF}]/u',
+            'sr' => '/[\x{0400}-\x{04FF}]/u',
+            'mk' => '/[\x{0400}-\x{04FF}]/u',
+            'mn' => '/[\x{0400}-\x{04FF}]/u',
+            'ar' => '/[\x{0600}-\x{06FF}]/u',
+            'fa' => '/[\x{0600}-\x{06FF}]/u',
+            'ur' => '/[\x{0600}-\x{06FF}]/u',
+            'he' => '/[\x{0590}-\x{05FF}]/u',
+            'yi' => '/[\x{0590}-\x{05FF}]/u',
+            'th' => '/[\x{0E00}-\x{0E7F}]/u',
+            'lo' => '/[\x{0E80}-\x{0EFF}]/u',
+            'hi' => '/[\x{0900}-\x{097F}]/u',
+            'mr' => '/[\x{0900}-\x{097F}]/u',
+            'ne' => '/[\x{0900}-\x{097F}]/u',
+            'el' => '/[\x{0370}-\x{03FF}]/u',
+            'hy' => '/[\x{0530}-\x{058F}]/u',
+            'ka' => '/[\x{10A0}-\x{10FF}]/u',
+            'bn' => '/[\x{0980}-\x{09FF}]/u',
+            'ta' => '/[\x{0B80}-\x{0BFF}]/u',
+            'te' => '/[\x{0C00}-\x{0C7F}]/u',
+            'kn' => '/[\x{0C80}-\x{0CFF}]/u',
+            'ml' => '/[\x{0D00}-\x{0D7F}]/u',
+            'gu' => '/[\x{0A80}-\x{0AFF}]/u',
+            'pa' => '/[\x{0A00}-\x{0A7F}]/u',
+            'si' => '/[\x{0D80}-\x{0DFF}]/u',
+        ];
+        if ( ! isset( $SCRIPT_MAP[ $base ] ) ) {
+            // Latin-script target (de/fr/es/it/pt/nl/pl/tr/sv/da/no/fi/cs/hu/
+            // ro/vi/id/ms). For those, the model usually obeys the prompt —
+            // and if it doesn't, English-vs-{e.g. German} can't be reliably
+            // distinguished by character-class matching alone. Skip.
+            return $html;
+        }
+        $native_re = $SCRIPT_MAP[ $base ];
+
+        // Walk H2 + H3 elements with a non-greedy regex. We work on the raw
+        // string (not DOMDocument) because DOM parsing can rewrite quoting,
+        // re-encode entities, and break inline JSON-LD downstream.
+        if ( ! preg_match_all( '/<(h[23])\b[^>]*>(.*?)<\/\1>/is', $html, $matches, PREG_SET_ORDER ) ) {
+            return $html;
+        }
+
+        $needs_translation = [];
+        $original_full     = []; // full <h2>...</h2> string per index
+        $original_text     = []; // visible text (entities decoded, tags stripped)
+
+        foreach ( $matches as $m ) {
+            $full = $m[0];
+            $inner = $m[2];
+            $text = trim( html_entity_decode( wp_strip_all_tags( $inner ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+            if ( $text === '' ) continue;
+            // Skip the empty References placeholder (the plugin populates it
+            // post-write so its inner text starts empty in some pipelines).
+            if ( mb_strlen( $text, 'UTF-8' ) < 3 ) continue;
+            // Already has native characters → obeys the prompt rule, skip.
+            if ( preg_match( $native_re, $text ) ) continue;
+            // Pure ASCII / pure Latin → almost certainly an English leak.
+            // Edge case: a heading like "iPhone 16 Pro" is technically all-
+            // Latin but is the brand spelled in Latin characters (legitimate
+            // even in a Japanese article). The translator preserves brand
+            // names per its system prompt, so passing through is harmless.
+            $needs_translation[] = $text;
+            $original_full[]     = $full;
+            $original_text[]     = $text;
+        }
+
+        if ( empty( $needs_translation ) ) {
+            return $html;
+        }
+
+        // Cap batch — matches the cloud-side cap and prevents pathological
+        // articles from triggering huge LLM calls.
+        if ( count( $needs_translation ) > 30 ) {
+            $needs_translation = array_slice( $needs_translation, 0, 30 );
+            $original_full     = array_slice( $original_full,     0, 30 );
+            $original_text     = array_slice( $original_text,     0, 30 );
+        }
+
+        $response = \SEOBetter\Cloud_API::signed_post( '/api/translate-headings', [
+            'headings'        => $needs_translation,
+            'target_language' => $base,
+        ], [ 'timeout' => 20 ] );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'SEOBetter translate-headings error (non-fatal): ' . $response->get_error_message() );
+            return $html;
+        }
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( $code !== 200 || ! is_array( $body ) || empty( $body['translations'] ) || ! is_array( $body['translations'] ) ) {
+            return $html;
+        }
+
+        $translations = $body['translations'];
+        for ( $i = 0; $i < count( $original_full ); $i++ ) {
+            $translated = isset( $translations[ $i ] ) && is_string( $translations[ $i ] ) ? trim( $translations[ $i ] ) : '';
+            if ( $translated === '' || $translated === $original_text[ $i ] ) continue;
+            // Server-side double-check: did the model actually return native
+            // script? If not, leave the heading alone rather than swap one
+            // English string for another.
+            if ( ! preg_match( $native_re, $translated ) ) continue;
+
+            // Build replacement that preserves the original heading's tag
+            // attributes (id="...", class="...") by swapping ONLY the inner
+            // text. The original_full string captured both <h2 ...> and
+            // </h2>; rebuild from $original_full[$i]'s opening tag.
+            $orig = $original_full[ $i ];
+            if ( preg_match( '/^(<h[23]\b[^>]*>)(.*?)(<\/h[23]>)$/is', $orig, $parts ) ) {
+                $rebuilt = $parts[1] . esc_html( $translated ) . $parts[3];
+                // Replace ONE occurrence (the first match) to avoid clobbering
+                // duplicate-text headings elsewhere in the article.
+                $pos = strpos( $html, $orig );
+                if ( $pos !== false ) {
+                    $html = substr( $html, 0, $pos ) . $rebuilt . substr( $html, $pos + strlen( $orig ) );
+                }
+            }
+        }
+
+        return $html;
+    }
+
+    /**
      * v1.5.159 — PHP enforcement of GEO requirements.
      * Guarantees table, FAQ, and keyword density regardless of AI model output.
      * Per SEO-GEO-AI-GUIDELINES.md §1: these are CRITICAL GEO factors.
@@ -2201,6 +2365,15 @@ class Async_Generator {
             // v1.5.192 — thread language for RTL wrapper (ar, he, fa, ur, etc.)
             'language'     => $options['language'] ?? 'en',
         ] );
+
+        // v1.5.212.2 — Server-side heading-language guard. Catches the case
+        // where the AI prompt's "no English headings in non-English articles"
+        // rule (Async_Generator.php:get_system_prompt v1.5.206d-fix7) was
+        // statistically violated for one or two H2/H3. Sends the wrong-script
+        // headings to /api/translate-headings in one batched LLM call and
+        // replaces them in the HTML. Skipped silently for English / Latin-
+        // script target languages. Fail-graceful on any error.
+        $html = self::enforce_heading_language( $html, $options['language'] ?? 'en' );
 
         // v1.5.26 — Layer 3 structural anti-hallucination guarantee for local-intent
         // listicles. Walks every H2/H3 section, extracts the business-name candidate,

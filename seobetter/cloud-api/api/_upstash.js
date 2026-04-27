@@ -151,6 +151,7 @@ const RATE_LIMITS = {
   research:          { free: 10,  pro: 100,  agency: Infinity },
   'content-brief':   { free: 10,  pro: 100,  agency: Infinity },
   'topic-research':  { free: 20,  pro: 200,  agency: Infinity },
+  'translate-headings': { free: 30, pro: 300, agency: Infinity },  // v1.5.212.2 — post-gen heading guard, single LLM call per article
   generate:          { free: 5,   pro: 100,  agency: Infinity },  // /api/generate is expensive (LLM calls)
   scrape:            { free: 30,  pro: 300,  agency: Infinity },
   pexels:            { free: 100, pro: 500,  agency: Infinity },  // free tier of Pexels is 200/hr — we stay under
