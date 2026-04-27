@@ -19,7 +19,7 @@
 ## v1.5.213.2 — Image alt text language coverage + author/featured image filter
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `40faac5`
 
 ### Why this ships
 
