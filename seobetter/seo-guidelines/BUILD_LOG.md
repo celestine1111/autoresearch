@@ -19,7 +19,7 @@
 ## v1.5.212.3 — Headline + meta-tag + H1 language coverage (extends v1.5.212.2 guard)
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `dd4512b`
 
 ### Why this ships
 
