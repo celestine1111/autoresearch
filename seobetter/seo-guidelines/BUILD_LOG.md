@@ -19,7 +19,7 @@
 ## v1.5.214 — UX + Pro-conversion pass (dashboard stat strip + Cloud/BYOK source card + sidebar redesign)
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `7ef3747`
 
 ### Why this ships
 
