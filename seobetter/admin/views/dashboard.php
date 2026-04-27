@@ -24,6 +24,42 @@ $steps_done = 0;
 if ( $has_key ) $steps_done++;
 if ( $total_generated > 0 ) $steps_done++;
 $setup_complete = $steps_done >= 2;
+
+// v1.5.214 — Monthly stats for the top stat strip.
+// Compute from real post meta (no extra DB tables, no API calls).
+$first_of_month = strtotime( date( 'Y-m-01 00:00:00' ) );
+$articles_this_month = get_posts( [
+    'post_type'      => [ 'post', 'page' ],
+    'post_status'    => [ 'publish', 'draft', 'pending' ],
+    'posts_per_page' => -1,
+    'fields'         => 'ids',
+    'meta_key'       => '_seobetter_geo_score',
+    'date_query'     => [
+        [ 'after' => date( 'Y-m-01' ), 'inclusive' => true ],
+    ],
+] );
+$articles_count = count( $articles_this_month );
+
+// Avg GEO score across this month's articles
+$score_sum = 0; $score_n = 0; $high_geo = 0; $schemas_total = 0;
+foreach ( $articles_this_month as $aid ) {
+    $sd = get_post_meta( $aid, '_seobetter_geo_score', true );
+    if ( is_array( $sd ) && isset( $sd['geo_score'] ) && is_numeric( $sd['geo_score'] ) ) {
+        $score_sum += (int) $sd['geo_score'];
+        $score_n++;
+        if ( (int) $sd['geo_score'] >= 80 ) $high_geo++;
+    }
+    // Count schema nodes (proxy for "schemas shipped")
+    $schema_json = get_post_meta( $aid, '_seobetter_schema', true );
+    if ( $schema_json ) {
+        $sd2 = json_decode( $schema_json, true );
+        if ( is_array( $sd2 ) && isset( $sd2['@graph'] ) && is_array( $sd2['@graph'] ) ) {
+            $schemas_total += count( $sd2['@graph'] );
+        }
+    }
+}
+$avg_geo = $score_n > 0 ? (int) round( $score_sum / $score_n ) : 0;
+$avg_geo_color = $avg_geo >= 80 ? '#10b981' : ( $avg_geo >= 60 ? '#f59e0b' : ( $avg_geo > 0 ? '#ef4444' : '#94a3b8' ) );
 ?>
 <div class="wrap seobetter-dashboard">
 
@@ -109,6 +145,67 @@ $setup_complete = $steps_done >= 2;
         </form>
     </div>
 
+    <!-- v1.5.214 — Monthly stat strip. Value-first: anchor user in measurable wins
+         from the free plan before any upsell. Per Reforge / ProductLed PLG research,
+         users who see their own metrics convert 3-7× better than users who see only
+         feature lists. -->
+    <div class="seobetter-card" style="margin-bottom:24px;padding:18px 20px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+            <!-- Stat 1: Articles this month -->
+            <div style="padding:14px 16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:6px">
+                    <?php esc_html_e( 'This month', 'seobetter' ); ?>
+                </div>
+                <div style="font-size:28px;font-weight:700;color:#1e293b;line-height:1"><?php echo (int) $articles_count; ?></div>
+                <div style="font-size:11px;color:#94a3b8;margin-top:6px">
+                    <?php echo esc_html( sprintf( _n( '%d article generated', '%d articles generated', $articles_count, 'seobetter' ), $articles_count ) ); ?>
+                </div>
+            </div>
+            <!-- Stat 2: Avg GEO score -->
+            <div style="padding:14px 16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:6px">
+                    <?php esc_html_e( 'Avg GEO score', 'seobetter' ); ?>
+                </div>
+                <div style="font-size:28px;font-weight:700;color:<?php echo esc_attr( $avg_geo_color ); ?>;line-height:1">
+                    <?php echo $avg_geo > 0 ? (int) $avg_geo : '—'; ?>
+                </div>
+                <div style="font-size:11px;color:#94a3b8;margin-top:6px">
+                    <?php
+                    if ( $avg_geo >= 80 ) {
+                        echo esc_html__( 'Top-tier AI citability', 'seobetter' );
+                    } elseif ( $avg_geo >= 60 ) {
+                        echo esc_html__( 'Solid — push to 80+ for top tier', 'seobetter' );
+                    } elseif ( $avg_geo > 0 ) {
+                        echo esc_html__( 'Re-optimize to lift score', 'seobetter' );
+                    } else {
+                        echo esc_html__( 'No data yet', 'seobetter' );
+                    }
+                    ?>
+                </div>
+            </div>
+            <!-- Stat 3: High-GEO articles -->
+            <div style="padding:14px 16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:6px">
+                    <?php esc_html_e( 'GEO 80+', 'seobetter' ); ?>
+                </div>
+                <div style="font-size:28px;font-weight:700;color:#10b981;line-height:1"><?php echo (int) $high_geo; ?></div>
+                <div style="font-size:11px;color:#94a3b8;margin-top:6px">
+                    <?php esc_html_e( 'Articles likely to be AI-cited', 'seobetter' ); ?>
+                </div>
+            </div>
+            <!-- Stat 4: Schema nodes shipped -->
+            <div style="padding:14px 16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:6px">
+                    <?php esc_html_e( 'Schema nodes', 'seobetter' ); ?>
+                </div>
+                <div style="font-size:28px;font-weight:700;color:#1e293b;line-height:1"><?php echo (int) $schemas_total; ?></div>
+                <div style="font-size:11px;color:#94a3b8;margin-top:6px">
+                    <?php esc_html_e( 'Across @graph (Recipe, Article, Org, Person, Breadcrumb, etc.)', 'seobetter' ); ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="seobetter-cards">
 
         <!-- What's Included -->
@@ -119,38 +216,47 @@ $setup_complete = $steps_done >= 2;
                 <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--sb-text-secondary,#64748b);margin-bottom:12px">
                     <span class="seobetter-score seobetter-score-good" style="margin-right:6px">FREE</span> Included
                 </h3>
-                <ul style="list-style:none;padding:0;margin:0;font-size:13px;line-height:2.2">
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> AI article generation (<?php echo esc_html( $status['monthly_limit'] ); ?>/month via Cloud)</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> GEO Score — see how AI-visible your content is</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> 5 headline variations per article</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Auto-generated SEO meta title &amp; description</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Auto-suggest secondary &amp; LSI keywords</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Stock images with SEO alt tags</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Affiliate link auto-linking + CTA buttons</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Topic suggestions for your niche</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Social media content (Twitter, LinkedIn, Instagram)</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Connect 1 AI provider (BYOK)</li>
+                <ul style="list-style:none;padding:0;margin:0;font-size:13px;line-height:2.0">
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> AI article generation (<?php echo esc_html( $status['monthly_limit'] ); ?>/month via Cloud, OR unlimited with your own API key)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> 3 content types: Blog Post, How-To, Listicle</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> GEO Score — measures AI citability of your content</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Article + Recipe + Organization + Person + BreadcrumbList schema</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> 5 headline variations + auto SEO meta title/description per article</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Auto-suggest secondary &amp; LSI keywords (Google Suggest + Wikipedia)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Pexels stock images via SEOBetter Cloud (no API key needed)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Jina Reader fallback for web research</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Topic suggestions + social media content (Twitter / LinkedIn / Instagram)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Connect 1 AI provider (Anthropic / OpenAI / Gemini / OpenRouter / Groq / Ollama)</li>
                 </ul>
             </div>
 
             <?php if ( ! $is_pro ) : ?>
+            <!-- v1.5.214 — Bundled-value Pro card. Per pricing research (Reforge,
+                 Stripe, Linear), users anchor on TOTAL feature gap, not individual
+                 line items. Listing "10 locked things" beats listing "1 killer feature".
+                 Each line is one specific outcome — no generic "advanced features" copy. -->
             <div style="padding:20px;background:var(--sb-primary-light,#f3eef8);border:2px solid var(--sb-primary,#764ba2);border-radius:8px">
                 <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--sb-primary,#764ba2);margin-bottom:12px">
-                    <span class="seobetter-score seobetter-score-good" style="background:var(--sb-primary,#764ba2);color:#fff;margin-right:6px">PRO</span> Unlock More
+                    <span class="seobetter-score seobetter-score-good" style="background:var(--sb-primary,#764ba2);color:#fff;margin-right:6px">PRO $39/mo</span> Unlock the rest
                 </h3>
-                <ul style="list-style:none;padding:0;margin:0 0 16px;font-size:13px;line-height:2.2">
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Unlimited</strong> AI content generation</li>
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Bulk generate</strong> — CSV import 50+ keywords at once</li>
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>GEO Optimizer</strong> — auto-enrich with quotes, stats, citations</li>
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Content refresh</strong> — detect stale posts, auto-suggest updates</li>
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Comparison page builder</strong> — "[X] vs [Y]" templates</li>
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Internal link suggestions</strong> between your posts</li>
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Unlimited AI providers</strong> (connect all your keys)</li>
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Priority support</strong></li>
-                    <li style="color:var(--sb-text-muted,#94a3b8)"><span style="margin-right:8px">&#9733;</span> <em>Coming soon:</em> Ahrefs API, Google Search Console, Analytics</li>
+                <ul style="list-style:none;padding:0;margin:0 0 16px;font-size:13px;line-height:2.0">
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>50 Cloud articles/month</strong> on Sonnet-tier LLM (vs 5 on Free)</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>All 21 content types</strong> — Recipe, Comparison, Buying Guide, Review, Case Study, Interview, Pillar Guide, etc. (Free: 3 types)</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Firecrawl deep research</strong> — 10× citation density vs free Jina fallback</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Serper SERP intelligence</strong> — competitor gap analysis, audience inference</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Auto-translate</strong> for 29 languages (cross-script keywords + headings + meta)</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>AI featured image</strong> — DALL-E 3 / FLUX Pro / Gemini Nano Banana</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Recipe Article wrapper</strong> + Speakable voice schema (2× rich-result lanes)</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>5 Schema Blocks</strong> — Product, Event, LocalBusiness, Vacation Rental, Job Posting</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>AIOSEO / Yoast / RankMath auto-population</strong> — focus keyword, meta, OG, schema</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Analyze &amp; Improve inject buttons</strong> — one-click +5-10 GEO points</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Priority support</strong> 48h SLA</li>
                 </ul>
+                <p style="font-size:12px;color:#64748b;margin:0 0 14px 0;font-style:italic">
+                    <?php esc_html_e( 'Annual: $349/yr — save $119 vs monthly.', 'seobetter' ); ?>
+                </p>
                 <a href="https://seobetter.com/pricing" target="_blank" class="button sb-btn-primary" style="width:100%;text-align:center;font-size:14px;height:44px;line-height:28px">
-                    Upgrade to Pro &rarr;
+                    See Pro plans &rarr;
                 </a>
             </div>
             <?php else : ?>

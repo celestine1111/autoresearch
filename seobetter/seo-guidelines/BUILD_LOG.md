@@ -7,12 +7,96 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.213.3)
+> **Last updated:** 2026-04-27 (v1.5.214)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.214 — UX + Pro-conversion pass (dashboard stat strip + Cloud/BYOK source card + sidebar redesign)
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Two parallel agents (internal inventory + external research on freemium WordPress plugin patterns) returned a comprehensive UX delta. Plus repriced Pro tiers in the same session against actual unit economics ($0.13/article cost). v1.5.214 ships the highest-leverage UX changes that:
+
+1. Make value visible BEFORE asking (stat strip showing user's actual articles + GEO scores BEFORE any Pro upsell)
+2. Surface the Cloud-vs-BYOK architecture explicitly (Settings now has a dedicated "AI generation source" card with quota meter — closes the "no SEOBetter Cloud option" question)
+3. Replace static sidebar boilerplate with dynamic contextual hints that change per-article (per Yoast / Surfer / Frase patterns)
+4. Refresh Pro upsell copy to reference v1.5.213 features (Recipe Article wrapper, Speakable expansion, 21 content types, Firecrawl deep research, etc.) at the new $39/mo price point
+
+### Added / Changed / Fixed
+
+- **Pexels tooltip fixes (4 spots)** — `admin/views/settings.php` lines **357, 633, 699, 757**
+  - Pre-fix copy referenced "Picsum fallback" and "generic placeholder images" — outdated since v1.5.212 added the Cloud Pexels middle tier. Now references the actual 3-tier chain: user's Pexels key → SEOBetter Cloud Pexels pool → Picsum.
+
+- **NEW: SEOBetter Cloud source card** — `admin/views/settings.php` lines **184-260** (above the BYOK AI Providers section)
+  - Shows active source (`☁️ CLOUD ACTIVE` or `🔑 BYOK ACTIVE`) with explanation of what each path does
+  - Cloud quota meter — color-graded ring (green <70%, amber 70-90%, red 90%+); CTA only appears at ≥70% (no nag below)
+  - "What SEOBetter Pro Cloud includes — $39/month" bundle reveal (free tier only) — 6 specific outcomes
+  - Closes the "no SEOBetter Cloud option" gap from earlier user complaint
+
+- **NEW: Dashboard monthly stat strip** — `admin/views/dashboard.php` lines **45-76, 130-185**
+  - 4 stat cards: This month / Avg GEO / GEO 80+ / Schema nodes
+  - Computed from existing `_seobetter_geo_score` + `_seobetter_schema` post meta filtered by `date_query` for current month — no new tables, no API calls
+  - Color-grades the avg GEO score by tier (green ≥80, amber 60-79, red <60)
+  - Renders BEFORE the Pro upsell card per "value before ask" rule
+
+- **REFRESHED: Dashboard FREE list** — `admin/views/dashboard.php` lines **226-245**
+  - Updated to reflect v1.5.213 reality: "Pexels via SEOBetter Cloud (no API key needed)", "Jina Reader fallback for web research", "3 content types: Blog Post, How-To, Listicle"
+  - Adds clarification: "OR unlimited with your own API key"
+
+- **REFRESHED: Dashboard PRO bundled-value card** — `admin/views/dashboard.php` lines **247-280`
+  - Replaced the old 9-feature list with the v1.5.213 bundle (11 specific outcomes): 50 Cloud articles/mo, all 21 content types, Firecrawl, Serper, auto-translate 29 languages, AI featured image, Recipe Article wrapper + Speakable, 5 Schema Blocks, AIOSEO sync, Analyze & Improve inject buttons, priority support
+  - $39/mo anchor + annual savings line ("$349/yr — save $119 vs monthly")
+  - Verify: `grep -n "PRO \\$39/mo" seobetter/admin/views/dashboard.php`
+
+- **CUT: Content Generator right-column GEO Tips card** — was `admin/views/content-generator.php` line **526-536**
+  - Static stats (+41% quotes, +30% statistics, etc.) duplicated dashboard "Why GEO Matters" panel; never re-read after first generation
+  - Replaced by dynamic pre-generation hints (see below)
+
+- **CUT: Content Generator right-column "Every Article Includes" checklist** — was lines **559-573**
+  - 10-item static list; users skim it once and never look again
+  - Removed entirely
+
+- **NEW: Pre-generation contextual hints panel** — `admin/views/content-generator.php` lines **522-540 + inline script ~580-690**
+  - Reads form state (content_type, country, language, keyword) via inline JS
+  - Renders 3-5 dynamic hints per article: schema bundle preview, Pro-content-type lock chip (free tier), cross-script translator preview, recipe cuisine mapping, Free vs Pro research depth
+  - Live updates on form field change — pure client-side computation, no API calls
+  - Empty state when form is blank: "Pick a content type, country & language to see what schema, research depth, and language guards will run."
+  - Verify: `grep -n 'sb-context-hints' seobetter/admin/views/content-generator.php`
+
+- **REFRESHED: Content Generator right-column Pro upsell** — lines **552-572**
+  - Heading: `[PRO] Push this article further` with $39/mo CTA
+  - 6 specific outcomes (Firecrawl, all 21 types, AI featured image, inject buttons, 5 Schema Blocks, 50 articles/mo)
+  - Verify: `grep -n 'Push this article further' seobetter/admin/views/content-generator.php`
+
+- **KEPT (per Ben's design review): Topic Suggester** — lines **540-549**
+  - "Need Ideas?" niche input + "Suggest 10 Topics" button — proven to drive engagement on the form
+
+### Files touched
+
+- `admin/views/dashboard.php` — stat strip, FREE list refresh, PRO bundled-value card
+- `admin/views/settings.php` — Cloud source card, 4 Pexels tooltip fixes
+- `admin/views/content-generator.php` — sidebar redesign (cuts + dynamic hints + refreshed Pro card)
+- `seobetter.php` — version bump to 1.5.214
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/plugin_UX.md` — new §3.99 (Dashboard layout) + refreshed §4 (Sidebar redesign)
+- `seo-guidelines/pro-plan-pricing.md` — §8 expanded with v1.5.214 contextual upgrade triggers (12 placements: 7 shipped ✅, 5 queued 📋)
+
+### Verified by user
+
+- **UNTESTED** — install zip, expected:
+  - Dashboard top shows 4-card stat strip with this month's articles + avg GEO
+  - Settings → AI Providers shows new Cloud source card with quota meter
+  - Content Generator sidebar shows "What this article will get" panel that updates live as you change content type / country / language / keyword
+  - Pexels tooltips reference Cloud middle tier
+  - Pro upsell copy throughout references $39/mo and v1.5.213 features
 
 ---
 

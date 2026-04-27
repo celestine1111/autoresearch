@@ -181,10 +181,92 @@ $settings = get_option( 'seobetter_settings', [] );
         </form>
     </div>
 
+    <!-- v1.5.214 — SEOBetter Cloud (active source + quota meter) -->
+    <?php
+    $cloud_status = SEOBetter\Cloud_API::check_status();
+    $is_byok      = ! empty( $cloud_status['has_own_key'] );
+    $is_pro_user  = ! empty( $license_info['is_pro'] );
+    $monthly_used = (int) ( $cloud_status['monthly_used'] ?? 0 );
+    $monthly_limit_raw = $cloud_status['monthly_limit'] ?? 5;
+    $monthly_limit = is_numeric( $monthly_limit_raw ) ? (int) $monthly_limit_raw : 9999;
+    $unlimited     = ! is_numeric( $monthly_limit_raw );
+    $pct           = $unlimited ? 0 : min( 100, (int) ( ( $monthly_used / max( 1, $monthly_limit ) ) * 100 ) );
+    $pct_color     = $pct < 70 ? '#10b981' : ( $pct < 90 ? '#f59e0b' : '#ef4444' );
+    ?>
+    <div class="seobetter-card" style="margin-bottom:20px;border-left:4px solid <?php echo $is_byok ? '#3b82f6' : '#8b5cf6'; ?>">
+        <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <span style="font-size:18px"><?php echo $is_byok ? '🔑' : '☁️'; ?></span>
+            <?php esc_html_e( 'AI generation source', 'seobetter' ); ?>
+            <span style="margin-left:auto;font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:<?php echo $is_byok ? '#3b82f6' : '#8b5cf6'; ?>">
+                <?php echo $is_byok ? esc_html__( 'BYOK ACTIVE', 'seobetter' ) : esc_html__( 'CLOUD ACTIVE', 'seobetter' ); ?>
+            </span>
+        </h2>
+        <p class="description" style="margin-bottom:14px">
+            <?php if ( $is_byok ) : ?>
+                <?php esc_html_e( 'Generation runs through your own connected provider below. SEOBetter Cloud is bypassed — you pay your provider directly per request, and you have unlimited usage.', 'seobetter' ); ?>
+            <?php else : ?>
+                <?php esc_html_e( 'Generation runs through SEOBetter Cloud — our centralized stack handles LLM calls (OpenRouter), web research (Firecrawl), SERP analysis (Serper), and stock images (Pexels). You don\'t need any API keys. Subject to your monthly quota.', 'seobetter' ); ?>
+            <?php endif; ?>
+        </p>
+
+        <?php if ( ! $is_byok ) : ?>
+            <!-- Cloud quota meter -->
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:14px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+                    <strong style="font-size:13px"><?php esc_html_e( 'This month', 'seobetter' ); ?></strong>
+                    <span style="font-size:13px;color:#64748b">
+                        <?php
+                        if ( $unlimited ) {
+                            echo esc_html( sprintf( __( '%d articles · unlimited (Pro)', 'seobetter' ), $monthly_used ) );
+                        } else {
+                            echo esc_html( sprintf( __( '%d of %d articles', 'seobetter' ), $monthly_used, $monthly_limit ) );
+                        }
+                        ?>
+                    </span>
+                </div>
+                <?php if ( ! $unlimited ) : ?>
+                <div style="height:10px;background:#e5e7eb;border-radius:9999px;overflow:hidden">
+                    <div style="height:100%;width:<?php echo (int) $pct; ?>%;background:<?php echo esc_attr( $pct_color ); ?>;transition:width 0.3s"></div>
+                </div>
+                <p style="margin:8px 0 0 0;font-size:11px;color:#64748b">
+                    <?php
+                    if ( $pct >= 90 ) {
+                        printf( esc_html__( '⚠️ You\'re near the limit. %1$sUpgrade to Pro%2$s for unlimited generations or %3$sconnect your own key%4$s.', 'seobetter' ),
+                            '<a href="https://seobetter.com/pricing" target="_blank">', '</a>',
+                            '<a href="#seobetter-byok-section">', '</a>' );
+                    } elseif ( $pct >= 70 ) {
+                        printf( esc_html__( '%1$sUpgrade to Pro%2$s for unlimited Cloud articles.', 'seobetter' ),
+                            '<a href="https://seobetter.com/pricing" target="_blank">', '</a>' );
+                    } else {
+                        esc_html_e( 'Resets on the 1st of each month. Bring your own key (below) for unlimited generations on Free.', 'seobetter' );
+                    }
+                    ?>
+                </p>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+
+        <!-- What Pro Cloud includes (loss-aversion bundled card per pro-plan-pricing.md §8) -->
+        <?php if ( ! $is_pro_user ) : ?>
+        <div style="background:linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%);border:1px solid #ddd6fe;border-radius:8px;padding:14px 18px">
+            <h4 style="margin:0 0 10px 0;color:#5b21b6"><?php esc_html_e( 'What SEOBetter Pro Cloud includes — $39/month', 'seobetter' ); ?></h4>
+            <ul style="margin:0 0 12px 0;padding:0;list-style:none;font-size:13px;color:#4c1d95">
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( '50 Cloud-generated articles/month (Sonnet-tier LLM, no API keys to manage)', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'Firecrawl deep research on every article (10× citation density vs free Jina fallback)', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'Serper SERP intelligence — competitor gap analysis, audience inference', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'All 21 content types (vs 3 on Free) + Recipe Article wrapper + Speakable voice schema', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'AI featured image (DALL-E 3 / FLUX Pro / Gemini Nano Banana)', 'seobetter' ); ?></li>
+                <li>✓ <?php esc_html_e( 'Auto-translates keywords + headings for non-English articles (29 languages)', 'seobetter' ); ?></li>
+            </ul>
+            <a href="https://seobetter.com/pricing" target="_blank" class="button button-primary"><?php esc_html_e( 'See Pro plans →', 'seobetter' ); ?></a>
+        </div>
+        <?php endif; ?>
+    </div>
+
     <!-- AI Providers Section (BYOK) -->
-    <div class="seobetter-card" style="margin-bottom:20px">
-        <h2><?php esc_html_e( 'AI Providers (Bring Your Own Key)', 'seobetter' ); ?></h2>
-        <p class="description"><?php esc_html_e( 'Connect your own AI API key. Your key is stored locally and never sent to SEOBetter servers.', 'seobetter' ); ?></p>
+    <div class="seobetter-card" id="seobetter-byok-section" style="margin-bottom:20px">
+        <h2><?php esc_html_e( 'Bring your own AI key (skips Cloud quota)', 'seobetter' ); ?></h2>
+        <p class="description"><?php esc_html_e( 'Connect your own AI API key — generations bypass SEOBetter Cloud and run through your provider directly. You pay them per token, but have unlimited usage. Your key is stored locally and never sent to SEOBetter servers.', 'seobetter' ); ?></p>
 
         <?php if ( ! $license_info['is_pro'] ) : ?>
             <p style="color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px">
@@ -354,7 +436,7 @@ $settings = get_option( 'seobetter_settings', [] );
                     <td>
                         <input type="password" name="pexels_api_key" value="<?php echo esc_attr( $settings['pexels_api_key'] ?? '' ); ?>" class="regular-text" placeholder="Enter Pexels API key..." />
                         <a href="https://www.pexels.com/api/new/" target="_blank" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Free Key', 'seobetter' ); ?></a>
-                        <p class="description"><?php esc_html_e( 'Free. Adds topic-relevant images to articles and sets featured image. 15,000 requests/month. Without this, generic placeholder images are used.', 'seobetter' ); ?></p>
+                        <p class="description"><?php esc_html_e( 'Optional. Free Pexels key — 15,000 requests/month from your own account. If you don\'t add a key, SEOBetter Cloud automatically supplies Pexels images via a shared pool. Picsum is the last-resort fallback only when both fail.', 'seobetter' ); ?></p>
                     </td>
                 </tr>
             </table>
@@ -630,7 +712,7 @@ $settings = get_option( 'seobetter_settings', [] );
     <div class="seobetter-card-body">
         <h2><?php esc_html_e( 'Branding & AI Featured Image', 'seobetter' ); ?></h2>
         <p class="description" style="margin-bottom:16px">
-            <?php esc_html_e( 'Upload your brand assets and choose an AI image provider to auto-generate a brand-aware featured image for every article. Uses the article title + keywords + your brand colors to compose the prompt. If no provider is configured, the plugin falls back to Pexels/Picsum stock images.', 'seobetter' ); ?>
+            <?php esc_html_e( 'Upload your brand assets and choose an AI image provider to auto-generate a brand-aware featured image for every article. Uses the article title + keywords + your brand colors to compose the prompt. If no AI provider is configured, the plugin falls back to: (1) your Pexels key, (2) SEOBetter Cloud Pexels pool, then (3) Picsum.', 'seobetter' ); ?>
         </p>
 
         <form method="post" enctype="multipart/form-data">
@@ -696,7 +778,7 @@ $settings = get_option( 'seobetter_settings', [] );
                     <td>
                         <?php $bp = $settings['branding_provider'] ?? ''; ?>
                         <select name="branding_provider" id="branding_provider">
-                            <option value="" <?php selected( $bp, '' ); ?>>— <?php esc_html_e( 'Disabled (use Pexels/Picsum fallback)', 'seobetter' ); ?> —</option>
+                            <option value="" <?php selected( $bp, '' ); ?>>— <?php esc_html_e( 'Disabled (use Pexels stock images: your key → Cloud pool → Picsum)', 'seobetter' ); ?> —</option>
                             <option value="pollinations" <?php selected( $bp, 'pollinations' ); ?>><?php esc_html_e( 'Pollinations.ai — FREE, no API key, no signup (Recommended to start)', 'seobetter' ); ?></option>
                             <option value="gemini" <?php selected( $bp, 'gemini' ); ?>><?php esc_html_e( 'Google Gemini 2.5 Flash Image (Nano Banana) — ~$0.04/image, 10/day FREE on AI Studio', 'seobetter' ); ?></option>
                             <option value="dalle3" <?php selected( $bp, 'dalle3' ); ?>><?php esc_html_e( 'OpenAI DALL-E 3 — $0.04/image standard, strong prompt adherence', 'seobetter' ); ?></option>
@@ -754,7 +836,7 @@ $settings = get_option( 'seobetter_settings', [] );
 
         <p class="description" style="padding:10px 14px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:4px;color:#1e3a5f;margin-top:8px">
             <strong><?php esc_html_e( 'ℹ️ Featured image vs inline images:', 'seobetter' ); ?></strong>
-            <?php esc_html_e( 'This setting controls the article FEATURED image only (the big hero at the top / social share preview). Inline images inside the article body still come from Pexels (if configured) or Picsum (free fallback) — AI-generated inline images would add $0.12+ per article for marginal visual gain, and Pexels already has millions of relevant real photos for free. Reserve AI generation for the one image that matters most: the hero.', 'seobetter' ); ?>
+            <?php esc_html_e( 'This setting controls the article FEATURED image only (the big hero at the top / social share preview). Inline images inside the article body come from a 3-tier fallback chain: (1) your own Pexels key if configured, (2) the SEOBetter Cloud Pexels pool (free for all users — added v1.5.212), or (3) Picsum as last resort. AI-generated inline images would add $0.12+ per article for marginal visual gain, and Pexels already has millions of relevant real photos. Reserve AI generation for the one image that matters most: the hero.', 'seobetter' ); ?>
         </p>
     </div>
 </div>

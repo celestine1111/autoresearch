@@ -233,26 +233,61 @@ Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validat
 
 ---
 
-## 4. SIDEBAR (Right Column)
+## 3.99 SEOBetter MAIN MENU LANDING (Dashboard) — `?page=seobetter` (v1.5.214 redesign)
 
-### 4.1 GEO Tips Card
-- "What Makes Content Rank"
-- 5 items with impact percentages from Princeton research
-- Source credit
+The plugin's main admin landing page when a user clicks **SEOBetter** in the WordPress sidebar. View: [admin/views/dashboard.php](../admin/views/dashboard.php).
 
-### 4.2 Pro Upsell Card (if not Pro)
-- "Unlock Pro"
-- Feature list
-- Upgrade button
+### Layout (top to bottom)
 
-### 4.3 Topic Suggester
-- "Need Ideas?"
-- Niche input + "Suggest 10 Topics" button
-- Results list with "Generate →" links per topic
+1. **Header** — page title + tagline + FREE/PRO badge + "Unlock Pro Features →" CTA (free tier only)
+2. **Onboarding hero** (only when setup_complete is false) — 2-step progress card on purple gradient: "Connect AI" + "Generate first article", with progress bar
+3. **Quick Generate Bar** — single keyword input + Generate button (shortcut to content-generator page)
+4. **Monthly stat strip (v1.5.214)** — 4 cards in a horizontal row:
+   - Articles this month (count from `_seobetter_geo_score` post meta filtered by `date_query`)
+   - Avg GEO score (color-graded: green ≥80, amber 60-79, red <60)
+   - GEO 80+ count (high-citability articles)
+   - Schema nodes shipped (count of @graph entries across all articles' `_seobetter_schema` post meta)
+5. **2-column features section** — "What You Get" (FREE included list + PRO bundled-value card) + "How SEOBetter Works" (3-step narrative + Why GEO Matters stats)
+6. **Recent Articles table** — last 10 articles with title / status / GEO score / date / Edit button
 
-### 4.4 Built-in Protocol Card
-- "Every Article Includes"
-- 10-item checklist of features
+### Pro-conversion design rules (v1.5.214)
+- **Value before ask** — stat strip renders BEFORE the Pro upsell card. User sees their own data first, the upsell second.
+- **Bundled-value card** — FREE list and PRO list are equal-prominence (not "FREE = checks, PRO = stars" only). PRO card shows ALL bundled features (50 articles, Firecrawl, Serper, all 21 types, AI featured image, 5 schema blocks, AIOSEO sync, etc.) — anchors user on TOTAL feature gap per Reforge pricing research.
+- **Specific outcomes** — every PRO list item names a concrete unlock ("50 Cloud articles/month on Sonnet-tier LLM", "Firecrawl deep research — 10× citation density"), not generic "advanced features".
+- **Annual savings copy** — `$349/yr — save $119 vs monthly` (dollar savings beats percent-off per UX research).
+
+---
+
+## 4. SIDEBAR (Right Column) — v1.5.214 redesign
+
+The sidebar is the high-leverage real estate while the user is actively producing value. v1.5.214 shipped a Pro-conversion-focused redesign based on Yoast / Rank Math / Surfer / Frase patterns + ProductLed PLG benchmarks. Cut the static GEO Tips + "Every Article Includes" boilerplate (low engagement, never read after the first generation) in favor of dynamic widgets that earn attention.
+
+### 4.1 Pre-generation contextual hints panel ("What this article will get")
+- **Inline JS reads form state** (content_type, country, language, keyword) and renders 3-5 dynamic hints
+- Hints describe what the plugin WILL do based on current selections — not generic feature lists
+- Hint patterns:
+  1. **Schema bundle** — primary @type + extras (e.g. "Recipe[] + Article wrapper + Speakable + recipeCuisine")
+  2. **Pro content-type lock** — when free user picks a Pro-only type, surface the lock with `🔒 Pro:` chip + Pro CTA
+  3. **Cross-script translator preview** — when keyword is Latin but language is non-Latin (ja/ko/zh/ru/ar/etc), shows "🌐 Auto-translate: keyword will be translated to JA"
+  4. **Recipe cuisine mapping** — when content type = recipe + country selected, shows "🍳 recipeCuisine = Japanese"
+  5. **Free vs Pro research depth** — Free shows "Jina Reader fallback (basic)", Pro shows "✓ Firecrawl + Serper + Sonar Pro active"
+- Live updates on form field change (no debounce, no API call — pure client-side)
+- Empty state: "Pick a content type, country & language to see what schema, research depth, and language guards will run."
+
+### 4.2 Topic Suggester (kept from v1.5.13)
+- "Need Ideas?" niche input + "Suggest 10 Topics" button
+- Routes through `/seobetter/v1/topic-research` → cloud-api `/api/topic-research`
+- Displays topic list with "Generate →" links
+
+### 4.3 Pro upsell card (free tier only — refreshed v1.5.214)
+- Heading: `[PRO] Push this article further` with $39/mo anchor
+- 6 specific outcomes (Firecrawl, all 21 types, AI featured image, inject buttons, schema blocks, 50 articles/mo)
+- Each line names a SPECIFIC unlocked outcome — no generic "advanced features" copy
+- CTA button: "$39/mo — See Pro plans →" (price visible in CTA per Reforge pricing research)
+
+### Cut in v1.5.214
+- ~~GEO Tips card~~ — the +41%/+30%/+28% Princeton stats moved to dashboard "Why GEO Matters" panel; redundant in sidebar
+- ~~"Every Article Includes" 10-item checklist~~ — never re-read after first generation; replaced by dynamic hints that change per article
 
 ---
 

@@ -522,29 +522,21 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
         <!-- ===== RIGHT: Sidebar ===== -->
         <div class="sb-generator-sidebar">
 
-            <!-- GEO Tips -->
-            <div class="sb-sidebar-card">
-                <h3><span class="dashicons dashicons-lightbulb" style="color:var(--sb-warning);margin-right:4px;font-size:14px;width:14px;height:14px"></span> What Makes Content Rank</h3>
-                <ul>
-                    <li><span style="color:var(--sb-success)">+41%</span> Expert quotes with credentials</li>
-                    <li><span style="color:var(--sb-success)">+30%</span> Statistics with (Source, Year)</li>
-                    <li><span style="color:var(--sb-success)">+28%</span> Inline citations [Source, Year]</li>
-                    <li><span style="color:var(--sb-success)">+27%</span> Fluency optimization</li>
-                    <li><span style="color:var(--sb-error)">-8%</span> Keyword stuffing (blocked)</li>
+            <!-- v1.5.214 — Pre-generation contextual hints panel.
+                 Reads form state via inline JS and shows what the plugin WILL do
+                 based on current selections. Educates the user about features
+                 they're unlocking + surfaces Pro-only paths contextually
+                 (highest-converting per ProductLed PLG benchmarks). -->
+            <div class="sb-sidebar-card" id="sb-context-hints" data-is-pro="<?php echo $is_pro ? '1' : '0'; ?>">
+                <h3><span class="dashicons dashicons-info" style="color:var(--sb-primary);margin-right:4px;font-size:14px;width:14px;height:14px"></span> What this article will get</h3>
+                <ul id="sb-context-hints-list" style="font-size:12px;line-height:1.7;margin:0;padding:0;list-style:none">
+                    <li style="color:var(--sb-text-muted);font-style:italic;padding:6px 0">
+                        Pick a content type, country &amp; language to see what schema, research depth, and language guards will run.
+                    </li>
                 </ul>
-                <div class="sb-help" style="margin-top:8px">Source: KDD 2024 GEO Research</div>
             </div>
 
-            <!-- Pro Upsell (if not pro) -->
-            <?php if ( ! $is_pro ) : ?>
-            <div class="sb-upsell-card">
-                <h3>Unlock Pro</h3>
-                <p>Get unlimited generation, bulk CSV import, auto content refresh, comparison page builder, and internal link suggestions.</p>
-                <a href="https://seobetter.com/pricing" target="_blank" class="button sb-btn-primary" style="font-size:13px;height:38px;line-height:20px">Upgrade to Pro &rarr;</a>
-            </div>
-            <?php endif; ?>
-
-            <!-- Topic Suggester (compact) -->
+            <!-- Topic Suggester (compact) — kept per v1.5.214 design review -->
             <div class="sb-sidebar-card">
                 <h3><span class="dashicons dashicons-editor-help" style="color:var(--sb-info);margin-right:4px;font-size:14px;width:14px;height:14px"></span> Need Ideas?</h3>
                 <div class="sb-field" style="margin-bottom:8px">
@@ -555,24 +547,135 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                 <div id="sb-topics-list" style="display:none;margin-top:10px;font-size:12px;line-height:1.8"></div>
             </div>
 
-            <!-- Built-in Protocol -->
-            <div class="sb-sidebar-card" style="background:var(--sb-bg)">
-                <h3>Every Article Includes</h3>
-                <ul style="font-size:11px;line-height:1.9">
-                    <li>&#10003; Key Takeaways (BLUF header)</li>
-                    <li>&#10003; 40-60 word snippable sections</li>
-                    <li>&#10003; Island Test compliance</li>
-                    <li>&#10003; Comparison tables</li>
-                    <li>&#10003; FAQ section with schema</li>
-                    <li>&#10003; Recent trends &amp; data</li>
-                    <li>&#10003; 5 headline variations</li>
-                    <li>&#10003; SEO meta tags with CTR score</li>
-                    <li>&#10003; Stock images with alt tags</li>
-                    <li>&#10003; References section</li>
+            <!-- v1.5.214 — Pro upsell card (free tier only). Contextual copy
+                 references real Pro features that compound on top of the free
+                 generation flow, not generic "more features". -->
+            <?php if ( ! $is_pro ) : ?>
+            <div class="sb-upsell-card">
+                <h3 style="display:flex;align-items:center;gap:6px">
+                    <span style="background:var(--sb-primary,#764ba2);color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;letter-spacing:0.05em">PRO</span>
+                    Push this article further
+                </h3>
+                <ul style="font-size:12px;line-height:1.7;margin:0 0 12px 0;padding:0 0 0 16px;color:var(--sb-text)">
+                    <li><strong>Firecrawl deep research</strong> — 10× citation density vs Jina fallback</li>
+                    <li><strong>All 21 content types</strong> — incl. Comparison, Buying Guide, Case Study, Recipe</li>
+                    <li><strong>AI featured image</strong> — DALL-E 3 / FLUX Pro / Gemini Nano Banana</li>
+                    <li><strong>Analyze &amp; Improve</strong> inject buttons — one-click +5-10 GEO points</li>
+                    <li><strong>5 Schema Blocks</strong> — Product, Event, LocalBusiness, Vacation Rental, Job Posting</li>
+                    <li><strong>50 Cloud articles/mo</strong> on Sonnet-tier LLM (vs 5 on Free)</li>
                 </ul>
+                <a href="https://seobetter.com/pricing" target="_blank" class="button sb-btn-primary" style="font-size:13px;height:38px;line-height:20px;width:100%;text-align:center">$39/mo — See Pro plans →</a>
             </div>
+            <?php endif; ?>
         </div>
     </div>
+
+    <!-- v1.5.214 — Pre-generation hints script. Reads form state and renders
+         contextual hints into #sb-context-hints-list. No backend calls — pure
+         client-side computation from the form's existing field values. -->
+    <script>
+    (function() {
+        var hintsRoot = document.getElementById('sb-context-hints');
+        if (!hintsRoot) return;
+        var listEl = document.getElementById('sb-context-hints-list');
+        var isPro = hintsRoot.getAttribute('data-is-pro') === '1';
+
+        // Map of content types to schema bundle (matches Schema_Generator::CONTENT_TYPE_MAP)
+        var schemaMap = {
+            'blog_post':         { primary: 'BlogPosting',          extras: ['BreadcrumbList','Organization','Person','FAQPage (auto)']},
+            'how_to':            { primary: 'Article',              extras: ['BreadcrumbList','Organization','Person','Speakable','FAQPage (auto)']},
+            'listicle':          { primary: 'Article + ItemList',   extras: ['BreadcrumbList','Organization','Person']},
+            'review':            { primary: 'Review',               extras: ['itemReviewed (auto)','positiveNotes/negativeNotes','BreadcrumbList','Organization','Person']},
+            'comparison':        { primary: 'Article',               extras: ['BreadcrumbList','Organization','Person','Product[] (auto)']},
+            'buying_guide':      { primary: 'Article + ItemList',   extras: ['Product[]','BreadcrumbList','Organization','Person']},
+            'recipe':            { primary: 'Recipe[] + Article wrapper', extras: ['Speakable','BreadcrumbList','Organization','Person','recipeCuisine (country-mapped)']},
+            'faq_page':          { primary: 'FAQPage',              extras: ['Speakable','BreadcrumbList','Organization','Person']},
+            'news_article':      { primary: 'NewsArticle',          extras: ['Speakable','BreadcrumbList','Organization','Person']},
+            'opinion':           { primary: 'OpinionNewsArticle',   extras: ['Speakable','citation[]','backstory','BreadcrumbList','Organization','Person']},
+            'tech_article':      { primary: 'TechArticle',          extras: ['citation[]','SoftwareApplication (auto)','BreadcrumbList','Organization','Person']},
+            'white_paper':       { primary: 'Article',              extras: ['Dataset (auto)','citation[]','BreadcrumbList','Organization','Person']},
+            'scholarly_article': { primary: 'ScholarlyArticle',     extras: ['citation[]','Dataset (auto)','BreadcrumbList','Organization','Person']},
+            'live_blog':         { primary: 'LiveBlogPosting',      extras: ['BreadcrumbList','Organization','Person']},
+            'press_release':     { primary: 'NewsArticle',          extras: ['Speakable','citation[]','BreadcrumbList','Organization (enriched)','Person']},
+            'personal_essay':    { primary: 'BlogPosting',          extras: ['Speakable','backstory','BreadcrumbList','Organization','Person','ProfilePage (auto)']},
+            'glossary':          { primary: 'DefinedTerm',          extras: ['BreadcrumbList','Organization','Person']},
+            'sponsored':         { primary: 'BlogPosting',          extras: ['sponsor org','backstory','citation[]','BreadcrumbList','Organization','Person']},
+            'case_study':        { primary: 'Article',              extras: ['Organization (client)','citation[]','BreadcrumbList','Organization','Person']},
+            'interview':         { primary: 'Article + ProfilePage',extras: ['QAPage (auto)','citation[]','Speakable','BreadcrumbList','Organization','Person']},
+            'pillar_guide':      { primary: 'Article + ItemList',   extras: ['Speakable','citation[]','BreadcrumbList','Organization','Person']}
+        };
+
+        // Pro-only content types (per pro-plan-pricing.md §2)
+        var freeTypes = ['blog_post', 'how_to', 'listicle'];
+
+        function render() {
+            var ct = (document.querySelector('[name="content_type"]') || {}).value || 'blog_post';
+            var country = (document.querySelector('[name="country"]') || {}).value || '';
+            var lang = (document.querySelector('[name="language"]') || {}).value || 'en';
+            var keyword = ((document.querySelector('[name="keyword"]') || {}).value || '').trim();
+
+            var hints = [];
+            var bundle = schemaMap[ct] || schemaMap['blog_post'];
+
+            // Hint 1: Schema bundle (always shown)
+            hints.push('<li style="padding:6px 0;border-bottom:1px solid #f1f5f9">' +
+                '<strong style="color:#0f172a">Schema:</strong> ' + bundle.primary +
+                ' <span style="color:#64748b">+ ' + bundle.extras.slice(0, 3).join(', ') + '</span></li>');
+
+            // Hint 2: Pro content-type lock (if free user picks a Pro type)
+            if (!isPro && freeTypes.indexOf(ct) === -1) {
+                hints.push('<li style="padding:6px 0;border-bottom:1px solid #f1f5f9;background:linear-gradient(90deg,#faf5ff 0%,transparent 100%);margin:0 -8px;padding:6px 8px">' +
+                    '<strong style="color:#7c3aed">🔒 Pro:</strong> "' + ct.replace(/_/g, ' ') + '" requires Pro. ' +
+                    '<a href="https://seobetter.com/pricing" target="_blank" style="color:#7c3aed;text-decoration:underline">Unlock all 21 types →</a></li>');
+            }
+
+            // Hint 3: Cross-script translator (when language doesn't match keyword script)
+            var nonLatinLangs = ['ja','ko','zh','ru','uk','bg','sr','mk','ar','fa','ur','he','th','hi','mr','ne','el','ka','hy','bn','ta','te','kn','ml','gu','pa','si'];
+            var keywordIsLatin = /^[\x00-\x7F]+$/.test(keyword) && /[A-Za-z]/.test(keyword);
+            if (lang !== 'en' && nonLatinLangs.indexOf(lang) !== -1 && keywordIsLatin && keyword) {
+                hints.push('<li style="padding:6px 0;border-bottom:1px solid #f1f5f9">' +
+                    '<strong style="color:#0f172a">🌐 Auto-translate:</strong> Your English keyword will be translated to ' + lang.toUpperCase() + ' for native research + headings + meta tags.</li>');
+            }
+
+            // Hint 4: Country-specific recipeCuisine (if Recipe + supported country)
+            if (ct === 'recipe' && country) {
+                var cuisineMap = {AU:'Australian',US:'American',GB:'British',FR:'French',IT:'Italian',JP:'Japanese',IN:'Indian',MX:'Mexican',TH:'Thai',CN:'Chinese',KR:'Korean',ES:'Spanish',DE:'German',BR:'Brazilian',GR:'Greek',TR:'Turkish',VN:'Vietnamese',IE:'Irish',NZ:'New Zealand'};
+                if (cuisineMap[country]) {
+                    hints.push('<li style="padding:6px 0;border-bottom:1px solid #f1f5f9">' +
+                        '<strong style="color:#0f172a">🍳 Recipe cuisine:</strong> Schema will mark recipeCuisine = ' + cuisineMap[country] + '.</li>');
+                }
+            }
+
+            // Hint 5: Free vs Pro research depth
+            if (!isPro) {
+                hints.push('<li style="padding:6px 0">' +
+                    '<strong style="color:#64748b">📡 Research:</strong> Free uses Jina Reader fallback (basic). ' +
+                    '<a href="https://seobetter.com/pricing" target="_blank" style="color:#7c3aed">Pro adds Firecrawl deep research →</a></li>');
+            } else {
+                hints.push('<li style="padding:6px 0"><strong style="color:#10b981">✓ Pro research stack active:</strong> Firecrawl + Serper + Sonar Pro</li>');
+            }
+
+            // If nothing matched (no form values yet), show placeholder
+            if (hints.length === 0) {
+                hints.push('<li style="color:#94a3b8;font-style:italic;padding:6px 0">Pick a content type, country &amp; language to see what schema, research depth, and language guards will run.</li>');
+            }
+
+            listEl.innerHTML = hints.join('');
+        }
+
+        // Attach change listeners to relevant form fields
+        ['content_type','country','language','keyword'].forEach(function(name) {
+            var el = document.querySelector('[name="' + name + '"]');
+            if (el) {
+                el.addEventListener('change', render);
+                el.addEventListener('input', render);
+            }
+        });
+
+        // Initial render after a tick (gives selects time to populate)
+        setTimeout(render, 100);
+    })();
+    </script>
 
     <!-- ===== RESULTS — rendered by async JS into #seobetter-async-result ===== -->
     <!-- Legacy server-side $result rendering was REMOVED in v1.5.12.

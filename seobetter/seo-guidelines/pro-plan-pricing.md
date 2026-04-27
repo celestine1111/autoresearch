@@ -233,17 +233,22 @@ Plus:
 
 Research shows **personalized contextual CTAs beat default CTAs by 202%** ([WeCanTrack 2026](https://wecantrack.com/insights/wordpress-monetization-statistics/)). Don't put a single "Upgrade" button in the sidebar. Put targeted prompts at the exact moment of friction where users feel the limitation.
 
-**7 placements:**
+**Active CTA placements as of v1.5.214 (✅ shipped) + queued (📋):**
 
-| # | Trigger | CTA copy |
-|---|---|---|
-| 1 | User selects a Pro content type (Buying Guide / Comparison / Review) | **"Unlock all 21 content types + 🎯 comparison tables — start 7-day Pro trial"** |
-| 2 | User's article GEO score card shows Tables 0 with a locked "Add Table" button | **"Add a comparison table in one click — Pro fixes tables automatically (+5 GEO points)"** |
-| 3 | User enters a small-town keyword that Sonar-free tier can't cover | **"Unlock Perplexity Sonar Pro for any town worldwide — find real businesses in Mudgee, Lucignano, or any small city ($39/mo)"** |
-| 4 | User enables AI Featured Image and picks a branded style | **"Upgrade to use DALL-E 3 and FLUX Pro for premium images (Pro)"** |
-| 5 | User's article has plain-text citations instead of clickable links | **"Pro users get clickable citations via Brave Search — fixes AIOSEO 'no outbound links' automatically"** |
-| 6 | User tries to generate a 4th article in a month (if we add usage cap to free tier later) | **"You've used all 3 free cloud articles this month. Upgrade to Pro for unlimited, or bring your own API key (still free)"** |
-| 7 | User opens the Analyze & Improve panel with any locked fix | **"Apply this fix with Pro — 7-day free trial, cancel anytime"** |
+| # | Trigger | CTA copy | Status |
+|---|---|---|---|
+| 1 | User selects a Pro content type (Buying Guide / Comparison / Review) in the form. Right-column hints panel shows `🔒 Pro:` chip live. | **"🔒 Pro: \"Buying Guide\" requires Pro. Unlock all 21 types →"** | ✅ v1.5.214 (`#sb-context-hints`) |
+| 2 | Settings → AI generation source card. Free user without BYOK key sees Cloud quota meter. | Quota meter color-grades green/amber/red at 70%/90%; CTA appears only ≥70%: **"Upgrade to Pro for unlimited Cloud articles"** | ✅ v1.5.214 (Settings card) |
+| 3 | Dashboard → bundled-value Pro card. Lists ALL 11 unlocked outcomes with $39/mo anchor. | Bundle card: 50 Cloud articles + Firecrawl + Serper + all 21 types + AI featured image + Speakable + 5 Schema Blocks + AIOSEO sync + inject buttons + 48h support. **"$39/mo — See Pro plans →"** + annual savings line ("$349/yr — save $119 vs monthly") | ✅ v1.5.214 (`dashboard.php`) |
+| 4 | Content Generator sidebar Pro card. Free tier only. Names 6 specific outcomes that compound on top of free generation. | **"PRO — Push this article further: Firecrawl deep research, all 21 types, AI featured image, inject buttons, 5 schema blocks, 50 Cloud articles/mo. $39/mo — See Pro plans →"** | ✅ v1.5.214 (`content-generator.php`) |
+| 5 | Pre-generation hints panel. Free user — every article shows "📡 Research: Free uses Jina Reader fallback (basic). Pro adds Firecrawl deep research →" | Live JS render, no nag — passive context, click-to-Pro-page only | ✅ v1.5.214 (inline script) |
+| 6 | Cross-script translator hint when user enters English keyword + non-Latin language | **"🌐 Auto-translate: Your English keyword will be translated to JA for native research + headings + meta tags."** (free feature, v1.5.212.2) | ✅ v1.5.214 (inline script) |
+| 7 | Recipe + country combo shows recipeCuisine mapping | **"🍳 Recipe cuisine: Schema will mark recipeCuisine = Japanese."** (free feature, surfaces value of country selector) | ✅ v1.5.214 (inline script) |
+| 8 | User's article GEO score card shows Tables 0 with a locked "Add Table" button (legacy from earlier draft) | **"Add a comparison table in one click — Pro fixes tables automatically (+5 GEO points)"** | 📋 Queued — Analyze & Improve inject buttons |
+| 9 | User enters a small-town keyword that Sonar-free tier can't cover | **"Unlock Perplexity Sonar Pro for any town worldwide — find real businesses in Mudgee, Lucignano, or any small city ($39/mo)"** | 📋 Queued — needs Places_Validator gating signal |
+| 10 | User's article has plain-text citations instead of clickable links | **"Pro users get clickable citations via Brave Search — fixes AIOSEO 'no outbound links' automatically"** | 📋 Queued — needs Citation_Pool format check |
+| 11 | User opens the Analyze & Improve panel with any locked fix | **"Apply this fix with Pro — 7-day free trial, cancel anytime"** | 📋 Queued — Analyze & Improve panel rebuild |
+| 12 | Success-moment card after GEO ≥75 generation completes | **"🎉 GEO 82 — top 18% of articles in your industry. [Publish] [Add Firecrawl pass +$0.40] [Maybe later]"** | 📋 Queued — needs result-panel hook |
 
 **Copy rules (from SaaS CRO research):**
 - Benefit-led, not feature-led ("Find real businesses" not "Unlock Sonar")
