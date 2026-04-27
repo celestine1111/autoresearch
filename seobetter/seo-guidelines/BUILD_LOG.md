@@ -19,7 +19,7 @@
 ## v1.5.212.2 — Non-English language hardening (cross-script research + heading-language guard)
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `5bc2168`
 
 ### Why this ships
 
