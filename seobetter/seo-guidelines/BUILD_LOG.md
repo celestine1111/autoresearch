@@ -19,7 +19,7 @@
 ## v1.5.212.5 — Aggressive Latin-word detection in heading guard
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `435f66e`
 
 ### Why this ships
 
