@@ -7,12 +7,78 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.212.5)
+> **Last updated:** 2026-04-27 (v1.5.213)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.213 — Schema coverage release: Recipe Article wrapper + @id refs + Speakable expansion + cleanups
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+After the v1.5.212.5 JP-Japanese article passed the language guard cleanly, Ben asked for comprehensive research on what schemas could/should apply to each of the 21 article types per Google + Schema.org best practices. Two parallel agents (internal Schema_Generator inventory + external Google docs research) returned a delta matrix. v1.5.213 ships the highest-impact items from that matrix as a single schema-coverage release.
+
+The two driving observations from the matrix:
+
+1. **The v1.5.212 Rich Results tab promised more than the code delivered.** "Available" badges (Speakable, Article-on-Recipe, Profile, etc.) implied the plugin would auto-emit when applicable — but Recipe articles got Recipe[] only, no Speakable, no Article wrapper, single-rich-result-lane.
+2. **Per-article author/publisher were inlined and duplicated.** In a multi-recipe article each Recipe carried its own ~13-field Person object (~500 bytes × 4 recipes = 2KB of duplicated identity per page). The top-level Person/Organization @id anchors from v1.5.212 already existed but no other schema referenced them.
+
+### Added / Changed / Fixed
+
+- **Translate-headings prompt tightened (was v1.5.212.6 — folded in)** — `cloud-api/api/translate-headings.js` lines **~57 + ~96**
+  - Pre-fix the model interpreted English SEO keywords inside 「」 / "" / '' quotes as proper nouns and preserved them, leaving leaks like `なぜ「Best Slow Cooker Recipes for Winter 2026」が日本で重要なのか`. Now both system prompt and user prompt explicitly instruct: translate quoted English phrases too. Only preserve genuine brand names (iPhone, Tesla, Toyota, BMW, Sony) / acronyms (CNN, SEO) / person names. Multi-word English search queries are NOT proper nouns.
+  - Verify: `grep -n "SEO keywords are NOT proper nouns" seobetter/cloud-api/api/translate-headings.js`
+
+- **`Cloud_API::translate_strings_batch()` shared helper** (already shipped v1.5.212.3) now also routes the Recipe `keywords` field for non-English articles — `includes/Schema_Generator.php::build_recipe()` line **~1003**
+  - Verify: `grep -n 'translate_strings_batch.*keyword' seobetter/includes/Schema_Generator.php`
+
+- **`Schema_Generator::author_id_ref()` + `publisher_id_ref()` shared helpers** — `includes/Schema_Generator.php` line **~204**
+  - Returns minimal `{@type, @id, name}` references to the top-level Person + Organization nodes (those use `home_url() . '#author-{slug}'` and `home_url() . '#organization'` from v1.5.212). Replaces inline author/publisher in `build_article()`, `build_recipe()`, `build_review()`. Keeps the @graph DRY — one canonical Person + Organization, every Article/Recipe/Review pointing at them by @id rather than repeating the 13-field Person object on each.
+  - Verify: `grep -n 'author_id_ref\|publisher_id_ref' seobetter/includes/Schema_Generator.php`
+
+- **`SPEAKABLE_TYPES` expanded 7 → 10** — `includes/Schema_Generator.php` line **~341**
+  - Added `recipe`, `personal_essay`, `press_release`. Recipe via Key Takeaways block (introduces dish), personal_essay via lede paragraph (first-person hook), press_release via dateline + first graf (news lede). All three appear regularly in voice search results for their respective intents.
+  - Verify: `grep -n "SPEAKABLE_TYPES = " seobetter/includes/Schema_Generator.php`
+
+- **Recipe Article wrapper co-emission** — `includes/Schema_Generator.php::build_recipe_article_wrapper()` line **~1240** + call site at `generate()` line **~349**
+  - Recipe articles now emit BOTH `Article` (wrapper) AND `Recipe[]` in the @graph. Article carries Speakable + articleSection: "Recipe" + author/publisher @id refs. Per Google's @graph spec, multiple top-level @types are explicitly supported and Google picks the most specific @type per surface — Recipe gets the Recipe rich-result lane, Article gets the Article snippet + Speakable voice readout lane. Two surfaces from one page.
+  - Verify: `grep -n 'build_recipe_article_wrapper' seobetter/includes/Schema_Generator.php`
+
+- **Dead `case 'HowTo'` removed** — `includes/Schema_Generator.php::generate_primary_schema()` line **~610**
+  - `CONTENT_TYPE_MAP['how_to']` has been `'Article'` since v1.5.116 (Google deprecated HowTo rich result Sept 2023), so the `case 'HowTo':` branch was unreachable. Speakable on how_to articles (already in SPEAKABLE_TYPES from v1.5.210) compensates for the lost rich result via voice readout.
+  - Verify: `grep -n "case 'HowTo'" seobetter/includes/Schema_Generator.php` (should return nothing)
+
+- **`ImageObject` populate name + description + caption** — `includes/Schema_Generator.php::detect_image_schemas()` line **~1955**
+  - Pre-fix standalone ImageObject nodes shipped with empty `name`/`description`, triggering Schema.org Validator "incomplete entity" warnings. Now populated with the alt text (already authored for accessibility). Same data, proper population, no extra cost.
+  - Verify: `grep -n "'name'             => \$alt" seobetter/includes/Schema_Generator.php`
+
+### Files touched
+
+- `cloud-api/api/translate-headings.js` — prompt tightening
+- `includes/Schema_Generator.php` — id-ref helpers, build_recipe + build_review + build_article keyword/author refactors, build_recipe_article_wrapper (NEW), SPEAKABLE_TYPES expansion, HowTo case removal, ImageObject populate
+- `seobetter.php` — version bump to 1.5.213
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §3.1B addendum + §10 Recipe co-emit note
+- `seo-guidelines/structured-data.md` — §5 Recipe-content-type co-emit note + §4 Recipe `keywords` translation note
+
+### Verified by user
+
+- **UNTESTED** — re-run JP-Japanese recipe article test. Expected: (a) one English-quoted keyword leak from previous test gone, (b) per-Recipe `author` is a tiny `{@id}` ref instead of inlined 13-field Person, (c) @graph has both Article and Recipe[] for recipe content type, (d) Recipe `keywords` field is Japanese, (e) standalone ImageObject nodes now have name + description + caption, (f) all H1/H2/H3 still in native script.
+
+### Deferred to v1.5.213.1+
+
+- **FAQ section in Recipe template** — needs Async_Generator prose-template change (v1.5.213.1)
+- **Glossary multi-term DefinedTermSet wrapper** — current single-term implementation is correct; multi-term needs different code path (v1.5.213.2)
+- **Pillar_guide hasPart cluster graph** — needs internal-link analysis (v1.5.213.2)
+- **Scholarly isPartOf Periodical + DOI** — needs metadata input UI (v1.5.213.2)
+- **Comparison/buying_guide per-Product nodes** — needs body parsing for table rows (v1.5.214 / Pro)
 
 ---
 

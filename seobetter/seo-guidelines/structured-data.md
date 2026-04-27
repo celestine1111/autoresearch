@@ -133,6 +133,12 @@ Every top-level schema emitted by `Schema_Generator::generate()` and the legacy 
 
 **Multi-recipe support:** Articles with 3+ recipe H2 sections generate SEPARATE Recipe schemas per recipe, plus an ItemList carousel schema. Google shows each recipe as a swipeable card.
 
+**Article wrapper co-emission (v1.5.213):** Recipe content type emits BOTH `Article` (wrapper) AND `Recipe[]` in the @graph. The Article wrapper carries `articleSection: "Recipe"`, `speakable.cssSelector: ['h1', '.key-takeaways', 'h2 + p']`, and @id refs to the top-level Person/Organization. Per Google's @graph spec, multiple top-level @types are explicitly supported and Google picks the most-specific @type per surface — Recipe gets the Recipe rich-result lane, Article gets the Article snippet + Speakable voice readout lane. Two surfaces from one page.
+
+**Author/Publisher @id refs (v1.5.213):** Per-Recipe author/publisher are minimal `{@type, @id, name}` refs to the canonical Person + Organization at the @graph root, NOT inlined Person objects. Pre-v1.5.213 each Recipe duplicated the full 13-field Person object (~500 bytes × 4 recipes = 2KB of redundant identity per article).
+
+**`keywords` field translation (v1.5.213):** When article `_seobetter_language` is non-English, the focus keyword fed into Recipe `keywords` is translated via `Cloud_API::translate_strings_batch()` so the schema field language matches the article body. Fail-open: translation errors fall back to the original keyword.
+
 | `nutrition.calories` | Regex: "X calories" or "X cal" in recipe section | `{"@type":"NutritionInformation","calories":"45 calories"}` |
 
 **BANNED:** Hardcoded times/yields/ratings/cuisine/calories. If the content doesn't state a value, the field is OMITTED.

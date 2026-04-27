@@ -260,9 +260,11 @@ Auto-detected from any paragraph matching `"Quote text" - Name, Title` (short da
 - Trigger regex (Unicode-aware): `^["\x{201C}]([^"\x{201D}]{20,})["\x{201D}]\s*[\x{2014}\x{2013}\-]\s*([A-Z][a-zA-Z\s.\']+?)(?:,\s*(.+?))?[.\s]*$`
 - Source: `Content_Formatter.php::format_hybrid()` paragraph branch — Expert quote
 
-### 5.11 Recipe Card (`v1.5.120+`, updated v1.5.122)
+### 5.11 Recipe Card (`v1.5.120+`, updated v1.5.122 / v1.5.213)
 
 **ONLY applies to `content_type = recipe` articles.** Other article types never get yellow recipe cards even if they mention recipes. Within recipe articles, each H2 that is NOT a generic section (Key Takeaways, FAQ, Pros/Cons, References, Safety) gets wrapped in a styled card.
+
+**Schema-side companion (v1.5.213):** The visual recipe card is paired with a dual-schema emission — `Article` wrapper (page-level, with Speakable + author/publisher @id refs) + `Recipe[]` (per-card). This gives the rendered card two rich-result lanes: Recipe carousel/card AND Article snippet + voice readout. See `structured-data.md` §4 Recipe + §5 content-type → @type map for the schema details. Layer 5 (visual) and Layer 4 (schema) stay aligned — every visual recipe card has a matching Recipe schema node.
 
 - **Background:** Warm gradient `linear-gradient(135deg, #fefce8 0%, #fef3c7 100%)` (light amber)
 - **Border:** `2px solid #fde68a` (amber), `border-radius: 16px`

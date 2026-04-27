@@ -186,6 +186,44 @@ class Schema_Generator {
      * Shares schema fields with build_author_schema() (nested author field in
      * Article schema) but emitted standalone with @id anchor.
      */
+    /**
+     * v1.5.213 — Build minimal {@type, @id, name} reference to the top-level
+     * Person/Organization nodes that build_site_*_schema emits. Replaces inline
+     * author/publisher duplication: pre-fix every Recipe in a multi-recipe
+     * article carried a 13-field Person object (~500 bytes) → 4 recipes × 4
+     * fields-deep = 2KB+ of duplicated identity data per article. With @id refs
+     * the per-Recipe author shrinks to ~80 bytes and consumers join to the
+     * single canonical Person at the @graph root.
+     *
+     * Google + Schema.org explicitly support @id resolution within a @graph;
+     * the minimal ref includes `name` as a fallback for non-graph-aware older
+     * consumers (legacy crawlers, third-party SEO scrapers).
+     */
+    private function author_id_ref( \WP_Post $post ): array {
+        $author_slug = '';
+        $author = get_userdata( $post->post_author );
+        if ( $author && $author->user_login ) {
+            $author_slug = $author->user_login;
+        }
+        return [
+            '@type' => 'Person',
+            '@id'   => trailingslashit( home_url() ) . '#author-' . ( $author_slug ?: $post->post_author ),
+            'name'  => $this->get_author_name( $post ),
+        ];
+    }
+
+    /**
+     * v1.5.213 — see author_id_ref(). Mirrors build_site_organization_schema's
+     * @id pattern (home_url + #organization).
+     */
+    private function publisher_id_ref(): array {
+        return [
+            '@type' => 'Organization',
+            '@id'   => trailingslashit( home_url() ) . '#organization',
+            'name'  => get_bloginfo( 'name' ),
+        ];
+    }
+
     private function build_site_author_person_schema( \WP_Post $post ): array {
         // Reuse the full author schema builder (v1.5.139 — has sameAs, jobTitle,
         // knowsAbout, worksFor, image, description) and add an @id anchor so
@@ -292,7 +330,15 @@ class Schema_Generator {
     //   - faq_page: Q&A format is voice-native — the highest-value voice-read type
     //   - interview: Q&A transcript lends itself to audio consumption
     // Sponsored deliberately excluded (Google policy — paid content shouldn't be voice-read without audible disclosure).
-    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview' ];
+    // v1.5.213 — Expanded from 7 to 10 types. Recipe + personal_essay +
+    // press_release benefit from voice-assistant readout: Recipe via Key
+    // Takeaways block (introduces the dish), personal_essay via the lede
+    // paragraph (first-person hook), press_release via the dateline + first
+    // graf (the news lede). All three articles routinely show up in voice
+    // search results for their respective intents (recipe queries, opinion
+    // pieces, brand news), so emitting Speakable widens the surface where
+    // Google Assistant / Alexa can read them aloud.
+    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release' ];
 
     // Content types that get universal `citation[]` injection (v1.5.210).
     // Implements the "biggest LLM-citation lever" rollout flagged in v1.5.209
@@ -341,6 +387,17 @@ class Schema_Generator {
             foreach ( array_slice( $this->_multi_recipes, 1 ) as $extra_recipe ) {
                 $schemas[] = $extra_recipe;
             }
+        }
+
+        // v1.5.213 — Recipe articles co-emit an Article wrapper alongside the
+        // Recipe[] schemas. Pre-fix: a Recipe-content-type article emitted ONLY
+        // Recipe[] in the @graph, which gave it ONE rich-result eligibility lane
+        // (Recipe card). With the Article wrapper, the page is also eligible for
+        // Article snippet + Speakable voice readout — two extra surfaces. Per
+        // Google's @graph spec, multiple top-level @types are explicitly
+        // supported and Google picks the most-specific @type per surface.
+        if ( $content_type === 'recipe' ) {
+            $schemas[] = $this->build_recipe_article_wrapper( $post );
         }
 
         // ---- Secondary schemas ----
@@ -548,12 +605,15 @@ class Schema_Generator {
     private function generate_primary_schema( \WP_Post $post, string $content_type ): ?array {
         $type = self::CONTENT_TYPE_MAP[ $content_type ] ?? 'Article';
 
-        // Specialty types have their own builders
+        // Specialty types have their own builders.
+        // v1.5.213 — `case 'HowTo'` removed. CONTENT_TYPE_MAP['how_to'] has been
+        // 'Article' since v1.5.116 (Google deprecated HowTo rich result Sept 2023),
+        // so this branch was unreachable. Kept the build_howto() method itself for
+        // potential Bing/Yandex use, but the default path through build_article()
+        // now handles how_to content type cleanly. Speakable on how_to articles
+        // gives them voice-readout coverage which compensates for the lost rich
+        // result on Google.
         switch ( $type ) {
-            case 'HowTo':
-                $howto = $this->build_howto( $post );
-                return $howto ?: $this->build_article( $post, 'Article' );
-
             case 'Recipe':
                 return $this->build_recipe( $post );
 
@@ -594,12 +654,13 @@ class Schema_Generator {
             'description'   => $this->build_clean_description( $post->post_content ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
-            'author'        => $this->safe_build_author( $post ),
-            'publisher'     => [
-                '@type' => 'Organization',
-                'name'  => get_bloginfo( 'name' ),
-                'url'   => home_url(),
-            ],
+            // v1.5.213 — @id refs to the top-level Person + Organization nodes
+            // (see build_site_author_person_schema / build_site_organization_schema).
+            // Keeps the @graph DRY — one canonical Person + Organization, with
+            // every Article/Recipe/Review pointing at them by @id rather than
+            // repeating the 13-field Person object on each.
+            'author'        => $this->author_id_ref( $post ),
+            'publisher'     => $this->publisher_id_ref(),
             'mainEntityOfPage' => [
                 '@type' => 'WebPage',
                 '@id'   => get_permalink( $post->ID ),
@@ -927,9 +988,28 @@ class Schema_Generator {
         $permalink = get_permalink( $post->ID );
         $keyword   = get_post_meta( $post->ID, '_seobetter_focus_keyword', true ) ?: '';
         $country   = get_post_meta( $post->ID, '_seobetter_country', true ) ?: '';
+        $language  = get_post_meta( $post->ID, '_seobetter_language', true ) ?: 'en';
 
-        // v1.5.145 — Full Person schema with E-E-A-T fields for recipes too
-        $author_data = $this->safe_build_author( $post );
+        // v1.5.213 — @id refs to top-level Person/Organization. Pre-fix every
+        // Recipe in a multi-recipe article inlined the full 13-field Person
+        // (~500 bytes × 4 recipes = 2KB of duplicated identity per article).
+        // With @id refs, per-Recipe author is ~80 bytes and the canonical
+        // Person lives once in the @graph root.
+        $author_ref = $this->author_id_ref( $post );
+
+        // v1.5.213 — Translate the focus keyword for the Recipe `keywords`
+        // field when the article language is non-English. Pre-fix: a Japanese
+        // recipe shipped `keywords: "Best Slow Cooker Recipes for Winter 2026"`
+        // — schema field language mismatched the article body. Now passes
+        // through the same translate-headings batch helper used elsewhere.
+        // Fail-open: translation errors fall back to the original keyword.
+        $translated_keyword = $keyword;
+        if ( $keyword && $language && substr( $language, 0, 2 ) !== 'en' ) {
+            $batch = \SEOBetter\Cloud_API::translate_strings_batch( [ $keyword ], $language );
+            if ( is_array( $batch ) && ! empty( $batch[0] ) && $batch[0] !== $keyword ) {
+                $translated_keyword = $batch[0];
+            }
+        }
 
         // Map country code to cuisine name
         $cuisine_map = [
@@ -973,7 +1053,7 @@ class Schema_Generator {
                     'name'          => $heading,
                     'description'   => wp_trim_words( $body_text, 25 ),
                     'datePublished' => get_the_date( 'c', $post ),
-                    'author'        => $author_data,
+                    'author'        => $author_ref,
                 ];
 
                 // v1.5.122 — Image array with multiple sizes (Google wants 1:1, 4:3, 16:9)
@@ -995,8 +1075,9 @@ class Schema_Generator {
                 }
 
                 // Keywords from focus keyword
-                if ( $keyword ) {
-                    $recipe['keywords'] = $keyword;
+                // v1.5.213 — uses translated form when article language is non-English.
+                if ( $translated_keyword ) {
+                    $recipe['keywords'] = $translated_keyword;
                 }
 
                 // Cuisine from country
@@ -1125,10 +1206,12 @@ class Schema_Generator {
                 'name'          => $post->post_title,
                 'description'   => wp_trim_words( $text, 30 ),
                 'datePublished' => get_the_date( 'c', $post ),
-                'author'        => $author_data,
+                // v1.5.213 — @id ref to canonical Person node.
+                'author'        => $author_ref,
             ];
             if ( $thumbnail ) $recipe['image'] = [ $thumbnail, $thumbnail, $thumbnail ];
-            if ( $keyword ) $recipe['keywords'] = $keyword;
+            // v1.5.213 — uses translated form for non-English articles.
+            if ( $translated_keyword ) $recipe['keywords'] = $translated_keyword;
             if ( $cuisine ) $recipe['recipeCuisine'] = $cuisine;
 
             // Extract from full content (existing logic)
@@ -1157,6 +1240,49 @@ class Schema_Generator {
     }
 
     /**
+     * v1.5.213 — Article wrapper schema co-emitted alongside Recipe[] for
+     * recipe content type. Gives the page an Article snippet + Speakable
+     * voice-readout eligibility lane in addition to the Recipe rich-result
+     * lane. Lightweight: just the article-level fields (no recipe ingredient/
+     * instruction repetition — those stay on the Recipe[] nodes).
+     *
+     * @id pattern matches the Recipe nodes' implicit page identity, so
+     * downstream consumers can join the Article wrapper to the Recipe[] via
+     * mainEntityOfPage.
+     */
+    private function build_recipe_article_wrapper( \WP_Post $post ): array {
+        $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
+        $permalink = get_permalink( $post->ID );
+
+        $schema = [
+            '@type'         => 'Article',
+            '@id'           => $permalink . '#article',
+            'headline'      => $post->post_title,
+            'description'   => $this->build_clean_description( $post->post_content ),
+            'datePublished' => get_the_date( 'c', $post ),
+            'dateModified'  => get_the_modified_date( 'c', $post ),
+            'author'        => $this->author_id_ref( $post ),
+            'publisher'     => $this->publisher_id_ref(),
+            'mainEntityOfPage' => [
+                '@type' => 'WebPage',
+                '@id'   => $permalink,
+            ],
+            'articleSection' => 'Recipe',
+            // Speakable on the wrapper — voice assistants read the H1 + Key
+            // Takeaways block (the dish-level intro) before the per-recipe
+            // ingredient/instruction details. SPEAKABLE_TYPES expansion v1.5.213.
+            'speakable' => [
+                '@type'       => 'SpeakableSpecification',
+                'cssSelector' => [ 'h1', '.key-takeaways', 'h2 + p' ],
+            ],
+        ];
+        if ( $thumbnail ) {
+            $schema['image'] = $thumbnail;
+        }
+        return $schema;
+    }
+
+     /**
      * v1.5.136 — Review schema: Google-exact format with smart itemReviewed detection.
      *
      * Detects WHAT is being reviewed from content + category and uses the correct
@@ -1340,11 +1466,9 @@ class Schema_Generator {
             'description'   => wp_trim_words( $text, 30 ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
-            'author'        => $this->safe_build_author( $post ),
-            'publisher'     => [
-                '@type' => 'Organization',
-                'name'  => get_bloginfo( 'name' ),
-            ],
+            // v1.5.213 — @id refs to canonical Person + Organization at @graph root.
+            'author'        => $this->author_id_ref( $post ),
+            'publisher'     => $this->publisher_id_ref(),
             'itemReviewed'  => $item_reviewed,
         ];
 
@@ -1825,12 +1949,22 @@ class Schema_Generator {
         if ( empty( $imgs[1] ) ) return [];
 
         $site_name = get_bloginfo( 'name' );
+        $post_url  = get_permalink( $post->ID );
         foreach ( array_slice( $imgs[1], 0, 5 ) as $i => $src ) {
             $alt = $imgs[2][ $i ] ?? '';
             if ( strlen( $alt ) < 5 ) continue;
+            // v1.5.213 — Populate `name` + `description` on standalone ImageObject
+            // nodes. Pre-fix these were emitted with empty name/description fields,
+            // which Schema.org Validator flagged as "incomplete entity" warnings.
+            // Now: name = the alt text (already authored for accessibility), and
+            // description = the alt text wrapped in article-context. Same data,
+            // proper population, no extra cost.
             $schemas[] = [
                 '@type'            => 'ImageObject',
                 'contentUrl'       => $src,
+                'name'             => $alt,
+                'description'      => $alt,
+                'caption'          => $alt,
                 'creditText'       => $site_name,
                 'creator'          => [
                     '@type' => 'Organization',

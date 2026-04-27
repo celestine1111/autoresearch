@@ -69,7 +69,19 @@ export default async function handler(req, res) {
   }
 
   const numbered = trimmed.map((h, i) => `${i + 1}. ${h}`).join('\n');
-  const userPrompt = `Translate each of the following headings into natural ${langName} as a native ${langName} writer would phrase them for a published article. Preserve proper nouns (brand names, place names, acronyms like CNN/SEO) in their original form when no native equivalent exists. Keep numbered list ordering.
+  // v1.5.212.6 — Tightened prompt. Pre-fix the model interpreted English
+  // SEO keywords inside 「」 / "" / '' quotes as proper nouns and preserved
+  // them — leaving leaks like `なぜ「Best Slow Cooker Recipes for Winter
+  // 2026」が日本で重要なのか` (Japanese article with English keyword in
+  // quotes). Now the prompt explicitly instructs: translate quoted English
+  // phrases too; only preserve genuine brand/product/person names.
+  const userPrompt = `Translate each of the following headings into natural ${langName} as a native ${langName} writer would phrase them for a published article.
+
+Rules:
+- TRANSLATE every English word into ${langName}, including English phrases inside quotes (「」, "", ‘’, '', etc). SEO keywords are NOT proper nouns — translate them.
+- ONLY preserve in their original form: genuine brand names (iPhone, Tesla, Toyota, BMW, Honda, Sony, Samsung), product model numbers (M3, A7 IV), company names (Google, Microsoft, OpenAI), well-known acronyms (CNN, SEO, AI, EU, NSW), and person names.
+- A multi-word English search query like "best slow cooker recipes for winter 2026" is NOT a brand name — translate it fully into ${langName}.
+- Keep numbered list ordering.
 
 Headings:
 ${numbered}
@@ -86,7 +98,7 @@ Output a JSON object with one field "translations" — an array of ${trimmed.len
       body: JSON.stringify({
         model: process.env.EXTRACTION_MODEL || 'openai/gpt-4.1-mini',
         messages: [
-          { role: 'system', content: `You translate article section headings into natural ${langName}. You preserve proper nouns and acronyms but never leave English connector phrases in the output. You output strict JSON only.` },
+          { role: 'system', content: `You translate article section headings into natural ${langName}. You preserve genuine brand/product/person names (iPhone, Tesla, Sony, CNN) but TRANSLATE everything else — including English phrases inside 「」 or "" or '' quotes. SEO search keywords are NOT proper nouns and must be translated. You output strict JSON only.` },
           { role: 'user', content: userPrompt },
         ],
         max_tokens: 1200,
