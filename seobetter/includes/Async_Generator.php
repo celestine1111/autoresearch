@@ -1973,12 +1973,29 @@ class Async_Generator {
             if ( ! empty( $sonar_data['table_data']['columns'] ) && ! empty( $sonar_data['table_data']['rows'] ) ) {
                 $cols = $sonar_data['table_data']['columns'];
                 $rows = $sonar_data['table_data']['rows'];
-                $table = "\n\n## Quick Comparison\n\n";
-                $table .= '| ' . implode( ' | ', $cols ) . " |\n";
-                $table .= '|' . str_repeat( ' --- |', count( $cols ) ) . "\n";
+
+                // v1.5.216.12 — Localize the heading + canonical English column
+                // headers (Aspect / Option A / Option B / Key Finding / Source /
+                // Name / Key Feature / Best For / Price / Rating) returned by
+                // cloud-api/api/research.js. Without this, a German article
+                // generated for "best ramen berlin 2026" gets an English-headed
+                // table mid-body. Topic-specific column names (e.g. "Park Name")
+                // pass through unchanged. See Localized_Strings::translate_table_column.
+                $table_lang = $job['options']['language'] ?? 'en';
+                $heading    = \SEOBetter\Localized_Strings::get( 'quick_comparison_table', $table_lang );
+                $cols_localized = array_map(
+                    static function ( $col ) use ( $table_lang ) {
+                        return \SEOBetter\Localized_Strings::translate_table_column( (string) $col, $table_lang );
+                    },
+                    $cols
+                );
+
+                $table = "\n\n## " . $heading . "\n\n";
+                $table .= '| ' . implode( ' | ', $cols_localized ) . " |\n";
+                $table .= '|' . str_repeat( ' --- |', count( $cols_localized ) ) . "\n";
                 foreach ( array_slice( $rows, 0, 5 ) as $row ) {
-                    $cells = array_pad( (array) $row, count( $cols ), '' );
-                    $table .= '| ' . implode( ' | ', array_slice( $cells, 0, count( $cols ) ) ) . " |\n";
+                    $cells = array_pad( (array) $row, count( $cols_localized ), '' );
+                    $table .= '| ' . implode( ' | ', array_slice( $cells, 0, count( $cols_localized ) ) ) . " |\n";
                 }
             }
             // Source B: No fallback. If research returned no table_data, skip.

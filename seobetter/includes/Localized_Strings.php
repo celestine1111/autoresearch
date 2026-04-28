@@ -425,6 +425,62 @@ class Localized_Strings {
     }
 
     /**
+     * v1.5.216.12 — Translate Quick-Comparison-Table column headers.
+     *
+     * cloud-api/api/research.js prompts the extraction LLM to return
+     * `table_data.columns` shaped like `["Aspect", "Option A", "Option B"]`,
+     * `["Aspect", "Key Finding", "Source"]`, or `["Name", "Key Feature",
+     * "Best For"]`. When the article language is non-English this leaks
+     * English column labels into the rendered table inside an otherwise-
+     * translated body (Ben hit this on a German "best ramen berlin 2026"
+     * test — the auto-injected table read "Aspect | Option A | Option B"
+     * mid-article).
+     *
+     * Maps the canonical English defaults from research.js to localized
+     * equivalents. Any column header NOT in the canonical set is returned
+     * unchanged (handles the case where the AI chose its own column name
+     * specific to the topic — e.g. ["Park Name", "Size (ha)", "Highlight"]).
+     *
+     * Universal — works for all 30+ supported languages, all 21 content
+     * types, all AI models. Per the SEOBetter pre-fix checklist.
+     *
+     * @param string $english_label Column header as returned by research.js (or AI).
+     * @param string $lang          Article language code (en, de, ja, etc.).
+     * @return string Localized column header, or the input unchanged when
+     *                no canonical mapping or language is English.
+     */
+    public static function translate_table_column( string $english_label, string $lang = 'en' ): string {
+        $lang = strtolower( str_replace( '_', '-', trim( $lang ) ) );
+        if ( $lang === 'en' || strpos( $lang, 'en-' ) === 0 ) {
+            return $english_label;
+        }
+        $key_map = [
+            'aspect'      => 'table_aspect',
+            'option a'    => 'table_option_a',
+            'option b'    => 'table_option_b',
+            'option c'    => 'table_option_c',
+            'key finding' => 'table_key_finding',
+            'source'      => 'table_source',
+            'name'        => 'table_name',
+            'key feature' => 'table_key_feature',
+            'best for'    => 'table_best_for',
+            'price'       => 'table_price',
+            'rating'      => 'table_rating',
+        ];
+        $needle = strtolower( trim( $english_label ) );
+        if ( ! isset( $key_map[ $needle ] ) ) {
+            return $english_label;
+        }
+        $localized = self::get( $key_map[ $needle ], $lang );
+        // get() returns the key itself when missing → that means we have
+        // no translation for this language. Fall back to English label.
+        if ( $localized === $key_map[ $needle ] || $localized === '' ) {
+            return $english_label;
+        }
+        return $localized;
+    }
+
+    /**
      * Translation table for the short UI labels.
      * Keys: last_updated, key_takeaways, references.
      * Language codes follow ISO 639-1 (or BCP-47 for region variants).
@@ -1076,6 +1132,167 @@ class Localized_Strings {
                 'pt-br' => 'Destaques principais', 'ar' => 'أبرز النقاط',
                 'hi' => 'प्रमुख विशेषताएं', 'nl' => 'Belangrijkste hoogtepunten',
                 'pl' => 'Najważniejsze punkty', 'tr' => 'Önemli noktalar',
+            ],
+            // v1.5.216.12 — Quick-Comparison table column headers.
+            // Used by Localized_Strings::translate_table_column() to localize
+            // the English defaults that come back from cloud-api/api/research.js
+            // (`["Aspect", "Option A", "Option B"]`, etc.) when injected into
+            // a non-English article. Coverage matches the priority languages
+            // already used elsewhere in this file; unknown languages fall
+            // back to the English label, which is a safe degradation.
+            'table_aspect' => [
+                'en' => 'Aspect', 'ja' => '項目', 'ko' => '항목',
+                'zh' => '项目', 'zh-cn' => '项目', 'zh-tw' => '項目',
+                'ru' => 'Параметр', 'de' => 'Aspekt',
+                'fr' => 'Aspect', 'es' => 'Aspecto',
+                'it' => 'Aspetto', 'pt' => 'Aspecto', 'pt-br' => 'Aspecto',
+                'ar' => 'الجانب', 'hi' => 'पहलू', 'nl' => 'Aspect',
+                'pl' => 'Aspekt', 'tr' => 'Konu',
+                'sv' => 'Aspekt', 'da' => 'Aspekt', 'no' => 'Aspekt',
+                'fi' => 'Näkökohta', 'cs' => 'Aspekt', 'hu' => 'Szempont',
+                'ro' => 'Aspect', 'el' => 'Πτυχή', 'uk' => 'Параметр',
+                'vi' => 'Khía cạnh', 'th' => 'ด้าน', 'id' => 'Aspek',
+                'ms' => 'Aspek', 'he' => 'היבט',
+            ],
+            'table_option_a' => [
+                'en' => 'Option A', 'ja' => '選択肢A', 'ko' => '옵션 A',
+                'zh' => '选项 A', 'zh-cn' => '选项 A', 'zh-tw' => '選項 A',
+                'ru' => 'Вариант A', 'de' => 'Option A',
+                'fr' => 'Option A', 'es' => 'Opción A',
+                'it' => 'Opzione A', 'pt' => 'Opção A', 'pt-br' => 'Opção A',
+                'ar' => 'الخيار أ', 'hi' => 'विकल्प A', 'nl' => 'Optie A',
+                'pl' => 'Opcja A', 'tr' => 'Seçenek A',
+                'sv' => 'Alternativ A', 'da' => 'Mulighed A', 'no' => 'Alternativ A',
+                'fi' => 'Vaihtoehto A', 'cs' => 'Možnost A', 'hu' => 'A lehetőség',
+                'ro' => 'Opțiunea A', 'el' => 'Επιλογή A', 'uk' => 'Варіант A',
+                'vi' => 'Tùy chọn A', 'th' => 'ตัวเลือก A', 'id' => 'Opsi A',
+                'ms' => 'Pilihan A', 'he' => 'אפשרות א',
+            ],
+            'table_option_b' => [
+                'en' => 'Option B', 'ja' => '選択肢B', 'ko' => '옵션 B',
+                'zh' => '选项 B', 'zh-cn' => '选项 B', 'zh-tw' => '選項 B',
+                'ru' => 'Вариант B', 'de' => 'Option B',
+                'fr' => 'Option B', 'es' => 'Opción B',
+                'it' => 'Opzione B', 'pt' => 'Opção B', 'pt-br' => 'Opção B',
+                'ar' => 'الخيار ب', 'hi' => 'विकल्प B', 'nl' => 'Optie B',
+                'pl' => 'Opcja B', 'tr' => 'Seçenek B',
+                'sv' => 'Alternativ B', 'da' => 'Mulighed B', 'no' => 'Alternativ B',
+                'fi' => 'Vaihtoehto B', 'cs' => 'Možnost B', 'hu' => 'B lehetőség',
+                'ro' => 'Opțiunea B', 'el' => 'Επιλογή B', 'uk' => 'Варіант B',
+                'vi' => 'Tùy chọn B', 'th' => 'ตัวเลือก B', 'id' => 'Opsi B',
+                'ms' => 'Pilihan B', 'he' => 'אפשרות ב',
+            ],
+            'table_option_c' => [
+                'en' => 'Option C', 'ja' => '選択肢C', 'ko' => '옵션 C',
+                'zh' => '选项 C', 'zh-cn' => '选项 C', 'zh-tw' => '選項 C',
+                'ru' => 'Вариант C', 'de' => 'Option C',
+                'fr' => 'Option C', 'es' => 'Opción C',
+                'it' => 'Opzione C', 'pt' => 'Opção C', 'pt-br' => 'Opção C',
+                'ar' => 'الخيار ج', 'hi' => 'विकल्प C', 'nl' => 'Optie C',
+                'pl' => 'Opcja C', 'tr' => 'Seçenek C',
+                'sv' => 'Alternativ C', 'da' => 'Mulighed C', 'no' => 'Alternativ C',
+                'fi' => 'Vaihtoehto C', 'cs' => 'Možnost C', 'hu' => 'C lehetőség',
+                'ro' => 'Opțiunea C', 'el' => 'Επιλογή C', 'uk' => 'Варіант C',
+                'vi' => 'Tùy chọn C', 'th' => 'ตัวเลือก C', 'id' => 'Opsi C',
+                'ms' => 'Pilihan C', 'he' => 'אפשרות ג',
+            ],
+            'table_key_finding' => [
+                'en' => 'Key Finding', 'ja' => '主な発見', 'ko' => '핵심 결과',
+                'zh' => '关键发现', 'zh-cn' => '关键发现', 'zh-tw' => '關鍵發現',
+                'ru' => 'Ключевой вывод', 'de' => 'Wichtigste Erkenntnis',
+                'fr' => 'Constat principal', 'es' => 'Hallazgo clave',
+                'it' => 'Risultato chiave', 'pt' => 'Conclusão principal', 'pt-br' => 'Conclusão principal',
+                'ar' => 'النتيجة الرئيسية', 'hi' => 'मुख्य निष्कर्ष', 'nl' => 'Belangrijkste bevinding',
+                'pl' => 'Kluczowy wniosek', 'tr' => 'Önemli Bulgu',
+                'sv' => 'Viktig slutsats', 'da' => 'Vigtig konklusion', 'no' => 'Viktig funn',
+                'fi' => 'Keskeinen havainto', 'cs' => 'Klíčové zjištění', 'hu' => 'Legfontosabb megállapítás',
+                'ro' => 'Constatare cheie', 'el' => 'Βασικό εύρημα', 'uk' => 'Ключовий висновок',
+                'vi' => 'Phát hiện chính', 'th' => 'ข้อค้นพบสำคัญ', 'id' => 'Temuan utama',
+                'ms' => 'Penemuan utama', 'he' => 'ממצא מרכזי',
+            ],
+            'table_source' => [
+                'en' => 'Source', 'ja' => '出典', 'ko' => '출처',
+                'zh' => '来源', 'zh-cn' => '来源', 'zh-tw' => '來源',
+                'ru' => 'Источник', 'de' => 'Quelle',
+                'fr' => 'Source', 'es' => 'Fuente',
+                'it' => 'Fonte', 'pt' => 'Fonte', 'pt-br' => 'Fonte',
+                'ar' => 'المصدر', 'hi' => 'स्रोत', 'nl' => 'Bron',
+                'pl' => 'Źródło', 'tr' => 'Kaynak',
+                'sv' => 'Källa', 'da' => 'Kilde', 'no' => 'Kilde',
+                'fi' => 'Lähde', 'cs' => 'Zdroj', 'hu' => 'Forrás',
+                'ro' => 'Sursă', 'el' => 'Πηγή', 'uk' => 'Джерело',
+                'vi' => 'Nguồn', 'th' => 'แหล่งที่มา', 'id' => 'Sumber',
+                'ms' => 'Sumber', 'he' => 'מקור',
+            ],
+            'table_name' => [
+                'en' => 'Name', 'ja' => '名称', 'ko' => '이름',
+                'zh' => '名称', 'zh-cn' => '名称', 'zh-tw' => '名稱',
+                'ru' => 'Название', 'de' => 'Name',
+                'fr' => 'Nom', 'es' => 'Nombre',
+                'it' => 'Nome', 'pt' => 'Nome', 'pt-br' => 'Nome',
+                'ar' => 'الاسم', 'hi' => 'नाम', 'nl' => 'Naam',
+                'pl' => 'Nazwa', 'tr' => 'Ad',
+                'sv' => 'Namn', 'da' => 'Navn', 'no' => 'Navn',
+                'fi' => 'Nimi', 'cs' => 'Název', 'hu' => 'Név',
+                'ro' => 'Nume', 'el' => 'Όνομα', 'uk' => 'Назва',
+                'vi' => 'Tên', 'th' => 'ชื่อ', 'id' => 'Nama',
+                'ms' => 'Nama', 'he' => 'שם',
+            ],
+            'table_key_feature' => [
+                'en' => 'Key Feature', 'ja' => '主な特徴', 'ko' => '핵심 특징',
+                'zh' => '主要特点', 'zh-cn' => '主要特点', 'zh-tw' => '主要特點',
+                'ru' => 'Ключевая особенность', 'de' => 'Hauptmerkmal',
+                'fr' => 'Caractéristique clé', 'es' => 'Característica clave',
+                'it' => 'Caratteristica chiave', 'pt' => 'Característica principal', 'pt-br' => 'Característica principal',
+                'ar' => 'الميزة الرئيسية', 'hi' => 'मुख्य विशेषता', 'nl' => 'Belangrijkste kenmerk',
+                'pl' => 'Kluczowa cecha', 'tr' => 'Öne Çıkan Özellik',
+                'sv' => 'Nyckelegenskap', 'da' => 'Vigtigste egenskab', 'no' => 'Hovedegenskap',
+                'fi' => 'Keskeinen ominaisuus', 'cs' => 'Klíčová vlastnost', 'hu' => 'Fő jellemző',
+                'ro' => 'Caracteristică cheie', 'el' => 'Βασικό χαρακτηριστικό', 'uk' => 'Ключова особливість',
+                'vi' => 'Tính năng chính', 'th' => 'คุณสมบัติเด่น', 'id' => 'Fitur utama',
+                'ms' => 'Ciri utama', 'he' => 'תכונה מרכזית',
+            ],
+            'table_best_for' => [
+                'en' => 'Best For', 'ja' => '最適な用途', 'ko' => '추천 대상',
+                'zh' => '最适合', 'zh-cn' => '最适合', 'zh-tw' => '最適合',
+                'ru' => 'Подходит для', 'de' => 'Am besten für',
+                'fr' => 'Idéal pour', 'es' => 'Ideal para',
+                'it' => 'Ideale per', 'pt' => 'Ideal para', 'pt-br' => 'Ideal para',
+                'ar' => 'الأنسب لـ', 'hi' => 'सबसे अच्छा', 'nl' => 'Geschikt voor',
+                'pl' => 'Najlepsze dla', 'tr' => 'En İyi',
+                'sv' => 'Bäst för', 'da' => 'Bedst til', 'no' => 'Best for',
+                'fi' => 'Sopii parhaiten', 'cs' => 'Nejlepší pro', 'hu' => 'Legjobb a számára',
+                'ro' => 'Ideal pentru', 'el' => 'Ιδανικό για', 'uk' => 'Найкраще для',
+                'vi' => 'Phù hợp nhất', 'th' => 'เหมาะสำหรับ', 'id' => 'Cocok untuk',
+                'ms' => 'Sesuai untuk', 'he' => 'הכי מתאים ל',
+            ],
+            'table_price' => [
+                'en' => 'Price', 'ja' => '価格', 'ko' => '가격',
+                'zh' => '价格', 'zh-cn' => '价格', 'zh-tw' => '價格',
+                'ru' => 'Цена', 'de' => 'Preis',
+                'fr' => 'Prix', 'es' => 'Precio',
+                'it' => 'Prezzo', 'pt' => 'Preço', 'pt-br' => 'Preço',
+                'ar' => 'السعر', 'hi' => 'मूल्य', 'nl' => 'Prijs',
+                'pl' => 'Cena', 'tr' => 'Fiyat',
+                'sv' => 'Pris', 'da' => 'Pris', 'no' => 'Pris',
+                'fi' => 'Hinta', 'cs' => 'Cena', 'hu' => 'Ár',
+                'ro' => 'Preț', 'el' => 'Τιμή', 'uk' => 'Ціна',
+                'vi' => 'Giá', 'th' => 'ราคา', 'id' => 'Harga',
+                'ms' => 'Harga', 'he' => 'מחיר',
+            ],
+            'table_rating' => [
+                'en' => 'Rating', 'ja' => '評価', 'ko' => '평점',
+                'zh' => '评分', 'zh-cn' => '评分', 'zh-tw' => '評分',
+                'ru' => 'Оценка', 'de' => 'Bewertung',
+                'fr' => 'Note', 'es' => 'Puntuación',
+                'it' => 'Valutazione', 'pt' => 'Avaliação', 'pt-br' => 'Avaliação',
+                'ar' => 'التقييم', 'hi' => 'रेटिंग', 'nl' => 'Beoordeling',
+                'pl' => 'Ocena', 'tr' => 'Puan',
+                'sv' => 'Betyg', 'da' => 'Bedømmelse', 'no' => 'Vurdering',
+                'fi' => 'Arvio', 'cs' => 'Hodnocení', 'hu' => 'Értékelés',
+                'ro' => 'Notă', 'el' => 'Βαθμολογία', 'uk' => 'Оцінка',
+                'vi' => 'Đánh giá', 'th' => 'คะแนน', 'id' => 'Penilaian',
+                'ms' => 'Penilaian', 'he' => 'דירוג',
             ],
         ];
     }
