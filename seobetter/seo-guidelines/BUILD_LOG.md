@@ -19,7 +19,7 @@
 ## v1.5.216.7 — Khmer + Burmese added to SCRIPT_RANGES (map parity)
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `55ac818`
 
 ### Why this ships
 
