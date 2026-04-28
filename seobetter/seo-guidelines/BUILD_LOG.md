@@ -19,7 +19,7 @@
 ## v1.5.216.13 — Deterministic PHP text overlay (Inter Bold, 6 techniques, brand-color aware)
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `6018191`
 
 ### Why this ships
 
