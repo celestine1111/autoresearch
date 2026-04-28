@@ -7,12 +7,67 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.4)
+> **Last updated:** 2026-04-28 (v1.5.216.5)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.5 — Verbose path tracing for set_featured_image + AI_Image_Generator
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben confirmed v1.5.216.4 is installed (Plugins page shows version 1.5.216.4) and Branding → AI Image Provider is set to "OpenRouter → Gemini Nano Banana". Generated a fresh article — no Nano Banana image landed AND no new `SEOBetter OpenRouter image:` lines in `wp-content/debug.log` from today. The only matching log line is from 27-Apr (yesterday's pre-fix).
+
+That means the OpenRouter call wasn't even attempted today. The slug fallback can't run if `generate_openrouter()` is never called.
+
+Three possible silent-skip points before reaching the OpenRouter call:
+1. `set_featured_image()` line 3994: `has_post_thumbnail()` returns true → bails immediately
+2. `set_featured_image()` line 4005: `$brand['provider']` is empty → skips AI gen, goes straight to Pexels
+3. `AI_Image_Generator::generate()` early returns: empty provider OR empty prompt
+
+Without verbose logging at these decision points, we're guessing. v1.5.216.5 adds path tracing.
+
+### Added / Changed / Fixed
+
+- **`set_featured_image()` verbose path logging** — `seobetter.php` line **~3987**
+  - Logs entry with post_id + keyword excerpt
+  - Logs when bailing on existing thumbnail (with the existing thumbnail ID)
+  - Logs the brand provider value (or `(none)`)
+  - Logs the call into AI_Image_Generator + return value
+  - Logs Pexels return value
+  - Logs Picsum fallback URL
+  - Verify: `grep -n "SEOBetter set_featured_image:" seobetter/seobetter.php`
+
+- **`AI_Image_Generator::generate()` verbose entry logging** — `includes/AI_Image_Generator.php` line **~59**
+  - Logs entry with provider + title excerpt
+  - Logs early-return reason if provider is empty or prompt is empty
+  - Logs successful routing to a provider switch case with prompt length
+  - Verify: `grep -n "SEOBetter AI_Image_Generator::" seobetter/includes/AI_Image_Generator.php`
+
+### Files touched
+
+- `seobetter.php` — set_featured_image trace + version bump
+- `includes/AI_Image_Generator.php` — generate() trace
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — install zip, generate ONE fresh article, then SSH and run:
+  ```
+  tail -200 wp-content/debug.log | grep -E "SEOBetter (set_featured|AI_Image|OpenRouter)"
+  ```
+  The output will show the FULL trace from "started" → "AI gen returned X" → "Pexels returned Y" → final saved attachment. From that we can see which branch executed (or which silent skip happened) and ship the correct fix.
+
+### Note: log volume
+
+These logs ONLY fire during article generation (one set per article). Not on page views, not on cron. Once we identify the silent skip and fix it, the verbose logs can stay or come out — they're cheap.
 
 ---
 

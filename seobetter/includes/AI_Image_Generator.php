@@ -58,14 +58,20 @@ class AI_Image_Generator {
      */
     public static function generate( string $title, string $keyword, array $brand ): string {
         $provider = $brand['provider'] ?? '';
+        // v1.5.216.5 — verbose entry logging
+        error_log( "SEOBetter AI_Image_Generator::generate provider=" . ( $provider ?: '(empty)' ) . " title=" . substr( $title, 0, 60 ) );
+
         if ( empty( $provider ) ) {
+            error_log( "SEOBetter AI_Image_Generator::generate: BAIL — no provider configured" );
             return '';
         }
 
         $prompt = self::build_prompt( $title, $keyword, $brand );
         if ( $prompt === '' ) {
+            error_log( "SEOBetter AI_Image_Generator::generate: BAIL — built prompt is empty" );
             return '';
         }
+        error_log( "SEOBetter AI_Image_Generator::generate: routing to provider={$provider}, prompt len=" . strlen( $prompt ) );
 
         switch ( $provider ) {
             case 'pollinations':

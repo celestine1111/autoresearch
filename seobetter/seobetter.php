@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.4
+ * Version: 1.5.216.5
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.4' );
+define( 'SEOBETTER_VERSION', '1.5.216.5' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -3991,7 +3991,14 @@ final class SEOBetter {
             require_once ABSPATH . 'wp-admin/includes/image.php';
         }
 
+        // v1.5.216.5 — Verbose path logging. Without this we can't tell which
+        // branch of set_featured_image actually executed. Logs every decision
+        // point so debug.log shows the full trace from "started" → "AI gen
+        // returned X" → "Pexels returned Y" → "saved as attachment Z".
+        error_log( "SEOBetter set_featured_image: START post_id={$post_id} keyword=" . substr( $keyword, 0, 60 ) );
+
         if ( has_post_thumbnail( $post_id ) ) {
+            error_log( "SEOBetter set_featured_image: BAIL — post already has thumbnail (id=" . get_post_thumbnail_id( $post_id ) . ")" );
             return;
         }
 
@@ -3999,23 +4006,30 @@ final class SEOBetter {
 
         // v1.5.67 — Branding AI image generation first. Try the user's
         // configured AI image provider (Pollinations / Gemini Nano Banana /
-        // DALL-E 3 / FLUX Pro). Returns empty string on any error, at which
-        // point we fall through to the existing Pexels → Picsum flow.
+        // OpenRouter Nano Banana). Returns empty string on any error, at
+        // which point we fall through to the existing Pexels → Picsum flow.
         $brand = \SEOBetter\AI_Image_Generator::get_brand_settings();
-        if ( ! empty( $brand['provider'] ) ) {
+        $provider_set = ! empty( $brand['provider'] );
+        error_log( "SEOBetter set_featured_image: brand_provider=" . ( $provider_set ? $brand['provider'] : '(none)' ) );
+
+        if ( $provider_set ) {
             $post_title = get_the_title( $post_id );
+            error_log( "SEOBetter set_featured_image: calling AI_Image_Generator::generate() with title=" . substr( $post_title, 0, 60 ) );
             $image_url = \SEOBetter\AI_Image_Generator::generate( $post_title, $keyword, $brand );
+            error_log( "SEOBetter set_featured_image: AI_Image_Generator returned " . ( $image_url ? "URL " . substr( $image_url, 0, 80 ) : "(empty — falling through to Pexels)" ) );
         }
 
         // Try Pexels API for topic-relevant image
         if ( ! $image_url ) {
             $image_url = $this->search_pexels_image( $keyword );
+            error_log( "SEOBetter set_featured_image: Pexels returned " . ( $image_url ? "URL " . substr( $image_url, 0, 80 ) : "(empty)" ) );
         }
 
         // Fallback: use a direct Picsum URL with .jpg extension
         if ( ! $image_url ) {
             $seed = abs( crc32( $keyword . 'featured' ) ) % 1000;
             $image_url = "https://picsum.photos/seed/{$seed}/1200/630.jpg";
+            error_log( "SEOBetter set_featured_image: falling back to Picsum {$image_url}" );
         }
 
         $alt_text = ucwords( $keyword ) . ' — featured guide image';
