@@ -19,7 +19,7 @@
 ## v1.5.216.9 — Multi-issue cleanup: text-overlay toggle + body-keyword translation + 16:9 crop + country in image prompt
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `95051bb`
 
 ### Why this ships
 
