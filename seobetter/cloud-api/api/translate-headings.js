@@ -24,13 +24,39 @@
 
 import { verifyRequest, rejectAuth, applyCorsHeaders, enforceRateLimit } from './_auth.js';
 
+// v1.5.216.6 — expanded to mirror topic-research.js LANG_NAMES so the
+// heading translator covers every language SEOBetter supports (60+ codes).
+// Pre-fix: missing codes (fa/ur/bn/ta/te/etc) silently fell back to 'English'
+// in the prompt, making the translator a no-op for those languages.
 const LANG_NAMES = {
+  // Major
   en: 'English', ja: 'Japanese', zh: 'Chinese (Simplified)', ko: 'Korean',
   ru: 'Russian', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian',
   pt: 'Portuguese', hi: 'Hindi', ar: 'Arabic', nl: 'Dutch', pl: 'Polish',
   tr: 'Turkish', sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish',
   cs: 'Czech', hu: 'Hungarian', ro: 'Romanian', el: 'Greek', uk: 'Ukrainian',
   vi: 'Vietnamese', th: 'Thai', id: 'Indonesian', ms: 'Malay', he: 'Hebrew',
+  // Cyrillic
+  bg: 'Bulgarian', sr: 'Serbian', mk: 'Macedonian', mn: 'Mongolian',
+  // Devanagari
+  mr: 'Marathi', ne: 'Nepali',
+  // Persian-Arabic-Urdu
+  fa: 'Persian', ur: 'Urdu',
+  // Hebrew script
+  yi: 'Yiddish',
+  // SE Asian scripts
+  lo: 'Lao', km: 'Khmer', my: 'Burmese',
+  // Caucasus
+  hy: 'Armenian', ka: 'Georgian',
+  // Indian scripts
+  bn: 'Bengali', ta: 'Tamil', te: 'Telugu', kn: 'Kannada',
+  ml: 'Malayalam', gu: 'Gujarati', pa: 'Punjabi', si: 'Sinhala',
+  // Other Latin-script European
+  ca: 'Catalan', eu: 'Basque', gl: 'Galician', cy: 'Welsh', ga: 'Irish',
+  hr: 'Croatian', sk: 'Slovak', sl: 'Slovenian',
+  lv: 'Latvian', lt: 'Lithuanian', et: 'Estonian', is: 'Icelandic',
+  // African + Asian Latin-script
+  sw: 'Swahili', tl: 'Tagalog', af: 'Afrikaans',
 };
 
 export default async function handler(req, res) {

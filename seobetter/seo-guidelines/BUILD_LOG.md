@@ -7,12 +7,81 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.5)
+> **Last updated:** 2026-04-28 (v1.5.216.6)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.6 — Cross-script translator extended to ALL non-English languages + LANG_NAMES expansion
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben tested with `keyword="best ramen shops in montreal 2026"` + Country=FR + Language=French. Auto-Suggest returned **English** secondary + LSI keywords. The cross-script translator added in v1.5.212.2 only triggered when the target language used a non-Latin script (CJK / Cyrillic / Arabic / Hebrew / Thai / Devanagari / Greek / etc). French uses Latin script just like English → `targetScript` was undefined → the entire translation gate short-circuited to false → translation never ran.
+
+Same-script different-language is a legitimate case the original logic didn't cover. v1.5.216.6 fixes it for ALL non-English languages (60+ codes).
+
+### Side benefit (validation): Nano Banana confirmed working
+
+In the same test, Ben pasted the v1.5.216.5 verbose path traces showing:
+```
+SEOBetter set_featured_image: brand_provider=openrouter
+SEOBetter AI_Image_Generator::generate: routing to provider=openrouter, prompt len=458
+SEOBetter set_featured_image: AI_Image_Generator returned URL ...sb-ai-image-RQ7DTwF9.png
+```
+
+The `sb-ai-image-XXXXX.png` filename is the unique signature of Nano Banana output (per `AI_Image_Generator::save_base64_to_temp`). v1.5.216.2's slug fallback IS working — Ben thought the photorealistic AI output was Pexels stock. **Image generation chapter closed.**
+
+### Added / Changed / Fixed
+
+- **Cross-script translator extended to all non-English languages** — `cloud-api/api/topic-research.js` line **~95**
+  - Pre-fix trigger: `(targetScript && !targetScript.test(niche))` — only fired for non-Latin targets with cross-script input
+  - New trigger: any `!isEnglish` language. Latin targets (fr/de/es/it/pt/nl/etc.) translate unconditionally; LLM prompt now says "if already in target language, return UNCHANGED" so French-input + French-target safely no-ops via `translated.toLowerCase() !== niche.toLowerCase()` change-detect
+  - For non-Latin targets, additionally validates the result has target-script chars (kills the case where LLM accidentally returned a still-English variant)
+  - Verify: `grep -n 'isCrossScript\|isLatinTarget' seobetter/cloud-api/api/topic-research.js`
+
+- **Translator prompt updated to handle "already in target language"** — `cloud-api/api/topic-research.js` line **~861**
+  - "If the keyword is ALREADY in natural ${langName}, return it UNCHANGED."
+  - "Translate from any source language (English, German, Spanish, etc.) into ${langName}."
+  - Drops the "this English keyword" framing since input may be in any language now
+  - Verify: `grep -n 'return it UNCHANGED' seobetter/cloud-api/api/topic-research.js`
+
+- **`LANG_NAMES` expanded 29 → 60+ entries** — both `topic-research.js` line ~30 and `translate-headings.js` line ~27
+  - Pre-fix: missing codes (fa/ur/bn/ta/te/kn/ml/gu/pa/si/lo/km/my/hy/ka/bg/sr/mk/mn/yi/mr/ne/ca/eu/gl/cy/ga/hr/sk/sl/lv/lt/et/is/sw/tl/af) silently fell back to `'English'` in the LLM prompt → translator was a no-op
+  - Now covers every BCP-47 code in SCRIPT_RANGES + common Latin-script European/African/Asian languages
+  - Verify: `grep -c "': '" seobetter/cloud-api/api/topic-research.js | head -3`
+
+- **Content Generator hint panel — auto-translate hint shows for ANY non-English language** — `admin/views/content-generator.php` line **~640**
+  - Pre-fix: hint only rendered for non-Latin language codes (`['ja','ko','zh','ru',...]`)
+  - Now: hint renders whenever language ≠ en AND the keyword is predominantly Latin/ASCII
+  - Copy updated: "covers all 60+ supported languages"
+  - Verify: `grep -n 'covers all 60' seobetter/admin/views/content-generator.php`
+
+### Files touched
+
+- `cloud-api/api/topic-research.js` — trigger expansion, prompt rewrite, LANG_NAMES expansion
+- `cloud-api/api/translate-headings.js` — LANG_NAMES expansion (matches topic-research.js)
+- `admin/views/content-generator.php` — hint panel JS condition expanded
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — re-test the French ramen scenario:
+  1. Auto-Suggest with `keyword="best ramen shops in montreal 2026"` + Country=FR + Language=French
+  2. Expected: secondary + LSI keywords come back in French (e.g., "meilleurs restaurants ramen montréal", "ramen authentique québec", etc.)
+  3. The hint panel right column should show "🌐 Auto-translate: Your keyword will be translated to FR..."
+  4. Same logic now works for German (de), Spanish (es), Italian (it), Portuguese (pt), Dutch (nl), Polish (pl), Turkish (tr), and all 60+ supported languages
+
+### Nano Banana status: WORKING (confirmed via v1.5.216.5 logs, no further work needed)
+
+The previous "no Nano Banana image" report turned out to be Ben mistaking the photorealistic AI output for a Pexels stock image. The trace logs prove the OpenRouter path executed, returned a saved image at `sb-ai-image-XXXXX.png`, and that file ended up as the post's featured image. The v1.5.216.5 verbose tracing can stay as a diagnostic safety net or come out in a future cleanup release — they're cheap (~1 set per article generation).
 
 ---
 

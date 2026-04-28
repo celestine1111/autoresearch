@@ -38,15 +38,41 @@ const SCRIPT_RANGES = {
 };
 
 // v1.5.212.2 — Map BCP-47 base codes to full language names for LLM prompts.
-// Hoisted from inferAudienceAndCategoryWithLLM so both the audience LLM and
-// the new translateKeywordIfNeeded() use one source of truth.
+// v1.5.216.6 — expanded to cover every BCP-47 code in SCRIPT_RANGES plus all
+// common Latin-script languages, so the keyword translator + audience LLM +
+// any future LLM caller has a name for every language SEOBetter supports.
+// Pre-fix: 29 entries → fallback to 'English' for missing codes meant the
+// LLM was told to translate to English (no-op) for languages like Persian
+// (fa) or Bengali (bn). Now covers 60+.
 const LANG_NAMES = {
+  // Major
   en: 'English', ja: 'Japanese', zh: 'Chinese (Simplified)', ko: 'Korean',
   ru: 'Russian', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian',
   pt: 'Portuguese', hi: 'Hindi', ar: 'Arabic', nl: 'Dutch', pl: 'Polish',
   tr: 'Turkish', sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish',
   cs: 'Czech', hu: 'Hungarian', ro: 'Romanian', el: 'Greek', uk: 'Ukrainian',
   vi: 'Vietnamese', th: 'Thai', id: 'Indonesian', ms: 'Malay', he: 'Hebrew',
+  // Cyrillic-script (parity with SCRIPT_RANGES)
+  bg: 'Bulgarian', sr: 'Serbian', mk: 'Macedonian', mn: 'Mongolian',
+  // Devanagari-script
+  mr: 'Marathi', ne: 'Nepali',
+  // Persian-Arabic-Urdu cluster
+  fa: 'Persian', ur: 'Urdu',
+  // Hebrew-script
+  yi: 'Yiddish',
+  // SE Asian scripts
+  lo: 'Lao', km: 'Khmer', my: 'Burmese',
+  // Caucasus + Armenian-Georgian
+  hy: 'Armenian', ka: 'Georgian',
+  // Indian scripts
+  bn: 'Bengali', ta: 'Tamil', te: 'Telugu', kn: 'Kannada',
+  ml: 'Malayalam', gu: 'Gujarati', pa: 'Punjabi', si: 'Sinhala',
+  // Other Latin-script European
+  ca: 'Catalan', eu: 'Basque', gl: 'Galician', cy: 'Welsh', ga: 'Irish',
+  hr: 'Croatian', sk: 'Slovak', sl: 'Slovenian',
+  lv: 'Latvian', lt: 'Lithuanian', et: 'Estonian', is: 'Icelandic',
+  // African + Asian Latin-script
+  sw: 'Swahili', tl: 'Tagalog', af: 'Afrikaans',
 };
 
 export default async function handler(req, res) {
@@ -82,24 +108,42 @@ export default async function handler(req, res) {
   rateLimitStore.set(rateKey, count + 1);
 
   try {
-    // v1.5.212.2 — Cross-script keyword auto-translation.
-    // When the input keyword's script doesn't match the target language's script
-    // (e.g. English keyword "best slow cooker recipes" + lang=ja), Google Suggest /
-    // Serper / Wikipedia all return English-dominant data because they search by
-    // the input string. Result: secondary + LSI come back in English even though
-    // the article is generated in Japanese. Fix: translate the keyword to the
-    // target language ONCE before any data source is hit; downstream extractors
-    // then see native-script input and return native-script output.
-    // Fail-open: if translation fails or the LLM is unavailable, fall back to
-    // the original keyword (existing behaviour, no regression for English).
+    // v1.5.212.2 — Cross-script keyword auto-translation (English → JA/KO/ZH/RU/AR/etc).
+    // v1.5.216.6 — extended to ALSO cover Latin-script non-English (FR/DE/ES/IT/PT/NL/etc).
+    //
+    // Pre-fix v1.5.216.6: trigger required `targetScript && !targetScript.test(niche)`
+    // — i.e. only fired when the language used a non-Latin script (CJK / Cyrillic /
+    // Arabic / etc) AND the keyword had zero target-script chars. French / German /
+    // Spanish / Italian have NO entry in SCRIPT_RANGES (they're Latin-script), so
+    // `targetScript` was undefined → the entire check short-circuited to false →
+    // translation never ran. User reported: "best ramen shops in montreal 2026" +
+    // lang=fr returned English secondary/LSI keywords.
+    //
+    // Now: when the article language is non-English, ALWAYS attempt translation.
+    //   - Cross-script case (CJK/etc): same as before — validate result has target-script chars
+    //   - Latin target case (fr/de/es/it/pt/etc): unconditional attempt, the LLM prompt
+    //     instructs to return the keyword unchanged if already in the target language,
+    //     so French-input + French-target safely no-ops via the change-detect check
+    //     (translated.toLowerCase() !== niche.toLowerCase())
+    //
+    // Fail-open everywhere: translation errors / no LLM key → fall back to original.
     let researchKeyword = niche;
     let translatedFrom = null;
     const targetScript = SCRIPT_RANGES[baseLang];
-    if (!isEnglish && targetScript && !targetScript.test(niche)) {
-      const translated = await translateKeywordToTargetLanguage(niche, baseLang);
-      if (translated && targetScript.test(translated)) {
-        translatedFrom = niche;
-        researchKeyword = translated;
+    if (!isEnglish) {
+      const isCrossScript = targetScript && !targetScript.test(niche);
+      const isLatinTarget = !targetScript; // fr / de / es / it / pt / nl / pl / etc.
+      if (isCrossScript || isLatinTarget) {
+        const translated = await translateKeywordToTargetLanguage(niche, baseLang);
+        if (translated && translated.toLowerCase() !== niche.toLowerCase()) {
+          // For non-Latin targets we additionally validate the result actually
+          // contains target-script characters (kills the case where the LLM
+          // returned a still-English variant by mistake).
+          if (!targetScript || targetScript.test(translated)) {
+            translatedFrom = niche;
+            researchKeyword = translated;
+          }
+        }
       }
     }
 
@@ -840,7 +884,17 @@ async function translateKeywordToTargetLanguage(keyword, baseLang) {
   const langName = LANG_NAMES[baseLang];
   if (!langName) return null;
 
-  const prompt = `Translate this English search keyword into natural ${langName} that real ${langName} speakers would type into a search engine. Keep proper nouns (brand names, year numbers like 2026) in their original form. Output ONLY the translated keyword as a single line of text, no quotes, no explanation.
+  // v1.5.216.6 — prompt updated to handle Latin-script non-English targets
+  // (fr/de/es/it/pt/etc) where the keyword may already be in the target
+  // language. Input language detection is the LLM's job — reliably better
+  // than a regex.
+  const prompt = `Translate this search keyword into natural ${langName} that real ${langName} speakers would type into a search engine.
+
+Rules:
+- If the keyword is ALREADY in natural ${langName}, return it UNCHANGED.
+- Translate from any source language (English, German, Spanish, etc.) into ${langName}.
+- Keep proper nouns (brand names, place names like Montreal, year numbers like 2026, country names) in their canonical local form.
+- Output ONLY the keyword (translated or unchanged) as a single line of text. No quotes, no explanation, no "Translation:" prefix.
 
 Keyword: ${keyword}`;
 

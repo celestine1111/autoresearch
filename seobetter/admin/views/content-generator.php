@@ -637,12 +637,19 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                     '<a href="https://seobetter.com/pricing" target="_blank" style="color:#7c3aed;text-decoration:underline">Unlock all 21 types →</a></li>');
             }
 
-            // Hint 3: Cross-script translator (when language doesn't match keyword script)
-            var nonLatinLangs = ['ja','ko','zh','ru','uk','bg','sr','mk','ar','fa','ur','he','th','hi','mr','ne','el','ka','hy','bn','ta','te','kn','ml','gu','pa','si'];
+            // v1.5.216.6 — Auto-translate hint for ANY non-English language.
+            // Pre-fix: only fired for non-Latin languages (ja/ko/ru/etc). French
+            // user reported "best ramen shops in montreal 2026 + lang=fr"
+            // returned English secondary/LSI keywords because the trigger
+            // skipped Latin-target languages. Now: show the hint whenever
+            // language is non-English and the keyword looks predominantly
+            // English (Latin alphabet). The actual translator (server-side)
+            // also covers all non-English now per v1.5.216.6.
             var keywordIsLatin = /^[\x00-\x7F]+$/.test(keyword) && /[A-Za-z]/.test(keyword);
-            if (lang !== 'en' && nonLatinLangs.indexOf(lang) !== -1 && keywordIsLatin && keyword) {
+            if (lang !== 'en' && keyword && keywordIsLatin) {
+                var langLabel = lang.toUpperCase();
                 hints.push('<li style="padding:6px 0;border-bottom:1px solid #f1f5f9">' +
-                    '<strong style="color:#0f172a">🌐 Auto-translate:</strong> Your English keyword will be translated to ' + lang.toUpperCase() + ' for native research + headings + meta tags.</li>');
+                    '<strong style="color:#0f172a">🌐 Auto-translate:</strong> Your keyword will be translated to ' + langLabel + ' so research + headings + meta tags come back in ' + langLabel + ' (covers all 60+ supported languages).</li>');
             }
 
             // Hint 4: Country-specific recipeCuisine (if Recipe + supported country)
