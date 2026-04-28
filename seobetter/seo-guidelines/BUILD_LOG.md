@@ -7,12 +7,49 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.2)
+> **Last updated:** 2026-04-28 (v1.5.216.3)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.3 — Defensive `$result` init in content-generator.php
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben pasted `wp-content/debug.log` and confirmed two things:
+
+1. **v1.5.216.2 diagnosis was correct** — the OpenRouter log shows `HTTP 404: {"error":{"message":"No endpoints found for google/gemini-2.5-flash-image-preview."}}`. This is the exact failure mode v1.5.216.2 fixes by trying the GA slug `google/gemini-2.5-flash-image` first. Test path: install latest zip, generate a fresh article, check OpenRouter dashboard for the GA slug hit.
+
+2. **Long-standing PHP warning** — `Undefined variable $result in admin/views/content-generator.php`. The `$result` variable is referenced at line ~926 (legacy social content generator gate) but was never initialized in this file after the v1.5.12 cleanup that removed synchronous POST handlers. PHP's `empty($result)` IS null-safe per the language spec, but PHP 8.x with strict error reporting still logs an "Undefined variable" warning in some configurations.
+
+### Added / Changed / Fixed
+
+- **Defensive `$result = $result ?? null;`** — `admin/views/content-generator.php` line **~3**
+  - Top-of-file initialization. Eliminates the warning permanently. The downstream `! empty( $result )` check still works correctly (stays falsy) so the legacy social content generator gate stays effectively disabled — no behavior change, just no log spam.
+  - Verify: `grep -n 'Defensive init of \$result' seobetter/admin/views/content-generator.php`
+
+### Files touched
+
+- `admin/views/content-generator.php` — single defensive line at top
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — but low risk; the change is one line that only adds a default value to a variable that was previously undefined.
+
+### What to test (priority order, all on v1.5.216.3)
+
+1. **Nano Banana via OpenRouter** (the main test) — install zip, generate article, check OpenRouter dashboard for `google/gemini-2.5-flash-image` (GA slug, no `-preview`) hit successfully. v1.5.216.2 fallback chain.
+2. **`$result` warning gone** — generate an article, check `wp-content/debug.log` — no more `Undefined variable $result` lines.
+3. **`Using null as an array offset` (wp-admin-bar.php)** — UNRELATED. WordPress core / theme issue, not SEOBetter. Can ignore unless it actually breaks the admin bar UI.
 
 ---
 

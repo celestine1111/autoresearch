@@ -1,6 +1,16 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// v1.5.216.3 — Defensive init of $result. Legacy variable referenced at
+// line ~926 (social content generator <?php if (!empty($result)) ... ?>
+// gate) — a leftover from the v1.5.12 cleanup that removed the synchronous
+// POST handlers. The `empty()` check IS null-safe but PHP 8.x logs an
+// "Undefined variable" warning when the var hasn't been declared at all
+// before the `empty()` call in some configurations. Initializing here
+// silences the warning and keeps the social-content gate effectively
+// disabled (it never enters the if-body since $result stays null).
+$result = $result ?? null;
+
 // ============================================================================
 // v1.5.12 — Legacy synchronous POST handlers removed.
 //
