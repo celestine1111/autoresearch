@@ -34,18 +34,63 @@ if ( ! defined( 'ABSPATH' ) ) {
 class AI_Image_Generator {
 
     /**
-     * Style preset → prompt template mapping. The {subject} placeholder is
-     * filled with the article title + keywords. {colors} is filled with the
-     * user's brand colors if set.
+     * v1.5.216.8 — Banner-design style presets WITH controlled article-title
+     * text rendering (replaces the brief no-text era).
+     *
+     * Each preset is a different banner design pattern (NYT-Magazine / flat /
+     * cinematic / minimalist / etc) that includes the article HEADLINE as
+     * legible bold sans-serif text positioned in the social-share safe zone.
+     *
+     * Banner-design specs (research-backed for social-media legibility):
+     *   - 1200×630 Open Graph standard (covers FB/LinkedIn/Twitter/WhatsApp
+     *     /iMessage/Discord). Pinterest pins use 1000×1500 separately.
+     *   - Inner 1000×500 safe zone (100px margin all sides) — Slack/Discord
+     *     square-crop won't clip the headline
+     *   - Headline minimum 70-80px tall, optimal 90-120px (legible at the
+     *     ~300px-wide mobile thumbnail social platforms display)
+     *   - Subhead 40-60px tall (clearly subordinate)
+     *   - Bold sans-serif (Inter / Helvetica / SF Pro family) — survives
+     *     downscaling far better than serif or thin weights
+     *   - WCAG AA contrast ratio (4.5:1) — semi-transparent dark scrim under
+     *     light text or vice versa
+     *
+     * 7 banner patterns:
+     *   1. realistic     — NYT-Magazine cover: bottom-third dark gradient + white headline
+     *   2. illustration  — Modern flat: upper-left dark headline on light illustration
+     *   3. flat          — Title-led split: left half text, right half iconographic
+     *   4. hero          — Cinematic full-bleed: centered title with cinema black bars
+     *   5. minimalist    — Small corner: bottom-right small title, image dominant
+     *   6. editorial     — Classic magazine (NYT): title top with horizontal divider
+     *   7. 3d            — Product hero: centered overlay text on rendered scene
+     *
+     * Placeholders:
+     *   {subject}  — sanitized topic phrase (KEYWORD, not full article title)
+     *                drives WHAT the image depicts
+     *   {headline} — the article title (max 60 chars, sanitized) rendered
+     *                AS TEXT in the banner
+     *   {colors}   — brand color palette woven into color grading
      */
     const STYLE_PRESETS = [
-        'realistic' => 'Professional high-quality photograph, editorial style, {colors} color accents, clean composition, natural lighting, shallow depth of field, 16:9 aspect ratio. Subject: {subject}. No text overlay, no logos, no watermarks.',
-        'illustration' => 'Professional vector illustration, clean lines, {colors} color palette, minimal shading, editorial quality, 16:9 aspect ratio. Subject: {subject}. No text, no logos.',
-        'flat' => 'Flat graphic design, bold geometric shapes, {colors} color palette, minimal composition, no photorealism, no text, clean solid background, 16:9 aspect ratio. Subject: {subject}.',
-        'hero' => 'Cinematic hero banner image, dramatic lighting, {colors} color grading, wide-angle composition, magazine-cover quality, 16:9 aspect ratio. Subject: {subject}. No text, no logos.',
-        'minimalist' => 'Minimalist composition, lots of negative space, {colors} color accents, soft natural lighting, clean background, 16:9 aspect ratio. Subject: {subject}. No text overlay.',
-        'editorial' => 'Editorial magazine-style photograph, journalism quality, {colors} accents, thoughtful framing, professional lighting, 16:9 aspect ratio. Subject: {subject}. No text, no logos.',
-        '3d' => 'Modern 3D render, soft studio lighting, {colors} color palette, clean background, professional product-shot style, 16:9 aspect ratio. Subject: {subject}.',
+        'realistic' =>
+            'Award-winning editorial magazine cover photograph for a Tier 1 publication (Wired / The New York Times Magazine / National Geographic). Subject of the photo: {subject}. Shot on Sony A7R IV, 50mm prime lens, f/2.8 shallow depth of field, natural directional lighting, golden-hour warm tones, {colors} color grading, sharp focus on subject, soft bokeh background. The article headline is rendered as TEXT OVERLAY in the lower third of the image: "{headline}" — set in BOLD WHITE sans-serif (Inter/Helvetica/SF Pro family), large size approximately 90-120px tall on a 1200×630 canvas, positioned in the inner 1000×500 social-share safe zone, with a subtle dark gradient scrim from the bottom up for WCAG AA contrast and mobile-thumbnail legibility. NO additional text beyond the single specified headline — NO logos, NO watermarks, NO subtitles, NO chalkboards, NO menu boards, NO speech bubbles.',
+
+        'illustration' =>
+            'Modern editorial vector illustration. Subject: {subject}. Clean flat shapes with subtle gradients, {colors} dominant palette, generous negative space, geometric composition, minimalist style aligned with The New Yorker or Wired magazine illustration, crisp lines, 16:9 aspect ratio. The article headline is rendered as TEXT OVERLAY in the upper-left third: "{headline}" — set in BOLD DARK sans-serif (Inter/Helvetica/SF Pro family), large size approximately 90-120px tall on a 1200×630 canvas, positioned in the inner 1000×500 safe zone, high contrast against the illustration. NO additional text — NO logos, NO watermarks, NO subtitles, NO speech bubbles.',
+
+        'flat' =>
+            'Bold modern flat design banner with split composition. LEFT HALF: large article headline as TEXT OVERLAY: "{headline}" — set in BOLD sans-serif (Inter/Helvetica/SF Pro family), large size approximately 100-130px tall on a 1200×630 canvas, dark text on light flat background or light text on {colors} dominant background depending on contrast. RIGHT HALF: bold abstract iconographic representation of {subject}, solid color blocks no gradients, {colors} primary palette, geometric shapes, premium app-design quality. NO additional text beyond the single headline, NO numbers, NO logos, NO watermarks.',
+
+        'hero' =>
+            'Cinematic premium hero banner photograph. Subject: {subject}. Dramatic side-lighting, anamorphic lens flare, {colors} teal-and-orange film color grade, atmospheric depth, film grain, 16:9 cinema crop with subtle black letterbox bars top and bottom, premium ad-campaign aesthetic. The article headline is rendered as CENTERED TEXT OVERLAY: "{headline}" — set in BOLD WHITE sans-serif (Inter/Helvetica/SF Pro family), large size approximately 100-130px tall on a 1200×630 canvas, positioned in the inner 1000×500 safe zone, with subtle text-shadow for legibility on varied backgrounds. NO additional text, NO logos, NO watermarks, NO chalkboards or menu boards, NO secondary captions.',
+
+        'minimalist' =>
+            'Minimalist editorial composition. Subject: {subject}. Abundant negative space, soft natural lighting, single-subject focus, gallery-quality photography, monochromatic with {colors} as subtle accent, contemplative mood, premium lifestyle publication style (Kinfolk / Cereal magazine), 16:9 aspect ratio. The article headline is rendered as SMALL TEXT in the bottom-right corner: "{headline}" — set in elegant sans-serif (Inter/Helvetica/SF Pro family), modest size approximately 60-80px tall on a 1200×630 canvas, positioned within the inner 1000×500 safe zone, dark text on the image (contrast achieved through composition negative space). The subject visual dominates; text is supporting. NO logos, NO watermarks, NO additional text.',
+
+        'editorial' =>
+            'Award-winning classic editorial magazine layout (The New York Times / Atlantic style). The article headline is rendered as TEXT in the TOP THIRD of the image: "{headline}" — set in BOLD DARK serif or sans-serif (depending on subject), large size approximately 100-120px tall on a 1200×630 canvas, positioned in the inner 1000×500 safe zone, on a clean light or {colors}-tinted background. Below the headline: a thin horizontal accent divider, then the photographic subject occupying the lower two-thirds — environmental composition of {subject}, natural directional lighting, {colors} subtle color grading, professional photojournalism quality, sharp focus. NO additional text beyond the single headline, NO subtitles, NO logos, NO watermarks, NO numbers visible.',
+
+        '3d' =>
+            'Premium 3D render banner. Subject: {subject}. Soft three-point studio lighting, {colors} brand palette, clean seamless white-to-grey gradient background, hyper-detailed materials with subsurface scattering, claymation-soft shading, 35-degree camera angle, 16:9 aspect ratio, premium product-shot quality. The article headline is rendered as CENTERED TEXT OVERLAY floating above the rendered scene: "{headline}" — set in BOLD sans-serif (Inter/Helvetica/SF Pro family), large size approximately 90-120px tall on a 1200×630 canvas, positioned in the inner 1000×500 safe zone, color chosen for maximum contrast against the rendered subject. NO additional text, NO logos, NO watermarks, NO product labels visible.',
     ];
 
     /**
@@ -93,53 +138,90 @@ class AI_Image_Generator {
     }
 
     /**
-     * Compose the final image generation prompt from the article title,
-     * keyword, and user's branding settings.
+     * v1.5.216.8 — Compose the final image generation prompt with banner-
+     * design intent: render the article title as bold sans-serif text overlay
+     * positioned in the social-share safe zone for mobile-thumbnail legibility.
+     *
+     * Three substitutions filled into the style template:
+     *   {subject}  — sanitized topic phrase (KEYWORD, drives WHAT the image depicts)
+     *   {headline} — sanitized article title (max 60 chars, what TEXT to render)
+     *   {colors}   — brand color palette (color grading hint)
+     *
+     * Sanitization rules:
+     *   - Subject = lowercased keyword with year suffixes stripped — keeps
+     *     the depiction phrase short and free of "2026" digits that would
+     *     duplicate or compete with the rendered headline
+     *   - Headline = the article TITLE (post_title), trimmed to 60 chars
+     *     max, with trailing colon-edition-year suffixes ("— édition 2026")
+     *     stripped because those would clutter the visual headline
+     *   - Business name + description NO LONGER appended (those caused
+     *     uncontrolled text-leak in v1.5.215; brand context is conveyed
+     *     exclusively through the {colors} weave + the style template's
+     *     "premium publication" framing)
      */
     private static function build_prompt( string $title, string $keyword, array $brand ): string {
         $style_key = $brand['style'] ?? 'realistic';
         $template  = self::STYLE_PRESETS[ $style_key ] ?? self::STYLE_PRESETS['realistic'];
 
-        $business_name = trim( (string) ( $brand['business_name'] ?? '' ) );
-        $description   = trim( (string) ( $brand['description'] ?? '' ) );
-        $primary       = trim( (string) ( $brand['color_primary'] ?? '' ) );
-        $secondary     = trim( (string) ( $brand['color_secondary'] ?? '' ) );
+        $primary   = trim( (string) ( $brand['color_primary'] ?? '' ) );
+        $secondary = trim( (string) ( $brand['color_secondary'] ?? '' ) );
 
-        // Build the color description from user-set brand colors
+        // Color phrase
         $colors = '';
         if ( $primary && $secondary ) {
             $colors = $primary . ' and ' . $secondary;
         } elseif ( $primary ) {
             $colors = $primary;
         } else {
-            $colors = 'natural, editorial';
+            $colors = 'natural editorial';
         }
 
-        // Build the subject from title + keyword (+ business context if set)
-        $subject = trim( $title );
-        if ( $keyword && stripos( $subject, $keyword ) === false ) {
-            $subject .= ' — ' . $keyword;
+        // === SUBJECT (what the image depicts) ===
+        // Use keyword if available — it's a short topic phrase. Strip year
+        // suffixes and trailing punctuation that don't add visual meaning
+        // and would compete with the rendered headline.
+        $subject = trim( $keyword !== '' ? $keyword : $title );
+        $subject = preg_replace( '/\s*[:\-—]\s*(édition|edition|guide|review|complete guide)\s+\d{4}\s*$/iu', '', $subject );
+        $subject = preg_replace( '/\s+\d{4}\s*$/', '', $subject );
+        $subject = preg_replace( '/\s*[:\-—]\s*$/', '', $subject );
+        $subject = trim( $subject );
+        $subject = function_exists( 'mb_strtolower' )
+            ? mb_strtolower( $subject, 'UTF-8' )
+            : strtolower( $subject );
+        if ( $subject === '' ) {
+            $subject = 'editorial subject';
         }
-        if ( $description ) {
-            // Trim description to a short phrase so it doesn't blow out the prompt
-            $short_desc = mb_substr( preg_replace( '/\s+/', ' ', $description ), 0, 80 );
-            $subject .= '. Brand context: ' . $short_desc;
+
+        // === HEADLINE (text to render in the banner) ===
+        // The article title becomes the visible banner headline. Trim
+        // trailing colon-edition tails so the headline reads cleanly. Cap
+        // at 60 chars so it wraps to 1-2 lines on a 1200×630 banner without
+        // overflowing the safe zone — research-backed mobile-thumbnail
+        // legibility threshold.
+        $headline = trim( $title !== '' ? $title : $keyword );
+        $headline = preg_replace( '/\s*[:\-—]\s*(édition|edition)\s+\d{4}\s*$/iu', '', $headline );
+        $headline = preg_replace( '/\s*\d{4}\s*$/', '', $headline );
+        $headline = trim( $headline, " \t\n\r\0\x0B.—-:" );
+        if ( function_exists( 'mb_strlen' ) ? mb_strlen( $headline, 'UTF-8' ) > 60 : strlen( $headline ) > 60 ) {
+            $headline = function_exists( 'mb_substr' )
+                ? rtrim( mb_substr( $headline, 0, 57, 'UTF-8' ), ' .—-,:' ) . '…'
+                : rtrim( substr( $headline, 0, 57 ), ' .—-,:' ) . '...';
         }
-        if ( $business_name ) {
-            $subject .= ' (' . $business_name . ' brand aesthetic)';
+        if ( $headline === '' ) {
+            $headline = ucwords( $subject );
         }
 
         // Fill the template
         $prompt = str_replace(
-            [ '{subject}', '{colors}' ],
-            [ $subject, $colors ],
+            [ '{subject}', '{headline}', '{colors}' ],
+            [ $subject, $headline, $colors ],
             $template
         );
 
-        // Add any user negative prompt
+        // User negative prompt appends to the template's existing constraints.
         $negative = trim( (string) ( $brand['negative_prompt'] ?? '' ) );
         if ( $negative ) {
-            $prompt .= ' Avoid: ' . $negative;
+            $prompt .= ' Also avoid: ' . $negative;
         }
 
         return $prompt;

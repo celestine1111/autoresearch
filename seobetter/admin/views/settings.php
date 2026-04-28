@@ -792,13 +792,13 @@ $settings = get_option( 'seobetter_settings', [] );
                     <td>
                         <?php $bs = $settings['branding_style'] ?? 'realistic'; ?>
                         <select name="branding_style">
-                            <option value="realistic" <?php selected( $bs, 'realistic' ); ?>><?php esc_html_e( 'Realistic Photo — editorial photojournalism', 'seobetter' ); ?></option>
-                            <option value="illustration" <?php selected( $bs, 'illustration' ); ?>><?php esc_html_e( 'Vector Illustration — clean lines, minimal shading', 'seobetter' ); ?></option>
-                            <option value="flat" <?php selected( $bs, 'flat' ); ?>><?php esc_html_e( 'Flat Graphic — bold shapes, solid backgrounds', 'seobetter' ); ?></option>
-                            <option value="hero" <?php selected( $bs, 'hero' ); ?>><?php esc_html_e( 'Hero Banner — cinematic, dramatic lighting', 'seobetter' ); ?></option>
-                            <option value="minimalist" <?php selected( $bs, 'minimalist' ); ?>><?php esc_html_e( 'Minimalist — lots of negative space', 'seobetter' ); ?></option>
-                            <option value="editorial" <?php selected( $bs, 'editorial' ); ?>><?php esc_html_e( 'Editorial — magazine journalism', 'seobetter' ); ?></option>
-                            <option value="3d" <?php selected( $bs, '3d' ); ?>><?php esc_html_e( '3D Render — studio lighting, product-shot style', 'seobetter' ); ?></option>
+                            <option value="realistic" <?php selected( $bs, 'realistic' ); ?>><?php esc_html_e( '📰 Magazine Cover (recommended) — bottom-third headline overlay, NYT/Wired editorial photo', 'seobetter' ); ?></option>
+                            <option value="editorial" <?php selected( $bs, 'editorial' ); ?>><?php esc_html_e( '🗞️ Classic Editorial — title top with horizontal divider, photo below (NYT/Atlantic style)', 'seobetter' ); ?></option>
+                            <option value="hero" <?php selected( $bs, 'hero' ); ?>><?php esc_html_e( '🎬 Cinematic Hero — full-bleed photo with centered title + cinema black bars', 'seobetter' ); ?></option>
+                            <option value="illustration" <?php selected( $bs, 'illustration' ); ?>><?php esc_html_e( '🎨 Modern Illustration — upper-left dark headline on flat editorial illustration', 'seobetter' ); ?></option>
+                            <option value="flat" <?php selected( $bs, 'flat' ); ?>><?php esc_html_e( '⬜ Title-led Flat — split layout: large headline left, abstract icon right', 'seobetter' ); ?></option>
+                            <option value="minimalist" <?php selected( $bs, 'minimalist' ); ?>><?php esc_html_e( '◽ Minimalist — small corner title, image dominant (Kinfolk/Cereal magazine)', 'seobetter' ); ?></option>
+                            <option value="3d" <?php selected( $bs, '3d' ); ?>><?php esc_html_e( '🎯 3D Hero — studio-rendered scene with floating centered title overlay', 'seobetter' ); ?></option>
                         </select>
                         <p class="description"><?php esc_html_e( 'The style preset determines the image generation prompt template. All presets automatically weave in your brand colors and business context.', 'seobetter' ); ?></p>
                     </td>

@@ -7,12 +7,102 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.7)
+> **Last updated:** 2026-04-28 (v1.5.216.8)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.8 — Banner-design featured image with controlled headline rendering
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben's first Nano Banana output looked terrible — chalkboard-with-French-restaurant-vibes shot with the article title baked in as awkward text overlay ("Meilleurs restaurants de ramen ramen à Montréal 2026 : édition 2026 — — best ramen shops in montreal 2026") plus a sub-headline of the business description ("We bring you the best news in all categories of the internet"). Image looked like a homepage chyron, not a magazine feature.
+
+Two diagnoses + two pivots:
+
+1. **Initial diagnosis** — text-leak from the prompt (article title + business name + description all rendered as visible text in the image because they appeared verbatim in the prompt). Initial fix: strip all text from the prompt, hard NO-TEXT instructions front-loaded.
+
+2. **Ben's correction** — "it should have the article title in it but do professional research on banner designs and text size on a banner like this so its visible on all social media sharing sites." The right answer wasn't no-text; it was CONTROLLED text rendering with banner-design intent and social-share legibility specs.
+
+### Banner design research (applied directly into prompts)
+
+Social-share legibility specs:
+- **Canvas**: 1200×630 (Open Graph standard — covers FB/LinkedIn/Twitter/WhatsApp/iMessage/Discord)
+- **Inner safe zone**: 1000×500 (100px margin all sides — Slack/Discord square-crop won't clip)
+- **Headline minimum**: 70-80px tall (legible at the ~300px-wide mobile thumbnail social platforms display)
+- **Headline optimal**: 90-120px tall (comfortable on desktop + mobile)
+- **Subhead**: 40-60px (clearly subordinate)
+- **Headline character cap**: ~50-60 chars (wraps cleanly to 1-2 lines)
+- **Font**: bold sans-serif (Inter/Helvetica/SF Pro family — survives downscaling)
+- **Contrast**: WCAG AA 4.5:1 minimum (semi-transparent dark scrim under light text or vice versa)
+
+Each style preset is now a different banner-design pattern:
+
+| Style | Banner pattern |
+|---|---|
+| `realistic` (recommended) | Magazine Cover — bottom-third dark gradient + white headline overlay |
+| `editorial` | Classic Editorial — title top with horizontal divider, photo below (NYT/Atlantic) |
+| `hero` | Cinematic Hero — full-bleed photo with centered title + cinema black bars |
+| `illustration` | Modern Illustration — upper-left dark headline on flat illustration |
+| `flat` | Title-led Flat — split layout: large headline left, abstract icon right |
+| `minimalist` | Minimalist — small corner title, image dominant (Kinfolk/Cereal style) |
+| `3d` | 3D Hero — studio-rendered scene with floating centered title overlay |
+
+### Added / Changed / Fixed
+
+- **All 7 STYLE_PRESETS rewritten as banner-design templates** — `includes/AI_Image_Generator.php` line **~46**
+  - Each prompt explicitly tells Nano Banana to render the article headline as text overlay at a specific position with specific size + font + contrast specs
+  - Each prompt anchors against a Tier 1 publication style (NYT Magazine / Wired / National Geographic / The New Yorker / Atlantic / Kinfolk / Cereal)
+  - Prompts use 3 placeholders: `{subject}` (what to depict — sanitized keyword), `{headline}` (what text to render — sanitized title), `{colors}` (color grading)
+  - Verify: `grep -c "{headline}" seobetter/includes/AI_Image_Generator.php` (should be 7+)
+
+- **`build_prompt()` rewritten with two-phase sanitization** — `includes/AI_Image_Generator.php` line **~118**
+  - **Subject** = lowercased keyword with year suffixes stripped (the topic to depict, NOT to render as text)
+  - **Headline** = article title trimmed to 60 chars max, with trailing colon-edition-year suffixes stripped (the text to render in the banner)
+  - Empty-string guards on both
+  - Business name + description NO LONGER appended (those caused text-leak in v1.5.215; brand context now travels exclusively through `{colors}` weave)
+  - Multi-byte-string-aware (mb_substr / mb_strtolower) so non-Latin titles (JP/KO/ZH/AR) don't truncate mid-character
+  - Verify: `grep -n "Headline = the article TITLE\|sanitized article title" seobetter/includes/AI_Image_Generator.php`
+
+- **Settings dropdown labels rewritten with banner-design previews** — `admin/views/settings.php` line **~795**
+  - Each option now describes the actual banner pattern the prompt produces
+  - Reordered so the recommended pattern (Magazine Cover) is first
+  - Emoji prefixes for quick visual scan
+  - Verify: `grep -n "Magazine Cover (recommended)" seobetter/admin/views/settings.php`
+
+### Files touched
+
+- `includes/AI_Image_Generator.php` — STYLE_PRESETS rewrite + build_prompt rewrite
+- `admin/views/settings.php` — image style dropdown labels
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### What to test
+
+1. Install zip — verify `1.5.216.8` on Plugins page
+2. Settings → Branding → Image Style Preset → leave on default **"📰 Magazine Cover (recommended)"** for first test
+3. Generate a test article with a clean keyword (try the same French ramen test: `best ramen shops in montreal 2026` + FR + French)
+4. Check the saved post's featured image:
+   - Headline should be in the **lower third** with a dark gradient scrim
+   - Bold white sans-serif text, large enough to read on mobile
+   - Image scene should depict the topic (ramen/restaurant/montreal) without chalkboards or menu boards
+   - No business description / no "Hstgr News Website" text rendered visibly
+5. If realistic looks right, try `editorial` (top-of-image title) and `hero` (cinematic) for variety
+6. If text quality is still poor (typos, weird letterforms), it's a Nano Banana model limitation — fallback options:
+   (a) Switch back to `realistic` style which is most forgiving
+   (b) Generate a shorter article title (Nano Banana renders short text more reliably)
+   (c) Future enhancement: post-process with PHP GD/Imagick text overlay (skip the AI text rendering entirely)
+
+### Verified by user
+
+- **UNTESTED** — re-test the French ramen scenario and any 1-2 other styles.
 
 ---
 
