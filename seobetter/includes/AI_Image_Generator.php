@@ -210,42 +210,49 @@ class AI_Image_Generator {
             return '';
         }
 
-        // Model slug. As of late 2025 OpenRouter exposes Nano Banana as
-        // `google/gemini-2.5-flash-image-preview`. If Google rotates the slug
-        // upstream, OpenRouter usually keeps a stable alias — but if the slug
-        // ever fails, surface it via error_log so we can update.
-        $model = apply_filters( 'seobetter_openrouter_image_model', 'google/gemini-2.5-flash-image-preview' );
+        // v1.5.216.2 — Model slug fallback chain. Google promoted Gemini 2.5
+        // Flash Image from preview → GA in late 2025 and OpenRouter dropped
+        // the `-preview` suffix on the canonical slug. The `-preview` slug may
+        // still resolve as an alias OR may 404 depending on when OpenRouter
+        // ran their cleanup. Try the GA slug FIRST (most stable going forward),
+        // fall back to `-preview` if 404, then surface the failure to debug.log.
+        // Filter `seobetter_openrouter_image_model` returns a SINGLE preferred
+        // slug; we always try the preferred + the alternate as fallback.
+        $preferred = apply_filters( 'seobetter_openrouter_image_model', 'google/gemini-2.5-flash-image' );
+        $slug_candidates = [ $preferred ];
+        if ( $preferred !== 'google/gemini-2.5-flash-image-preview' ) {
+            $slug_candidates[] = 'google/gemini-2.5-flash-image-preview';
+        } else {
+            $slug_candidates[] = 'google/gemini-2.5-flash-image';
+        }
 
-        $response = wp_remote_post( 'https://openrouter.ai/api/v1/chat/completions', [
-            'timeout' => 60,
-            'headers' => [
-                'Content-Type'  => 'application/json',
-                'Authorization' => 'Bearer ' . $api_key,
-                // OpenRouter requires HTTP-Referer + X-Title for app attribution.
-                'HTTP-Referer'  => home_url(),
-                'X-Title'       => 'SEOBetter',
-            ],
-            'body' => wp_json_encode( [
-                'model'    => $model,
-                'messages' => [
-                    [
-                        'role'    => 'user',
-                        'content' => 'Generate a high-quality image for: ' . $prompt,
-                    ],
-                ],
-                // Gemini-family image models honour these via OpenRouter's
-                // pass-through; non-image models will ignore safely.
-                'modalities' => [ 'image', 'text' ],
-            ] ),
-        ] );
-
-        if ( is_wp_error( $response ) ) {
-            error_log( 'SEOBetter OpenRouter image error: ' . $response->get_error_message() );
+        $response = null; $model = ''; $last_error = '';
+        foreach ( $slug_candidates as $candidate ) {
+            $resp = self::call_openrouter_image( $api_key, $candidate, $prompt );
+            if ( is_wp_error( $resp ) ) {
+                $last_error = $resp->get_error_message();
+                continue;
+            }
+            $code = wp_remote_retrieve_response_code( $resp );
+            if ( $code === 200 ) {
+                // Success — keep this response and break out
+                $response = $resp;
+                $model = $candidate;
+                break;
+            }
+            // 404 (slug not found) → try next candidate. 401/429/etc → bail
+            // immediately because retrying with another slug won't help.
+            if ( $code === 404 ) {
+                $last_error = 'HTTP 404 on ' . $candidate;
+                continue;
+            }
+            $body_excerpt = substr( wp_remote_retrieve_body( $resp ), 0, 300 );
+            error_log( 'SEOBetter OpenRouter image HTTP ' . $code . ' on ' . $candidate . ': ' . $body_excerpt );
             return '';
         }
-        $code = wp_remote_retrieve_response_code( $response );
-        if ( $code !== 200 ) {
-            error_log( 'SEOBetter OpenRouter image HTTP ' . $code . ': ' . substr( wp_remote_retrieve_body( $response ), 0, 200 ) );
+
+        if ( ! $response ) {
+            error_log( 'SEOBetter OpenRouter image: all model slugs failed. Last error: ' . $last_error . '. Tried: ' . implode( ', ', $slug_candidates ) . '. Override via filter `seobetter_openrouter_image_model` if Google rotated the slug again.' );
             return '';
         }
 
@@ -298,6 +305,37 @@ class AI_Image_Generator {
         $body_excerpt = substr( wp_remote_retrieve_body( $response ), 0, 400 );
         error_log( 'SEOBetter OpenRouter image: 200 OK but no image found in response. Model=' . $model . '. Body excerpt: ' . $body_excerpt );
         return '';
+    }
+
+    /**
+     * v1.5.216.2 — Single OpenRouter chat-completions call for image generation.
+     * Extracted from generate_openrouter() so the model-slug fallback loop
+     * can call it multiple times with different model IDs without duplicating
+     * the request boilerplate.
+     */
+    private static function call_openrouter_image( string $api_key, string $model, string $prompt ) {
+        return wp_remote_post( 'https://openrouter.ai/api/v1/chat/completions', [
+            'timeout' => 60,
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $api_key,
+                // OpenRouter requires HTTP-Referer + X-Title for app attribution.
+                'HTTP-Referer'  => home_url(),
+                'X-Title'       => 'SEOBetter',
+            ],
+            'body' => wp_json_encode( [
+                'model'    => $model,
+                'messages' => [
+                    [
+                        'role'    => 'user',
+                        'content' => 'Generate a high-quality image for: ' . $prompt,
+                    ],
+                ],
+                // Gemini-family image models honour these via OpenRouter's
+                // pass-through; non-image models will ignore safely.
+                'modalities' => [ 'image', 'text' ],
+            ] ),
+        ] );
     }
 
     /**

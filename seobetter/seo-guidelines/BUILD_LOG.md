@@ -7,12 +7,57 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.1)
+> **Last updated:** 2026-04-28 (v1.5.216.2)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.2 — Nano Banana model slug fallback (fix the actual image-gen bug)
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Yesterday Ben reported: "OpenRouter logs show no Gemini image request at all" even after v1.5.215.1 fixed the save allowlist. The dropdown saves correctly, the plugin reaches `generate_openrouter()`, but no actual image lands.
+
+Root cause confirmed: model slug rotation. Google promoted Gemini 2.5 Flash Image from preview → GA in late 2025. OpenRouter's canonical slug dropped the `-preview` suffix. v1.5.215 was hardcoded to `google/gemini-2.5-flash-image-preview` which now returns 404 (or some other error code from OpenRouter's "model not found" handler) silently, with no image in the response → returns '' → falls through to Pexels.
+
+### Added / Changed / Fixed
+
+- **`generate_openrouter()` model slug fallback** — `includes/AI_Image_Generator.php` line **~213**
+  - Tries the GA slug `google/gemini-2.5-flash-image` FIRST (most stable going forward)
+  - Falls back to `google/gemini-2.5-flash-image-preview` on HTTP 404
+  - Other HTTP errors (401/429/etc) bail immediately — retrying with another slug won't help
+  - When BOTH slugs fail, logs `'all model slugs failed. Last error: ... Tried: ...'` with the filter override hint so future Google slug rotations can be patched without a plugin update
+  - Verify: `grep -n 'slug_candidates' seobetter/includes/AI_Image_Generator.php`
+
+- **New helper `call_openrouter_image()`** — `includes/AI_Image_Generator.php` line **~310**
+  - Extracted the single OpenRouter chat-completions request into a helper so the slug-fallback loop can call it multiple times without duplicating the boilerplate
+  - Verify: `grep -n 'call_openrouter_image' seobetter/includes/AI_Image_Generator.php`
+
+- **Filter `seobetter_openrouter_image_model`** still works as the override knob
+  - If both default slugs ever break (unlikely but possible), users can drop a tiny mu-plugin: `add_filter('seobetter_openrouter_image_model', fn() => 'google/some-new-slug');` — no plugin update required
+
+### Files touched
+
+- `includes/AI_Image_Generator.php` — slug fallback + helper extraction
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — re-test:
+  1. Settings → Branding → AI Image Provider → "OpenRouter → Gemini Nano Banana"
+  2. Save (should still stay selected per v1.5.215.1)
+  3. Generate an article (any keyword/content type)
+  4. Check OpenRouter activity dashboard — should now show `google/gemini-2.5-flash-image` (the GA slug) hit successfully
+  5. Check the saved post's featured image — should be a Nano Banana–generated image, saved as `.webp` (per v1.5.215)
+  6. If neither slug works: `wp-content/debug.log` will show `SEOBetter OpenRouter image: all model slugs failed. Last error: ... Tried: ...` — paste the line back so I can update the slug
 
 ---
 
