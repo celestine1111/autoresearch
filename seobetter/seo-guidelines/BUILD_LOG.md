@@ -19,7 +19,7 @@
 ## v1.5.216.10 — Crop bias fix + close two more keyword-translation gaps + aspect-ratio prompt reinforcement
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `30840d7`
 
 ### Why this ships
 
