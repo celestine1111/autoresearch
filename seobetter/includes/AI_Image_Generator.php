@@ -228,16 +228,19 @@ class AI_Image_Generator {
     private static function build_prompt( string $title, string $keyword, array $brand ): string {
         $style_key = $brand['style'] ?? 'realistic';
 
-        // v1.5.216.9 — Pick with-text or clean preset based on the new
-        // text_overlay setting. Default ON (true) for backward compat —
-        // existing users keep magazine-cover banner-design behavior. Users
-        // who want clean images uncheck the box in Settings → Branding.
-        $text_overlay = isset( $brand['text_overlay'] ) ? (bool) $brand['text_overlay'] : true;
-        if ( $text_overlay ) {
-            $template = self::STYLE_PRESETS[ $style_key ] ?? self::STYLE_PRESETS['realistic'];
-        } else {
-            $template = self::STYLE_PRESETS_CLEAN[ $style_key ] ?? self::STYLE_PRESETS_CLEAN['realistic'];
-        }
+        // v1.5.216.13 — ALWAYS request a CLEAN image from the AI provider.
+        // Pre-fix: text_overlay=ON asked Nano Banana to render the headline
+        // text inside the image, which produced spelling errors in
+        // non-English scripts ("discobbir"/"mellores" in Portuguese,
+        // similar typos across French/German/Spanish). The text overlay
+        // is now drawn deterministically in PHP by Image_Text_Overlay using
+        // bundled Inter font — zero typos, exact typographic control.
+        //
+        // text_overlay setting still toggles whether ANY headline appears
+        // on the image (ON = PHP draws it; OFF = no overlay at all). The
+        // STYLE_PRESETS array (the legacy with-text variants) is kept for
+        // reference but no longer reachable from this entry point.
+        $template = self::STYLE_PRESETS_CLEAN[ $style_key ] ?? self::STYLE_PRESETS_CLEAN['realistic'];
 
         $primary   = trim( (string) ( $brand['color_primary'] ?? '' ) );
         $secondary = trim( (string) ( $brand['color_secondary'] ?? '' ) );

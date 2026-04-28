@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.12
+ * Version: 1.5.216.13
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.12' );
+define( 'SEOBETTER_VERSION', '1.5.216.13' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4088,6 +4088,33 @@ final class SEOBetter {
             ? ( $crop_bias_map[ $style_key ] ?? 'bottom' )
             : 'center';
         $this->enforce_featured_aspect_169( $image_id, $crop_bias );
+
+        // v1.5.216.13 — Apply deterministic PHP text overlay AFTER aspect
+        // crop and BEFORE webp conversion. Replaces AI-rendered headlines
+        // (which produced typos in non-English scripts: "discobbir" instead
+        // of "descobrir", "mellores" instead of "melhores") with a perfect
+        // Inter Bold render. The AI image is already clean (text_overlay=ON
+        // routes to STYLE_PRESETS_CLEAN as of v1.5.216.13) so we draw the
+        // headline server-side using bundled fonts. Brand color_accent (or
+        // color_primary fallback) drives the accent-block technique used by
+        // the illustration / flat style presets.
+        if ( $has_overlay ) {
+            $accent_color = $brand_for_crop['color_accent'] ?? '';
+            if ( $accent_color === '' ) {
+                $accent_color = $brand_for_crop['color_primary'] ?? '';
+            }
+            if ( $accent_color === '' ) {
+                $accent_color = '#0F172A';
+            }
+            $article_lang = (string) ( get_post_meta( $post_id, '_seobetter_language', true ) ?: 'en' );
+            \SEOBetter\Image_Text_Overlay::apply(
+                $image_id,
+                get_the_title( $post_id ),
+                $style_key,
+                $article_lang,
+                $accent_color
+            );
+        }
 
         // v1.5.215 — Best-effort WebP conversion at quality 85 for the
         // featured image. WebP is ~30% smaller than JPEG/PNG at equivalent

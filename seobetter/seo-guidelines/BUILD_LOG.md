@@ -7,12 +7,89 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.12)
+> **Last updated:** 2026-04-28 (v1.5.216.13)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.13 — Deterministic PHP text overlay (Inter Bold, 6 techniques, brand-color aware)
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben generated a Portuguese ramen article and got Nano Banana typos in the rendered headline ("**discobbir**" instead of "descobrir", "**mellores**" instead of "melhores"). This is a fundamental limitation of AI image text rendering across non-English scripts — the model treats text as visual texture, not glyphs to spell correctly.
+
+Ben chose Option B from a 3-option list: deterministic PHP text overlay drawn server-side. Quote: *"Option B but i want it to be high quality text overlay and decent font selection, can you reseach css text overlay styles to see what is trending for 2026 and use that and fonts too"*.
+
+A general-purpose research agent surveyed 2026 design-trend coverage (Fontfabric, Smashing, Creative Boom, NN/g, itsnicethat) and 2026 typography lists (Muzli, Creative Bloq, FontFYI). The output recommended Inter Tight + bottom linear scrim as the safest 90% default; per-style overrides for the other 6 dropdown presets. Implementation follows that recommendation.
+
+### Pre-fix checklist
+
+- ✅ **All keywords** — no keyword-specific logic; works for any topic.
+- ✅ **All 21 content types** — overlay is style-driven, not content-type-driven.
+- ✅ **All AI models** — runs PHP-side after the AI returns the image; provider-agnostic.
+
+### Added / Changed / Fixed
+
+- **New class `Image_Text_Overlay`** — `includes/Image_Text_Overlay.php` (~440 lines)
+  - Public entry: `apply( $attachment_id, $headline, $style_key, $lang, $accent_color )`
+  - 6 overlay techniques mapped per dropdown style:
+    - `realistic` → magazine top tint band 220px + bottom-stacked headline (Inter ExtraBold 60-92px, ease-in dark gradient under text band)
+    - `editorial` → bottom linear scrim, ease-in alpha to 0.85 black, Inter Bold 56-76px white left-aligned with soft drop shadow
+    - `hero` (cinematic) → flat 0.55 black tint full-canvas, Inter ExtraBold 56-96px centered with shadow
+    - `illustration` / `flat` → solid accent block left 45%, Inter Bold 36-60px white left-aligned (uses brand `color_accent` → fallback `color_primary` → fallback `#0F172A`)
+    - `minimalist` → bottom-right white card with 6px drop shadow, Inter Bold 24-40px slate-900
+    - `3d` → centered translucent white glass card with subtle dim, Inter Bold 36-58px white centered
+  - Auto-fit: starts at max font size, shrinks 4px at a time until headline fits in `max_lines`. Floor returns whatever fits.
+  - Word-wrap: `preg_split('/\s+/u', ...)` is multibyte-safe; uses `imagettfbbox` for precise width measurement; never breaks mid-word.
+  - Script gating: skips overlay when ≥20% of headline is in CJK / Arabic / Hebrew / Devanagari / Bengali / Tamil / Thai / Lao / Tibetan / Myanmar / Georgian / Ethiopic / Khmer (Inter doesn't cover those). The clean AI image still ships, just without burned-in text. Future v1.5.217+ will lazy-fetch Noto subsets.
+  - Graceful fallback: missing GD, missing FreeType, missing fonts, unreadable file, non-JPEG/PNG ext, or any render exception all bail with an error_log line — caller doesn't need to handle it.
+  - Verify: `grep -n "STYLE_TECHNIQUE_MAP\|class Image_Text_Overlay" seobetter/includes/Image_Text_Overlay.php`
+
+- **Bundled fonts** — `assets/fonts/Inter-Bold.ttf` (405KB) + `assets/fonts/Inter-ExtraBold.ttf` (406KB) + `assets/fonts/LICENSE.txt` (SIL OFL 1.1)
+  - Inter v4.0 (rsms/inter, Nov 2023). Covers Latin Extended A+B, Cyrillic, Cyrillic Extended, Greek, Vietnamese.
+  - Adds ~810KB to plugin zip (1.1MB → ~1.9MB). Acceptable for a feature that resolves a recurring spelling-error class.
+
+- **AI image now ALWAYS requested clean** — `includes/AI_Image_Generator.php::build_prompt()` line **~228**
+  - Pre-fix: `text_overlay=ON` routed to `STYLE_PRESETS` (with `{headline}` text-render instructions), `OFF` routed to `STYLE_PRESETS_CLEAN`.
+  - Post-fix: ALWAYS routes to `STYLE_PRESETS_CLEAN`. The text_overlay setting now toggles whether PHP draws a headline (ON) or leaves the image clean (OFF).
+  - Verify: `grep -n "STYLE_PRESETS_CLEAN\[ \$style_key" seobetter/includes/AI_Image_Generator.php`
+
+- **Wire-up at `set_featured_image()`** — `seobetter.php` line **~4090**
+  - Calls `Image_Text_Overlay::apply()` after `enforce_featured_aspect_169()` and before `convert_featured_to_webp()`.
+  - Threads `_seobetter_language` post meta + brand `color_accent` (fallback `color_primary` → `#0F172A`).
+  - Verify: `grep -n "Image_Text_Overlay::apply" seobetter/seobetter.php`
+
+### Brand-color integration (confirmed wired)
+
+In response to Ben's question on whether brand colors are integrated: **YES**. They were already wired and remain wired — nothing to remove.
+- `branding_color_primary` / `_secondary` / `_accent` settings → `AI_Image_Generator::get_brand_settings()` lines ~712-714 → `build_prompt()` lines ~242-253 → `{colors}` token woven into all 7 STYLE_PRESETS_CLEAN templates as the "color grading" hint for the AI image.
+- v1.5.216.13 also feeds `color_accent` into the new PHP overlay's accent-block technique (illustration / flat presets get a brand-colored side panel instead of slate-900).
+
+### What was NOT changed
+
+- The `STYLE_PRESETS` legacy array (with `{headline}` text-rendering instructions) is left in place for reference but is no longer reachable from `build_prompt()`. Future cleanup pass can remove if desired.
+- No Settings UI changes — the existing "Text Overlay" checkbox now controls whether PHP draws the headline; the default (ON) keeps the existing visual semantic that articles get a headlined banner.
+- Schema and article body untouched — this is purely Layer 5 (article design).
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + Image_Text_Overlay::apply call in set_featured_image
+2. `seobetter/includes/AI_Image_Generator.php` — always route to STYLE_PRESETS_CLEAN
+3. `seobetter/includes/Image_Text_Overlay.php` — NEW class
+4. `seobetter/assets/fonts/Inter-Bold.ttf` — NEW (SIL OFL 1.1)
+5. `seobetter/assets/fonts/Inter-ExtraBold.ttf` — NEW (SIL OFL 1.1)
+6. `seobetter/assets/fonts/LICENSE.txt` — NEW (font license)
+7. `seobetter/seo-guidelines/article_design.md` — Layer 5 update (per mandate)
+8. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+**Verified by user:** UNTESTED — Ben to regenerate one article per visual style preset (realistic / editorial / hero / illustration / flat / minimalist / 3d) and confirm the headline renders cleanly with no typos, correct typography per style, and brand color visible on the accent_block techniques (illustration / flat). Test in at least one Latin language (Portuguese, German, or French) to confirm the typo-class is fixed.
 
 ---
 

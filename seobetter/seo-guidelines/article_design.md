@@ -483,6 +483,32 @@ The plugin auto-generates a featured image from the article title using the user
 
 Featured image is just the article title rendered as a clickable image — no logo overlay, no text-on-image, no variations. Per Ben's v1.5.215 design call to keep the feature lean. Logo embedding, per-article style override, and content-type-filtered style libraries are documented in `pro-features-ideas.md` for future revisits.
 
+### 7.3.1a Deterministic PHP text overlay (v1.5.216.13)
+
+The AI image is **always** generated clean (no embedded text) — `STYLE_PRESETS_CLEAN` in `AI_Image_Generator.php`. The headline is then drawn server-side by `Image_Text_Overlay::apply()` using the bundled Inter font. Pre-fix: AI providers (Nano Banana especially) produced typos in non-English headlines ("**discobbir**" instead of "descobrir", "**mellores**" instead of "melhores"); deterministic PHP eliminates that class entirely.
+
+Per-style overlay technique (driven by the dropdown style key — same dropdown that drives the AI prompt template):
+
+| Style key | Technique | Font / size | Anchor |
+|---|---|---|---|
+| `realistic` | Magazine top tint band 220px + bottom-stacked headline | Inter ExtraBold 60-92px white | bottom |
+| `editorial` | Bottom linear scrim (ease-in α to 0.85) | Inter Bold 56-76px white left | bottom |
+| `hero` | Full 0.55 black tint + centered headline | Inter ExtraBold 56-96px white center | center |
+| `illustration` | Solid accent block left 45% + headline inside | Inter Bold 36-60px white left | left-side |
+| `flat` | Solid accent block left 45% + headline inside | Inter Bold 36-60px white left | left-side |
+| `minimalist` | Bottom-right white card with drop shadow | Inter Bold 24-40px slate-900 | corner |
+| `3d` | Centered translucent glass card with subtle dim | Inter Bold 36-58px white center | center |
+
+Auto-fit shrinks the font 4px at a time until the headline fits within `max_lines` for that technique. Word-wrap is multibyte-safe (`preg_split('/\s+/u')`) and uses `imagettfbbox` for precise width measurement so French/German/Russian/Greek headlines wrap correctly.
+
+The `accent_block` technique (illustration / flat) reads `branding_color_accent` → fallback `branding_color_primary` → fallback `#0F172A` (slate-900). Brand color is therefore visible as the side-panel backdrop.
+
+**Script coverage** — Inter Bold/ExtraBold supports Latin Extended A+B, Cyrillic, Cyrillic Extended, Greek, Vietnamese. When ≥20% of the headline is in CJK / Arabic / Hebrew / Devanagari / Bengali / Tamil / Thai / Lao / Tibetan / Myanmar / Georgian / Ethiopic / Khmer the overlay is **skipped** — the clean AI image is still saved, the post just gets a no-text featured image. Future v1.5.217+ will lazy-fetch Noto Sans CJK / Arabic / Devanagari subsets to expand coverage.
+
+**Failure modes (graceful)** — missing GD, missing FreeType, missing font file, unreadable attachment, non-JPEG/PNG ext, or any render exception → bail with `error_log` line, leave the clean AI image untouched. The pipeline never produces a broken image because of the overlay step.
+
+**Bundled fonts** — `assets/fonts/Inter-Bold.ttf` (~405KB) + `assets/fonts/Inter-ExtraBold.ttf` (~406KB) + `LICENSE.txt` (SIL OFL 1.1). Inter v4.0 from rsms/inter (Nov 2023). Font choice grounded in 2026 typography research: Inter Tight / Inter family is the consensus pick for editorial/news/SaaS featured images per Fontfabric, Smashing Magazine, Creative Boom, and the London Web Design Agency 2026 Google Fonts ranking.
+
 ### 7.3.2 WebP conversion (v1.5.215)
 
 After `media_sideload_image` stores the AI-generated or stock featured image, the plugin attempts to convert it to WebP at quality 85. WebP is ~30% smaller than JPEG/PNG at equivalent visual quality:
