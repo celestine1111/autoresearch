@@ -19,7 +19,7 @@
 ## v1.5.216.11 — Cinematic-hero prompt fix + per-style crop bias
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `a87885e`
 
 ### Why this ships
 
