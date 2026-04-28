@@ -19,7 +19,7 @@
 ## v1.5.216.6 — Cross-script translator extended to ALL non-English languages + LANG_NAMES expansion
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `90b1a4c`
 
 ### Why this ships
 
