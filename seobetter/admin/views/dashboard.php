@@ -246,7 +246,7 @@ $avg_geo_color = $avg_geo >= 80 ? '#10b981' : ( $avg_geo >= 60 ? '#f59e0b' : ( $
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Firecrawl deep research</strong> — 10× citation density vs free Jina fallback</li>
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Serper SERP intelligence</strong> — competitor gap analysis, audience inference</li>
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Auto-translate</strong> for 29 languages (cross-script keywords + headings + meta)</li>
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>AI featured image</strong> — DALL-E 3 / FLUX Pro / Gemini Nano Banana</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>AI featured image via Nano Banana</strong> — Pollinations free / OpenRouter / Gemini direct</li>
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Recipe Article wrapper</strong> + Speakable voice schema (2× rich-result lanes)</li>
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>5 Schema Blocks</strong> — Product, Event, LocalBusiness, Vacation Rental, Job Posting</li>
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>AIOSEO / Yoast / RankMath auto-population</strong> — focus keyword, meta, OG, schema</li>

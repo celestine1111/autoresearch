@@ -7,12 +7,70 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.216)
+> **Last updated:** 2026-04-28 (v1.5.216.1)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.1 — Settings page text cleanup + AI Image Provider trim to 3 options
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben asked for two things during a settings page UX pass:
+1. **Check Settings text + Quick Picks UX** — flag stale copy left over from v1.5.216's BYOK-only free tier rework
+2. **Trim AI Image Provider** to just Pollinations (free) + OpenRouter Nano Banana + Gemini direct Nano Banana — drop DALL-E 3 + FLUX Pro from the dropdown to keep the picker focused (one fewer decision for the user)
+
+The DALL-E 3 + FLUX Pro code paths in `AI_Image_Generator` are KEPT intact (existing users with saved settings won't break), just hidden from the dropdown going forward. Reflects v1.5.216 design call: "for now add free version, nano banana on openrouter and nano banana".
+
+### Added / Changed / Fixed
+
+- **BYOK section heading + intro rewritten** — `admin/views/settings.php` line **~250**
+  - Old heading: "Bring your own AI key (skips Cloud quota)" — referenced the v1.5.214 quota that no longer exists
+  - New heading: "Connect your AI provider"
+  - Old intro: "generations bypass SEOBetter Cloud..." — Cloud isn't even an option for free tier anymore
+  - New intro: "Free tier requires a provider connection — articles generate through your own AI account, you pay your provider directly per token (~$0.01–$0.08 per article depending on the model). Skip this entirely on Pro — Cloud generation is included."
+  - Updated "Free tier: 1 AI provider" notice to clarify Pro adds multiple providers + Cloud generation
+
+- **AI Image Provider dropdown trimmed 5 → 3 options** — `admin/views/settings.php` line **~782**
+  - Kept: Disabled / Pollinations / OpenRouter→Nano Banana / Gemini Nano Banana direct
+  - Removed from dropdown (code paths kept for existing users): OpenAI DALL-E 3, FLUX 1.1 Pro
+  - Help text simplified: "Start with Pollinations (free, zero setup). If you already use OpenRouter, switch to OpenRouter → Nano Banana. Gemini direct is the cheapest paid option (10/day free)."
+  - Dropped DALL-E + FLUX help text spans (no longer reachable from UI)
+  - Save allowlist updated: `['', 'pollinations', 'openrouter', 'gemini']`
+  - Verify: `grep -n "allowed_providers = " seobetter/admin/views/settings.php`
+
+- **Pro card AI featured image copy refreshed (3 surfaces)** — `settings.php`, `dashboard.php`, `content-generator.php`
+  - Was: "AI featured image — DALL-E 3 / FLUX Pro / Gemini Nano Banana"
+  - Now: "AI featured image via Nano Banana — Pollinations free / OpenRouter / Gemini direct"
+  - Reflects what the dropdown actually offers, not what it used to
+
+- **Quick Picks intro tightened** — `admin/views/settings.php` line **~298**
+  - Old: "Not sure which model to pick? Click a preset below and the form will auto-fill with a known-compatible model. You can edit from there. These presets are tested to follow SEOBetter's hallucination-prevention rules."
+  - New: "Click a preset below to auto-fill the provider + model fields. All four are tested with SEOBetter's strict rule-following requirements. The 'Recommended' pick (OpenRouter → Haiku 4.5) works for most users worldwide — single key, intl payment friendly, ~$0.02/article."
+  - Tighter, mentions the actual recommended pick + cost
+
+### Files touched
+
+- `admin/views/settings.php` — BYOK section heading/intro, AI image dropdown trim, save allowlist, Pro card image copy, Quick Picks intro
+- `admin/views/dashboard.php` — Pro card image copy refresh
+- `admin/views/content-generator.php` — Pro card image copy refresh
+- `seobetter.php` — version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — install, expected:
+  1. Settings → AI Providers section heading reads "Connect your AI provider" (not "Bring your own AI key (skips Cloud quota)")
+  2. Settings → Branding → AI Image Provider dropdown shows 4 options: Disabled / Pollinations / OpenRouter → Nano Banana / Gemini Nano Banana direct (no DALL-E, no FLUX)
+  3. Quick Picks intro mentions "OpenRouter → Haiku 4.5" as the Recommended pick
+  4. Pro card on Settings, Dashboard, and Content Generator all say "AI featured image via Nano Banana" instead of the old DALL-E/FLUX list
 
 ---
 

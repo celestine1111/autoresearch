@@ -559,7 +559,7 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                 <ul style="font-size:12px;line-height:1.7;margin:0 0 12px 0;padding:0 0 0 16px;color:var(--sb-text)">
                     <li><strong>Firecrawl deep research</strong> — 10× citation density vs Jina fallback</li>
                     <li><strong>All 21 content types</strong> — incl. Comparison, Buying Guide, Case Study, Recipe</li>
-                    <li><strong>AI featured image</strong> — DALL-E 3 / FLUX Pro / Gemini Nano Banana</li>
+                    <li><strong>AI featured image via Nano Banana</strong> — Pollinations free / OpenRouter / Gemini direct</li>
                     <li><strong>Analyze &amp; Improve</strong> inject buttons — one-click +5-10 GEO points</li>
                     <li><strong>5 Schema Blocks</strong> — Product, Event, LocalBusiness, Vacation Rental, Job Posting</li>
                     <li><strong>50 Cloud articles/mo</strong> on Sonnet-tier LLM (vs 5 on Free)</li>

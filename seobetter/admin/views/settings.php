@@ -122,12 +122,11 @@ if ( isset( $_POST['seobetter_save_places'] ) && check_admin_referer( 'seobetter
 // AI_Image_Generator::generate() to produce article featured images.
 if ( isset( $_POST['seobetter_save_branding'] ) && check_admin_referer( 'seobetter_branding_nonce' ) ) {
     $existing = get_option( 'seobetter_settings', [] );
-    // v1.5.215.1 — added 'openrouter' to the allowlist. Without this entry
-    // the save handler silently reset $provider to '' (Disabled), so users
-    // who picked OpenRouter from the dropdown got Pexels instead and the
-    // OpenRouter API never received a request — root cause of Ben's "I
-    // checked OpenRouter logs and no image generation hit" report.
-    $allowed_providers = [ '', 'pollinations', 'openrouter', 'gemini', 'dalle3', 'flux_pro' ];
+    // v1.5.216.1 — Trimmed image provider list to 3 options (free + Nano Banana
+    // via two paths). Keeping the AI_Image_Generator code paths for dalle3 +
+    // flux_pro intact so existing users' saved settings still work, but they're
+    // hidden from the dropdown going forward to keep the picker focused.
+    $allowed_providers = [ '', 'pollinations', 'openrouter', 'gemini' ];
     $provider = sanitize_text_field( $_POST['branding_provider'] ?? '' );
     if ( ! in_array( $provider, $allowed_providers, true ) ) {
         $provider = '';
@@ -239,7 +238,7 @@ $settings = get_option( 'seobetter_settings', [] );
                 <li style="margin-bottom:5px">✓ <?php esc_html_e( 'Premium tier LLM (Claude Sonnet 4.6) — best instruction-following + multilingual', 'seobetter' ); ?></li>
                 <li style="margin-bottom:5px">✓ <?php esc_html_e( 'Firecrawl deep research (10× citation density) + Serper SERP intelligence', 'seobetter' ); ?></li>
                 <li style="margin-bottom:5px">✓ <?php esc_html_e( 'All 21 content types + Recipe Article wrapper + Speakable voice schema', 'seobetter' ); ?></li>
-                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'AI featured image (DALL-E 3 / FLUX Pro / Nano Banana) + 5 schema blocks', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'AI featured image via Nano Banana (Pollinations free / OpenRouter / Gemini direct) + 5 schema blocks', 'seobetter' ); ?></li>
                 <li>✓ <?php esc_html_e( 'Or: keep BYOK active and use Pro for the advanced features only', 'seobetter' ); ?></li>
             </ul>
             <a href="https://seobetter.com/pricing" target="_blank" class="button button-primary"><?php esc_html_e( 'See Pro plans →', 'seobetter' ); ?></a>
@@ -249,13 +248,13 @@ $settings = get_option( 'seobetter_settings', [] );
 
     <!-- AI Providers Section (BYOK) -->
     <div class="seobetter-card" id="seobetter-byok-section" style="margin-bottom:20px">
-        <h2><?php esc_html_e( 'Bring your own AI key (skips Cloud quota)', 'seobetter' ); ?></h2>
-        <p class="description"><?php esc_html_e( 'Connect your own AI API key — generations bypass SEOBetter Cloud and run through your provider directly. You pay them per token, but have unlimited usage. Your key is stored locally and never sent to SEOBetter servers.', 'seobetter' ); ?></p>
+        <h2><?php esc_html_e( 'Connect your AI provider', 'seobetter' ); ?></h2>
+        <p class="description"><?php esc_html_e( 'Free tier requires a provider connection — articles generate through your own AI account, you pay your provider directly per token (~$0.01–$0.08 per article depending on the model). Your key is stored locally and never sent to SEOBetter servers. Skip this entirely on Pro — Cloud generation is included.', 'seobetter' ); ?></p>
 
         <?php if ( ! $license_info['is_pro'] ) : ?>
             <p style="color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px">
                 <span class="dashicons dashicons-info-outline"></span>
-                <?php esc_html_e( 'Free tier: 1 AI provider. Upgrade to Pro for unlimited providers.', 'seobetter' ); ?>
+                <?php esc_html_e( 'Free tier: 1 connected provider at a time. Upgrade to Pro for multiple providers + Cloud generation (no key needed).', 'seobetter' ); ?>
             </p>
         <?php endif; ?>
 
@@ -293,11 +292,11 @@ $settings = get_option( 'seobetter_settings', [] );
         </table>
         <?php endif; ?>
 
-        <!-- v1.5.32 — Quick-Pick Model Presets -->
+        <!-- v1.5.32 / v1.5.216.1 — Quick-Pick Model Presets -->
         <div style="margin-top:20px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
             <h3 style="margin:0 0 8px 0"><?php esc_html_e( '⚡ Quick Pick — Recommended Models', 'seobetter' ); ?></h3>
             <p class="description" style="margin:0 0 12px 0">
-                <?php esc_html_e( 'Not sure which model to pick? Click a preset below and the form will auto-fill with a known-compatible model. You can edit from there. These presets are tested to follow SEOBetter\'s hallucination-prevention rules.', 'seobetter' ); ?>
+                <?php esc_html_e( 'Click a preset below to auto-fill the provider + model fields. All four are tested with SEOBetter\'s strict rule-following requirements. The "Recommended" pick (OpenRouter → Haiku 4.5) works for most users worldwide — single key, intl payment friendly, ~$0.02/article.', 'seobetter' ); ?>
             </p>
             <div style="display:flex;gap:12px;flex-wrap:wrap">
                 <?php foreach ( \SEOBetter\AI_Provider_Manager::get_quick_picks() as $qkey => $q ) : ?>
@@ -766,11 +765,10 @@ $settings = get_option( 'seobetter_settings', [] );
                             <option value="pollinations" <?php selected( $bp, 'pollinations' ); ?>><?php esc_html_e( 'Pollinations.ai — FREE, no API key, no signup (Recommended to start)', 'seobetter' ); ?></option>
                             <option value="openrouter" <?php selected( $bp, 'openrouter' ); ?>><?php esc_html_e( 'OpenRouter → Gemini Nano Banana — uses your existing OpenRouter key, ~$0.04/image', 'seobetter' ); ?></option>
                             <option value="gemini" <?php selected( $bp, 'gemini' ); ?>><?php esc_html_e( 'Google Gemini 2.5 Flash Image (Nano Banana) direct — ~$0.04/image, 10/day FREE on AI Studio', 'seobetter' ); ?></option>
-                            <option value="dalle3" <?php selected( $bp, 'dalle3' ); ?>><?php esc_html_e( 'OpenAI DALL-E 3 — $0.04/image standard, strong prompt adherence', 'seobetter' ); ?></option>
-                            <option value="flux_pro" <?php selected( $bp, 'flux_pro' ); ?>><?php esc_html_e( 'Black Forest Labs FLUX.1 Pro 1.1 (via fal.ai) — $0.055/image, best editorial quality', 'seobetter' ); ?></option>
                         </select>
                         <p class="description" style="margin-top:8px">
-                            <strong><?php esc_html_e( 'Recommended for most users:', 'seobetter' ); ?></strong> <?php esc_html_e( 'If you already use OpenRouter for article generation, pick "OpenRouter → Nano Banana" — same key, same dashboard, same billing. Otherwise start with Pollinations (free, zero setup) and upgrade once you want brand-aware quality.', 'seobetter' ); ?>
+                            <strong><?php esc_html_e( 'Recommended:', 'seobetter' ); ?></strong>
+                            <?php esc_html_e( 'Start with Pollinations (free, zero setup) to test the workflow. If you already use OpenRouter for article generation, switch to "OpenRouter → Nano Banana" for higher quality without managing a second key. "Gemini direct" is the cheapest paid option (10/day free on Google AI Studio).', 'seobetter' ); ?>
                         </p>
                     </td>
                 </tr>
@@ -784,8 +782,6 @@ $settings = get_option( 'seobetter_settings', [] );
                             <span data-provider="pollinations"><?php esc_html_e( 'No API key required — Pollinations is free and anonymous.', 'seobetter' ); ?></span>
                             <span data-provider="openrouter"><?php esc_html_e( 'No additional key needed — uses the OpenRouter key you configured for article generation in the BYOK section above. Single OpenRouter dashboard, single bill, ~$0.04/image (pass-through pricing).', 'seobetter' ); ?> <a href="https://openrouter.ai/google/gemini-2.5-flash-image-preview" target="_blank" rel="noopener"><?php esc_html_e( 'Model details', 'seobetter' ); ?></a></span>
                             <span data-provider="gemini"><?php esc_html_e( 'Get a free key at aistudio.google.com/apikey. Free tier: 10 images/day on gemini-2.5-flash-image. Paid: ~$0.04/image.', 'seobetter' ); ?> <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"><?php esc_html_e( 'Get Gemini Key', 'seobetter' ); ?></a></span>
-                            <span data-provider="dalle3"><?php esc_html_e( 'Get a key at platform.openai.com. Billing required. $0.04 standard / $0.08 HD per image.', 'seobetter' ); ?> <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener"><?php esc_html_e( 'Get OpenAI Key', 'seobetter' ); ?></a></span>
-                            <span data-provider="flux_pro"><?php esc_html_e( 'Get a fal.ai API key. $5 free credit on signup. $0.055 per image. Best editorial-quality realistic images.', 'seobetter' ); ?> <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener"><?php esc_html_e( 'Get fal.ai Key', 'seobetter' ); ?></a></span>
                         </p>
                     </td>
                 </tr>
