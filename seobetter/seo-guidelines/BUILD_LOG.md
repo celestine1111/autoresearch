@@ -19,7 +19,7 @@
 ## v1.5.216.4 — CRITICAL: remove `?>` from v1.5.216.3 PHP comment that broke content-generator.php
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `d629bed`
 
 ### Why this ships (critical hotfix)
 
