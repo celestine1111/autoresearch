@@ -19,7 +19,7 @@
 ## v1.5.216.3 — Defensive `$result` init in content-generator.php
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `260c255`
 
 ### Why this ships
 
