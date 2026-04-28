@@ -147,6 +147,8 @@ if ( isset( $_POST['seobetter_save_branding'] ) && check_admin_referer( 'seobett
         'branding_color_accent'    => sanitize_hex_color( $_POST['branding_color_accent'] ?? '' ),
         'branding_logo_id'         => absint( $_POST['branding_logo_id'] ?? 0 ),
         'branding_negative_prompt' => sanitize_textarea_field( $_POST['branding_negative_prompt'] ?? '' ),
+        // v1.5.216.9 — render-headline-as-text-overlay toggle. Default ON.
+        'branding_text_overlay'    => isset( $_POST['branding_text_overlay'] ) ? '1' : '0',
     ] );
     update_option( 'seobetter_settings', $settings );
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Branding & AI image settings saved.', 'seobetter' ) . '</p></div>';
@@ -801,6 +803,28 @@ $settings = get_option( 'seobetter_settings', [] );
                             <option value="3d" <?php selected( $bs, '3d' ); ?>><?php esc_html_e( '🎯 3D Hero — studio-rendered scene with floating centered title overlay', 'seobetter' ); ?></option>
                         </select>
                         <p class="description"><?php esc_html_e( 'The style preset determines the image generation prompt template. All presets automatically weave in your brand colors and business context.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+
+                <!-- v1.5.216.9 — Text overlay toggle -->
+                <tr>
+                    <th><?php esc_html_e( 'Article Title Text Overlay', 'seobetter' ); ?></th>
+                    <td>
+                        <?php
+                        // Default ON for backward compat. Existing users who haven't seen this setting yet → checked.
+                        $text_overlay = isset( $settings['branding_text_overlay'] ) ? (string) $settings['branding_text_overlay'] : '1';
+                        ?>
+                        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+                            <input type="checkbox" name="branding_text_overlay" value="1" <?php checked( $text_overlay, '1' ); ?> style="margin-top:3px" />
+                            <span>
+                                <strong><?php esc_html_e( 'Render the article title as text overlay on the featured image', 'seobetter' ); ?></strong>
+                                <span class="description" style="display:block;margin-top:4px">
+                                    <?php esc_html_e( 'CHECKED (default): magazine-cover banner with the article headline rendered as bold sans-serif text overlay (positioned per the chosen style preset). Ready-to-post on social media.', 'seobetter' ); ?>
+                                    <br/>
+                                    <?php esc_html_e( 'UNCHECKED: clean photographic image with no text rendered. Choose this if you prefer to add your own typography in the WP Block editor or via a separate text-overlay plugin.', 'seobetter' ); ?>
+                                </span>
+                            </span>
+                        </label>
                     </td>
                 </tr>
 

@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.8
+ * Version: 1.5.216.9
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.8' );
+define( 'SEOBETTER_VERSION', '1.5.216.9' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4013,8 +4013,13 @@ final class SEOBetter {
         error_log( "SEOBetter set_featured_image: brand_provider=" . ( $provider_set ? $brand['provider'] : '(none)' ) );
 
         if ( $provider_set ) {
+            // v1.5.216.9 — pass per-article country into $brand so the image
+            // prompt grounds the scene in the right geography (NZ ramen shop
+            // looks like NZ, not Tokyo).
+            $brand['country'] = (string) ( get_post_meta( $post_id, '_seobetter_country', true ) ?: '' );
+
             $post_title = get_the_title( $post_id );
-            error_log( "SEOBetter set_featured_image: calling AI_Image_Generator::generate() with title=" . substr( $post_title, 0, 60 ) );
+            error_log( "SEOBetter set_featured_image: calling AI_Image_Generator::generate() with title=" . substr( $post_title, 0, 60 ) . " country=" . $brand['country'] );
             $image_url = \SEOBetter\AI_Image_Generator::generate( $post_title, $keyword, $brand );
             error_log( "SEOBetter set_featured_image: AI_Image_Generator returned " . ( $image_url ? "URL " . substr( $image_url, 0, 80 ) : "(empty — falling through to Pexels)" ) );
         }
@@ -4048,6 +4053,15 @@ final class SEOBetter {
             'post_title' => ucwords( $keyword ) . ' Guide',
         ] );
 
+        // v1.5.216.9 — Enforce 16:9 (1200×630 Open Graph standard) on the
+        // saved featured image. Required because Nano Banana / Gemini 2.5
+        // Flash Image returns 1024×1024 SQUARE output by default — OpenRouter's
+        // Gemini Image wrapper doesn't expose an aspect-ratio parameter.
+        // Without this crop, WP would generate intermediate sizes from the
+        // square original and themes would render the featured image as a
+        // square that gets cut off in social shares (1.91:1 OG aspect).
+        $this->enforce_featured_aspect_169( $image_id );
+
         // v1.5.215 — Best-effort WebP conversion at quality 85 for the
         // featured image. WebP is ~30% smaller than JPEG/PNG at equivalent
         // visual quality, which directly improves:
@@ -4059,6 +4073,65 @@ final class SEOBetter {
         // file is kept intact for fallback consumers — we only ADD a WebP
         // sibling and update the attachment metadata to reference it.
         $this->convert_featured_to_webp( $image_id );
+    }
+
+    /**
+     * v1.5.216.9 — Crop the featured image to 16:9 (1200×630) when the source
+     * is square. Nano Banana / Gemini 2.5 Flash Image defaults to 1024×1024
+     * which renders as a square crop in WP themes and gets cut off when
+     * shared on social media (Facebook/Twitter expect 1.91:1 / 16:9).
+     *
+     * Strategy: center-crop to 16:9 then resize to 1200×630 (Open Graph
+     * standard). Skipped silently if image is already wider than tall (Pollinations
+     * already returns 1200×630, no work needed) or if WP_Image_Editor isn't
+     * available.
+     */
+    private function enforce_featured_aspect_169( int $attachment_id ): void {
+        $file = get_attached_file( $attachment_id );
+        if ( ! $file || ! file_exists( $file ) ) return;
+
+        // Only act on raster formats; skip SVG/GIF
+        $mime = (string) get_post_mime_type( $attachment_id );
+        if ( ! in_array( $mime, [ 'image/jpeg', 'image/png', 'image/webp' ], true ) ) return;
+
+        $size = @getimagesize( $file );
+        if ( ! $size ) return;
+        $w = (int) $size[0];
+        $h = (int) $size[1];
+        if ( $w === 0 || $h === 0 ) return;
+
+        // Already wider than 16:9 (e.g. 1200×630 Pollinations default) — leave alone
+        if ( $w / $h >= 1.7 ) return;
+
+        $editor = wp_get_image_editor( $file );
+        if ( is_wp_error( $editor ) ) return;
+
+        // Center-crop to 16:9 then resize to 1200×630
+        $target_ratio = 1200 / 630;
+        if ( $w / $h > $target_ratio ) {
+            // Wider than 16:9 — crop horizontal
+            $new_w = (int) round( $h * $target_ratio );
+            $crop_x = (int) round( ( $w - $new_w ) / 2 );
+            $editor->crop( $crop_x, 0, $new_w, $h, 1200, 630 );
+        } else {
+            // Taller than 16:9 (square or vertical) — crop vertical
+            $new_h = (int) round( $w / $target_ratio );
+            $crop_y = (int) round( ( $h - $new_h ) / 2 );
+            $editor->crop( 0, $crop_y, $w, $new_h, 1200, 630 );
+        }
+
+        $editor->set_quality( 90 );
+        $saved = $editor->save( $file ); // overwrite original
+        if ( is_wp_error( $saved ) ) return;
+
+        // Regenerate intermediate sizes from the new 1200×630 source so theme
+        // thumbnails/medium/large all derive from the cropped image.
+        if ( function_exists( 'wp_generate_attachment_metadata' ) ) {
+            $new_meta = wp_generate_attachment_metadata( $attachment_id, $file );
+            if ( is_array( $new_meta ) ) {
+                wp_update_attachment_metadata( $attachment_id, $new_meta );
+            }
+        }
     }
 
     /**

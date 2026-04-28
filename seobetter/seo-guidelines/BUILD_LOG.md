@@ -7,12 +7,87 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.8)
+> **Last updated:** 2026-04-28 (v1.5.216.9)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.9 — Multi-issue cleanup: text-overlay toggle + body-keyword translation + 16:9 crop + country in image prompt
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Four issues surfaced from Ben's v1.5.216.8 testing pass:
+
+1. **Image is square in the blog post** — Nano Banana / Gemini 2.5 Flash Image returns 1024×1024 by default; OpenRouter's wrapper doesn't expose an aspect-ratio parameter; WP themes render the square crop and social shares cut it off (FB/Twitter expect 1.91:1 / 16:9).
+2. **English keyword leaks into French article body** — Async_Generator's content-gen prompt at line 1022 + 1173 + 2663 told the AI to "use the primary keyword `{$keyword}` 1-2 times" using the raw English keyword, and the LANGUAGE rule explicitly permitted keeping it in English. Translation pipeline existed for headlines + meta tags (v1.5.213.3) but not body content.
+3. **Country context missing from image prompt** — "best ramen shops in christchurch 2026" + country=NZ produced a generic East-Asian-stereotype ramen shop because the prompt only said "ramen" and didn't ground the scene in NZ.
+4. **Need a "no text overlay" UX option** — some users want clean photographic featured images and prefer to add typography in the WP Block editor or via a separate plugin. v1.5.216.8 forced text overlay; v1.5.216.9 makes it a Settings toggle.
+
+### Added / Changed / Fixed
+
+- **`Async_Generator::run_step()` — translate focus keyword for non-English articles** — line **~166**
+  - Mirrors the v1.5.213.3 pattern already used by `generate_headlines` and `generate_meta_tags`. When language is non-English, calls `Cloud_API::translate_strings_batch([$keyword], $language)` once at the top of step processing and caches the result on `$job['translated_keyword']` so subsequent steps reuse it without re-translating.
+  - Original English keyword preserved on `$job['keyword']` for technical SEO meta fields if needed downstream.
+  - Verify: `grep -n 'translated_keyword' seobetter/includes/Async_Generator.php`
+
+- **`Async_Generator::get_system_prompt()` — LANGUAGE rule rewritten** — line **~2663**
+  - Pre-fix: "The primary keyword may be in any language but the article body text must be {$lang_name}." This explicitly gave the AI permission to use the English keyword in a non-English article.
+  - New: "The primary keyword provided by the plugin is ALREADY translated into {$lang_name} ... Use the keyword EXACTLY as provided — do NOT switch it back to English, and do NOT include the original English form anywhere in the body."
+  - Verify: `grep -n 'ALREADY translated into' seobetter/includes/Async_Generator.php`
+
+- **`AI_Image_Generator::STYLE_PRESETS_CLEAN` — NEW set of no-text variants** — line **~96**
+  - Each style has a CLEAN counterpart that omits the `{headline}` text-overlay sentence and front-loads strong NO-TEXT negatives. Used when user unchecks the new toggle.
+  - Verify: `grep -n 'STYLE_PRESETS_CLEAN' seobetter/includes/AI_Image_Generator.php`
+
+- **Settings → Branding → "Render article title as text overlay" checkbox** — `admin/views/settings.php` line **~810**
+  - Defaults ON for backward compat (existing users keep magazine-cover banner-design behavior)
+  - When unchecked, `build_prompt` switches to `STYLE_PRESETS_CLEAN` → clean photographic image with no headline rendering
+  - Save handler reads `$_POST['branding_text_overlay']` → stores `'1'` or `'0'`
+  - Verify: `grep -n 'branding_text_overlay' seobetter/admin/views/settings.php`
+
+- **`AI_Image_Generator::COUNTRY_LABELS`** + country threading — `includes/AI_Image_Generator.php` line **~96** + `seobetter.php::set_featured_image()` line **~4015**
+  - 50+ ISO-3166 country codes mapped to "set in {country} — local urban environment, modern boutique aesthetic appropriate to that country"
+  - `set_featured_image()` reads `_seobetter_country` post meta and injects into `$brand['country']`
+  - `build_prompt` appends "(set in {country} ...)" to the subject phrase if the country isn't already mentioned in the keyword
+  - Result: "best ramen shops in christchurch" + NZ → grounded as "best ramen shops christchurch (set in New Zealand — local urban environment, modern boutique aesthetic)"
+  - Verify: `grep -n 'COUNTRY_LABELS\|country_label' seobetter/includes/AI_Image_Generator.php`
+
+- **`enforce_featured_aspect_169()` post-process crop** — `seobetter.php` line **~4060**
+  - After `media_sideload_image` saves the AI image as the post thumbnail and BEFORE WebP conversion, center-crop the source to 16:9 (1200×630 Open Graph standard) if it's not already wider than 1.7:1
+  - Pollinations already returns 1200×630 directly → skipped (no work)
+  - Nano Banana 1024×1024 squares → cropped to 1024×576 then resized to 1200×630
+  - Regenerates WP intermediate sizes from the cropped source so themes render the featured image at the right aspect ratio
+  - Verify: `grep -n 'enforce_featured_aspect_169' seobetter/seobetter.php`
+
+- **Better headline truncation in `build_prompt`** — `includes/AI_Image_Generator.php` line **~218**
+  - Pre-fix: "Meilleurs restaurants de ramen à Montréal en 2026 : guide..." was cut mid-word at the 60-char cap with mid-word ellipsis
+  - Now: strip more tail patterns (`: guide`, `: review`, `— complete guide`, `— ultimate guide`, `expliqué`, etc.) AND word-boundary-aware truncation (cuts at the last full word before 60 chars, never mid-word)
+  - mb_strrpos for multi-byte safety
+  - Verify: `grep -n 'word-boundary-aware truncation' seobetter/includes/AI_Image_Generator.php`
+
+### Files touched
+
+- `includes/Async_Generator.php` — keyword translation at run_step + LANGUAGE rule rewrite
+- `includes/AI_Image_Generator.php` — STYLE_PRESETS_CLEAN + COUNTRY_LABELS + text_overlay branching + better truncation + country injection
+- `admin/views/settings.php` — text-overlay checkbox + save handler
+- `seobetter.php` — set_featured_image country threading + enforce_featured_aspect_169 + version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — re-test:
+  1. Settings → Branding → confirm new "Article Title Text Overlay" checkbox appears, defaults checked
+  2. Generate a French article (keyword="best ramen shops in christchurch 2026", country=NZ, language=French)
+  3. Check the saved featured image — should be 16:9 (NOT square), Christchurch-NZ-ish setting (NOT generic East Asian), with French headline overlay rendered cleanly without mid-word cut
+  4. Check the article body — French text only, NO English keyword "best ramen shops in christchurch 2026" leaked into the body
+  5. Toggle the text-overlay checkbox OFF, regenerate — should produce a clean photographic image with no text rendered
 
 ---
 

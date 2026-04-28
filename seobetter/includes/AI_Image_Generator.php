@@ -94,6 +94,72 @@ class AI_Image_Generator {
     ];
 
     /**
+     * v1.5.216.9 — CLEAN variant of every style preset. NO text overlay,
+     * NO headline rendering. Used when user unchecks the new Settings →
+     * Branding → "Render article title as text overlay" option (default ON).
+     *
+     * Why two sets: some users want the ready-to-post magazine-cover look
+     * (with-text presets above). Others want a clean photographic image
+     * and prefer to add their own typography in the WP Block editor or via
+     * a separate text-overlay plugin. Both are valid use cases.
+     *
+     * Each clean preset uses identical scene/style/composition language
+     * to its with-text counterpart but DROPS the "headline rendered as
+     * text overlay" sentence and front-loads strong NO-TEXT negatives.
+     */
+    /**
+     * v1.5.216.9 — ISO-3166 country code → human-readable country/region
+     * label woven into the image prompt so AI image models ground the scene
+     * in the right country instead of defaulting to generic / stereotypical
+     * imagery (e.g. "ramen shop" → Tokyo by default, but the article is
+     * about a Christchurch ramen shop).
+     */
+    const COUNTRY_LABELS = [
+        'AU' => 'Australia', 'NZ' => 'New Zealand', 'US' => 'the United States',
+        'CA' => 'Canada', 'GB' => 'the United Kingdom', 'IE' => 'Ireland',
+        'FR' => 'France', 'DE' => 'Germany', 'IT' => 'Italy', 'ES' => 'Spain',
+        'PT' => 'Portugal', 'NL' => 'the Netherlands', 'BE' => 'Belgium',
+        'CH' => 'Switzerland', 'AT' => 'Austria', 'SE' => 'Sweden',
+        'DK' => 'Denmark', 'NO' => 'Norway', 'FI' => 'Finland',
+        'PL' => 'Poland', 'CZ' => 'the Czech Republic', 'HU' => 'Hungary',
+        'GR' => 'Greece', 'TR' => 'Turkey', 'RO' => 'Romania',
+        'JP' => 'Japan', 'KR' => 'South Korea', 'CN' => 'China',
+        'IN' => 'India', 'TH' => 'Thailand', 'VN' => 'Vietnam',
+        'ID' => 'Indonesia', 'MY' => 'Malaysia', 'SG' => 'Singapore',
+        'PH' => 'the Philippines', 'TW' => 'Taiwan', 'HK' => 'Hong Kong',
+        'AE' => 'the United Arab Emirates', 'SA' => 'Saudi Arabia',
+        'IL' => 'Israel', 'EG' => 'Egypt',
+        'BR' => 'Brazil', 'MX' => 'Mexico', 'AR' => 'Argentina',
+        'CL' => 'Chile', 'CO' => 'Colombia', 'PE' => 'Peru',
+        'ZA' => 'South Africa', 'NG' => 'Nigeria', 'KE' => 'Kenya',
+        'MA' => 'Morocco',
+        'RU' => 'Russia', 'UA' => 'Ukraine',
+    ];
+
+    const STYLE_PRESETS_CLEAN = [
+        'realistic' =>
+            'Award-winning editorial magazine cover photograph for a Tier 1 publication (Wired / The New York Times Magazine / National Geographic), single-subject hero shot of {subject}. Shot on Sony A7R IV, 50mm prime lens, f/2.8 shallow depth of field, natural directional lighting, golden-hour warm tones, {colors} color grading, ultra-sharp focus on subject, soft bokeh background, professional color grading, magazine-cover quality, photojournalism aesthetic, 16:9 cinematic crop. ABSOLUTELY NO text, NO typography, NO captions, NO subtitles, NO chalkboards, NO menu boards, NO banners, NO signs, NO labels, NO numbers visible, NO watermarks, NO logos, NO brand names rendered as text.',
+
+        'illustration' =>
+            'Modern editorial vector illustration of {subject}, clean flat shapes with subtle gradients, {colors} dominant palette, generous negative space, geometric composition, minimalist style aligned with The New Yorker or Wired magazine illustration, premium digital art, crisp lines, 16:9 aspect ratio, suitable as feature opener for major publication. ABSOLUTELY NO text, NO typography, NO captions, NO labels, NO numbers, NO watermarks, NO signs, NO brand names, NO speech bubbles.',
+
+        'flat' =>
+            'Bold modern flat design illustration of {subject}, abstract iconographic representation, {colors} as primary color palette, solid color blocks with no gradients, no photorealism, generous whitespace, geometric shapes, app-design quality, premium editorial graphic, 16:9 aspect ratio. ABSOLUTELY NO text, NO typography, NO numbers, NO labels, NO captions, NO watermarks, NO brand names, NO speech bubbles.',
+
+        'hero' =>
+            'Cinematic premium hero banner photograph, {subject}, dramatic side-lighting, anamorphic lens flare, {colors} teal-and-orange film color grade, ultra-wide composition, atmospheric depth, film grain, 16:9 cinema crop, premium ad-campaign aesthetic, suitable as hero banner for major news publication. ABSOLUTELY NO text, NO typography, NO captions, NO chalkboards, NO menu boards, NO banners, NO signs, NO labels, NO numbers, NO watermarks, NO logos.',
+
+        'minimalist' =>
+            'Minimalist editorial composition of {subject}, abundant negative space, soft natural lighting, single-subject focus, gallery-quality photography, monochromatic with {colors} as accent, contemplative mood, premium lifestyle publication style (Kinfolk / Cereal magazine), 16:9 aspect ratio. ABSOLUTELY NO text, NO typography, NO labels, NO captions, NO watermarks, NO logos, NO clutter, NO secondary subjects.',
+
+        'editorial' =>
+            'Award-winning editorial photograph for a Tier 1 publication (Wired / The New York Times Magazine / National Geographic), {subject}, environmental composition with strong narrative, natural directional lighting, {colors} subtle color grading, professional photojournalism quality, sharp focus, 16:9 aspect ratio, suitable as magazine feature opener. ABSOLUTELY NO text, NO typography, NO captions, NO chalkboards, NO menu boards, NO signs, NO numbers, NO logos, NO watermarks, NO brand names rendered visible.',
+
+        '3d' =>
+            'Premium 3D render of {subject}, soft three-point studio lighting, {colors} brand palette, clean seamless white-to-grey gradient background, hyper-detailed materials with subsurface scattering, claymation-soft shading, 35-degree camera angle, 16:9 aspect ratio, premium product-shot quality, advertising-grade. ABSOLUTELY NO text, NO typography, NO labels, NO numbers, NO watermarks, NO logos, NO brand names.',
+    ];
+
+    /**
      * Main entry. Generate a featured image URL for an article.
      *
      * @param string $title    Article title.
@@ -161,7 +227,17 @@ class AI_Image_Generator {
      */
     private static function build_prompt( string $title, string $keyword, array $brand ): string {
         $style_key = $brand['style'] ?? 'realistic';
-        $template  = self::STYLE_PRESETS[ $style_key ] ?? self::STYLE_PRESETS['realistic'];
+
+        // v1.5.216.9 — Pick with-text or clean preset based on the new
+        // text_overlay setting. Default ON (true) for backward compat —
+        // existing users keep magazine-cover banner-design behavior. Users
+        // who want clean images uncheck the box in Settings → Branding.
+        $text_overlay = isset( $brand['text_overlay'] ) ? (bool) $brand['text_overlay'] : true;
+        if ( $text_overlay ) {
+            $template = self::STYLE_PRESETS[ $style_key ] ?? self::STYLE_PRESETS['realistic'];
+        } else {
+            $template = self::STYLE_PRESETS_CLEAN[ $style_key ] ?? self::STYLE_PRESETS_CLEAN['realistic'];
+        }
 
         $primary   = trim( (string) ( $brand['color_primary'] ?? '' ) );
         $secondary = trim( (string) ( $brand['color_secondary'] ?? '' ) );
@@ -192,21 +268,56 @@ class AI_Image_Generator {
             $subject = 'editorial subject';
         }
 
-        // === HEADLINE (text to render in the banner) ===
-        // The article title becomes the visible banner headline. Trim
-        // trailing colon-edition tails so the headline reads cleanly. Cap
-        // at 60 chars so it wraps to 1-2 lines on a 1200×630 banner without
-        // overflowing the safe zone — research-backed mobile-thumbnail
-        // legibility threshold.
-        $headline = trim( $title !== '' ? $title : $keyword );
-        $headline = preg_replace( '/\s*[:\-—]\s*(édition|edition)\s+\d{4}\s*$/iu', '', $headline );
-        $headline = preg_replace( '/\s*\d{4}\s*$/', '', $headline );
-        $headline = trim( $headline, " \t\n\r\0\x0B.—-:" );
-        if ( function_exists( 'mb_strlen' ) ? mb_strlen( $headline, 'UTF-8' ) > 60 : strlen( $headline ) > 60 ) {
-            $headline = function_exists( 'mb_substr' )
-                ? rtrim( mb_substr( $headline, 0, 57, 'UTF-8' ), ' .—-,:' ) . '…'
-                : rtrim( substr( $headline, 0, 57 ), ' .—-,:' ) . '...';
+        // v1.5.216.9 — Country context injection. Pre-fix: "best ramen shops
+        // in christchurch 2026" + country=NZ produced a generic East-Asian-
+        // stereotype ramen shop because the prompt only said "ramen" and
+        // Nano Banana defaulted to its prior on Asian visual associations.
+        // Now we append the country/city setting explicitly so the model
+        // grounds the scene in the right geographic context (modern
+        // Christchurch boutique restaurant, not old-school Hong Kong shop).
+        $country_code = strtoupper( trim( (string) ( $brand['country'] ?? '' ) ) );
+        if ( $country_code !== '' ) {
+            $country_label = self::COUNTRY_LABELS[ $country_code ] ?? '';
+            if ( $country_label !== '' && stripos( $subject, $country_label ) === false ) {
+                $subject .= ' (set in ' . $country_label . ' — local urban environment, modern boutique aesthetic appropriate to that country)';
+            }
         }
+
+        // === HEADLINE (text to render in the banner) ===
+        // v1.5.216.9 — better tail-stripping + word-boundary truncation.
+        // Pre-fix produced "Meilleurs restaurants de ramen à Montréal en 2026 :
+        // guide..." with a mid-word cut. New: strip more tail patterns
+        // ("guide", "review", "complete guide", "ultimate guide", "explained")
+        // and truncate at the last full word before 60 chars instead of
+        // mid-word + ellipsis.
+        $headline = trim( $title !== '' ? $title : $keyword );
+        // Strip "[colon/dash] [tail-word(s)] [optional year]" patterns
+        $tail_words = '(?:édition|edition|guide|guide complet|complete guide|ultimate guide|review|revue|expliqué|explained|tout savoir|the guide)';
+        $headline = preg_replace( '/\s*[:\-—]\s*' . $tail_words . '(?:\s+\d{4})?\s*$/iu', '', $headline );
+        // Strip standalone trailing year
+        $headline = preg_replace( '/\s+\d{4}\s*$/', '', $headline );
+        // Strip stray colons/dashes/punctuation at the end
+        $headline = preg_replace( '/[\s:—–\-,.]+$/u', '', $headline );
+        $headline = trim( $headline );
+
+        // Word-boundary-aware truncation — never cut mid-word
+        $hl_len = function_exists( 'mb_strlen' ) ? mb_strlen( $headline, 'UTF-8' ) : strlen( $headline );
+        if ( $hl_len > 60 ) {
+            // Take first 60 chars then back off to the last whitespace
+            $truncated = function_exists( 'mb_substr' )
+                ? mb_substr( $headline, 0, 60, 'UTF-8' )
+                : substr( $headline, 0, 60 );
+            $last_space = function_exists( 'mb_strrpos' )
+                ? mb_strrpos( $truncated, ' ', 0, 'UTF-8' )
+                : strrpos( $truncated, ' ' );
+            if ( $last_space !== false && $last_space > 30 ) {
+                $truncated = function_exists( 'mb_substr' )
+                    ? mb_substr( $truncated, 0, $last_space, 'UTF-8' )
+                    : substr( $truncated, 0, $last_space );
+            }
+            $headline = rtrim( $truncated, " .—-,:;" );
+        }
+
         if ( $headline === '' ) {
             $headline = ucwords( $subject );
         }
@@ -577,6 +688,11 @@ class AI_Image_Generator {
         $provider = $settings['branding_provider'] ?? '';
         if ( empty( $provider ) ) return [];
 
+        // v1.5.216.9 — text_overlay defaults to true (existing behavior). The
+        // saved option is null/empty for users who haven't seen the new toggle
+        // yet → ?? '1' keeps backward compat.
+        $text_overlay_raw = $settings['branding_text_overlay'] ?? '1';
+
         return [
             'provider'        => $provider,
             'api_key'         => $settings['branding_api_key'] ?? '',
@@ -587,6 +703,7 @@ class AI_Image_Generator {
             'color_secondary' => $settings['branding_color_secondary'] ?? '',
             'color_accent'    => $settings['branding_color_accent'] ?? '',
             'negative_prompt' => $settings['branding_negative_prompt'] ?? '',
+            'text_overlay'    => (bool) (int) $text_overlay_raw,
         ];
     }
 }
