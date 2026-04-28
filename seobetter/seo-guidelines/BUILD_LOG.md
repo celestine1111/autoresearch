@@ -19,7 +19,7 @@
 ## v1.5.216.5 — Verbose path tracing for set_featured_image + AI_Image_Generator
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `1732f09`
 
 ### Why this ships
 
