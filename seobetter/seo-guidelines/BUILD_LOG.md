@@ -19,7 +19,7 @@
 ## v1.5.216.1 — Settings page text cleanup + AI Image Provider trim to 3 options
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `16a7bf9`
 
 ### Why this ships
 
