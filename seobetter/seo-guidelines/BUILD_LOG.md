@@ -7,12 +7,108 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-27 (v1.5.215.1)
+> **Last updated:** 2026-04-27 (v1.5.216)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216 — BYOK-only free tier + Quick Picks rewrite + revenue-first launch strategy
+
+**Date:** 2026-04-27
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben raised a budget concern at the right time: "I'm paying for OpenRouter + Firecrawl + Serper. If I get 5,000 free installs, I can't afford $2K/mo cost. Is there another way to generate revenue first?"
+
+After research on freemium WP plugin patterns + AI tool conversion benchmarks, the answer is: yes — switch the free tier from "5 Cloud articles/month" (open-ended cost exposure) to BYOK-only (Yoast / RankMath / AIOSEO model). Owner pays $0 for free-tier article generation. Users connect their own AI provider key and pay their provider directly. Free tier remains genuinely useful (full SEO scoring, schema, GEO analyzer, all infrastructure tools) — just paid AI generation requires either BYOK or Pro upgrade.
+
+This caps owner cost at the fixed ~$50/mo infrastructure spend (Firecrawl + Vercel + misc) regardless of install count. Removes the $2K/mo nightmare scenario at scale.
+
+Plus: revenue-first launch sequencing. Don't list on WP.org until AFTER 20 paying beta users + AppSumo cash injection lands. First-20-users playbook documented (8 channels, no Twitter network required).
+
+### Added / Changed / Fixed
+
+- **`License_Manager::can_generate()` rewritten — BYOK or Pro required for generation** — `includes/License_Manager.php` line **~185**
+  - Pre-fix: free tier had 5 Cloud articles/month with monthly quota tracking. Created open-ended cost exposure at scale.
+  - Now: free tier requires BYOK (any provider in AI_Provider_Manager). Pro tier has unlimited Cloud. No middle ground (no "5 free Cloud articles" anymore).
+  - Error message when free user tries to generate without BYOK: "Free tier requires you to connect your own AI API key (OpenRouter / Anthropic / OpenAI / Gemini / Groq) — you pay your provider directly, no SEOBetter Cloud cost. Or upgrade to Pro ($39/mo) for Cloud generation included."
+  - Verify: `grep -n "Free tier requires you to connect" seobetter/includes/License_Manager.php`
+
+- **`AI_Provider_Manager::QUICK_PICKS` rewritten — corrected costs + new defaults** — `includes/AI_Provider_Manager.php` line **~250**
+  - Pre-fix: cost estimates were 5-10× off (said Sonnet 4.6 was $0.04/article — actual is $0.08-0.31). Recommended default was Anthropic-direct which has payment friction for international users (Anthropic Max plan does NOT include API access).
+  - Now: 4 picks reflecting late-2025 reality —
+    - 🌍 **Recommended (Most Flexible)**: OpenRouter → Claude Haiku 4.5 (~$0.02/article) — single key for 100+ models, intl payment friendly, auto-failover
+    - 💰 **Best Value**: GPT-4.1 Mini (~$0.01/article) — 90% of GPT-4.1 quality at 25% cost
+    - 🥇 **Premium Quality**: Claude Sonnet 4.6 (~$0.08/article) — best for pillar pages
+    - 🆓 **True Free**: Gemini 2.5 Flash (FREE 1,500/day on AI Studio)
+  - Verify: `grep -n "Recommended (Most Flexible)" seobetter/includes/AI_Provider_Manager.php`
+
+- **Settings → AI generation source card rewritten** — `admin/views/settings.php` lines **~184-260**
+  - Removed Cloud quota meter UI (no more monthly quota on free tier)
+  - Free user without BYOK now sees explicit warning card: "Article generation is not configured yet — connect your own AI provider below or upgrade to Pro"
+  - Pro upsell card refreshed to position Cloud generation as the Pro value prop ("50 Cloud articles/month — no API keys needed, ever")
+  - Verify: `grep -n "Article generation is not configured" seobetter/admin/views/settings.php`
+
+- **Dashboard FREE list + Pro card refreshed** — `admin/views/dashboard.php`
+  - FREE list now leads with "Unlimited AI article generation with your own API key (BYOK — pay your provider directly, ~$0.01-$0.08 per article)" — no monthly quota
+  - PRO card leads with "50 Cloud articles/month — no API keys needed, ever (this IS the Pro value prop — skip the BYOK setup, just generate)" + "Premium tier LLM (Claude Sonnet 4.6) for content generation"
+  - Verify: `grep -n "this IS the Pro value prop" seobetter/admin/views/dashboard.php`
+
+- **`pro-plan-pricing.md` §2 Free Tier rewritten** — BYOK-only model documented
+  - Owner cost at 5,000 installs: $0 variable + $50/mo fixed = **$50/mo total** regardless of install count
+  - Cloud articles deferred to Phase 6 (post-AppSumo, only if MRR comfortably covers)
+
+- **`pro-plan-pricing.md` §7 Launch Phases — revenue-first sequencing**
+  - Old: Phase 0 → Freemius infra → WP.org → AppSumo → MRR scale (WP.org-first risked open-ended free-tier costs before revenue)
+  - New: Phase 0 → **Phase 1 beta (20 paying users at $99/yr founder pricing)** → Freemius → **AppSumo cash injection** → WP.org listing AFTER cash lands → MRR scale → Cloud articles re-introduced in Phase 6 if MRR sustains
+  - AppSumo LTD raised to $169 (from $149) — better margin given premium config costs
+
+- **`pro-plan-pricing.md` §7B First-20-Users Playbook — NEW SECTION**
+  - 8 distribution channels for solo WP plugin founders WITHOUT a Twitter network:
+    1. WordPress Facebook groups (highest ROI for WP audience)
+    2. Reddit (r/SEO, r/Blogging, r/WordPress, r/IndieHackers, r/SaaS)
+    3. Cold email to existing SEO bloggers (free Pro for review)
+    4. IndieHackers + Product Hunt soft launch
+    5. Paid Reddit ads ($50-100 budget)
+    6. WordPress meetup organizers (warm intros)
+    7. LinkedIn outreach (B2B WordPress audience)
+    8. Niche SEO Slack/Discord communities
+  - Each channel: realistic conversion estimate, cost, expected timeline
+  - Target: 20 paying beta users at $99/yr = $1,980 cash + testimonials for AppSumo application
+
+### Files touched
+
+- `includes/License_Manager.php` — can_generate() rewritten
+- `includes/AI_Provider_Manager.php` — QUICK_PICKS rewritten with corrected costs
+- `admin/views/settings.php` — AI source card rewritten for BYOK-only model
+- `admin/views/dashboard.php` — FREE list + Pro card refreshed
+- `seobetter.php` — version bump to 1.5.216
+- `seo-guidelines/BUILD_LOG.md` — this entry
+- `seo-guidelines/pro-plan-pricing.md` — §2 BYOK-only free tier + §7 revenue-first phases + §7B first-20-users playbook
+
+### Verified by user
+
+- **UNTESTED** — install zip:
+  1. Free tier without BYOK → generation blocked with clear error message linking to BYOK section + Pro upgrade
+  2. Free tier with BYOK → unlimited generation through user's provider
+  3. Settings → Quick Picks shows OpenRouter → Haiku as Recommended
+  4. Dashboard FREE list shows BYOK-only language; PRO card emphasizes Cloud as the value prop
+
+### Strategic note (for resume)
+
+The new launch sequence is:
+1. Beta with 20 paying users via Facebook groups + Reddit + cold email (week 1-4) → $1,980+ MRR
+2. Apply to AppSumo with testimonials (week 5-6)
+3. AppSumo launch → $35K-60K cash injection (month 2-3)
+4. Submit to WP.org with proven Pro conversion (month 4-5)
+5. Add free Cloud articles only if MRR > $8K stable (month 12+)
+
+Owner cost during all phases: ~$50/mo fixed + ~$8/mo per Pro user (covered by Pro revenue).
 
 ---
 

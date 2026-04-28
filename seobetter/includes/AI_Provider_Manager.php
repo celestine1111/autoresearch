@@ -247,24 +247,46 @@ class AI_Provider_Manager {
      * form. Each preset is a one-click selection of provider + model that
      * sets the form fields via JS.
      */
+    /**
+     * v1.5.216 — Quick Picks rewritten with correct 2025-2026 pricing and a
+     * different recommended default. Pre-fix: cost estimates were 5-10× off
+     * (said Sonnet 4.6 was $0.04/article — actual is ~$0.08-0.31 depending on
+     * token count) and Anthropic-direct was the recommended default which
+     * created payment friction for international users (Anthropic Max plan
+     * does NOT include API access; users have to set up separate billing).
+     *
+     * New defaults reflect:
+     *   - OpenRouter recommended for global accessibility (single key, 100+
+     *     models, crypto+intl payment, auto-failover)
+     *   - GPT-4.1 Mini as the value pick (90% of GPT-4.1 quality at 25% cost)
+     *   - Claude Sonnet 4.6 reserved for premium pillar pages
+     *   - Gemini 2.5 Flash free tier kept for true zero-cost path
+     */
     const QUICK_PICKS = [
-        'best' => [
-            'label'       => '🥇 Best Quality (Recommended)',
-            'description' => 'Claude Sonnet 4.6 — highest accuracy, best multilingual, follows PLACES RULES reliably. ~$0.04 per article.',
-            'provider'    => 'anthropic',
-            'model'       => 'claude-sonnet-4-6',
+        'recommended' => [
+            'label'       => '🌍 Recommended (Most Flexible)',
+            'description' => 'OpenRouter → Claude Haiku 4.5 — single key for 100+ models, intl payment friendly, auto-failover. ~$0.02 per article on cheap mode. Best default for most users worldwide.',
+            'provider'    => 'openrouter',
+            'model'       => 'anthropic/claude-haiku-4-5',
             'badge_color' => '#f59e0b',
         ],
         'value' => [
-            'label'       => '💰 Best Value',
-            'description' => 'Claude Haiku 4.5 — 80% of Sonnet quality at 20% of the cost. ~$0.008 per article.',
-            'provider'    => 'anthropic',
-            'model'       => 'claude-haiku-4-5-20251001',
+            'label'       => '💰 Best Value (Cheapest Quality)',
+            'description' => 'GPT-4.1 Mini — 90% of GPT-4.1 quality at 25% of the cost. Strong instruction-following + JSON reliability. ~$0.01 per article.',
+            'provider'    => 'openai',
+            'model'       => 'gpt-4.1-mini',
             'badge_color' => '#3b82f6',
         ],
+        'premium' => [
+            'label'       => '🥇 Premium Quality (Pillar Pages)',
+            'description' => 'Claude Sonnet 4.6 — best instruction-following, best multilingual, strongest on long-form coherence. ~$0.08 per article. Pick this for pillar pages where quality matters more than cost.',
+            'provider'    => 'anthropic',
+            'model'       => 'claude-sonnet-4-6',
+            'badge_color' => '#7c3aed',
+        ],
         'free' => [
-            'label'       => '🆓 Free Tier',
-            'description' => 'Google Gemini 2.5 Flash — FREE 1,500 requests/day on AI Studio. Weaker on strict rules — pair with Places waterfall for best results.',
+            'label'       => '🆓 True Free (Zero Cost)',
+            'description' => 'Google Gemini 2.5 Flash — FREE 1,500 requests/day on AI Studio. Globally available (no card required). Weaker on strict rules — pair with Places waterfall for best results.',
             'provider'    => 'gemini',
             'model'       => 'gemini-2.5-flash',
             'badge_color' => '#22c55e',

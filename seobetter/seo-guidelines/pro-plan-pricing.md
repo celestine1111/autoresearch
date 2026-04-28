@@ -28,33 +28,56 @@
 
 ---
 
-## 2. Free Tier (WordPress.org Listing)
+## 2. Free Tier (WordPress.org Listing) — BYOK-only model (v1.5.216)
 
 **Goal:** drive organic discovery via WP.org directory. Let users prove the plugin works before asking for money. No time-limited trial. Free tier works forever.
 
-**What's free:**
-- ✅ Unlimited articles with BYOK (user provides their own OpenAI / Claude / OpenRouter key — user pays their own token costs; zero marginal cost to us)
+**Critical decision (v1.5.216):** Free tier is **BYOK-only** — no SEOBetter Cloud articles included. Users connect their own AI provider key (OpenRouter / Anthropic / OpenAI / Gemini / Groq / Ollama) and pay their provider directly per token. Plugin owner pays $0 for free-tier article generation.
+
+**Why this matters financially:** A "5 free Cloud articles/month" model created open-ended exposure at scale (5,000 installs × premium config = $2,000+/mo). Solo founders can't sustain that pre-launch. The BYOK-only model caps owner cost at the fixed $50/mo infrastructure spend (Firecrawl + Vercel + misc) regardless of install count. Mirrors Yoast / RankMath / AIOSEO pattern: full free SEO tooling, paid AI generation. WP.org-compliant + financially sustainable.
+
+Cloud articles will be re-introduced as a goodwill bonus (~3/mo) once Pro MRR comfortably covers infra costs — see §7 Phase 5 (post-AppSumo).
+
+**What's free (BYOK-powered):**
+- ✅ **Unlimited articles via BYOK** — user provides their own OpenAI / Anthropic / OpenRouter / Gemini / Groq key. They pay their provider directly (~$0.01–$0.08 per article depending on model). Zero marginal cost to us.
+- ✅ Full GEO Analyzer (score ring + rubric breakdown — runs locally, zero cost)
+- ✅ Full schema generation: Article + Recipe + Organization + Person + BreadcrumbList + FAQPage (when applicable)
 - ✅ 3 content types: Blog Post, How-To Guide, Listicle
-- ✅ Basic GEO Analyzer (score ring + rubric breakdown, no fix buttons)
-- ✅ Basic schema (Article + FAQ only)
-- ✅ 1 AI provider connection at a time
-- ✅ OpenStreetMap places only (Tier 1 of the waterfall)
-- ✅ Picsum stock images (generic placeholder)
-- ✅ Auto-suggest secondary + LSI keywords
-- ✅ Humanizer banned-word check
+- ✅ 1 AI provider connection at a time (BYOK)
+- ✅ OpenStreetMap places only (Tier 1 of the Places waterfall)
+- ✅ Pexels stock images via SEOBetter Cloud free pool (no Pexels key needed — costs the owner $0 via Pexels free tier 20K/mo)
+- ✅ Jina Reader fallback for web research (free, no key)
+- ✅ Auto-suggest secondary + LSI keywords (Google Suggest + Wikipedia + Reddit — all free)
+- ✅ Humanizer banned-word check (runs locally)
 - ✅ "Powered by SEOBetter" footer link (removable in Pro)
 
-**What's locked (prompts upgrade):**
+**What requires Pro (the upgrade story):**
+- ❌ **SEOBetter Cloud generation** — generate without managing API keys. THIS IS THE PRO VALUE PROP. Premium-tier LLM (Claude Sonnet 4.6) for content generation, mini for extractions.
 - ❌ 18 other content types (Buying Guide, Comparison, Review, Ultimate Guide, Recipe, Case Study, Interview, Tech Article, White Paper, Opinion, Press Release, Personal Essay, Glossary, Scholarly, Sponsored, Live Blog, FAQ Page, News Article)
 - ❌ Analyze & Improve inject buttons (citations, quotes, tables, statistics, freshness)
 - ❌ Places waterfall Tier 0 (Perplexity Sonar Pro), Tier 2 (Foursquare), Tier 3 (HERE), Tier 4 (Google Places)
-- ❌ AI Featured Image with branding (4 providers)
+- ❌ AI Featured Image with branding (5 providers including Nano Banana via OpenRouter)
+- ❌ Firecrawl deep research (10× citation density vs Jina Reader)
+- ❌ Serper SERP intelligence (competitor gap analysis, audience inference via LLM)
 - ❌ Brave Search (Pro research source)
 - ❌ Country localization (80+ country APIs)
-- ❌ AIOSEO / Yoast / RankMath auto-population
+- ❌ AIOSEO / Yoast / RankMath auto-population (focus keyword, meta, OG, schema sync)
 - ❌ LocalBusiness + HowTo + ItemList schema
+- ❌ Recipe Article wrapper + Speakable voice schema (v1.5.213)
+- ❌ Auto-translate for 29 languages (cross-script keywords + headings + meta — v1.5.212.x)
 - ❌ Bulk CSV import
 - ❌ Priority support
+
+**Free-tier financial model at 5,000 installs:**
+- Article generation cost to owner: **$0** (users pay their own provider via BYOK)
+- Fixed infrastructure cost: ~$50/mo (Firecrawl Standard $26 + Vercel Pro $20 + misc)
+- Variable cost from free users: $0
+- **Total monthly cost regardless of install count: ~$50/mo**
+
+Compare to old "5 free Cloud articles/mo" model:
+- 5,000 installs × 30% active × 5 articles/mo × $0.013 cheap config = ~$100/mo additional
+- 5,000 installs × 30% active × 5 articles/mo × $0.10 premium config = ~$750/mo additional
+- BYOK model removes that variable entirely.
 
 ---
 
@@ -194,7 +217,13 @@ Plus:
 
 ---
 
-## 7. Launch Phases
+## 7. Launch Phases — Revenue-First Sequencing (v1.5.216 update)
+
+**Critical strategy decision (v1.5.216):** Instead of WP.org-first (which exposes a solo founder to open-ended free-tier API costs at scale), launch revenue-first. Get 20 paying beta users → AppSumo cash injection → THEN list on WP.org with proven Pro conversion.
+
+The financial logic:
+- WP.org-first risks: 5,000 free installs × open-ended Cloud quota = $500–$2,000/mo cost before any revenue lands
+- Revenue-first benefits: $0 owner cost during validation phase (BYOK-only free tier per §2), then $30K-60K AppSumo cash funds 12+ months of infra
 
 ### Phase 0 — Free validation (current state, no code gates yet)
 - All features unlocked for free internal testing
@@ -202,30 +231,141 @@ Plus:
 - Measure actual GEO scores, AIOSEO scores, AI citation pickup (Perplexity, ChatGPT, Gemini) over 30 days
 - Iterate plugin until Article 1/2/3 all land at 90+
 
-### Phase 1 — Freemius infrastructure (weeks 1-2 after Phase 0 passes)
+### Phase 1 — Beta validation with 20 founder-tier paying users (week 1-4)
+
+**Goal:** prove willingness-to-pay BEFORE listing publicly. Target $400-$1,500 MRR with 20-30 beta users.
+
+**Pricing for beta:**
+- $99/year ("Founder pricing — locked forever, never raises")
+- Or $49 for 6 months
+- Includes lifetime grandfathered Pro access
+- 50% off normal price ($349/yr) = explicit discount in exchange for testimonial + feedback
+
+**Distribution channels (no Twitter network required — see §7B First-20-Users Playbook below):**
+- WordPress Facebook groups (free)
+- Reddit r/SEO, r/Blogging, r/WordPress, r/IndieHackers (free)
+- WordPress meetup organisers (warm intros)
+- Paid Reddit ads ($50-100 budget)
+- Cold email to existing SEO bloggers (offer free Pro in exchange for honest review)
+- IndieHackers post + product update
+- LinkedIn outreach (more responsive than X for B2B WordPress audience)
+
+**Success gate:** at least 10 paying users + 5 published reviews/case studies. Don't proceed to Phase 2 until this lands.
+
+**Owner cost during Phase 1:** ~$50/mo fixed infra. Beta users on Pro pay ~$8/mo each in API costs (covered by their $99/yr).
+
+### Phase 2 — Freemius infrastructure (weeks 5-6)
 - Integrate [Freemius SDK](https://freemius.com/wordpress/) (2-3 days of work)
 - Freemius handles: license keys, subscription billing, trial management, WP.org free-variant packaging, refunds, analytics dashboard
 - Build free/pro feature gates per §2 and §3
 - Wire contextual upgrade CTAs at the 7 friction points (see §8)
 - Set up [seobetter.com](https://seobetter.com) pricing page with monthly/annual toggle
+- Beta users migrated onto Freemius as grandfathered Pro accounts
 
-### Phase 2 — WordPress.org directory submission (week 3)
+### Phase 3 — AppSumo Lifetime Deal launch (week 7-14)
+
+**Critical step.** This is where solo-founder cash flow gets fixed.
+
+- Apply to AppSumo with a **$169 LTD** for first 500 customers (raised from earlier $149 — better margin given premium config costs)
+- Application requires: working plugin demo, 5-10 testimonials from Phase 1 beta, comparison vs competitors, screenshots, founder video pitch
+- AppSumo approval: 30-60 days typically
+- 7-10 day launch promotion drives the buyer rush
+- AppSumo takes ~30% commission
+- **Expected outcome: 300-500 lifetime sales × $169 = $50K-$85K gross → $35K-$60K net to owner**
+- Cash funds: 12+ months of infra at any reasonable scale
+- Plus 300-500 evangelist users who leave 5-star reviews on WP.org BEFORE the directory submission goes live
+
+### Phase 4 — WordPress.org directory submission (month 4-5, AFTER AppSumo cash lands)
 - Scrub free tier for WP.org guideline compliance (no hardcoded external calls, proper escaping, GPL2+, etc)
 - Submit to directory (approval: 7-14 days)
 - Build the directory listing: hero video, 8 screenshots, benefit-led description, FAQ
 - Prepare 3 launch blog posts on seobetter.com for content traffic
+- Free tier is BYOK-only at this point (per §2) — zero owner cost regardless of install count
 
-### Phase 3 — AppSumo Lifetime Deal launch (month 2)
-- Apply to AppSumo with a **$149 LTD** for first 500 customers
-- Commit to 3-month AppSumo exclusivity window per their terms
-- Expected outcome: 300-800 lifetime sales → **$45,000-$120,000 upfront cash**
-- 500 evangelists leave reviews on AppSumo + WP.org, bootstrapping social proof
-
-### Phase 4 — MRR scale (months 3-6)
+### Phase 5 — MRR scale (months 5-12)
 - WordPress.org directory drives organic free installs (~50-200/day post-launch)
 - SEO content on seobetter.com targets plugin comparison keywords ("best AI content WordPress plugin 2026", "Yoast vs SEOBetter", "RankMath vs SEOBetter") — dog-fooding the product
 - Retarget free installs via email nurture (day 1, 3, 7, 14, 21, 30, 45)
-- Growth target: **$5k MRR by month 6** at conservative 8% conversion on ~1,500 installs
+- Growth target: **$10K MRR by month 12** at conservative 4% conversion on ~6,000 cumulative installs
+
+### Phase 6 — Add free Cloud articles (month 12+, optional, only if MRR comfortably covers it)
+- Once MRR > $8K/mo and stable, add "3 free Cloud articles/month" as a goodwill bonus on free tier
+- Cost: ~$60/mo at 5,000 installs × 30% activation × 3 articles × $0.013 cheap config
+- Improves free-tier user acquisition (more generous tier = better WP.org reviews + more installs)
+- Reverse if churn spikes or cost outpaces growth
+
+---
+
+## 7B. First-20-Paying-Users Playbook (no network required)
+
+The fear: "I don't have 20 Twitter friends, how do I get 20 paying beta users?"
+The answer: you don't need Twitter. Here are 8 proven channels for solo WordPress plugin founders, ranked by realistic conversion rate × effort.
+
+### Channel 1: WordPress Facebook Groups (highest ROI for WP audience)
+- **Groups to join (free, immediate):**
+  - "WordPress Help" (200K+ members)
+  - "Advanced WordPress" (40K+, more technical)
+  - "WordPress Bloggers Community" (50K+, target audience)
+  - "WP & SEO" (15K+, SEO-aware)
+  - "WordPress Speed Up Group" (10K+, performance-focused)
+- **Approach:** don't pitch immediately. Spend 1 week answering 5-10 questions in each group. THEN post a "I'm building X for $99/yr lifetime founder pricing — looking for 20 beta testers, here's a 2-min demo video" post.
+- **Expected:** 5-10 paying users per active group across 2 weeks of soft engagement.
+- **Cost:** $0.
+
+### Channel 2: Reddit (r/SEO, r/Blogging, r/WordPress, r/IndieHackers)
+- **Subreddits:** r/SEO (1.2M), r/Blogging (240K), r/WordPress (200K), r/IndieHackers (100K), r/SaaS (45K)
+- **Approach:** post a transparent "I built this and need 20 beta users" post in r/IndieHackers (most receptive). For r/SEO and r/WordPress, frame as "Looking for SEO bloggers to test a new plugin — $99/yr founder pricing".
+- **Caveat:** r/SEO and r/WordPress are STRICT on self-promotion. Read each subreddit's rules. r/IndieHackers and r/SaaS are friendly to founder pitches.
+- **Expected:** 3-8 paying users per post if positioned right.
+- **Cost:** $0.
+
+### Channel 3: Cold email to existing SEO bloggers (offer free Pro in exchange for review)
+- **Targets:** find 50-100 SEO/blogging YouTube creators or bloggers with ≤5K followers (smaller audience = more responsive). Use "AI SEO" / "ChatGPT SEO" / "GEO optimization" search terms.
+- **Email template:**
+  > Hi {name}, I'm a solo founder building SEOBetter — a WordPress plugin that writes articles AI engines (Perplexity, ChatGPT) actually cite. I'm offering free lifetime Pro access ($349/yr value) to 20 SEO content creators in exchange for: (a) honest 5-min trial, (b) one tweet/post if you like it, (c) optional 60-second testimonial. No catch, no commitment beyond trying it. Reply if interested and I'll send your license key. — Ben
+- **Expected:** 5-15 reviewers from 100 emails (5-15% reply rate).
+- **Cost:** $0 + 100 email outreach time (~3 hours).
+
+### Channel 4: IndieHackers + Product Hunt soft launch
+- **IndieHackers:** post in "Show IH" with "I built X, here's the code, here's the pricing, here's what I'm looking for"
+- **Product Hunt:** "Coming Soon" page → email subscribers → soft launch on a Tuesday (highest traffic day)
+- **Expected:** 200-500 visitors → 5-15 paying users
+- **Cost:** $0.
+
+### Channel 5: Paid Reddit ads ($50-100 budget)
+- **Best subreddits to target:** r/SEO, r/Entrepreneur, r/Blogging, r/Marketing
+- **Ad copy:** "AI articles your readers see in ChatGPT/Perplexity. WordPress plugin. $99/yr lifetime founder pricing → first 20 only."
+- **Expected:** at $0.50 CPC, $50 = 100 visitors → 2-5 paying users.
+- **Cost:** $50-100.
+
+### Channel 6: WordPress meetup organizers (warm intros, slow-burn but high-quality)
+- **Find via:** [WordPress.org/meetups/](https://www.meetup.com/topics/wordpress/) — there are ~600 active WordPress meetups worldwide
+- **Approach:** email meetup organizers offering free Pro accounts for their members + 10-min lightning talk slot
+- **Expected:** 1-3 organisers say yes, each → 5-10 members try it → 1-3 paying users per meetup
+- **Cost:** $0 + email outreach time.
+
+### Channel 7: LinkedIn outreach (B2B WordPress audience)
+- **Search:** "WordPress consultant", "SEO consultant", "content marketing manager" + 1st degree connections
+- **Approach:** message warm contacts asking if they'd test a tool you're building. Same email template as Channel 3.
+- **Expected:** 5-10 paying users from 50-100 LinkedIn DMs (10% conversion is normal for warm 1st degree)
+- **Cost:** $0.
+
+### Channel 8: Niche SEO Slack/Discord communities
+- **Communities:** Online Geniuses (Slack, 30K+), SEO Mavericks (Discord), Traffic Think Tank (Slack, paid but high-quality)
+- **Approach:** participate genuinely for 1 week, then post the founder offer
+- **Expected:** 2-5 paying users per active community.
+- **Cost:** $0 (free communities) to $99/yr (Traffic Think Tank — but the audience converts at 5-10× rate).
+
+### Aggregate target
+
+If you hit 3-4 of these channels in the first 2 weeks, **20 paying users at $99/yr = $1,980 cash + grandfathered Pro account base** is realistic. That funds 3-4 months of infra and gives you the testimonials needed for AppSumo Phase 3.
+
+### What NOT to do
+- ❌ **Don't pay for Twitter influencer shoutouts.** The audience is wrong (consumer, not WP).
+- ❌ **Don't run Google Ads early.** $5+ CPCs for "WordPress SEO plugin" — burns cash fast pre-conversion.
+- ❌ **Don't do Facebook ads at this stage.** Targeting too imprecise; better used at Phase 4 retargeting.
+- ❌ **Don't build a waiting list / coming soon page first.** Vanity metric. Just sell.
+- ❌ **Don't discount more than 50% off.** $99/yr beta vs $349/yr regular = anchored as a deal. Below $99 signals desperation.
 
 ---
 

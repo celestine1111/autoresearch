@@ -183,27 +183,38 @@ class License_Manager {
      * Check if user can generate content (has remaining cloud credits or own API key).
      */
     public static function can_generate(): array {
-        // If user has their own API key configured, always allow
+        // v1.5.216 — Free tier is now BYOK-only. Cloud generation requires Pro.
+        // Pre-fix: free tier had 5 Cloud articles/month, which created open-ended
+        // financial exposure for the plugin owner at scale (5,000 installs ×
+        // premium config = $2,000+/mo). Solo founders can't sustain that pre-
+        // launch. New model: free tier is fully functional via BYOK (user's
+        // own OpenRouter/Anthropic/OpenAI/Gemini key — they pay their provider
+        // directly, plugin owner pays $0). Pro tier ($39/mo) is the Cloud value
+        // prop. Mirrors Yoast/RankMath/AIOSEO pattern: full free SEO tooling,
+        // paid AI generation. WP.org-compliant + financially sustainable.
+        // Cloud articles will be re-introduced as a goodwill bonus (3/mo) once
+        // Pro MRR comfortably covers infra costs — see pro-plan-pricing.md §7
+        // Phase 5 (post-AppSumo).
+
+        // BYOK path: any user (free or Pro) with their own provider key
+        // generates unlimited articles paying their provider directly.
         $provider = AI_Provider_Manager::get_active_provider();
         if ( $provider ) {
             return [ 'allowed' => true, 'source' => 'byok', 'remaining' => 'unlimited' ];
         }
 
-        // Cloud generation: check monthly limit
-        $usage = self::get_monthly_usage();
-        $limit = self::is_pro() ? PHP_INT_MAX : self::FREE_MONTHLY_LIMIT;
-        $remaining = max( 0, $limit - $usage );
-
-        if ( $remaining <= 0 ) {
-            return [
-                'allowed'   => false,
-                'source'    => 'cloud',
-                'remaining' => 0,
-                'message'   => 'Monthly free limit reached (' . self::FREE_MONTHLY_LIMIT . ' articles). Connect your own AI API key or upgrade to Pro for unlimited.',
-            ];
+        // Cloud path: Pro only.
+        if ( self::is_pro() ) {
+            return [ 'allowed' => true, 'source' => 'cloud', 'remaining' => 'unlimited' ];
         }
 
-        return [ 'allowed' => true, 'source' => 'cloud', 'remaining' => self::is_pro() ? 'unlimited' : $remaining ];
+        // Free tier without BYOK: deny with upgrade-or-BYOK message.
+        return [
+            'allowed'   => false,
+            'source'    => 'cloud',
+            'remaining' => 0,
+            'message'   => 'Free tier requires you to connect your own AI API key (OpenRouter / Anthropic / OpenAI / Gemini / Groq) — you pay your provider directly, no SEOBetter Cloud cost. Or upgrade to Pro ($39/mo) for Cloud generation included.',
+        ];
     }
 
     /**

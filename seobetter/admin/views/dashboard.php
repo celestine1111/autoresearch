@@ -217,16 +217,16 @@ $avg_geo_color = $avg_geo >= 80 ? '#10b981' : ( $avg_geo >= 60 ? '#f59e0b' : ( $
                     <span class="seobetter-score seobetter-score-good" style="margin-right:6px">FREE</span> Included
                 </h3>
                 <ul style="list-style:none;padding:0;margin:0;font-size:13px;line-height:2.0">
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> AI article generation (<?php echo esc_html( $status['monthly_limit'] ); ?>/month via Cloud, OR unlimited with your own API key)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Unlimited AI article generation with your own API key (BYOK — pay your provider directly, ~$0.01-$0.08 per article depending on model)</li>
                     <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> 3 content types: Blog Post, How-To, Listicle</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> GEO Score — measures AI citability of your content</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Article + Recipe + Organization + Person + BreadcrumbList schema</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> GEO Score — measures AI citability of your content (zero cost, runs locally)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Full schema generation: Article + Recipe + Organization + Person + BreadcrumbList + FAQPage</li>
                     <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> 5 headline variations + auto SEO meta title/description per article</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Auto-suggest secondary &amp; LSI keywords (Google Suggest + Wikipedia)</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Pexels stock images via SEOBetter Cloud (no API key needed)</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Jina Reader fallback for web research</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Auto-suggest secondary &amp; LSI keywords (Google Suggest + Wikipedia + Reddit)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Pexels stock images via SEOBetter Cloud (no Pexels key needed)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Jina Reader fallback for web research (free, no key)</li>
                     <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Topic suggestions + social media content (Twitter / LinkedIn / Instagram)</li>
-                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Connect 1 AI provider (Anthropic / OpenAI / Gemini / OpenRouter / Groq / Ollama)</li>
+                    <li><span style="color:var(--sb-success,#059669);margin-right:8px">&#10003;</span> Connect any AI provider: OpenRouter / Anthropic / OpenAI / Gemini / Groq / Ollama</li>
                 </ul>
             </div>
 
@@ -240,7 +240,8 @@ $avg_geo_color = $avg_geo >= 80 ? '#10b981' : ( $avg_geo >= 60 ? '#f59e0b' : ( $
                     <span class="seobetter-score seobetter-score-good" style="background:var(--sb-primary,#764ba2);color:#fff;margin-right:6px">PRO $39/mo</span> Unlock the rest
                 </h3>
                 <ul style="list-style:none;padding:0;margin:0 0 16px;font-size:13px;line-height:2.0">
-                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>50 Cloud articles/month</strong> on Sonnet-tier LLM (vs 5 on Free)</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>50 Cloud articles/month — no API keys needed</strong> (this IS the Pro value prop — skip the BYOK setup, just generate)</li>
+                    <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Premium tier LLM</strong> — Claude Sonnet 4.6 for content generation, best multilingual + instruction-following</li>
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>All 21 content types</strong> — Recipe, Comparison, Buying Guide, Review, Case Study, Interview, Pillar Guide, etc. (Free: 3 types)</li>
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Firecrawl deep research</strong> — 10× citation density vs free Jina fallback</li>
                     <li><span style="color:var(--sb-primary,#764ba2);margin-right:8px">&#9733;</span> <strong>Serper SERP intelligence</strong> — competitor gap analysis, audience inference</li>

@@ -186,82 +186,61 @@ $settings = get_option( 'seobetter_settings', [] );
         </form>
     </div>
 
-    <!-- v1.5.214 — SEOBetter Cloud (active source + quota meter) -->
+    <!-- v1.5.216 — AI generation source card (rewritten for BYOK-only free tier) -->
     <?php
     $cloud_status = SEOBetter\Cloud_API::check_status();
     $is_byok      = ! empty( $cloud_status['has_own_key'] );
     $is_pro_user  = ! empty( $license_info['is_pro'] );
-    $monthly_used = (int) ( $cloud_status['monthly_used'] ?? 0 );
-    $monthly_limit_raw = $cloud_status['monthly_limit'] ?? 5;
-    $monthly_limit = is_numeric( $monthly_limit_raw ) ? (int) $monthly_limit_raw : 9999;
-    $unlimited     = ! is_numeric( $monthly_limit_raw );
-    $pct           = $unlimited ? 0 : min( 100, (int) ( ( $monthly_used / max( 1, $monthly_limit ) ) * 100 ) );
-    $pct_color     = $pct < 70 ? '#10b981' : ( $pct < 90 ? '#f59e0b' : '#ef4444' );
     ?>
-    <div class="seobetter-card" style="margin-bottom:20px;border-left:4px solid <?php echo $is_byok ? '#3b82f6' : '#8b5cf6'; ?>">
+    <div class="seobetter-card" style="margin-bottom:20px;border-left:4px solid <?php echo $is_byok ? '#3b82f6' : ( $is_pro_user ? '#8b5cf6' : '#ef4444' ); ?>">
         <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-            <span style="font-size:18px"><?php echo $is_byok ? '🔑' : '☁️'; ?></span>
+            <span style="font-size:18px"><?php echo $is_byok ? '🔑' : ( $is_pro_user ? '☁️' : '⚠️' ); ?></span>
             <?php esc_html_e( 'AI generation source', 'seobetter' ); ?>
-            <span style="margin-left:auto;font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:<?php echo $is_byok ? '#3b82f6' : '#8b5cf6'; ?>">
-                <?php echo $is_byok ? esc_html__( 'BYOK ACTIVE', 'seobetter' ) : esc_html__( 'CLOUD ACTIVE', 'seobetter' ); ?>
+            <span style="margin-left:auto;font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:<?php echo $is_byok ? '#3b82f6' : ( $is_pro_user ? '#8b5cf6' : '#ef4444' ); ?>">
+                <?php
+                if ( $is_byok ) echo esc_html__( 'BYOK ACTIVE', 'seobetter' );
+                elseif ( $is_pro_user ) echo esc_html__( 'CLOUD ACTIVE (PRO)', 'seobetter' );
+                else echo esc_html__( 'NOT CONFIGURED', 'seobetter' );
+                ?>
             </span>
         </h2>
-        <p class="description" style="margin-bottom:14px">
-            <?php if ( $is_byok ) : ?>
-                <?php esc_html_e( 'Generation runs through your own connected provider below. SEOBetter Cloud is bypassed — you pay your provider directly per request, and you have unlimited usage.', 'seobetter' ); ?>
-            <?php else : ?>
-                <?php esc_html_e( 'Generation runs through SEOBetter Cloud — our centralized stack handles LLM calls (OpenRouter), web research (Firecrawl), SERP analysis (Serper), and stock images (Pexels). You don\'t need any API keys. Subject to your monthly quota.', 'seobetter' ); ?>
-            <?php endif; ?>
-        </p>
 
-        <?php if ( ! $is_byok ) : ?>
-            <!-- Cloud quota meter -->
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:14px">
-                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-                    <strong style="font-size:13px"><?php esc_html_e( 'This month', 'seobetter' ); ?></strong>
-                    <span style="font-size:13px;color:#64748b">
-                        <?php
-                        if ( $unlimited ) {
-                            echo esc_html( sprintf( __( '%d articles · unlimited (Pro)', 'seobetter' ), $monthly_used ) );
-                        } else {
-                            echo esc_html( sprintf( __( '%d of %d articles', 'seobetter' ), $monthly_used, $monthly_limit ) );
-                        }
-                        ?>
-                    </span>
-                </div>
-                <?php if ( ! $unlimited ) : ?>
-                <div style="height:10px;background:#e5e7eb;border-radius:9999px;overflow:hidden">
-                    <div style="height:100%;width:<?php echo (int) $pct; ?>%;background:<?php echo esc_attr( $pct_color ); ?>;transition:width 0.3s"></div>
-                </div>
-                <p style="margin:8px 0 0 0;font-size:11px;color:#64748b">
-                    <?php
-                    if ( $pct >= 90 ) {
-                        printf( esc_html__( '⚠️ You\'re near the limit. %1$sUpgrade to Pro%2$s for unlimited generations or %3$sconnect your own key%4$s.', 'seobetter' ),
-                            '<a href="https://seobetter.com/pricing" target="_blank">', '</a>',
-                            '<a href="#seobetter-byok-section">', '</a>' );
-                    } elseif ( $pct >= 70 ) {
-                        printf( esc_html__( '%1$sUpgrade to Pro%2$s for unlimited Cloud articles.', 'seobetter' ),
-                            '<a href="https://seobetter.com/pricing" target="_blank">', '</a>' );
-                    } else {
-                        esc_html_e( 'Resets on the 1st of each month. Bring your own key (below) for unlimited generations on Free.', 'seobetter' );
-                    }
-                    ?>
+        <?php if ( $is_byok ) : ?>
+            <p class="description" style="margin-bottom:14px">
+                <?php esc_html_e( 'Article generation runs through your own connected provider below. You pay your AI provider directly per request — unlimited generation, no SEOBetter Cloud cost.', 'seobetter' ); ?>
+            </p>
+        <?php elseif ( $is_pro_user ) : ?>
+            <p class="description" style="margin-bottom:14px">
+                <?php esc_html_e( 'Pro tier active — generation runs through SEOBetter Cloud (centralized OpenRouter + Firecrawl + Serper + Pexels stack). You don\'t need any API keys. Optional: connect your own key below to bypass the Cloud and run unlimited via your own provider.', 'seobetter' ); ?>
+            </p>
+        <?php else : ?>
+            <!-- Free tier without BYOK: BLOCKING — user must connect a provider OR upgrade to Pro -->
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;margin-bottom:14px">
+                <h4 style="margin:0 0 8px 0;color:#991b1b;font-size:14px">
+                    <?php esc_html_e( '⚠ Article generation is not configured yet', 'seobetter' ); ?>
+                </h4>
+                <p style="margin:0 0 10px 0;font-size:13px;color:#7f1d1d;line-height:1.55">
+                    <?php esc_html_e( 'SEOBetter\'s free tier requires you to connect your own AI provider (OpenRouter / Anthropic / OpenAI / Gemini / Groq) below. You pay your provider directly — usually $0.01-$0.08 per article — and the plugin does the SEO + schema + GEO work for free.', 'seobetter' ); ?>
                 </p>
-                <?php endif; ?>
+                <p style="margin:0;font-size:13px;color:#7f1d1d;line-height:1.55">
+                    <?php esc_html_e( 'Don\'t want to manage API keys?', 'seobetter' ); ?>
+                    <a href="https://seobetter.com/pricing" target="_blank" style="color:#991b1b;font-weight:600;text-decoration:underline"><?php esc_html_e( 'Upgrade to Pro ($39/mo) →', 'seobetter' ); ?></a>
+                    <?php esc_html_e( 'and we handle generation through SEOBetter Cloud — no keys, just generate.', 'seobetter' ); ?>
+                </p>
             </div>
         <?php endif; ?>
 
-        <!-- What Pro Cloud includes (loss-aversion bundled card per pro-plan-pricing.md §8) -->
+        <!-- Pro upsell card (free tier only — refreshed v1.5.216 for BYOK-free model) -->
         <?php if ( ! $is_pro_user ) : ?>
         <div style="background:linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%);border:1px solid #ddd6fe;border-radius:8px;padding:14px 18px">
-            <h4 style="margin:0 0 10px 0;color:#5b21b6"><?php esc_html_e( 'What SEOBetter Pro Cloud includes — $39/month', 'seobetter' ); ?></h4>
+            <h4 style="margin:0 0 10px 0;color:#5b21b6"><?php esc_html_e( 'What Pro adds — $39/month', 'seobetter' ); ?></h4>
             <ul style="margin:0 0 12px 0;padding:0;list-style:none;font-size:13px;color:#4c1d95">
-                <li style="margin-bottom:5px">✓ <?php esc_html_e( '50 Cloud-generated articles/month (Sonnet-tier LLM, no API keys to manage)', 'seobetter' ); ?></li>
-                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'Firecrawl deep research on every article (10× citation density vs free Jina fallback)', 'seobetter' ); ?></li>
-                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'Serper SERP intelligence — competitor gap analysis, audience inference', 'seobetter' ); ?></li>
-                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'All 21 content types (vs 3 on Free) + Recipe Article wrapper + Speakable voice schema', 'seobetter' ); ?></li>
-                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'AI featured image (DALL-E 3 / FLUX Pro / Gemini Nano Banana)', 'seobetter' ); ?></li>
-                <li>✓ <?php esc_html_e( 'Auto-translates keywords + headings for non-English articles (29 languages)', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( '50 Cloud-generated articles/month — no API keys to manage, ever', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'Premium tier LLM (Claude Sonnet 4.6) — best instruction-following + multilingual', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'Firecrawl deep research (10× citation density) + Serper SERP intelligence', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'All 21 content types + Recipe Article wrapper + Speakable voice schema', 'seobetter' ); ?></li>
+                <li style="margin-bottom:5px">✓ <?php esc_html_e( 'AI featured image (DALL-E 3 / FLUX Pro / Nano Banana) + 5 schema blocks', 'seobetter' ); ?></li>
+                <li>✓ <?php esc_html_e( 'Or: keep BYOK active and use Pro for the advanced features only', 'seobetter' ); ?></li>
             </ul>
             <a href="https://seobetter.com/pricing" target="_blank" class="button button-primary"><?php esc_html_e( 'See Pro plans →', 'seobetter' ); ?></a>
         </div>
