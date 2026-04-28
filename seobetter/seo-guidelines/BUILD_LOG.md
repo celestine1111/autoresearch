@@ -19,7 +19,7 @@
 ## v1.5.216.8 — Banner-design featured image with controlled headline rendering
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `8eba189`
 
 ### Why this ships
 
