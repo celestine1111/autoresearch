@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.9
+ * Version: 1.5.216.10
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.9' );
+define( 'SEOBETTER_VERSION', '1.5.216.10' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4060,7 +4060,13 @@ final class SEOBetter {
         // Without this crop, WP would generate intermediate sizes from the
         // square original and themes would render the featured image as a
         // square that gets cut off in social shares (1.91:1 OG aspect).
-        $this->enforce_featured_aspect_169( $image_id );
+        // v1.5.216.10 — pass the text_overlay flag so the crop biases toward
+        // the bottom (where the magazine-cover prompt asks text to be) when
+        // overlay is enabled — preserves the headline intact instead of
+        // slicing through it with a center-crop.
+        $brand_for_crop = \SEOBetter\AI_Image_Generator::get_brand_settings();
+        $has_overlay = ! empty( $brand_for_crop['provider'] ) && ! empty( $brand_for_crop['text_overlay'] );
+        $this->enforce_featured_aspect_169( $image_id, $has_overlay );
 
         // v1.5.215 — Best-effort WebP conversion at quality 85 for the
         // featured image. WebP is ~30% smaller than JPEG/PNG at equivalent
@@ -4086,7 +4092,7 @@ final class SEOBetter {
      * already returns 1200×630, no work needed) or if WP_Image_Editor isn't
      * available.
      */
-    private function enforce_featured_aspect_169( int $attachment_id ): void {
+    private function enforce_featured_aspect_169( int $attachment_id, bool $has_text_overlay = true ): void {
         $file = get_attached_file( $attachment_id );
         if ( ! $file || ! file_exists( $file ) ) return;
 
@@ -4106,17 +4112,34 @@ final class SEOBetter {
         $editor = wp_get_image_editor( $file );
         if ( is_wp_error( $editor ) ) return;
 
-        // Center-crop to 16:9 then resize to 1200×630
+        // v1.5.216.10 — Bias the crop based on whether text overlay is on.
+        // Pre-fix: pure center-crop sliced through the headline text rendered
+        // by Nano Banana, leaving "2026 : LE" partial-text artifacts visible
+        // at the top of the crop. Now:
+        //   - text_overlay=true: bias crop toward the BOTTOM third (where the
+        //     magazine-cover prompt asks the headline to be rendered). Keep
+        //     last 630 rows. Preserves the headline intact.
+        //   - text_overlay=false: classic center-crop (no text to preserve).
+        //
+        // For wide-source images (rare with Nano Banana), we always center-
+        // crop horizontally regardless of overlay setting.
         $target_ratio = 1200 / 630;
         if ( $w / $h > $target_ratio ) {
-            // Wider than 16:9 — crop horizontal
+            // Wider than 16:9 — crop horizontal, center horizontally
             $new_w = (int) round( $h * $target_ratio );
             $crop_x = (int) round( ( $w - $new_w ) / 2 );
             $editor->crop( $crop_x, 0, $new_w, $h, 1200, 630 );
         } else {
             // Taller than 16:9 (square or vertical) — crop vertical
             $new_h = (int) round( $w / $target_ratio );
-            $crop_y = (int) round( ( $h - $new_h ) / 2 );
+            if ( $has_text_overlay ) {
+                // BOTTOM-WEIGHTED: keep the bottom $new_h rows so the headline
+                // overlay is preserved intact. crop_y = h - new_h.
+                $crop_y = max( 0, $h - $new_h );
+            } else {
+                // CENTER-WEIGHTED: classic crop (no text to preserve).
+                $crop_y = (int) round( ( $h - $new_h ) / 2 );
+            }
             $editor->crop( 0, $crop_y, $w, $new_h, 1200, 630 );
         }
 

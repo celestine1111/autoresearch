@@ -7,12 +7,68 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.9)
+> **Last updated:** 2026-04-28 (v1.5.216.10)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.10 — Crop bias fix + close two more keyword-translation gaps + aspect-ratio prompt reinforcement
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben tested v1.5.216.9 with a French Québec hamburger article. Results:
+
+1. **Featured image was cropped wrong** — center-crop sliced through the headline text rendered by Nano Banana, leaving a partial "2026 : LE" text artifact at the TOP of the cropped image (the bottom of the original headline bled into the cut zone). Theme then renders post_title above the image too — looks broken.
+
+2. **English keyword still leaks into French body** — "Best Hamburger Shops In Quebec City 2026" appeared in the article body even though v1.5.216.9 translated `$keyword` in `run_step()`. Root cause: `assemble_markdown()` (line ~1383) and `assemble_final()` (line ~2337) re-load `$job['keyword']` directly, bypassing the translation cached on `$job['translated_keyword']`.
+
+### Added / Changed / Fixed
+
+- **`assemble_markdown()` + `assemble_final()` now use `$job['translated_keyword']` when available** — `includes/Async_Generator.php` lines **~1383, ~2337**
+  - `$keyword = ! empty( $job['translated_keyword'] ) ? $job['translated_keyword'] : $job['keyword']`
+  - Falls back to original for English articles where no translation occurred
+  - Verify: `grep -n 'translated_keyword' seobetter/includes/Async_Generator.php` (should show 4+ hits now)
+
+- **`enforce_featured_aspect_169()` accepts `$has_text_overlay` parameter** — `seobetter.php` line **~4060**
+  - When text-overlay is enabled, biases vertical crop toward the BOTTOM of the source (keep last 630 rows)
+  - Why: the magazine-cover prompt asks Nano Banana to render the headline in the bottom-third of the image. Center-crop slices through it; bottom-weighted crop preserves it intact.
+  - Caller (`set_featured_image`) reads `branding_text_overlay` from `get_brand_settings()` and passes the flag.
+  - When text-overlay is OFF, classic center-crop (no text to preserve).
+  - Verify: `grep -n 'BOTTOM-WEIGHTED' seobetter/seobetter.php`
+
+- **`call_openrouter_image()` aspect-ratio prompt reinforcement** — `includes/AI_Image_Generator.php` line **~316**
+  - Front-loads "Generate a high-quality WIDESCREEN image at 16:9 aspect ratio (1200x630 pixels, NOT square). Open Graph banner format. The output MUST be wider than it is tall — 1.91:1 aspect ratio for social media sharing."
+  - Repeats the spec in three different framings (16:9 / 1200×630 / 1.91:1 / NOT square / wider than tall) — Gemini Image is more likely to honour repeated, prominent specs
+  - Even if it produces square (current default), the server-side enforce_featured_aspect_169 crop is the safety net
+  - Verify: `grep -n 'WIDESCREEN image at 16:9' seobetter/includes/AI_Image_Generator.php`
+
+### Files touched
+
+- `includes/Async_Generator.php` — assemble_markdown + assemble_final use translated keyword
+- `seobetter.php` — enforce_featured_aspect_169 bottom-weighted crop + text_overlay parameter + caller threading + version bump
+- `includes/AI_Image_Generator.php` — call_openrouter_image aspect-ratio prompt reinforcement
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — re-test:
+  1. Same French Québec hamburger scenario
+  2. Expected: featured image is 16:9, headline visible INTACT (not cut off), no top-of-image text artifact
+  3. Article body is 100% French — no "Best Hamburger Shops In Quebec City 2026" English string
+  4. If Nano Banana still returns square + crop preserves headline → that's the right outcome
+  5. If Nano Banana NOW returns 16:9 directly thanks to the prompt reinforcement → even better, no crop needed
+
+### Notes
+
+- The schema "randomly adding Product + FAQ schema" Ben mentioned is a separate issue (FAQ schema fires when generate_faq_schema detects H3 questions — must be falsely detecting them; Product schema may fire from detect_product_schema on irrelevant content). Ben said "fix later when we test all articles" — parked for a future schema audit pass.
+- WordPress aspect-ratio rendering across themes: most themes respect the source image dimensions when rendering featured images. After our 1200×630 crop, themes will display at that aspect by default. SOME themes force a square thumbnail crop via custom CSS or theme settings — those would need theme-side adjustment, not plugin-side. Most modern themes (Twenty Twenty-Four, Astra, GeneratePress, Kadence, Blocksy) display 16:9 cleanly.
 
 ---
 

@@ -513,6 +513,16 @@ class AI_Image_Generator {
      * the request boilerplate.
      */
     private static function call_openrouter_image( string $api_key, string $model, string $prompt ) {
+        // v1.5.216.10 — front-load the aspect ratio in the prompt itself.
+        // OpenRouter's Gemini Image wrapper doesn't expose an explicit
+        // aspect-ratio parameter, but the model DOES sometimes respect the
+        // ratio when it's stated up front + reinforced. Repeating the
+        // 1200×630 / 16:9 specification in three different framings
+        // increases the odds of getting a wide-format output instead of
+        // the default 1024×1024 square. Even if it produces square, the
+        // server-side enforce_featured_aspect_169() crop is the safety net.
+        $aspect_preface = 'Generate a high-quality WIDESCREEN image at 16:9 aspect ratio (1200x630 pixels, NOT square). Open Graph banner format. The output MUST be wider than it is tall — 1.91:1 aspect ratio for social media sharing. Image specifications: ';
+
         return wp_remote_post( 'https://openrouter.ai/api/v1/chat/completions', [
             'timeout' => 60,
             'headers' => [
@@ -527,7 +537,7 @@ class AI_Image_Generator {
                 'messages' => [
                     [
                         'role'    => 'user',
-                        'content' => 'Generate a high-quality image for: ' . $prompt,
+                        'content' => $aspect_preface . $prompt,
                     ],
                 ],
                 // Gemini-family image models honour these via OpenRouter's

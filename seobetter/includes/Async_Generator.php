@@ -1380,7 +1380,10 @@ class Async_Generator {
      * Key Takeaways, FAQ, and References.
      */
     private static function assemble_markdown( array $job ): string {
-        $keyword = $job['keyword'];
+        // v1.5.216.10 — Use translated keyword if available (cached by run_step
+        // for non-English articles). Falls back to original $job['keyword'] for
+        // English articles where no translation occurred.
+        $keyword = ! empty( $job['translated_keyword'] ) ? $job['translated_keyword'] : $job['keyword'];
         $title = ucwords( $keyword );
         $date = wp_date( 'F Y' );
         // H1 first (title-cased), then Last Updated as metadata
@@ -2331,7 +2334,9 @@ class Async_Generator {
     }
 
     private static function assemble_final( array $job ): array {
-        $keyword = $job['keyword'];
+        // v1.5.216.10 — Use translated keyword if available (cached by run_step
+        // for non-English articles). Falls back to original for English.
+        $keyword = ! empty( $job['translated_keyword'] ) ? $job['translated_keyword'] : $job['keyword'];
         $options = $job['options'];
         $markdown = self::assemble_markdown( $job );
 
