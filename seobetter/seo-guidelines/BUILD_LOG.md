@@ -7,12 +7,55 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.3)
+> **Last updated:** 2026-04-28 (v1.5.216.4)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.4 — CRITICAL: remove `?>` from v1.5.216.3 PHP comment that broke content-generator.php
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships (critical hotfix)
+
+Ben installed v1.5.216.3 and the Content Generator page broke spectacularly — raw PHP comment text leaking into the rendered page, plus a flood of `Undefined variable $status` / `Undefined variable $result` warnings on lines 53 and 62. Page completely unusable.
+
+**Root cause:** the v1.5.216.3 comment block I added at the top of `content-generator.php` contained the literal string `<?php if (!empty($result)) ... ?>` as a CODE EXAMPLE inside the PHP comment. The `?>` inside that example string CLOSED the PHP block prematurely. Everything after that — including the entire rest of my comment AND the `$result = $result ?? null;` initialization — was rendered as raw HTML, not parsed as PHP. Then the next code block (which referenced `$status`, `$license`, etc.) ran with all variables undefined.
+
+This is the classic PHP heredoc-trap-meets-comment-leak bug and entirely my fault — I should have tested the file output before shipping.
+
+### Added / Changed / Fixed
+
+- **Comment cleaned of `?>` literal** — `admin/views/content-generator.php` line **~4**
+  - Removed the `<?php if (!empty($result)) ... ?>` example string from the comment
+  - The defensive `$result = $result ?? null;` line itself is unchanged and still works as intended (silences the original warning)
+  - Verify: `grep -c '?>' seobetter/admin/views/content-generator.php` (should be a small finite number, not the corrupted state)
+
+### Files touched
+
+- `admin/views/content-generator.php` — comment block rewritten without `?>` literal
+- `seobetter.php` — version bump to 1.5.216.4
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — install zip, navigate to Content Generator page. Expected:
+  1. Page renders normally (no raw comment text leaking into the view)
+  2. No `Undefined variable $status` / `$result` / `$license` warnings in `wp-content/debug.log`
+  3. Generate button works as before
+  4. `wp-admin-bar.php` "null array offset" warning still present (that's WordPress core, not us — ignore)
+
+### Prevention note for future PHP comment edits
+
+When commenting in PHP files, NEVER include a literal `?>` sequence inside the comment — even as a code example. PHP's parser doesn't care that you're inside a `// comment` — it sees `?>` and closes the block. Either:
+- Escape with concatenation: `'< ' . '?php ... ' . '?>'`
+- Or paraphrase: "the legacy social-content-generator gate uses a `! empty( $result )` check"
+- Or use markdown-style backticks if absolutely necessary, but still avoid `?>` even inside backticks
 
 ---
 
