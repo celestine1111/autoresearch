@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.10
+ * Version: 1.5.216.11
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.10' );
+define( 'SEOBETTER_VERSION', '1.5.216.11' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4066,7 +4066,28 @@ final class SEOBetter {
         // slicing through it with a center-crop.
         $brand_for_crop = \SEOBetter\AI_Image_Generator::get_brand_settings();
         $has_overlay = ! empty( $brand_for_crop['provider'] ) && ! empty( $brand_for_crop['text_overlay'] );
-        $this->enforce_featured_aspect_169( $image_id, $has_overlay );
+        // v1.5.216.11 — Per-style crop bias. Different banner styles place
+        // the headline in different regions, so a one-size crop bias slices
+        // through some styles' text. Map from style-key to crop strategy:
+        //   bottom : magazine-cover headline lives in bottom third  → keep bottom
+        //   top    : classic-editorial / illustration headlines live in top    → keep top
+        //   center : cinematic-hero / 3d-hero headlines centered             → center crop
+        //   bottom-right: minimalist tiny corner title                       → keep bottom (corner)
+        //   center : flat split-layout (left text, right icon)               → center crop
+        $crop_bias_map = [
+            'realistic'    => 'bottom',
+            'editorial'    => 'top',
+            'hero'         => 'center',
+            'illustration' => 'top',
+            'flat'         => 'center',
+            'minimalist'   => 'bottom',
+            '3d'           => 'center',
+        ];
+        $style_key = (string) ( $brand_for_crop['style'] ?? 'realistic' );
+        $crop_bias = $has_overlay
+            ? ( $crop_bias_map[ $style_key ] ?? 'bottom' )
+            : 'center';
+        $this->enforce_featured_aspect_169( $image_id, $crop_bias );
 
         // v1.5.215 — Best-effort WebP conversion at quality 85 for the
         // featured image. WebP is ~30% smaller than JPEG/PNG at equivalent
@@ -4092,7 +4113,7 @@ final class SEOBetter {
      * already returns 1200×630, no work needed) or if WP_Image_Editor isn't
      * available.
      */
-    private function enforce_featured_aspect_169( int $attachment_id, bool $has_text_overlay = true ): void {
+    private function enforce_featured_aspect_169( int $attachment_id, string $crop_bias = 'center' ): void {
         $file = get_attached_file( $attachment_id );
         if ( ! $file || ! file_exists( $file ) ) return;
 
@@ -4112,14 +4133,11 @@ final class SEOBetter {
         $editor = wp_get_image_editor( $file );
         if ( is_wp_error( $editor ) ) return;
 
-        // v1.5.216.10 — Bias the crop based on whether text overlay is on.
-        // Pre-fix: pure center-crop sliced through the headline text rendered
-        // by Nano Banana, leaving "2026 : LE" partial-text artifacts visible
-        // at the top of the crop. Now:
-        //   - text_overlay=true: bias crop toward the BOTTOM third (where the
-        //     magazine-cover prompt asks the headline to be rendered). Keep
-        //     last 630 rows. Preserves the headline intact.
-        //   - text_overlay=false: classic center-crop (no text to preserve).
+        // v1.5.216.11 — Per-style crop bias (string). Caller (set_featured_image)
+        // passes one of:
+        //   'top'    — keep top portion (editorial / illustration: title up top)
+        //   'center' — classic center-crop (cinematic-hero / 3d / flat / no overlay)
+        //   'bottom' — keep bottom portion (magazine-cover / minimalist: title down)
         //
         // For wide-source images (rare with Nano Banana), we always center-
         // crop horizontally regardless of overlay setting.
@@ -4130,14 +4148,14 @@ final class SEOBetter {
             $crop_x = (int) round( ( $w - $new_w ) / 2 );
             $editor->crop( $crop_x, 0, $new_w, $h, 1200, 630 );
         } else {
-            // Taller than 16:9 (square or vertical) — crop vertical
+            // Taller than 16:9 (square or vertical) — crop vertical with bias
             $new_h = (int) round( $w / $target_ratio );
-            if ( $has_text_overlay ) {
-                // BOTTOM-WEIGHTED: keep the bottom $new_h rows so the headline
-                // overlay is preserved intact. crop_y = h - new_h.
+            if ( $crop_bias === 'top' ) {
+                $crop_y = 0;
+            } elseif ( $crop_bias === 'bottom' ) {
                 $crop_y = max( 0, $h - $new_h );
             } else {
-                // CENTER-WEIGHTED: classic crop (no text to preserve).
+                // 'center' default
                 $crop_y = (int) round( ( $h - $new_h ) / 2 );
             }
             $editor->crop( 0, $crop_y, $w, $new_h, 1200, 630 );

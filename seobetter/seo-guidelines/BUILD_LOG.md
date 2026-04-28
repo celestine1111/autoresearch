@@ -7,12 +7,65 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.10)
+> **Last updated:** 2026-04-28 (v1.5.216.11)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.11 — Cinematic-hero prompt fix + per-style crop bias
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben tested the "Cinematic Hero" style with `best parks in quebec city 2026` and got an image with a literal black bar at the bottom and no headline rendered.
+
+Two bugs:
+
+1. **"Letterbox bars" wording in the cinematic-hero prompt was taken too literally** — Nano Banana rendered an actual black band at the bottom of the image instead of the cinematic AESTHETIC (anamorphic widescreen feel) I intended.
+
+2. **v1.5.216.10's bottom-weighted crop is wrong for cinematic-hero** — that style's prompt asks the headline to be CENTERED, not in the bottom-third. Bottom-weighted crop sliced through where the centered headline was supposed to be → headline lost.
+
+### Added / Changed / Fixed
+
+- **Cinematic-hero prompt rewrite (both with-text and clean variants)** — `includes/AI_Image_Generator.php` lines **~83 and ~149**
+  - Removed "subtle black letterbox bars top and bottom" wording
+  - Added "FILLS THE ENTIRE 1200×630 FRAME EDGE-TO-EDGE", "ABSOLUTELY NO black borders, NO letterbox bars, NO black bands, NO matte"
+  - Replaced "shot like a Netflix or Apple TV+ promotional still" anchor (better aesthetic reference than the literal "letterbox" misinterpretation)
+  - Strengthened headline rendering: "MUST be rendered as CENTERED LARGE TEXT OVERLAY", "THE MOST IMPORTANT VISIBLE TEXT — render it clearly and prominently"
+  - Verify: `grep -n "FILLS THE ENTIRE 1200×630" seobetter/includes/AI_Image_Generator.php`
+
+- **Per-style crop bias** — `seobetter.php::set_featured_image()` line **~4068** + `enforce_featured_aspect_169()` line **~4095**
+  - Map from style-key → crop strategy:
+    - `realistic` (magazine cover) → `bottom` (headline in bottom-third)
+    - `editorial` (classic NYT) → `top` (title up top with horizontal divider)
+    - `hero` (cinematic) → `center` (centered overlay)
+    - `illustration` (modern flat) → `top` (upper-left headline)
+    - `flat` (split layout) → `center` (left-half text)
+    - `minimalist` (corner title) → `bottom` (bottom-right corner)
+    - `3d` (product hero) → `center` (centered overlay)
+  - Function signature changed from `bool $has_text_overlay` → `string $crop_bias` ('top' / 'center' / 'bottom')
+  - When text overlay is OFF, always uses 'center' crop (no text to preserve)
+  - Verify: `grep -n "crop_bias_map" seobetter/seobetter.php`
+
+### Files touched
+
+- `includes/AI_Image_Generator.php` — cinematic-hero prompt rewrites (with-text + clean)
+- `seobetter.php` — crop_bias_map + enforce_featured_aspect_169 string-bias signature + version bump
+- `seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verified by user
+
+- **UNTESTED** — re-test:
+  1. Cinematic Hero style + `best parks in quebec city 2026` (or any keyword)
+  2. Expected: full-bleed cinematic photograph (NO black bars), headline rendered as centered bold white sans-serif text overlay across the middle-third
+  3. Editorial / Illustration styles: title visible at top of cropped image (not sliced)
+  4. Realistic (magazine cover) / Minimalist: title visible at bottom (not sliced)
 
 ---
 
