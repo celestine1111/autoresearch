@@ -7,12 +7,29 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.6)
+> **Last updated:** 2026-04-28 (v1.5.216.7)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.7 — Khmer + Burmese added to SCRIPT_RANGES (map parity)
+
+**Date:** 2026-04-28
+**Commit:** `[pending]`
+
+### Why this ships
+
+Cross-check between SCRIPT_RANGES and LANG_NAMES showed `km` (Khmer) and `my` (Burmese) had LANG_NAMES entries but no SCRIPT_RANGES regexes. They functionally worked via the Latin-target path (unconditional translation attempt) but the post-translation script validation — which catches LLM accidentally returning English when asked for Khmer/Burmese — didn't apply.
+
+Adding `km: /[ក-៿]/` (Khmer Unicode block U+1780-U+17FF) and `my: /[က-႟]/` (Myanmar block U+1000-U+109F).
+
+### Verified by user
+
+- **UNTESTED** — minor parity fix. Same as v1.5.216.6 test scenarios, just adds two more languages to the cross-script validation path.
 
 ---
 

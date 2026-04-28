@@ -31,6 +31,11 @@ const SCRIPT_RANGES = {
   ar: /[؀-ۿ]/, fa: /[؀-ۿ]/, ur: /[؀-ۿ]/,
   he: /[֐-׿]/, yi: /[֐-׿]/,
   th: /[฀-๿]/, lo: /[຀-໿]/,
+  // v1.5.216.7 — Khmer + Burmese added so post-translation script validation
+  // applies to them too (kills false positives where LLM returned still-English
+  // for these targets). Pre-fix they fell through the Latin-target path which
+  // skips the validation.
+  km: /[ក-៿]/, my: /[က-႟]/,
   el: /[Ͱ-Ͽ]/, hy: /[԰-֏]/, ka: /[Ⴀ-ჿ]/,
   bn: /[ঀ-৿]/, ta: /[஀-௿]/, te: /[ఀ-౿]/,
   kn: /[ಀ-೿]/, ml: /[ഀ-ൿ]/, gu: /[઀-૿]/,
