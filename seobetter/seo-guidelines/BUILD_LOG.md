@@ -19,7 +19,7 @@
 ## v1.5.216.12 — Localize Quick Comparison table heading + column headers
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `75b5286`
 
 ### Why this ships
 
