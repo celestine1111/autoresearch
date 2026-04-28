@@ -19,7 +19,7 @@
 ## v1.5.216.2 — Nano Banana model slug fallback (fix the actual image-gen bug)
 
 **Date:** 2026-04-28
-**Commit:** `[pending]`
+**Commit:** `eb01a9b`
 
 ### Why this ships
 
