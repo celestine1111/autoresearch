@@ -19,7 +19,7 @@
 ## v1.5.216 — BYOK-only free tier + Quick Picks rewrite + revenue-first launch strategy
 
 **Date:** 2026-04-27
-**Commit:** `[pending]`
+**Commit:** `886338d`
 
 ### Why this ships
 
