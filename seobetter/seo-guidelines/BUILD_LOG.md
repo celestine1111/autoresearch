@@ -19,7 +19,7 @@
 ## v1.5.216.16 — Robust 3-tier image loading (Pexels overlay fix)
 
 **Date:** 2026-04-29
-**Commit:** `[pending]`
+**Commit:** `0ee75f2`
 
 ### Why this ships
 
