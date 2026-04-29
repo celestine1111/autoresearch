@@ -14,7 +14,42 @@
 
 ---
 
-## 1. Core Pages
+## 1. Primary Positioning (the wedge — marketing-first)
+
+**Locked positioning statement (use verbatim across all marketing surfaces):**
+
+> *"SEOBetter is the WordPress plugin that engineers your content to be cited by ChatGPT, Perplexity, and Google AI Overviews — schema-first structure, GEO scoring built in, and citation tracking to prove it works. In 60+ languages. BYOK so it's free."*
+
+**Marketing taglines (rank-ordered):**
+
+1. **Headline tagline:** *"Stop optimizing for rankings nobody clicks. Get cited by the AI engines people actually ask."*
+2. **Bulk feature tagline:** *"20 articles a week that rank — not 200 a day that don't."*
+3. **Free tier hook:** *"Free forever. BYOK so it stays that way."*
+4. **vs. Surfer/Frase:** *"Built for WordPress. Built for AI search. Built for solopreneurs."*
+
+**The wedge is the COMBINATION** — not any single feature. No competitor hits all four:
+
+1. **21-content-type schema engine** with proper layered emission (Article + Recipe wrapper + Speakable + citation[] + LocalBusiness + Organization auto-detect) — Yoast/RankMath cover ~6 types
+2. **Multilingual GEO** — 60+ languages with localized translations of structural anchors. Surfer is English-mostly; Frase ~11 languages.
+3. **BYOK pricing model** — solopreneurs pay $0 in API costs to plugin owner. Surfer entry $89/mo, Frase $45/mo.
+4. **AI Citation Tracker** — measures whether ChatGPT / Perplexity / Gemini / AI Overviews actually cite your content. Otterly/Profound/Peec exist but aren't WordPress-native and start ~$29/mo standalone.
+
+**What this positioning does NOT compete on (intentionally):**
+- ❌ Native rank tracking — every solopreneur already has Ahrefs/SEMrush/RankMath; commodity feature
+- ❌ Backlink analysis — massive data costs, off-wedge
+- ❌ AI chatbot for site visitors — different product, different buyer
+
+**Top 3 buyer signals to lead with on landing pages:**
+
+1. **Live citation example:** "Here's an article we generated 3 weeks ago. Here's the Perplexity result citing it for [target query]."
+2. **GEO score ring + SEOBetter Score 0-100:** visible in every demo screenshot. Buyers expect a single big number (Surfer's green-dot is psychological table-stakes).
+3. **The free-tier hook:** "BYOK = $0 forever. Your OpenAI/Anthropic key, our pipeline. No credit cap."
+
+**Source:** Synthesis from 2026-04-29 research session. Locked unless competitive landscape shifts materially.
+
+---
+
+## 2. Core Pages
 
 ### Homepage
 - Hero: "The WordPress plugin that writes articles AI actually cites"

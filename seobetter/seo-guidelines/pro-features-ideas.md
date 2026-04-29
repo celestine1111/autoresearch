@@ -1,930 +1,553 @@
-# SEOBetter Pro Features — Ideas & Planning
+# SEOBetter Pro Features — Roadmap & Tier Matrix
 
-> **Purpose:** Brainstorm and track ideas for Pro-only features.
-> Everything is currently free for testing. Once validated, features will be gated behind a license key.
+> **Status:** LOCKED 2026-04-29 — source of truth for what gets built from here to launch.
 >
-> **Last updated:** 2026-04-23
+> **Replaces:** the prior pro-features-ideas.md draft (deleted; this is the rewrite after the 2026-04-29 strategic re-tier).
 >
 > **Related docs:**
-> - [`email-marketing.md`](email-marketing.md) — drip campaigns & capture touchpoints that funnel into these features
-> - [`automated-emails.md`](automated-emails.md) — the 8-category email pipeline; cross-references which Pro features own which categories
-> - [`website-ideas.md`](website-ideas.md) — website-side capture points + lead magnets
+> - `pro-plan-pricing.md` — pricing math, unit economics, conversion projections, AppSumo phases
+> - `website-ideas.md` §1 — locked positioning ("the wedge") used across all marketing surfaces
+> - `article-marketing.md` — competitor traffic-stealing content strategy + 12-week editorial calendar
+> - `security.md` — 4-layer security architecture (referenced extensively in §4 below)
+> - `BUILD_LOG.md` — what's already shipped vs what's queued
+>
+> **Ownership:** every entry here has a phase number and a free/Pro/Pro+/Agency tier. Anything not on this list is not in scope pre-launch.
 
 ---
 
-## FREE TIER (Always Available)
+## 1. Mission & Positioning
 
-### Content Generation
-- [ ] Generate articles (3/month via Cloud, unlimited with BYOK)
-- [ ] Async generation with progress bar
-- [ ] 5 headline variations with scoring
-- [ ] Auto-generated meta title & description
-- [ ] Auto-suggest secondary & LSI keywords
-- [ ] Stock images (Picsum fallback — generic)
-- [ ] GEO Score analysis (score + grade + suggestions)
-- [ ] Save as Post or Page
-- [ ] 1 AI provider connection (BYOK)
+**Locked positioning** (use verbatim across landing pages, plugin descriptions, AppSumo copy):
 
-### Editor Integration
-- [ ] GEO Score in Post sidebar panel
-- [ ] Toolbar score badge
-- [ ] Headline Analyzer
-- [ ] Re-analyze button
+> *"SEOBetter is the WordPress plugin that engineers your content to be cited by ChatGPT, Perplexity, and Google AI Overviews — schema-first structure, GEO scoring built in, and citation tracking to prove it works. In 60+ languages. BYOK so it's free."*
 
-### Technical SEO
-- [ ] Schema markup (Article + FAQ auto-detected)
-- [ ] Social meta (OG + Twitter cards)
-- [ ] llms.txt generator
-- [ ] AI bot meta tags (max-image-preview, max-snippet)
-- [ ] Speakable schema for voice search
+**The wedge is the COMBINATION** — not any single feature:
+
+1. **21-content-type schema engine** with proper layered emission (Article + Recipe wrapper + Speakable + citation[] + LocalBusiness + Organization auto-detect). Yoast/RankMath cover ~6 types.
+2. **Multilingual GEO** — 60+ languages with localized translations of structural anchors. Surfer is English-mostly; Frase ~11 languages.
+3. **BYOK pricing** — solopreneurs pay $0 in API costs to plugin owner. Surfer entry $89/mo, Frase $45/mo.
+4. **AI Citation Tracker** — measures whether ChatGPT / Perplexity / Gemini / AI Overviews actually cite content. The wedge made measurable.
 
 ---
 
-## PRO TIER IDEAS (To Gate Behind License Key)
+## 2. Tier Matrix — Source of Truth
 
-### Content Generation Pro
-- [ ] Unlimited Cloud generation (remove 3/month limit)
-- [ ] Bulk CSV import (50+ keywords → batch generate)
-- [ ] Content Brief Generator
-- [ ] Content type templates (21 types with auto-adjusted prompts)
-- [ ] Country & language targeting (90+ countries with local APIs)
-- [ ] Topic-relevant images via Pexels (vs generic Picsum)
-- [ ] Featured image auto-download to media library
+This table supersedes anywhere else feature gating is described. If pro-plan-pricing.md or any code disagrees, this wins.
 
-### Analyze & Improve Pro
-- [ ] "Add now" inject buttons (citations, quotes, table, stats, freshness)
-- [ ] Real-time research data (Vercel: Reddit, HN, Wikipedia, DuckDuckGo)
-- [ ] Brave Search integration (real web statistics)
-- [ ] One-click Content Refresh for stale articles
+### Tier prices
 
-### SEO Plugin Integration Pro
-- [ ] AIOSEO auto-population (title, desc, OG, Twitter, schema, keywords)
-- [ ] Yoast auto-population
-- [ ] RankMath auto-population
-- [ ] Schema type auto-detection (Article, FAQ, HowTo, Review, Product)
+| Tier | Monthly | Annual | Annual discount | Sites | Seats | Cloud articles/mo |
+|---|---|---|---|---|---|---|
+| **Free** | $0 | — | — | 1 | 1 | BYOK unlimited (zero Cloud) |
+| **Pro** | **$39** | **$349** | 25% ($117 saved) | **1** | 1 | **50** |
+| **Pro+** | **$69** | **$619** | 25% ($209 saved) | **3** | 1 | **100** |
+| **Agency** | **$179** | **$1,790** | 17% ($358 saved) | **10** | **5** | **250** |
 
-### Analytics & Monitoring Pro
-- [ ] AI Citation Tracker (check if AI engines cite your content)
-- [ ] Content Decay Alerts (email when posts go stale or scores drop)
-- [ ] Keyword Cannibalization Detector
-- [ ] GEO Score column in Posts list (sortable)
+All Cloud articles default to **cheap config** (gpt-4.1-mini extractions, ~$0.013/article cost). Premium config (Sonnet/Opus content, ~$0.10/article) is gated to Cloud Credit pack purchases or Agency-tier opt-in. This protects margins.
 
-> **Internal linking — REINSTATED as a Pro feature (2026-04-19).** Previously out of scope. Now planned as "Internal Links Intelligence" with AI-powered placement suggestions. See detailed spec below.
+### Feature matrix
 
-### Email Capture & Engagement Pro (NEW — added 2026-04-23)
+Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badge in UI when user hits feature for first time (shows upgrade CTA)
 
-> **Purpose:** These Pro features exist BECAUSE of the email automation pipeline (see [`automated-emails.md`](automated-emails.md)) and the website capture strategy (see [`website-ideas.md §9`](website-ideas.md)). They are the Pro-gated upgrades to the Free-tier email surfaces. Every Pro customer's email is already captured via Freemius checkout (C1 transactional), so the focus here is *differentiating value* — giving Pro users richer, faster, more customizable email-driven features.
+#### Generation core
 
----
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| BYOK unlimited generation | ✅ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Cloud articles/month included | — | 50 | 100 | 250 | ✅ Shipped |
+| Content types | 3 (Blog Post, How-To, Listicle) | All 21 | All 21 | All 21 | ✅ Shipped |
+| Multilingual (60+ languages) | ❌ | ✅ | ✅ | ✅ | ✅ Shipped (v1.5.216.x) |
+| Country localization | 6 EN-speaking only (US/UK/AU/CA/NZ/IE) | All 80+ | All 80+ | All 80+ | ✅ Shipped |
+| AI Featured Image generation | ❌ | ✅ | ✅ | ✅ | ✅ Shipped (v1.5.216.13) |
+| Inline citation injection (Citation Pool) | ❌ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Pexels stock images | ✅ | ✅ | ✅ | ✅ | ✅ Shipped |
 
-- [ ] **AI Citation Real-Time Alerts** (Pro tier, powers `automated-emails.md` B7 + dedicated Category 3 sub-category)
+#### Schema
 
-  **What it does:** Monitors Google AI Overviews, ChatGPT, Perplexity, Gemini, Copilot (Bing Chat), Baidu ERNIE, Yandex Neural Search for citations of the user's published articles. When detected, emails the user within 5 minutes with:
-  - AI engine name + citation context (what the AI said about them)
-  - Link to the AI response
-  - Suggested follow-up action ("Your Recipe article was cited — here are 3 similar topics to cover next")
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| Basic schema (Article + FAQPage + BreadcrumbList) | ✅ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Advanced schema (Recipe wrapper, Speakable, citation[], TechArticle, ScholarlyArticle, etc.) | ❌ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Auto-detect schema (LocalBusiness / Organization / Product / Event / Course / Video / etc.) | ❌ | ✅ | ✅ | ✅ | ✅ Shipped |
+| 5 Schema Blocks (Product / Event / LocalBusiness / Vacation Rental / Job Posting) | ❌ | ✅ | ✅ | ✅ | ⏳ Phase 1 |
+| Rich Results validation preview (in editor) | ✅ Read-only | ✅ Read-only | ✅ Read-only | ✅ Read-only | ✅ Shipped (needs surfacing) |
 
-  **How it works:**
-  - Vercel cron fires every 15 minutes, hits Serper AI Overviews endpoint + Perplexity + Gemini grounding APIs for each Pro user's top 50 articles
-  - Dedupes against previously-detected citations (stored in `_seobetter_ai_citations` post meta)
-  - When new citation detected: queues email via `Email_Router.php` → Category 3 → B7 email template
+#### AI Search File (llms.txt) — emerging standard, reinforces the wedge
 
-  **Free tier equivalent:** Citation events batched into the weekly/monthly Usage Digest (U1/U2). Pro gets real-time email within 5 minutes — a dopamine notification with high delight value.
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| Basic `/llms.txt` (site name, description, latest 20 posts, citation guidance) | ✅ | ✅ | ✅ | ✅ | ✅ Shipped (current LLMS_Txt_Generator) |
+| **Optimized `/llms.txt`** (content-type categorization, GEO-score filtering, custom summary setting, language + country signals, FAQ pointers, schema declaration) | ❌ | ✅ | ✅ | ✅ | ⏳ Phase 1 (2 days rewrite) |
+| **`/llms-full.txt`** (comprehensive content dump — full text of all published posts as concatenated markdown for LLM ingestion) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 1 (1 day endpoint) |
+| Multilingual `/llms.txt` per-language (`/en/llms.txt`, `/fr/llms.txt`, `/ja/llms.txt`) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 1 (0.5 day, builds on multilingual gen) |
+| Custom llms.txt editor (override AI-generated summary, descriptions per post) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 1 (1 day Settings UI) |
+| Transient caching + invalidation hooks (regenerate on post save, 24h TTL) | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 1 (0.5 day) |
 
-  **Settings:** Users can filter which engines to track (e.g. "only ChatGPT + Perplexity, skip Bing") and set quiet hours.
+#### AI Search Readiness — bridge for non-llms.txt-adopting engines (Google AI Overviews / OpenAI / Perplexity / Gemini)
 
-  **Integration point:** New file `includes/AI_Citation_Tracker.php` + Vercel endpoint `cloud-api/api/citation-check.js` + email template in `Email_Templates.php`.
+> **Why:** llms.txt adoption is real for Anthropic / Stripe / Zapier / Cloudflare but uncertain for Google / OpenAI / Perplexity through 2026-27. We need features that ensure AI engines can read + extract content via HTML crawling regardless of llms.txt support. Pairs with AI Citation Tracker — together they're the wedge made measurable: "Can AI engines READ your content? Did they CITE it?"
 
-  **Why Pro:** requires Serper + Perplexity + Gemini API credits (paid by Ben), so metered via tier.
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| **AI Crawler Access audit** — scan robots.txt + meta robots + HTTP X-Robots-Tag for blocks against GPTBot / ClaudeBot / PerplexityBot / Bingbot / ChatGPT-User / Google-Extended / CCBot / anthropic-ai. Shows pass/fail per bot. One-click fix updates robots.txt with AI-bot-friendly rules. | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 1 (1-2 days) |
+| **AI Search Readiness Score 0-100** — weighted composite: Crawler access 15% + AI bot activity (last 30d) 20% + Schema completeness 20% + Citation extractability 15% + llms.txt + sitemap submitted 15% + Freshness signals 15%. Shows alongside GEO score per-article + site-wide dashboard. | ✅ Score visible | ✅ + 5 action items | ✅ + per-page breakdown | ✅ + per-site rollup | ⏳ Phase 2 (1-2 days) |
+| **AI Bot Activity Tracker** — server-side User-Agent logging in custom WP table; dashboard chart shows per-bot visits per day. *"GPTBot crawled 47 pages this month; PerplexityBot 23; ClaudeBot 12."* | ❌ | ❌ | ✅ Last 30 days | ✅ Last 12 months + per-site filtering | ⏳ Phase 2 (2-3 days) |
+| **Engine submission checklist** — Bing Webmaster Tools (powers Copilot) / Google Search Console / Perplexity (when registration opens) / ChatGPT search registration. Status indicators per engine. | ✅ Read-only checklist | ✅ Click-to-submit | ✅ Auto-status checks | ✅ Bulk per-site | ⏳ Phase 2 (0.5 day) |
+| Per-page AI bot heatmap (which articles get hit by which bots; correlate with Citation Tracker) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 5+ |
+| Server-level AI crawler optimization (Cache-Control / Last-Modified / ETag tuning for AI crawler patterns) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
+| llms.txt format auto-update (if spec evolves when OpenAI/Google/Perplexity adopt) | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 5+ (auto-track) |
 
-  **Estimated effort:** ~40 hours (cron orchestration + dedup logic + 7 engine APIs + email template + settings UI).
+#### Research stack
 
----
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| Jina Reader fallback | ✅ | ✅ | ✅ | ✅ | ✅ Shipped |
+| OSM Places (Tier 1) | ✅ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Places Waterfall Tier 0 (Sonar Pro) + Tier 2/3/4 (Foursquare/HERE/Google) | ❌ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Firecrawl deep research | ❌ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Brave Search citations | ❌ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Serper SERP intelligence | ❌ | ✅ | ✅ | ✅ | ✅ Shipped |
 
-- [ ] **Weekly Digest (Pro cadence + richer content)** (Pro tier, replaces killed Decay Alert)
+#### Quality / scoring
 
-  **What it does:** Pro tier unlocks weekly digest cadence + deeper analytics vs Free tier's monthly digest.
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| GEO Analyzer (full rubric) | ✅ | ✅ | ✅ | ✅ | ✅ Shipped |
+| SEOBetter Score 0-100 (composite) | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 1 (1-2 days) |
+| Humanizer banned-phrase regex | ✅ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Brand Voice profiles (sample-post enforcement) | ❌ | 1 voice | 3 voices | Unlimited + per-language | ⏳ Phase 1 (2-3 weeks) |
 
-  **Free tier digest (monthly, `automated-emails.md` U2):**
-  - Top 3 articles by GEO score
-  - Stale posts count (no individual list)
-  - New features shipped this month
-  - One suggested next action
+#### SEO plugin integration
 
-  **Pro tier digest (weekly, `automated-emails.md` U1):**
-  - All Free tier content, plus:
-  - Full stale post list with one-click refresh buttons (deep-links to Content Updater)
-  - AI citation events detected in the last 7 days (engine + context + article)
-  - Score movement chart: articles that gained vs lost GEO score this week
-  - Keyword cannibalization findings (if detected)
-  - Competitor activity: top 3 competitors' new articles from Firecrawl scan
-  - Personalized next-action recommendation ("Your Recipe articles are averaging 82 — try adding Expert Quotes to push them above 90")
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| Yoast/RankMath/AIOSEO/SEOPress meta sync (title, desc, OG, Twitter) | ✅ | ✅ | ✅ | ✅ | ✅ Shipped |
+| Canonical URL sync | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 1 (15 min) |
+| AIOSEO full schema sync | ❌ | ✅ | ✅ | ✅ | ✅ Shipped |
 
-  **Why this matters:** This replaces the old unsolicited Decay Alert email (killed in v1.5.206d-fix17 because it violated WP.org guidelines by sending without opt-in). The digest is the legitimate, consent-based successor — delivering useful weekly intelligence instead of a single-metric nag email.
+#### Search performance / Freshness
 
-  **Settings:** Cadence toggle (weekly/monthly) + per-section include/exclude checkboxes.
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| GSC connect + view (clicks/impressions/queries/position) | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 1 (1 week) |
+| GSC-driven Freshness inventory (ranks decay-priority by GSC click + position) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 1 (1 week, builds on age-based) |
+| Freshness report (age-based only) | ✅ | ✅ | ✅ | ✅ | ✅ Shipped (Content_Freshness_Manager) |
+| Content Refresher (one-click stale-article refresh) | ❌ | ❌ | ✅ | ✅ | ✅ Shipped |
+| Refresh-brief generator (side-by-side diff suggestions) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
+| GSC Indexing API (request indexing on save) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
 
-  **Integration point:** `Email_Router.php::render_digest()` reads tier from Freemius license, pulls more data for Pro.
+#### Internal Links (override the 2026-04-15 removal decision)
 
-  **Estimated effort:** ~12 hours (template + data aggregation + tier branching).
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| Orphan-pages report | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 1 (2 days) |
+| Editor sidebar suggester (5 suggestions/post) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 1 (1 week) |
+| Unlimited suggestions + auto-linking rules (Link Whisper-style) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
 
----
+#### AI Citation Tracker (THE wedge)
 
-- [ ] **White-Label Email Branding** (Agency tier only)
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| AI Citation Tracker | 1 prompt × Perplexity-only × monthly | 1 prompt × 4 engines × weekly | 5 prompts × 4 engines × weekly | 25 prompts × 4 engines × weekly | ⏳ Phase 2 (2-3 weeks) |
+| Engines | Perplexity | ChatGPT (BYOK) + Perplexity + Gemini (BYOK) + Google AI Overviews (SerpAPI) | Same | Same | — |
+| Cost to Ben (weighted) | ~$0.50/yr/free user | ~$1/mo/Pro user | ~$2/mo/Pro+ user | ~$3/mo/Agency user | — |
 
-  **What it does:** Agency tier customers can re-brand all outbound automated emails with their agency's logo, colors, and sender identity. When sending digest emails (C6), milestone emails (C3), and client reports (Category 8), the email appears as "from [Agency Name]" instead of "from SEOBetter."
+#### Bulk
 
-  **Customizable elements:**
-  - Email header logo (upload)
-  - Primary + accent brand colors (affects buttons, links, accents)
-  - Sender name + reply-to address (with SPF/DKIM verification)
-  - Footer text (agency's address, legal disclaimers, custom unsubscribe wording)
-  - "Powered by SEOBetter" footnote (optional — $30/mo removes it entirely)
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| Bulk CSV import | ❌ | ❌ | ❌ | ✅ 50/day cap, GEO floor 40, default to draft | ⏳ Phase 1 (5-8 days, UX layer on existing Async_Generator) |
+| Cannibalization detector | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
 
-  **How it works:**
-  - New Agency → Branding page in plugin Settings
-  - Logo stored in media library, injected into email template's `{{agency_logo}}` merge tag
-  - Colors injected into email template's inline CSS
-  - Agency configures SPF/DKIM for their domain (Freemius supports custom sender domains on Enterprise)
-  - Emails sent via Freemius with custom from-address
+#### WooCommerce (Pro add-on, post-launch)
 
-  **Why this matters:** Agencies resell SEOBetter to clients. Their clients should never see "SEOBetter" branding — the agency owns the relationship. This is a common Agency-tier differentiator (Yoast Agency, AIOSEO Agency plans all have white-label email).
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| Category Intro Generator | ❌ | ❌ | 5/site lifetime | Unlimited | ⏳ Phase 5+ Pro add-on |
+| Product Description Rewriter | ❌ | ❌ | ❌ | Unlimited | ⏳ Phase 5+ Pro add-on |
 
-  **Integration point:** `Email_Templates.php` with merge-tag system; `admin/views/settings-agency-branding.php` new card; Freemius custom-sender-domain config.
+#### Power features (Agency-only)
 
-  **Estimated effort:** ~15 hours.
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| White-label (basic — replace logo, hide footer, custom email sender) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 2 |
+| Premium white-label (custom domain, full UI rebrand, whitelisted email) | ❌ | ❌ | ❌ | $99/mo add-on | ⏳ Phase 5+ |
+| API access (n8n / Zapier / custom triggers) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 2 |
+| Custom prompt templates per content type | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
+| Priority support | ❌ | Standard | Standard | 24h SLA + onboarding call | ⏳ Phase 2 |
 
----
+#### Branding / Misc
 
-- [ ] **Team Member Invites + Role-Based Emails** (Agency tier)
-
-  **What it does:** Agency tier customers can invite team members (up to 10 in base Agency, unlimited at Enterprise). Each team member gets their own login + their own email preferences + role-specific email routing.
-
-  **Email categories per role:**
-  - **Owner / Admin:** receives everything (billing, renewal, all client reports, all digests)
-  - **Content Strategist:** receives digests + milestones + citations, NOT billing
-  - **Writer:** receives only article-specific milestones (their own articles), no digests
-  - **Client (read-only share):** receives monthly client report (C8-A3) only
-
-  **New emails:**
-  - Team invite email (when owner invites member)
-  - Role change notification (when member's role is updated)
-  - Team member removal notification
-  - Client view-link email (read-only dashboard share for clients)
-
-  **Why this matters:** Agency customers aren't single users — they're teams. Each role has different email needs. The Owner drowns in notifications if they receive every team member's article milestone; the Writer is confused if they get the agency's billing emails.
-
-  **Integration point:** New custom table `{prefix}seobetter_team_members` + role-based filter in `Email_Router.php::should_send()`.
-
-  **Estimated effort:** ~25 hours.
-
----
-
-- [ ] **Lead Magnet Delivery Automation** (infrastructure feature, powers the website's LM1-LM7)
-
-  **What it does:** When a visitor submits a lead-magnet form on seobetter.com (see `website-ideas.md §9`), the plugin's automation pipeline delivers the PDF, adds them to Onboarding Category 2, tracks open/click, and flips them through the drip sequence.
-
-  **The 7 lead magnets on seobetter.com (professionally-written, NOT plugin-generated):**
-  1. "2026 GEO Checklist: 14 Factors That Make AI Cite You"
-  2. "21 Content Types That Rank Different"
-  3. "The AI Citation Playbook — ChatGPT, Perplexity, Gemini"
-  4. "Internal Linking Intelligence for WP Blogs"
-  5. "Schema Markup Cheatsheet for 12 WordPress Content Types"
-  6. "Multilingual SEO for WordPress: Rank in 29 Languages"
-  7. "Google AI Overviews Survival Guide for Bloggers"
-
-  **How it works:**
-  - Lead magnet form on website POSTs to `cloud-api/api/lead-magnet.js`
-  - Endpoint: verifies email, sends PDF via Freemius, adds to Onboarding drip, records UTM source
-  - Plugin admin dashboard shows lead-magnet funnel stats: downloads per magnet, downloaded → installed → activated conversion
-
-  **Separate Pro feature — "Agency Lead Magnet Builder":** agencies use the plugin itself to generate their OWN branded lead-magnet PDFs for their clients (different from Ben's 7 hand-written magnets which live on seobetter.com). The agency feature meters premium-model generation costs.
-
-  **Integration point:** New Vercel endpoint + Freemius mailing-list API + admin dashboard card.
-
-  **Estimated effort:** ~20 hours.
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| "Powered by SEOBetter" footer | ✅ Shown | Removable | Removable | Removable | ✅ Shipped |
+| Cloud Credits Add-on (top-up packs) | ❌ | ✅ Optional | ✅ Optional | ✅ Optional | ⏳ Phase 2 build, Phase 3 activate |
 
 ---
 
-- [ ] **Email Preference Center + Preference-Based Resubscribe** (Free + Pro)
+## 3. Build Roadmap
 
-  **What it does:** A dedicated `wp-admin/admin.php?page=seobetter-email-preferences` page (and matching seobetter.com/preferences web page) where users manage all email subscriptions in one place instead of unsubscribing from each email separately.
+Each phase lists features + the security work that ships alongside (per `security.md`).
 
-  **Features:**
-  - 8 category toggles matching `automated-emails.md` categories
-  - Digest cadence dropdown (weekly / monthly / off)
-  - Milestone-specific filters ("only 90+ score milestones, skip article-count milestones")
-  - Quiet hours (pause emails 10pm-8am local time)
-  - One-click "Unsubscribe all" mega-button
-  - Re-subscribe path: lapsed users get a "We miss you — here's what changed" email every 90 days (max 3 total, then stop)
+### Phase 1 — Pre-launch (3-4 weeks of dev, then test gate)
 
-  **Why this matters:** EU GDPR requires granular consent. A preference center is the gold-standard way to comply AND reduce unsubscribes (users throttle instead of quitting).
+**Features:**
 
-  **Free vs Pro:**
-  - Free: 3 basic category toggles (onboarding / updates / digest)
-  - Pro: all 8 categories, quiet hours, milestone filters, Pro-only resubscribe campaign
-
-  **Integration point:** `admin/views/settings-email-preferences.php` + `cloud-api/api/email-preferences.js` (for non-logged-in unsubscribe token handling).
-
-  **Estimated effort:** ~18 hours.
-
----
-
-- [ ] **A/B Test Subject Lines** (Pro, internal tool — not user-facing)
-
-  **What it does:** Every outbound email from the automation pipeline runs an A/B test on subject line variants. The winning variant becomes the default after 200 opens. This is an INTERNAL optimization — users never see the test, but open rates improve 15-30% over time.
-
-  **How it works:**
-  - Each email template in `Email_Templates.php` has `subject_variants` array
-  - `Email_Router::send()` randomly picks one variant per send
-  - `Email_Event_Log.php` records variant + open event
-  - After 200 opens on any template, variant with highest open-rate wins, set as default
-  - Losing variants archived for reference
-
-  **Why this matters:** Subject lines are the #1 lever for email engagement. Static subject lines stagnate; A/B-tested subjects improve indefinitely.
-
-  **This is NOT a user-facing feature** — it's infrastructure that improves everyone's engagement. Just exists behind the scenes once the email system is live.
-
-  **Integration point:** `Email_Templates.php::pick_subject()` + `Email_Event_Log.php::record_open()` + weekly cron that promotes winners.
-
-  **Estimated effort:** ~8 hours.
-
----
-
-- [ ] **Email → In-App Deep Links** (Free + Pro polish)
-
-  **What it does:** Every CTA in every automated email deep-links directly to the action it suggests, with the right admin page, the right post, the right modal open. Eliminates friction between email → action.
-
-  **Examples:**
-  - Milestone B4 "You hit 90+" → deep link opens `/wp-admin/edit.php?post_id=X&seobetter_celebrate=1` which opens the post editor with a confetti banner and "Share on X" button
-  - Digest "3 articles went stale" → deep link opens `/wp-admin/admin.php?page=seobetter-freshness&filter=stale&auto_refresh=1` which opens the freshness tool with stale filter pre-applied
-  - Trial TR4 "2 days left" → deep link opens `/wp-admin/admin.php?page=seobetter-settings#trial-extend` which scrolls to the trial-extend offer card
-
-  **How it works:**
-  - Every CTA URL gets a query string like `?seobetter_action=celebrate&post_id=X&campaign_id=B4`
-  - Plugin's `init` hook reads the action param and triggers the right UI state on page load
-  - Tracked in analytics for click-through attribution
-
-  **Why this matters:** The gap between "email read" and "action taken" is where most engagement dies. Deep links collapse that gap to a single click. This is table-stakes for 2026+ email.
-
-  **Integration point:** Query-string handler in `seobetter.php::enqueue_admin_scripts()` + matching JS handlers per action type.
-
-  **Estimated effort:** ~10 hours.
-
----
-
-- [ ] **Onboarding Progress Dashboard + Gamified Emails** (Free + Pro)
-
-  **What it does:** During the 7-email onboarding sequence (Category 2, O1-O7), each email includes a progress bar showing "You've completed 3 of 7 setup steps. Next: Try Optimize All." Every action the user takes (generate first article, hit 80+, run Optimize All) moves the bar forward and unlocks the next email.
-
-  **The 7 setup milestones:**
-  1. Plugin activated ✅
-  2. First article generated
-  3. Score ≥ 70 (proof the plugin works)
-  4. Used Optimize All (proof the Pro upsell feature works)
-  5. Published first article
-  6. Saw AI citation (if tracking enabled)
-  7. Generated article in 2nd language OR tried 2nd content type
-
-  **Email ties in:**
-  - If user skips a milestone, the next onboarding email lingers on that step with extra help content
-  - Milestone completion triggers a one-time "Achievement unlocked!" email (B1-B8 in Category 3)
-  - Progress bar also visible in the plugin admin dashboard header
-
-  **Why this matters:** Gamification drives completion. Duolingo, Codecademy, Notion onboarding all use this pattern. For WP plugins, it's underused and a differentiator.
-
-  **Integration point:** New `includes/Onboarding_Tracker.php` + progress bar in admin dashboard + hooks on article saved, Optimize All completed, score updated.
-
-  **Estimated effort:** ~20 hours.
-
----
-
-- [ ] **SMS + Slack + Webhook Alerts** (Agency tier polish, powers critical alerts)
-
-  **What it does:** For critical alerts (site broken, license expiring in 24h, AI citation detected, client site score drop), Agency tier users can route notifications to SMS (via Twilio), Slack (via incoming webhook), or any custom webhook URL in addition to email.
-
-  **Why this matters:** Email is slow. A client's site scoring 20 at midnight needs an SMS or Slack ping, not a next-day email. Agency tier customers running critical infrastructure need faster channels.
-
-  **Channels:**
-  - Email (default, all users, C1-C8)
-  - SMS (Agency tier, $10/mo add-on for Twilio costs) — only for P2 (breaking change), T6 (payment failure), A2 (client site issue)
-  - Slack webhook (Agency tier, free) — all categories customizable
-  - Custom webhook URL (Agency tier, free) — POST JSON payload for custom integrations (Zapier, n8n, PagerDuty)
-
-  **Integration point:** `includes/Alert_Router.php` layer above `Email_Router.php` that fans out to multiple channels based on user preference.
-
-  **Estimated effort:** ~25 hours.
-
----
-
-### Content Freshness & Management Pro
-
-- [ ] **Content Freshness Analyzer** (requested 2026-04-19)
-
-  **What it does:** Analyzes every article from any blog, computes a freshness score, compares up to 3 blogs side-by-side, and generates a prioritized updating list based on traffic decline and content age.
-
-  **How it works with Serper + Firecrawl:**
-  - WordPress REST API / sitemap.xml to discover all posts with publish/modified dates
-  - Serper checks current Google ranking for each article's target keyword (ranking trend)
-  - Firecrawl scrapes competitor blogs via their sitemaps for comparison mode
-  - Freshness score formula: based on age, last modified date, keyword ranking trend, traffic decline estimate
-
-  **UI:** New admin page `SEOBetter > Content Freshness` with:
-  - Single Domain: gauge score (0-100), total articles, avg age, fresh (<1yr), stale (>3yr), estimated organic traffic, high-priority count, top 10 oldest articles
-  - Compare Domains: side-by-side for up to 3 blogs (enter competitor URLs)
-  - Article Table: title, author, last updated, trend sparkline, peak traffic, current traffic, decline %, freshness score, priority badge (Critical/High/Medium/Low)
-  - Filters: min traffic threshold, sort by score/decline/age, search by title/URL
-
-  **Integration point:** New admin page registered in `seobetter.php::register_admin_pages()`. Data stored in `_seobetter_freshness_scan` option. Uses `cloud-api/api/research.js` Serper for ranking checks.
-
-  **WordPress plugin integrations:** MonsterInsights/GA4 (real traffic data), Jetpack Stats (traffic fallback), Google Search Console API (real impressions/clicks — Pro OAuth), Yoast/RankMath/AIOSEO (focus keyword for rank checking)
-
-  **Estimated effort:** ~15 hours
-  **Free-to-Pro gating:** Free: scan own site only, top 10 articles. Pro: compare 3 domains, full article list, export CSV, scheduled re-scans.
-
-- [ ] **Internal Links Intelligence** (requested 2026-04-19)
-
-  **What it does:** Ingests your sitemap, maps all existing internal links, prioritizes pages by opportunity, and gives AI-powered placement suggestions with ready-to-paste HTML snippets.
-
-  **How it works with Serper + Firecrawl:**
-  - Reads site's sitemap.xml to discover all pages (or uses WordPress post query)
-  - Firecrawl scrapes each page to extract existing internal links + page content
-  - AI analyzes content similarity between pages (TF-IDF or embedding-based)
-  - Generates placement suggestions: anchor text, original paragraph, rewritten paragraph with link, HTML snippet
-
-  **UI:** New admin page `SEOBetter > Internal Links` with 3 tabs:
-  - Setup: sitemap URL input, scan button, scan progress
-  - Dashboard: pages indexed, avg internal links, weak anchors, new posts needing links, last scan. Table: page title, published date, traffic, backlinks, inbound links count, priority score, "Recs" action button
-  - Recommendations: page URL analyzer, inbound count vs site average, status badge (Below Avg/Above Avg). Table: recommended pages with similarity %, inbound count, "Suggest Placement" button. Modal: suggested anchor text, original paragraph, rewritten paragraph with link highlighted in green, HTML snippet with copy button, AI reasoning
-
-  **WordPress plugin integrations:**
-  - WooCommerce (product pages as link targets, category pages for topical clustering)
-  - Yoast SEO (cornerstone content marking — prioritize linking TO cornerstone pages)
-  - RankMath (focus keyword data for anchor text optimization, internal link count in SEO analysis)
-  - AIOSEO (link suggestions data, focus keyword)
-  - Link Whisper (migration path — import existing link suggestions, offer as alternative)
-  - Internal Link Juicer (migration path — detect existing auto-linking rules)
-  - Redirection plugin (detect broken internal links, suggest replacements)
-  - MonsterInsights / GA4 (traffic data for page prioritization)
-  - Jetpack (stats for traffic-based priority)
-  - Elementor / Beaver Builder / Divi (parse page builder content for link injection)
-  - WP Sitemap plugins (XML sitemap discovery)
-  - TablePress (detect table content for contextual linking)
-
-  **Integration point:** New admin page in `seobetter.php`. Link data stored in custom table `{prefix}seobetter_internal_links`. Uses Firecrawl `/api/scrape` for page content extraction.
-
-  **Estimated effort:** ~25 hours
-  **Free-to-Pro gating:** Free: scan up to 50 pages, 5 suggestions per page. Pro: unlimited pages, unlimited suggestions, scheduled rescans, WooCommerce integration, export.
-
-- [ ] **Auto Content Updater** (requested 2026-04-19)
-
-  **What it does:** Finds outdated statistics, recommends product mentions, identifies topic gaps from top-ranking competitors, and generates new sections in your writing style. You approve every suggestion before anything changes.
-
-  **How it works with Serper + Firecrawl:**
-  - Firecrawl scrapes the article to analyze current content
-  - Serper searches for current data on the article's keyword
-  - Firecrawl scrapes top 5 ranking competitors for the keyword
-  - AI compares: finds outdated stats (year references, stale claims), missing topics, new product mentions
-  - Generates suggested changes with diff view (red = remove, green = add)
-
-  **UI:** New admin page `SEOBetter > Content Updater` with 7-step wizard:
-  1. Enter URL — paste article URL + optional update context (e.g. "mention new integration")
-  2. Review Content — AI highlights current article with age indicators
-  3. Update Claims — finds time-sensitive statistics, outdated years, stale facts. Each has approve/reject toggle
-  4. Add Products — recommends relevant product/tool mentions based on current SERP results
-  5. Fill Topic Gaps — competitor analysis identifies missing H2 sections. Priority badges: Critical (top 3 competitors all cover it), Significant (2 cover it), Nice-to-have. Each gap shows: proposed H2, placement point, estimated word count, generated content preview
-  6. Review Draft — side-by-side diff view (original left, updated right). Changes highlighted in red (removed) and green (added). Approve/reject per change
-  7. Complete — apply approved changes to the WordPress post
-
-  **WordPress plugin integrations:** Same as Content Freshness (GSC, analytics plugins for traffic data), plus WooCommerce (recommend own products), Easy Digital Downloads (recommend own downloads)
-
-  **Integration point:** New admin page in `seobetter.php`. Uses Serper + Firecrawl pipeline on Vercel. Changes stored as pending drafts in `_seobetter_update_suggestions` post meta until approved.
-
-  **Estimated effort:** ~30 hours
-  **Free-to-Pro gating:** Free: 3 updates per month, steps 1-3 only (claims update). Pro: unlimited, all 7 steps including topic gaps and product mentions, batch update multiple articles.
-
-### Advanced Pro
-- [ ] Unlimited AI provider connections
-- [ ] Social content generator (Twitter, LinkedIn, Instagram)
-- [ ] **Booking.com affiliate program integration into Places links (NEW — requested 2026-04-15)**
-
-  **What it does:** when the Places_Link_Injector (v1.5.29) renders the meta line below every verified business H2, for hotel / motel / B&B / hostel / apartment / villa categories, append a Booking.com affiliate search link alongside the existing Google Maps + website links.
-
-  **Example rendered line after feature ships:**
-  ```
-  📍 Via Rosini 20, 52046 Lucignano AR ·
-  View on Google Maps · Website · ⭐ 4.7 (Foursquare) ·
-  🛏️ Book on Booking.com
-  ```
-
-  **How it works:**
-  - User configures Booking.com affiliate ID once in Settings → Branding or a new Settings → Affiliate Links card
-  - Places_Link_Injector checks if the matched pool entry's `type` field contains one of: `hotel`, `motel`, `b&b`, `hostel`, `apartment`, `villa`, `guesthouse`, `lodging`, `resort`, `inn`
-  - If yes AND user has an affiliate ID configured, appends a Booking.com search URL with the user's aid: `https://www.booking.com/searchresults.html?ss={urlencode(name+location)}&aid={user_affiliate_id}&label=seobetter`
-  - The `label` param lets the user track which SEOBetter articles generate bookings in the Booking.com affiliate dashboard
-  - Only fires for lodging business types — restaurants, cafes, shops, gelaterias get the normal meta line without the affiliate link
-
-  **Extensions (later releases):**
-  - **Expedia Group affiliate** (Hotels.com, Vrbo) as an alternative provider the user picks in settings
-  - **GetYourGuide affiliate** for activity/tour listings (would trigger on `attraction`, `museum`, `tour` categories)
-  - **Amazon affiliate** for product review listicles (would need an SKU lookup layer, more complex)
-  - **Automatic affiliate-ID injection into v1.5.30 Sonar results** — when Sonar returns a TripAdvisor URL, optionally rewrite it to a TripAdvisor affiliate URL (requires TripAdvisor partner API key)
-
-  **Why this matters:** lodging is the highest-paying affiliate vertical. A single booking can pay $20-$150 in commission. For travel-niche bloggers running articles like "best hotels in Lucignano Italy" or "where to stay in Kyoto", monetizing the verified Places data is the single biggest revenue lever the plugin could add.
-
-  **Integration point:** [includes/Places_Link_Injector.php::build_meta_line()](includes/Places_Link_Injector.php) — add a conditional branch that checks `$entry['type']` against the lodging category list and appends the affiliate link when the user's `seobetter_settings['booking_affiliate_id']` is non-empty.
-
-  **Estimated effort:** ~2 hours (settings field + category detection + URL builder + meta line injection).
-
-  **Free-to-Pro gating:** could be Pro-only (unlock revenue vertical behind a paywall) or ship free (gives users immediate reason to get the plugin and try it).
-
-
-- [x] **Branding page + AI-generated featured image — ✅ SHIPPED in v1.5.32 (2026-04-15)**
-
-  See [BUILD_LOG.md v1.5.32](BUILD_LOG.md) for anchors. Settings → Branding & AI Featured Image card with business name/description, logo upload, 3 brand color pickers, 4 providers (Pollinations free / Gemini Nano Banana / DALL-E 3 / FLUX Pro), 7 style presets, negative prompt, and a `Stock_Image_Inserter::set_featured_image()` hook that tries the AI generator first and falls back to Pexels → Picsum. Original backlog entry kept below for reference:
-
-  **What it does:** a new Settings → Branding page that lets the user upload their brand assets once, then auto-generates a high-quality featured image for every article based on the brand, article title, and keywords. Replaces the current Picsum / stock-image fallback for featured images.
-
-  **User uploads / configures (once):**
-  - Logo (PNG/SVG) — stored in media library
-  - 3 brand hex colors (primary / secondary / accent) with color pickers
-  - Brand style preset: `Realistic photo` / `Professional illustration` / `Flat graphic` / `Hero banner` / `Product shot` / `Minimalist` / `Editorial` / `Retro` / `3D render` (9 presets)
-  - Image aspect ratio: `16:9 hero` (default) / `1:1 social` / `4:3 featured` / `9:16 Pinterest`
-  - Optional: reference brand URL for style-matching AI to pull site colors/fonts
-  - Optional: negative prompt (things to never include — e.g. "no text overlay, no watermark, no people's faces")
-
-  **Per-article prompt composition (hidden from user by default):**
-  The plugin prepends a style-preset prompt to the AI image generator based on the user's picks. Example for `Realistic photo` preset:
-
-  > `"Professional high-quality photograph, {user_brand_primary_color} color accent, clean composition, natural lighting, shallow depth of field, editorial style, 16:9 aspect ratio, no text overlay, no logos, no watermarks. Subject: {article_title}. Context: {first_3_keywords}. Style reference: {user_brand_style}."`
-
-  For `Flat graphic`:
-  > `"Flat vector illustration, bold geometric shapes, {user_brand_colors} color palette, minimal composition, no photorealism, no text, clean background, 16:9 aspect ratio. Subject: {article_title}."`
-
-  Each preset has its own prepended template. User sees a "Preview prompt" toggle that reveals the full composed prompt so they can override it if they don't like what the AI produces.
-
-  **Override flow:**
-  - After generation, user sees the image in the result panel
-  - If they don't like it, they click "Regenerate with custom prompt" — modal opens with the full composed prompt pre-filled and editable
-  - User edits the prompt, clicks Regenerate, sees the new image
-  - No limit on regenerations (or 3 per article on free, unlimited on Pro)
-
-  **Image generation backends (evaluated 2026-04-14):**
-
-  | Model | Cost/image | Quality | Speed | Best for | Access |
-  |---|---|---|---|---|---|
-  | **Google Gemini 2.5 Flash Image** | ~$0.02 | Good | 3–5s | Cheapest, multi-language captions | Gemini API direct, or via OpenRouter |
-  | **OpenAI DALL-E 3** | $0.04 (standard) / $0.08 (HD) | Very good | 5–10s | Reliable brand-aware generation, 1024×1024 or 1792×1024 | OpenAI API direct |
-  | **FLUX.1 Pro 1.1** (Black Forest Labs) | ~$0.055 | Excellent | 5–8s | Best realism + composition, top choice for hero banners | via FAL.ai or Replicate |
-  | **FLUX.1 Pro 1.1 Ultra** | ~$0.06 | Excellent + 4MP res | 8–15s | Print-quality featured images | via FAL.ai or Replicate |
-  | **FLUX.1 Dev** | ~$0.003 | Good | 3–5s | Budget tier, good for bulk | via Replicate or fal.ai |
-  | **Ideogram v2** | ~$0.08 | Very good | 6–10s | BEST for images where text needs to appear correctly (e.g. a hero showing the article title as a graphic element) | via Replicate |
-  | **Stable Diffusion XL** | ~$0.003 | Fair | 3–5s | Free/cheap backup, lower quality | via Replicate, self-host via Ollama/AUTOMATIC1111 |
-  | **Midjourney** | subscription only | Best-in-class | 30s+ | NOT usable — no public API as of 2026 | — |
-
-  **Recommended default:** `FLUX.1 Pro 1.1` via FAL.ai or Replicate for quality, with `Gemini 2.5 Flash Image` as the budget tier. Both available via direct API with free/trial credit.
-
-  **Settings page layout:**
-  ```
-  Settings → Branding (NEW PAGE)
-  ├── Brand Assets
-  │    ├── Logo upload (PNG/SVG, max 2MB)
-  │    ├── Primary color (color picker)
-  │    ├── Secondary color (color picker)
-  │    └── Accent color (color picker)
-  ├── Featured Image Generator
-  │    ├── AI Model [dropdown: FLUX Pro / DALL-E 3 / Gemini Flash Image]
-  │    ├── API Key for selected model [password field]
-  │    ├── Style preset [9 options]
-  │    ├── Aspect ratio [4 options]
-  │    ├── Negative prompt [textarea, optional]
-  │    └── Preview composed prompt [toggle]
-  └── Free tier limits
-       └── 3 images per month on free / unlimited on Pro
-  ```
-
-  **Free-to-Pro gating:**
-  - Free tier: 3 images/month, Stable Diffusion XL only (cheapest), no custom prompt editing
-  - Pro: unlimited images, any model (FLUX / DALL-E / Ideogram), full prompt editing, brand URL auto-extraction, aspect ratio choice, negative prompt
-
-  **Integration point:** `Stock_Image_Inserter::get_featured_image()` currently falls back to Picsum — replace that with a call to the new `AI_Image_Generator::generate($keyword, $title, $brand_settings)` when a brand is configured. Keep Picsum as the ultimate fallback for users without a brand configured or when the AI call fails.
-
-  **Why this matters:** Picsum images are random — they have zero relevance to the article content. AI featured images dramatically improve click-through from social shares and search results, and brand-aware images make the article look like a professional publisher's output (which is the whole differentiation vs. basic AI content tools).
-
-  **Estimated effort:** ~10 hours (new Settings page + brand-asset storage + model fetcher + prompt composer + modal UI + 3 API integrations)
-
-- [x] **Article Writer Model Recommender + Tier Badges — ✅ SHIPPED in v1.5.32 (2026-04-15)**
-
-  See [BUILD_LOG.md v1.5.32](BUILD_LOG.md) for anchors. 3 quick-pick preset buttons (🥇 Best Quality / 💰 Best Value / 🆓 Free Tier) above the Advanced dropdown, compatibility badges (🟢 / 🟡 / 🔴) on every model in the advanced dropdown via `AI_Provider_Manager::MODEL_TIERS`, and a red-tier confirmation dialog when saving. Avoid list: Llama 3.1/3.3, DeepSeek R1/v3, Mixtral, o3/o4, Perplexity Sonar (research model, not a writer). Original backlog entry kept below for reference:
-
-  **Problem:** the current Settings page lists 7 providers × 40+ models with zero guidance. A WordPress newbie picks a cheap Llama or DeepSeek R1 model, sees the plugin "hallucinate" business names, and blames the plugin — even though the hallucination is the model ignoring PLACES RULES, not the plugin failing. Some models genuinely CANNOT follow SEOBetter's strict grounding rules.
-
-  **What to ship:**
-
-  1. **3-tier preset selector** replacing the current dropdown-of-40:
-     - 🥇 **Best Quality (Recommended)** → `claude-sonnet-4.6` direct or via OpenRouter. $0.04/article. Best instruction-following, best multilingual, best at following PLACES RULES + Citation Pool.
-     - 💰 **Best Value** → `claude-haiku-4.5` direct. $0.008/article. 80% of Sonnet quality for 20% of the cost.
-     - 🆓 **Free Tier** → `gemini-2.5-flash` via Gemini API (1,500 free requests/day). $0 for most users. Weaker on strict rules — only safe when Places waterfall is fully populated.
-     - **Advanced** → opens the full 40-model dropdown for power users who know what they're doing.
-
-  2. **Compatibility badges per model** in the Advanced dropdown:
-     - 🟢 `Recommended — hallucination-tested with SEOBetter flow`
-     - 🟡 `Works but may ignore URL rules under complex prompts`
-     - 🔴 `Not recommended — known to produce fake business names despite PLACES RULES`
-     - Explicit ❌ list: `deepseek/deepseek-r1`, `deepseek/deepseek-v3`, `meta-llama/llama-3.3-70b`, `meta-llama/llama-3.1-*`, `openai/o3`, `openai/o3-mini`, `openai/o4-mini`, `mistralai/mixtral-*`, `groq/llama-*`, `perplexity/sonar*` (research model, not writer)
-
-  3. **Hallucination warning modal** when user saves a 🔴 model as their article writer AND has no Places waterfall keys configured:
-     *"⚠️ You're using Llama 3.3 70B with no Places data sources configured. For local-business keywords like 'best gelato in [city]', this combination will produce hallucinated business names. Either configure Perplexity Sonar in Settings → Places Integrations OR switch to a 🟢 Recommended model."*
-     Don't block the save, but make the warning loud.
-
-  4. **Country → model auto-suggest tooltip** on the article generator form. When user picks a country, show a small tooltip under the model selector:
-     - Japan / Korea → "Recommended: Gemini 2.5 Pro"
-     - Italy / Spain / France → "Recommended: Claude Sonnet 4.6"
-     - India / Thailand / Vietnam → "Recommended: Gemini 2.5 Pro"
-     - USA / UK / AU → "Recommended: Claude Sonnet 4.6 or GPT-4o"
-
-  5. **Plain-English model descriptions** — replace "claude-sonnet-4-6" (meaningless to newbies) with "Claude Sonnet 4.6 — Best accuracy, $0.04/article, great for any language". Each model gets a one-sentence description focused on what the user cares about, not the model's name.
-
-  6. **"Test this model" button** — runs a 50-token generation with a dummy keyword against the selected model and returns "✅ Model responds in X seconds" or "❌ Model failed: X". Helps users verify their key works before trying a full article.
-
-  **Estimated effort:** ~4 hours (preset-selector UI + badge system + warning modal + tooltip + test button)
-
-  **Why this matters:** the plugin currently appears to "produce hallucinated content" when the real cause is users picking incompatible models. Simplifying the model picker eliminates ~80% of that confusion for WordPress newbies.
-- [ ] Content Exporter (HTML, Markdown, Plain Text)
-- [ ] Affiliate link auto-linking + CTA buttons
-- [ ] White-label mode
-
-### Internationalization (i18n) — Admin UI Translation
-**Status:** Not started. Currently all admin UI text is hardcoded English even though the plugin has a 90+ country picker for article generation.
-
-**What's missing:**
-- No `/languages` folder or `.pot` template file
-- No `load_plugin_textdomain()` call in main plugin file
-- ~131 strings already use `__()` / `_e()` across admin views, but:
-  - Content type labels ("Blog Post", "How-To Guide", "Listicle", etc.) in `content-generator.php:288-310` are hardcoded English `<option>` text
-  - Other hardcoded strings likely exist throughout admin views — needs full audit
-- No `.mo` files for any language
-
-**What to do (one-time setup, free forever after):**
-1. Add `load_plugin_textdomain( 'seobetter', false, dirname( SEOBETTER_PLUGIN_BASENAME ) . '/languages' );` on `plugins_loaded` hook
-2. Audit all PHP admin views — wrap every user-facing string in `__( 'string', 'seobetter' )`, especially the content type dropdown options
-3. Generate `.pot` template with WP-CLI: `wp i18n make-pot . languages/seobetter.pot`
-4. Ship `seobetter.pot` in plugin zip under `/languages/`
-5. When submitted to WP.org plugin directory → translate.wordpress.org volunteers translate for free into 100+ languages, auto-downloaded per user's WP site language
-
-**Optional Pro feature idea:** "AI Admin UI Translator" button — one-click DeepL/GPT translation of the `.pot` file into any language, compiled to `.mo` and dropped into `/languages/`. This would be a differentiator vs. Yoast/AIOSEO which rely on volunteer translations only.
-
-**Why this matters:** Plugin targets global markets (country picker has Spanish, Japanese, Arabic, Chinese, etc.) but the admin UI that the website owner uses to configure it is English-only. A Spanish WP user installing SEOBetter on their Spanish WP install sees English menus — feels unfinished. Yoast/AIOSEO/RankMath all have 100+ translations because they do this properly.
-
-**Priority:** Not blocking — plugin works in English for now. Should be done **before WP.org submission** since WP.org expects translation-ready plugins and auto-populates volunteer translations.
-
----
-
-## CONVERSION STRATEGY IDEAS
-
-### Free → Pro Triggers
-1. **Usage limit** — 3 articles/month free, unlimited Pro
-2. **Score gate** — generate article free, but "Add now" inject fixes require Pro
-3. **Preview gate** — show the improved score after fix, but require Pro to actually apply it
-4. **Feature teaser** — show Citation Tracker results but blur/hide details without Pro
-5. **Time-limited trial** — 7-day Pro trial on first install, then reverts to free
-
-### Recommended Split (based on testing)
-- **Free:** Generate articles, see GEO score, see suggestions, headline analyzer
-- **Pro:** Fix buttons (inject), research data, Pexels images, AIOSEO integration, bulk generate, citation tracker
-- **Upsell moment:** After generation, show score and fixes needed → "Add now" buttons require Pro
-
-### Pricing Ideas
-- $59/year single site
-- $99/year 3 sites
-- $199/year unlimited sites
-- Lifetime deal: $299
-
-### Key Metric to Track
-- Free → Pro conversion rate (target: 5-10%)
-- Articles generated per user per month
-- "Add now" button clicks (shows intent to upgrade)
-
----
-
-## SECURITY CONSIDERATIONS
-
-### License Key Architecture
-- Server-validated keys (Vercel `/api/validate`)
-- Domain-locked (each key tied to site URL)
-- 24-hour cache with 48-hour grace period on network errors
-- Development key: `SEOBETTER-DEV-PRO` (only works with WP_DEBUG)
-
-### Anti-Piracy
-- Pro features that depend on server-side processing (research API, Brave search) can't be unlocked by editing PHP
-- Client-side gating (UI buttons) can be bypassed but the actual processing requires a valid key
-- Consider moving more logic to the Vercel cloud API for Pro features
-
----
-
-## Research Sources Backlog
-
-### ✅ SHIPPED in v1.5.24 — Pluggable Places Provider abstraction (Google / Foursquare / HERE) + Settings UI
-
-**Status:** Shipped 2026-04-13 in v1.5.24 as the Places waterfall. The architecture is slightly different from the originally-proposed PHP abstraction — the 5 providers live inline in `cloud-api/api/research.js` instead of separate PHP classes, because the JS cloud-api is where all the existing research fetchers live and adding a PHP class layer would have duplicated the logic. The user-facing result is the same: a Settings → Places Integrations section with 3 API key fields, a 5-tier waterfall with automatic fallback, and provider-agnostic downstream prompt/validator logic.
-
-**What was shipped:**
-- Tier 1: OSM (already in v1.5.23)
-- Tier 2: Wikidata SPARQL (free, no key)
-- Tier 3: Foursquare Places (free 1K/day, user key in Settings)
-- Tier 4: HERE Places (free 1K/day, user key in Settings)
-- Tier 5: Google Places API New (paid, user key in Settings)
-- Hard refuse fallback (write general informational article with disclaimer if all tiers return <3 places)
-- Settings → Places Integrations card with 3 password fields + setup instructions per provider
-- GEO_Analyzer `local_places` high-priority suggestion pointing users to Settings when the sentinel fires
-- Telemetry: `places_provider_used` + `places_providers_tried` in the research response
-
-**What was NOT included, can come in a follow-up:**
-- Yelp Fusion provider (500/day free, Anglophone markets only — lower priority)
-- Test Connection REST endpoints per provider in Settings
-- Pre-generation coverage card above the Generate button
-- Post-generation provider attribution line in the result panel
-
-**Original entry kept below for reference:**
-
-### Pluggable Places Provider abstraction (Google / Foursquare / Yelp / HERE) + Settings UI
-
-**Status:** v1.5.23 ships with OSM-only Places integration (Nominatim + Overpass, fully free, no API key). The v1.6.0 follow-up is a full provider abstraction layer so users who want higher-quality Google Maps / Foursquare / Yelp / HERE data can plug in their own API keys. User requested this feature on 2026-04-13 — added here per explicit user ask.
-
-**Why v1.5.23 ships OSM-only:**
-- OSM works out of the box for every user — zero setup cost, no signup
-- Global coverage, best in Europe/North America
-- Stops the hallucination bleeding immediately
-- v1.6.0 can layer the abstraction without breaking the v1.5.23 flow
-
-**v1.6.0 target architecture:**
-
-1. **New `Places_Provider` interface** (PHP) — abstract base class with one method: `search_places(location: string, type: string, limit: int): array` returning normalized place entries
-2. **Concrete implementations:**
-   - `Places_OSM` (always available, free) — v1.5.23 fetchOSMPlaces ported to PHP. Already used by the cloud-api JS version; this just wraps it as a PHP class for parity.
-   - `Places_Google` — Google Places API (New). User provides API key. Paid tier ($200/mo free credit ≈ 17K searches). Best data quality globally.
-   - `Places_Foursquare` — Foursquare FSQ Places API. User provides API key. Free tier: 1,000 calls/day. Good POI data with ratings and hours.
-   - `Places_Yelp` — Yelp Fusion. User provides API key. Free tier: 500 calls/day. Strong US/CA/AU/UK coverage.
-   - `Places_Here` — HERE Places API. User provides API key. Free tier: 1,000 transactions/day. Global.
-3. **Settings page** — new "Integrations" tab with:
-   - Dropdown "Places Data Source" (default: OSM)
-   - API key fields per provider (password-masked, stored in wp_options)
-   - "Test Connection" button per provider (REST endpoint validates the key + does a probe query)
-   - Cascade fallback: if the configured provider fails or returns empty, auto-fallback to OSM
-4. **Normalized data shape** — every provider returns the same `{name, type, address, website, phone, lat, lon, source_url, source}` structure so downstream code (Citation Pool, system prompt, GEO_Analyzer sentinel) is source-agnostic
-5. **REST endpoint** `POST /seobetter/v1/places-provider-test` to validate API keys from the settings page without hitting the full research pipeline
-
-**Files the v1.6.0 change will touch:**
-- New: `includes/Places_Provider.php` (abstract)
-- New: `includes/Places_OSM.php`, `Places_Google.php`, `Places_Foursquare.php`, `Places_Yelp.php`, `Places_Here.php`
-- New: `admin/views/settings-integrations.php`
-- Modified: `seobetter.php` — register settings tab + REST routes
-- Modified: `cloud-api/api/research.js` — accept `places_provider` + `places_api_key` in request body, route to the right fetcher, fall back to OSM
-- Modified: `Async_Generator.php::get_system_prompt()` — no change needed; PLACES RULES are source-agnostic
-- Modified: `GEO_Analyzer.php::check_local_places_grounding()` — no change needed; sentinel checks for OSM/Google Maps URLs regardless of which provider populated them
-
-**Estimated effort:** ~300 lines + settings UI + REST validation endpoints. About 4-6 hours of focused work. Too big for a v1.5.x hotfix, natural fit for v1.6.0.
-
-### X / Twitter integration (research-only — no clean free path)
-
-**Status:** Not started. Added to backlog v1.5.16. The user specifically wants X data because it's where unfiltered real-people skill discussions and trending tech ideas happen — Bluesky, Mastodon, DEV.to, and Lemmy (added in v1.5.16) cover adjacent niches but don't fully replace X for that signal.
-
-**Why this is hard.** In 2026 X has no clean free API for read/search:
-- X API Free tier ($0/mo) — 1,500 POSTs/month, basically zero read or search → useless for research
-- X API Basic ($200/mo) — 10K reads/month → too expensive to bake into a plugin every user installs
-- Public Nitter mirrors — mostly broken since 2023, surviving instances are unreliable
-- ScrapeCreators / Apify scrapers — $30-100/mo → has to be optional and per-user-paid
-
-**The 3 realistic paths to research:**
-
-1. **Cookie-auth approach (recommended starting point)** — same as the `last30days` skill does.
-   - User logs into X in their browser, copies their `auth_token` and `ct0` cookies into a SEOBetter Settings field.
-   - Plugin uses those cookies to hit X's authenticated search endpoints from the cloud-api.
-   - **Pro:** $0 cost, works for the user's own site, immediate value
-   - **Con:** brittle — breaks whenever X updates anything. Per-user setup overhead. Cookies expire and need refresh. Possibly ToS-grey for commercial plugins.
-   - Files to touch: new `searchXTwitter()` in `cloud-api/api/research.js`, new Settings fields in `admin/views/settings.php`, pass cookies through the research request as headers.
-
-2. **Optional ScrapeCreators integration** — user provides their own ScrapeCreators API key.
-   - **Pro:** legal, reliable, works for any user willing to pay $30+/mo
-   - **Con:** gates X behind a paid third-party. Most users won't subscribe.
-   - Best as a Pro-tier feature where the SEOBetter Pro license includes a metered ScrapeCreators allowance.
-
-3. **Wait for X API pricing reset** — X has talked about lowering Basic tier pricing. Monitor and revisit when affordable.
-
-**Why this didn't ship in v1.5.16:** all paths require either a paid third party, a Settings page redesign, or per-user cookie management. Picking the right path needs the user to decide whether SEOBetter is willing to ship a feature that breaks unpredictably (cookie auth) vs gates a feature behind a third-party paywall (ScrapeCreators) vs waits indefinitely (API price drop).
-
-**Next decision needed:** which of the 3 paths to research first. Cookie-auth has the lowest upfront cost and `last30days` already proves it works in Python — porting to JS for the cloud-api is probably v1.5.17 or v1.5.18 territory.
-
-**Reference implementation available:** the vendored `last30days` skill at `seobetter/.agents/skills/last30days/scripts/lib/vendor/bird-search/` already implements X cookie-auth search. Its approach can be ported to JS for the Vercel cloud-api once the user picks a path.
-
----
-
----
-
-## FUTURE PRO TOOLS — Content Intelligence Suite
-
-### Content Freshness Analyzer
-A content freshness tool that analyzes every article from any blog, computes a freshness score, compares up to 3 blogs side-by-side, and generates a prioritized updating list based on traffic decline and content age.
-
-- [ ] Crawl sitemap or RSS feed to index all published articles
-- [ ] Compute freshness score per article (date published, last modified, stats currency, link rot)
-- [ ] Side-by-side comparison of up to 3 blogs (yours vs competitors)
-- [ ] Prioritized update list: highest-traffic articles with lowest freshness first
-- [ ] Traffic decline detection (integrate GSC API or estimate from content signals)
-- [ ] One-click "Refresh This Article" button that feeds the article to the content updater
-
-### Internal Links Intelligence
-An internal links tool that ingests your sitemap, maps all existing internal links, prioritizes pages by opportunity, and gives AI-powered placement suggestions with ready-to-paste HTML snippets.
-
-- [ ] Sitemap ingestion — builds full link graph of the site
-- [ ] Orphan page detection (pages with 0 internal links pointing to them)
-- [ ] Opportunity scoring: pages with high GEO score but low internal links
-- [ ] AI-powered anchor text suggestions — reads both source and target articles
-- [ ] Ready-to-paste HTML snippets with exact insertion point in the source article
-- [ ] Bulk "Add All Suggestions" button for power users
-- [ ] Visual link graph (D3.js or similar) showing link clusters and gaps
-
-### Automatic Content Updater
-An automatic content updater that finds outdated statistics, recommends product mentions, identifies topic gaps from top-ranking competitors, and generates new sections in your writing style. You approve every suggestion before anything changes.
-
-- [ ] Outdated stat finder — scans for statistics with dates older than 12 months, finds current replacements via Tavily/Sonar
-- [ ] Product mention recommender — cross-references article topics with trending products in the category
-- [ ] Competitor gap analysis — scrapes top 5 ranking articles for the keyword, identifies sections/topics they cover that yours doesn't
-- [ ] Section generator — writes new paragraphs in the article's existing tone and style to fill identified gaps
-- [ ] Approval workflow — every suggestion shown as a diff (before/after) with Accept/Reject buttons
-- [ ] Batch mode — queue multiple articles for updating, review all diffs in one session
-- [ ] Change log — tracks what was updated, when, and what the original text was (rollback capability)
-
----
-
-## PRIORITY FIX — Places Waterfall PHP Fallback
-
-**Problem:** When the Vercel research endpoint returns empty data (timeout, rate limit, deployment stale), local-intent articles get generated with store names but NO addresses, NO website links, NO Google Maps links, NO phone numbers. The Places waterfall (Sonar → OSM → Foursquare → HERE → Google Places) only runs during Vercel-side generation — there's no PHP-side fallback like there is for quotes (Tavily) and citations (Sonar).
-
-**Impact:** Local articles like "pet shops brisbane" list businesses without any way for readers to find them. Destroys local SEO value, E-E-A-T trust, and user experience.
-
-**Fix needed:**
-- [ ] PHP-side Places fallback in `optimize_all()` — if `sonar_data['places']` is empty, run a PHP-side OSM/Nominatim + Overpass query to get real business data
-- [ ] Pass places data to `Places_Link_Injector` at optimize time (currently only at save time)
-- [ ] Ensure LocalBusiness schema is generated from the places data
-- [ ] Add Google Maps link for each business (formatted as `https://www.google.com/maps/search/?api=1&query=BUSINESS+NAME+ADDRESS`)
-- [ ] Add website URL when available from the Places waterfall
-- [ ] Test with: "pet shops brisbane", "vet clinics melbourne", "dog groomers sydney" — verify addresses are real
-
-**Priority:** HIGH — this affects every local-intent keyword for every user
-
----
-
-## PRO FEATURE — WooCommerce Product Integration
-
-Automatically integrate the user's own WooCommerce products, categories, and blog posts into generated articles when the topic matches.
-
-### How it would work:
-1. **Auto-scan WooCommerce catalog** — on article generation/save, the plugin reads the user's WooCommerce product categories and products via `wc_get_products()` and `get_terms('product_cat')`
-2. **Topic matching** — compare article keyword against product names, category names, and product tags. Use fuzzy matching (keyword tokens appear in product title or category)
-3. **Insert product links** — where the article mentions a product type (e.g. "grain free cat food"), auto-link to the user's matching WooCommerce category page or product page
-4. **"Shop This" product block** — below the comparison table or at the article end, insert a styled block showing 2-3 matching products from the user's store with image, price, and "Shop Now" button
-5. **Internal link scoring** — the EEAT checker already scores internal links. WooCommerce links would automatically satisfy this check
-
-### Implementation details:
-- [ ] `WooCommerce_Integrator` class — scans catalog, caches product index (1hr transient)
-- [ ] `match_products($keyword, $content_type)` — returns matched products + categories sorted by relevance
-- [ ] `inject_product_links($markdown, $matches)` — replaces generic product mentions with WooCommerce links
-- [ ] `render_shop_block($matches)` — styled HTML block with product cards (image, name, price, button)
-- [ ] Settings toggle: "Auto-integrate WooCommerce products" (on/off)
-- [ ] Settings: "Shop block position" — after comparison table / end of article / both
-- [ ] Settings: "Max products per article" — default 3
-- [ ] Only activates if WooCommerce is installed and has products
-- [ ] Works with variable products (shows price range "From $29.99")
-- [ ] Affiliate disclosure auto-inserted if linking to own products
-
-### Example output:
-For keyword "grain free cat food" on a pet store site:
-```
-## Shop Grain Free Cat Food
-
-[Product Image] **Ziwi Peak Air-Dried Cat Food** — $42.99
-Free-range, grain-free recipe with 96% meat content.
-[Shop Now →](https://mindiampets.com.au/product/ziwi-peak-cat-food/)
-
-[Product Image] **Ivory Coat Grain Free Chicken** — $34.99
-Australian-made, grain-free with real chicken.
-[Shop Now →](https://mindiampets.com.au/product/ivory-coat-chicken/)
-```
-
-### Why this is a Pro feature:
-- Direct revenue attribution — articles generate sales, not just traffic
-- Internal linking — every product link is an internal link (SEO boost)
-- E-E-A-T — "we sell these products" = first-hand experience
-- Conversion — readers go from research to purchase without leaving the site
-- Competitive moat — no other AI content plugin does this
-
----
-
-## PRO FEATURE — Rich Result SERP Preview + Search Performance Dashboard
-
-### Rich Result Preview (in post editor metabox)
-
-A visual preview of how the article will appear in Google Search with its schema markup. Shows different previews per content type:
-
-- [ ] 4th tab in SEOBetter metabox: "Rich Results" (alongside General, Page Analysis, Readability)
-- [ ] Desktop + Mobile toggle views
-- [ ] Recipe: card with image, star rating, cook time, ingredients count
-- [ ] Review/Product: star rating, price, pros/cons badges below title
-- [ ] FAQ: expandable dropdown questions below the listing
-- [ ] News: Top Stories card with thumbnail + date
-- [ ] LocalBusiness: map pin + address + hours
-- [ ] Standard Article: enhanced listing with author, date, image
-- [ ] Schema Impact Estimate panel with research-backed statistics:
-  - "Articles with Recipe schema get 2.7x more clicks" (Searchmetrics)
-  - "Product schema with star ratings increases CTR by 35%" (SEJ)
-  - "Schema markup leads to 30-40% boost in AI citation rates" (Princeton GEO)
-  - "Rich results get 58% of all clicks on page 1" (FirstPageSage)
-- [ ] Schema Validation badge: "Valid (0 errors)" or "3 warnings"
-- [ ] Link to Google Rich Results Test for the page URL
-- [ ] Count of active rich result types: "4 rich results active: Recipe, FAQ, Breadcrumb, Speakable"
-
-### Google Search Console Integration (Pro)
-
-Real performance data per article — requires OAuth connection:
-
-- [ ] Settings: "Connect Google Search Console" button (OAuth2 flow)
-- [ ] Per-article dashboard: Impressions, Clicks, CTR, Average Position
-- [ ] Before/after comparison: schema added vs no schema
-- [ ] Trend charts over 30/60/90 days
-- [ ] Site-wide summary: total rich result impressions, CTR improvement
-- [ ] "Top Performing Articles" leaderboard sorted by clicks
-- [ ] Alert: "Article dropped 5 positions — consider refreshing"
-
-### Content Performance Stats (Free tier)
-
-Research-backed estimates (no API needed):
-
-- [ ] Reading time estimate (word count / 238 wpm): "5 min read — optimal for mobile"
-- [ ] Readability score: "Grade 7 — accessible to 85% of readers"
-- [ ] Content uniqueness signal: "92% original content"
-- [ ] Schema richness score: "4/6 rich result types active"
-- [ ] AI citation readiness: "High — has quotes, citations, FAQ, structured data"
-
----
-
----
-
-## GUTENBERG BLOCKS & SHORTCODES (New Feature Category)
-
-> **Why:** Makes SEOBetter useful for EVERY post (not just AI-generated), increases daily active usage, creates switching cost (posts depend on blocks), and provides natural free → Pro upgrade path.
-
-### Free Blocks (drives adoption)
-
-| Block | Shortcode | What it does |
-|---|---|---|
-| **Key Takeaways** | `[seobetter_takeaways]Point one\|Point two\|Point three[/seobetter_takeaways]` | Styled bullet box with icon — user types bullets. Every post should have one, creates habit. |
-| **Pros / Cons** | `[seobetter_proscons pros="Fast,Easy" cons="Expensive,Limited"]` | Two-column green/red with checkmark/X icons. Wirecutter-style, highly visual. |
-| **FAQ with Schema** | `[seobetter_faq]` | Accordion Q&A pairs, auto-injects FAQPage schema. Instant Google rich results — users see value in days. |
-| **Table of Contents** | `[seobetter_toc]` | Auto-generated from H2/H3 headings, smooth scroll links. Saves time, sticky usage. |
-| **Author Bio** | `[seobetter_author]` | E-E-A-T card with photo, social icons, Person schema. Uses SEOBetter settings author data. |
-| **Comparison Table** | `[seobetter_table]` | Styled table with accent header, zebra rows. Manual data entry — users fill in their own specs. |
-| **Code Block** | `[seobetter_code lang="python"]code here[/seobetter_code]` | Dark terminal with language label, traffic light dots, monospace font. |
-| **Callout Box** | `[seobetter_callout type="tip"]text[/seobetter_callout]` | Tip / Note / Warning styled boxes with custom SVG icons. Types: tip, note, warning, didyouknow. |
-
-### Pro Blocks (drives upgrades — require research API)
-
-| Block | Shortcode | What it does | Why Pro |
+| Order | Task | Effort | Tier |
 |---|---|---|---|
-| **Live Statistic** | `[seobetter_stat keyword="topic"]` | Big number callout — pulls REAL stats from Serper/Firecrawl | Requires Ben's API keys, real research data |
-| **Expert Quote** | `[seobetter_quote keyword="topic"]` | Styled blockquote — fetches REAL expert quotes from research | Requires Serper/Firecrawl, not hallucinated |
-| **Citation Insert** | `[seobetter_cite keyword="topic"]` | Drop a verified citation inline — searches, verifies, formats | Requires Citation Pool + verification |
-| **GEO Score Badge** | `[seobetter_score]` | Live score ring for the current post, updates on save | Requires GEO Analyzer |
-| **Content Freshness** | `[seobetter_freshness]` | "Last verified: [date]" badge that auto-updates on save | Drives re-engagement, Pro retention |
-| **Schema Builder** | `[seobetter_schema type="Product"]` | Visual schema type picker (Product, Recipe, HowTo, etc.) with field inputs | Huge SEO value, visual builder |
+| 1 | Canonical URL sync to all 4 SEO plugins | 15 min | All |
+| 2 | License gating wire-up + **TEST MODE flag** — `License_Manager::can_use()` checks at every feature route. Add `SEOBETTER_GATE_LIVE` constant (default `false` during Phase 1) — when `false`, all gates return `true` so Ben can test ALL Pro/Pro+/Agency features as if licensed. UI lock badges + tooltip copy still render so the upsell experience can be tested. Flag flips to `true` only after Phase 1 test gate passes (item 18 below). | 4 h | — |
+| 3 | GSC integration MVP (OAuth + daily cron + view dashboard) | 1 week | Free for connect+view; Pro+ for Freshness driver |
+| 4 | Freshness inventory MVP (sortable table; GSC-driven priority for Pro+) | 1 week | Free age-based; Pro+ GSC-driven |
+| 5 | Internal Links MVP (orphan report Free; editor suggester Pro+) | 1 week | Free orphan; Pro+ suggester |
+| 6 | Brand Voice profiles (upload sample posts + banned-phrase regex pass + system prompt injection) | 2-3 weeks | Pro 1; Pro+ 3; Agency unlimited |
+| 7 | SEOBetter Score 0-100 composite (weighted blend of existing GEO layer scores) | 1-2 days | All |
+| 8 | Rich Results validation preview surfacing (data exists; needs polish) | 2 days | All |
+| 9 | Bulk CSV UX layer (presets + per-row override + Action Scheduler queue + GEO 40 floor + default-to-draft) | 5-8 days | Agency only |
+| 10 | 5 Schema Blocks (Product / Event / LocalBusiness / Vacation Rental / Job Posting) | 5-7 days | Pro+ |
+| 11 | Country allowlist split — Free = US/UK/AU/CA/NZ/IE (no Regional_Context block fires); Pro+ = full 80+ | 1 day | Free 6; Pro 80+ |
+| 12 | **llms.txt rewrite + `/llms-full.txt` + caching** — rewrite `LLMS_Txt_Generator` for content-type categorization + GEO-score filtering + custom summary + language/country signals + FAQ pointers; add `/llms-full.txt` endpoint; transient cache 24h + invalidate on post save; Settings UI for custom summary + regenerate button. **Reinforces the wedge — directly maps to article-marketing.md Top-10 keyword #6 ("llms.txt wordpress").** | 3-5 days | Basic Free; Optimized Pro; full+multilingual+custom Pro+ |
+| 13 | **Settings.php restructure into 6 tabs** — License & Account / AI Provider / General / Author Bio / Branding / Research & Integrations. WordPress nav-tab-wrapper pattern, deep-linkable via `?tab=`, save button per tab (existing per-form handlers preserved). Add tier-aware Pro/Pro+/Agency 3-card upsell grid. Remove dead settings (`target_readability`, `geo_engines`). Update all marketing copy to match `pro-features-ideas.md` §2 Tier Matrix. | 2-3 days | All |
+| 14 | **Brand Voice profile section** (in Settings → Branding tab) — sample-post uploader (drag-drop or pick from existing posts) + banned-phrase textarea + voice profiles list (1/3/unlimited per tier with quota badge). Persists to `seobetter_brand_voices` option as array. Tier-gated number of voices. | 1 day (UI only — generation pipeline integration is separate Phase 1 task #6) | Pro 1 / Pro+ 3 / Agency unlimited |
+| 15 | **License tier display logic** — internal `License_Manager` stores precise license type (`free` / `pro_subscription` / `pro_plus_subscription` / `agency_subscription` / `pro_lifetime` / `pro_plus_lifetime` / `agency_lifetime`) BUT externally displays ONLY: Free / Pro / Pro+ / Agency. AppSumo LTD buyers see the same tier badge as subscription buyers — never an "LTD" or "Lifetime" badge (would deter future paying customers from joining if they see lifetime equivalence shown publicly). LTD attribute affects only billing, hard Cloud cap enforcement, and cheap-config-forced flag — invisible to UI. | 1 day | All |
+| 16 | **Tier-aware UI gating** — gate AI Image provider/style preset behind Pro license check with lock badges + upsell tooltips. Tavily field shows Pro lock badge. Places APIs stay free-accessible per Option B (article quality decision: place-citation articles need this; users provide own keys at $0 cost to Ben). | 1-2 days | Pro |
+| 17 | **License & Account tab dashboard** — tier badge (Free/Pro/Pro+/Agency) · site usage meter ("1 of 3 sites") · Cloud article usage ("47 of 100 used this month" — for Cloud users only; BYOK shows "Unlimited via your provider") · Cloud Credits balance + Buy Credits button (placeholder until Phase 2 ships Credits backend) · 3-card Pro/Pro+/Agency upsell grid for free users; upgrade-to-next-tier card for current paid users · Annual savings copy in dollars not percent | 2 days | All |
+| 18 | **AI Crawler Access audit** — single Settings page check (in Research & Integrations tab): scan robots.txt + meta robots + HTTP X-Robots-Tag headers for blocks against GPTBot / ClaudeBot / PerplexityBot / Bingbot / ChatGPT-User / Google-Extended / CCBot / anthropic-ai. Show pass/fail per bot. One-click fix that updates robots.txt with AI-bot-friendly rules (using the WP `do_robotstxt` filter). Bridge feature for engines that haven't adopted llms.txt yet — protects users from accidental blocks by aggressive WordPress security plugins. | 1-2 days | Free (table-stakes) |
+| 19 | **Dashboard restructure** (admin.php?page=seobetter) — header tier badge expanded from binary FREE/PRO to **Free/Pro/Pro+/Agency** · onboarding adds "or skip BYOK with Pro" alternative path · "What You Get" rewrites: Free list aligned with new tier matrix (basic schema = Article+FAQPage+BreadcrumbList only — REMOVE Recipe/Organization/Person from free list) · ADD missing Free features: SEOBetter Score 0-100, Rich Results preview, basic meta sync, GSC connect+view, Internal Links orphan, age-based Freshness, AI Crawler audit, basic llms.txt · REPLACE single Pro upsell with **3-tier comparison grid** (Pro/Pro+/Agency cards) for free users · tier-aware "next-tier upgrade" card for paid users · Remove "inject buttons" line · Fix "Premium tier LLM Claude Sonnet 4.6" → "50 Cloud articles/mo using SEOBetter research stack" · Fix "Auto-translate 29 languages" → "Multilingual generation 60+ languages" · Clarify "AIOSEO/Yoast/RankMath auto-population" → "AIOSEO full schema sync" (basic meta sync to all 4 plugins is Free) · ADD missing Pro features to upsell: AI Citation Tracker (1/5/25 prompts by tier), Brand Voice (1/3/unlimited), Country localization 80+, Brave Search, inline citations, auto-detect schemas. | 2-3 days | All |
+| 20 | **Recent Articles columns** (dashboard) — add SEOBetter Score 0-100 column alongside existing GEO score column (item 7 dependency); placeholder slots for Phase 2 columns (AI Citations badge, AI Readiness mini-score). | 0.5 day | All |
+| 21 | **Generate Content page sweep** (?page=seobetter-generate) — add 🔒 Pro lock badges to 18 non-free content types in the dropdown (Free shows only blog_post, how_to, listicle unlocked) · fix pre-generation contextual-hints JS schema list (Free's `blog_post` only emits `Article + FAQPage + BreadcrumbList` — remove `Organization + Person` from free hint) · update sidebar Pro upsell card: remove "Analyze & Improve inject buttons" line · fix "Sonnet-tier LLM" + "5 on Free" misleading copy · add wedge features to upsell (AI Citation Tracker, Brand Voice, Multilingual 60+, Country localization, Brave Search, inline citations) · keep upsell density LOW (active task flow) — sidebar only, no full-page interrupt · add subtle "6 free / 80+ Pro" hint to country picker · remove hardcoded `5/15` Cloud count in status bar (read from License_Manager) | 1-2 days | All |
+| 22 | **Bulk Generate page tier fix** (?page=seobetter-bulk) — change "Bulk Generation requires Pro" → "Bulk Generation requires Agency" · update CTA from $39/mo → $179/mo with Agency value prop · fix `$is_pro` gate to `License_Manager::can_use('bulk_csv')` which checks Agency tier · expand binary PRO/FREE header badge to Free/Pro/Pro+/Agency (consistent with dashboard) · the full UX rebuild (presets / per-row override / Action Scheduler queue / GEO floor 40 / default-to-draft) is Phase 1 item 9 which replaces the form entirely — this item is just the tier-correctness sweep that ships alongside | 0.5 day | All |
+| 23 | **Phase 1 test gate** — Ben personally tests EVERY feature works correctly with `SEOBETTER_GATE_LIVE=false` (testing-as-Pro mode). Test matrix: 3 GEO-90+ articles (How-To / Listicle / Local Business Listicle per pro-plan-pricing.md §6); all 21 content types generate without errors; AI Featured Image works for all 7 style presets across major languages (English, Portuguese, German, Japanese); GSC OAuth connects + dashboard shows data; Freshness inventory loads; Internal Links suggester returns suggestions; Brand Voice enforces banned phrases; Bulk CSV runs end-to-end with quality gate; 5 Schema Blocks render and validate in Google Rich Results Test; llms.txt + llms-full.txt serve correctly; AI Crawler Access audit finds + fixes blocked bots; **Dashboard 3-tier upsell grid renders correctly with all tiers and accurate copy**; **Settings 6-tab restructure works with no broken save handlers**; **Generate Content page shows 🔒 lock icons on 18 non-free content types**; **Bulk Generate page correctly says "Agency required" not "Pro required"**; meta sync to Yoast/RankMath/AIOSEO/SEOPress works; multilingual gen works for 10+ languages. **Failure of any one halts Phase 2.** Bug-fix iteration loop until everything is green. | 1-2 weeks elapsed | — |
+| 24 | **Flip `SEOBETTER_GATE_LIVE` to `true`** — after item 23 fully passes. Final smoke test: spin up a fresh free-tier WP install (no license key) and confirm: Pro features show lock badges + refuse to execute; Free features all work; upsell CTAs link to correct pricing tiers; **Dashboard tier badge correctly shows "Free" not "Pro"**; **Generate Content blocks Pro content types from execution**; **Bulk Generate blocks all non-Agency users**. THIS is the moment Pro/Pro+/Agency gating becomes real. Removes the existing `License_Manager.php` v1.5.13 testing flag. | 0.5 day | — |
 
-### Implementation Priority
+**Security work (per security.md):**
 
-**Phase 1 — Start here (biggest impact, lowest effort):**
-1. FAQ Block with Schema — immediate Google rich results
-2. Key Takeaways Block — goes in every post, creates dependency
-3. GEO Score Badge (Pro) — the conversion lever
+| Order | Task | Effort | Layer |
+|---|---|---|---|
+| S1 | Build `do_action()` hook stubs in free plugin codebase for every Pro feature (preparation for Layer 3 split) | 3 days | Layer 2 prep |
+| S2 | Cloud API license verification — every Pro endpoint validates Freemius license, refuses on invalid | 2 days | Layer 2 |
+| S3 | Inject button cleanup — remove `Analyze & Improve inject buttons` code entirely from codebase (not just feature-gate) | 1 day | code hygiene + locked NO |
 
-**Phase 2 — Content blocks:**
-4. Pros/Cons Block
-5. Callout Box Block (Tip/Note/Warning)
-6. Comparison Table Block
-7. Code Block
+**Phase 1 test gate (BLOCKER — no Phase 2 until passes):**
 
-**Phase 3 — Research-powered Pro blocks:**
-8. Live Statistic Block
-9. Expert Quote Block
-10. Citation Insert Block
+Per existing pro-plan-pricing.md §6, three test articles must hit GEO 90+:
+- `how to transition your dog to raw food safely 2026` (How-To)
+- `best washable dog beds australia 2026` (Listicle)
+- `best dog food delivery services in melbourne australia 2026` (Listicle, places-heavy)
 
-### Technical Notes
+PLUS the full feature test matrix in item 18 above. The `SEOBETTER_GATE_LIVE` flag stays `false` during testing so Ben can exercise EVERY Pro/Pro+/Agency feature as if licensed. Once all features pass, item 19 flips the flag to `true` and gating becomes real.
 
-- All blocks exist as both Gutenberg blocks (`assets/js/blocks/`) AND shortcodes (`includes/Shortcodes.php`)
-- Free blocks use inline styles (same as Content_Formatter already does) — no external CSS dependencies
-- Pro blocks call the existing research pipeline (Serper/Firecrawl) on demand
-- Blocks render server-side (`register_block_type` with `render_callback`) so they work in Classic Editor too
-- Shortcode output is identical to block output — same HTML, same inline styles
-- All styling already exists in Content_Formatter — blocks just expose it as user-insertable elements
+**Critical sequencing:**
+1. Build everything (items 1-17) with `SEOBETTER_GATE_LIVE=false`
+2. Test everything with full Pro access (item 18)
+3. Fix bugs, retest
+4. Only when fully green: flip `SEOBETTER_GATE_LIVE=true` (item 19)
+5. Smoke-test free-tier behavior on a clean install
+6. THEN proceed to Phase 2 (Freemius)
+
+**Total Phase 1: ~7-9 weeks of solo dev** (some parallelizable, +1-2 weeks testing & fix iteration)
+
+### Phase 2 — Freemius integration & plugin split (~3 weeks)
+
+**Features + infrastructure:**
+
+| Task | Effort |
+|---|---|
+| Integrate Freemius SDK (license keys, subscription billing, trial management, refunds, analytics) | 2-3 days |
+| Wire 7 contextual upgrade CTAs (per pro-plan-pricing.md §8) | 3 days |
+| Set up [seobetter.com](https://seobetter.com) pricing page with annual toggle | 1 day |
+| Beta users (Phase 1 founder-pricing buyers) migrated to Freemius as grandfathered Pro accounts | 1 day |
+| Cloud Credits backend + UI ($19/$49/$129 packs; balance counter; one-click top-up) | 3 days |
+| White-label (basic) implementation — logo upload, footer toggle, email sender override | 3 days |
+| API access endpoint (n8n/Zapier-compatible auth + REST routes) | 3 days |
+| 24h priority support inbox setup | 1 day |
+| **AI Search Readiness Score 0-100** — composite score (Crawler access 15% + AI bot activity 20% + Schema completeness 20% + Citation extractability 15% + llms.txt + sitemap submitted 15% + Freshness signals 15%). Surfaces alongside GEO score per-article + site-wide dashboard. | 1-2 days |
+| **AI Bot Activity Tracker** — server-side User-Agent logging in custom WP table (`{prefix}_seobetter_ai_bot_log`). Dashboard chart per-bot per-day. Pro+: last 30 days. Agency: last 12 months + per-site filtering. Pairs with AI Citation Tracker as the input/output sides of the wedge ("Did AI engines READ your content? Did they CITE it?") | 2-3 days |
+| **Engine submission checklist** — Settings UI listing Bing Webmaster Tools / GSC / Perplexity / ChatGPT search registration with status indicators. Free shows static checklist; Pro+ adds auto-status checks (ping each engine for indexed-by status). | 0.5 day |
+
+**Security work (the big one):**
+
+| Order | Task | Effort | Layer |
+|---|---|---|---|
+| S4 | **Layer 3 plugin split** — extract ALL Pro PHP into separate `seobetter-pro` codebase. Free plugin (`seobetter`) ships ONLY free-tier code + hook stubs. Cracking the free plugin unlocks NOTHING. | 1-2 weeks | Layer 3 |
+| S5 | Freemius Bundle Generator setup — automatic build of `seobetter-pro.zip` from Pro codebase | 1 day | Layer 3 |
+| S6 | **Pre-launch security audit** — verify Layers 1-3 all pass: HMAC signing, SSRF prevention, rate limits, cost caps, server-side license verification, plugin split (cracked free plugin = zero Pro capability) | 2-3 days | Audit |
+
+### Phase 3 — AppSumo Lifetime Deal launch (week 7-14)
+
+**5-tier LTD ladder activated** (see §5 below for cap details).
+
+**Cloud Credits activated publicly** — LTD buyers exceeding their lifetime Cloud cap can buy credit packs to top up.
+
+**No new feature work** — this is a launch promotion using already-built infrastructure.
+
+### Phase 4 — WordPress.org directory submission (~1 week prep + 7-14 days approval)
+
+**Features:** none — submission only.
+
+**Security & compliance work:**
+
+| Task | Effort |
+|---|---|
+| WP.org compliance audit — proper escaping, sanitization, no hardcoded external calls in free plugin, GPL2+ compatible, capability checks on every admin route | 3-5 days |
+| Final external security review (paid, ~$500-1500 via WPSec / Patchstack / similar specialist) | 1 week elapsed, ~6h Ben's time |
+| Build the WP.org directory listing — hero video, 8 screenshots, benefit-led description, FAQ | 1 week |
+| Prepare 3 launch blog posts on seobetter.com (per `article-marketing.md` Top-10 keywords) | 1 week |
+
+### Phase 5+ — Post-revenue (months 5-12+)
+
+**Features (priority order, ship one per release):**
+
+| Task | Tier |
+|---|---|
+| Refresh-brief generator (side-by-side diff suggestions) | Agency |
+| GSC Indexing API integration | Agency |
+| Cannibalization detector | Agency |
+| Custom prompt templates per content type | Agency |
+| Outdated-stat LLM detection in Freshness | Pro+ |
+| Internal Links unlimited + auto-linking rules (Link Whisper-style) | Agency |
+| Premium white-label add-on ($99/mo) — custom domain, full UI rebrand, whitelisted email | Agency add-on |
+| **WooCommerce Pro add-on** (Category Intro Generator + Product Description Rewriter) | Pro+ Intros (5/site); Agency unlimited + Rewriter |
+| **Events Calendar Pro add-on** (Event blocks + Event schema enrichment) | Pro+ |
+| **WP Job Manager Pro add-on** (Job Posting blocks + JobPosting schema) | Pro+ |
+| Phase 6: 3 free Cloud articles/mo to free tier (only if MRR > $8K/mo) | Free |
+| Per-page AI bot heatmap — which articles get hit by which bots; correlate with Citation Tracker | Pro+ |
+| Server-level AI crawler optimization — Cache-Control / Last-Modified / ETag tuning for AI crawler patterns | Agency |
+| llms.txt format auto-update — when OpenAI/Google/Perplexity announce adoption, plugin auto-updates llms.txt format if spec evolves (monitors llmstxt.org for spec changes; safe migration of existing user customizations) | All |
+
+**Security work:**
+
+| Task | Layer |
+|---|---|
+| Layer 4 — UUID install fingerprinting (Freemius tracks UUID + URL + license + activation timestamp; duplicate UUIDs auto-flag) | Layer 4 |
+| Layer 4 — Plugin self-hash + tamper detection (`X-Seobetter-Hash` header on every cloud-api request) | Layer 4 |
+| Layer 4 — Runtime license pings (cloud-api refuses if license-not-pinged > N hours) | Layer 4 |
+| Layer 4 — License-used-on-too-many-sites auto-downgrade | Layer 4 |
 
 ---
 
-*Add new ideas to this file as they come up. Move items to "implemented" when built and tested.*
+## 4. Security & Anti-Tamper Roadmap
+
+This summarizes `security.md` — the canonical 4-layer plan. Every Pro feature ships with its security layer alongside.
+
+### Layer 1 — Vercel endpoint hardening ✅ SHIPPED v1.5.211-212
+
+| Component | Status |
+|---|---|
+| HMAC request signing | ✅ |
+| Origin validation | ✅ |
+| SSRF prevention | ✅ |
+| Input sanitization | ✅ |
+| Rate limiting (Upstash) | ✅ |
+| Cost circuit breaker (Serper / Firecrawl / OpenRouter / Anthropic / Groq) | ✅ |
+| Environment variable hygiene | ✅ |
+
+### Layer 2 — Pro gating architecture (Phase 1)
+
+**Rule 1 — Pro features must execute server-side.** No client-side license checks. Every Pro endpoint on the cloud API verifies the Freemius license before executing. A cracked plugin still can't get Pro behavior because the code lives behind the API.
+
+**Rule 2 — License verification via Freemius.** Plugin sends license key with every cloud-api request. Cloud API validates against Freemius API; refuses on invalid. Cached for 1h with revocation honored.
+
+### Layer 3 — Plugin split (Phase 2)
+
+**Free plugin `seobetter` — WordPress.org**:
+- Unobfuscated PHP (WP.org rule)
+- Free tier features ONLY: 3 content types, basic schema, GEO Analyzer, Pexels, GSC connect, footer link
+- Contains hook stubs for Pro features: `do_action('seobetter_pro_inject_citation', ...)`, etc.
+- **No Pro logic** — even if cracked, no Pro capability is unlocked
+
+**Pro add-on `seobetter-pro` — Freemius distribution only (NOT WP.org)**:
+- Distributed via Freemius downloads after purchase
+- Contains all Pro/Pro+/Agency PHP: 5 Schema Blocks render_callbacks, Brand Voice logic, AI Citation Tracker, Bulk CSV UX, AIOSEO full schema, Places Pro tiers, Internal Links suggester, GSC Freshness driver, etc.
+- Hooks into free plugin's `do_action` stubs
+- Freemius Bundle Generator handles the split build automatically
+
+**User flow:**
+1. Install free plugin from WP.org → gets free tier
+2. Buy Pro/Pro+/Agency via Freemius → Freemius emails ZIP download link
+3. Upload Pro add-on ZIP → free plugin detects companion → Pro features activate
+
+### Layer 4 — Anti-tamper + fingerprinting (Phase 5+)
+
+| Component | What it does |
+|---|---|
+| UUID install fingerprinting | Plugin generates UUID on activation; Freemius tracks UUID + URL + license + timestamp. Duplicate UUIDs across different licenses = auto-flag. |
+| Plugin self-hash | Plugin computes SHA256 of its PHP files on load; sends `X-Seobetter-Hash` header on every cloud-api request. Hash mismatch = tamper detected. |
+| Runtime license pings | Cloud API refuses if license-not-pinged > 24h (prevents air-gapped license sharing). |
+| License-used-on-too-many-sites | Auto-downgrade to free tier when site count exceeds entitlement. |
+
+### Pre-launch security gate (BLOCKER)
+
+⚠️ **Do NOT ship Freemius gating or accept payments until ALL of these pass:**
+
+1. Layer 1 audit: HMAC signing works, rate limits hold under stress test, cost caps trigger at expected thresholds
+2. Layer 2 audit: every Pro endpoint refuses unauthenticated requests; license validation cached + revocation respected
+3. Layer 3 audit: cracked free plugin (license check removed manually) has ZERO Pro capability — confirmed by trying every Pro feature route
+4. WP.org compliance review: escaping, sanitization, no hardcoded URLs, GPL2+, capability checks
+5. External paid security review: ~$500-1500 by WPSec / Patchstack / similar — catches issues self-audit misses
+
+---
+
+## 5. AppSumo LTD Structure
+
+**Goal:** $89,500 gross / ~$62,650 net cash injection. 500 buyers × weighted-average $179. Lifetime support sustainable because of caps + cheap-config-only enforcement.
+
+### 5-tier ladder
+
+| Tier | Price | Sites | Seats | Cloud articles/mo (lifetime cap) | Equivalent subscription tier |
+|---|---|---|---|---|---|
+| Tier 1 | **$69** | 1 | 1 | 5 | Free++ |
+| Tier 2 | **$129** | 3 | 1 | 15 | Pro features for life |
+| Tier 3 | **$249** | 5 | 1 | 30 | Pro+ features for life |
+| Tier 4 | **$349** | 10 | 5 | 75 | Agency features for life |
+| Tier 5 | **$499** | 25 | 5 | 150 | Agency+ for life (incl. premium WL) |
+
+### Vendor-protection rules (mandatory)
+
+| Protection | Mechanism |
+|---|---|
+| **BYOK unlimited at every tier** | User connects own AI key → unlimited generation → $0 cost to Ben |
+| **Cheap config FORCED for Cloud articles** | gpt-4.1-mini extractions only (~$0.013/article). Premium config (Sonnet/Opus) gated to subscription tiers + credit packs only |
+| **Hard monthly Cloud caps** | Tier exceeds → must use BYOK or buy Cloud Credit packs; cannot overflow |
+| **Cloud Credit pack stacking** | Available to LTD buyers — additional revenue stream from heavy users |
+| **Premium WL gated to Tier 5** | Custom domain + full UI rebrand requires DNS+DKIM support burden — Tier 5 buyers expect that level of service |
+
+### Margin sanity check
+
+5-year lifetime exposure at full Cloud cap usage (cheap config only):
+
+| Tier | Net to Ben (after AppSumo 30%) | 5yr cost | 5yr profit | Margin |
+|---|---|---|---|---|
+| Tier 1 ($69) | $48.30 | $3.90 | $44.40 | **92%** |
+| Tier 2 ($129) | $90.30 | $11.70 | $78.60 | **87%** |
+| Tier 3 ($249) | $174.30 | $23.40 | $150.90 | **87%** |
+| Tier 4 ($349) | $244.30 | $58.50 | $185.80 | **76%** |
+| Tier 5 ($499) | $349.30 | $117.00 | $232.30 | **67%** |
+
+All tiers maintain ≥67% profit margin even at full lifetime usage. Sustainable.
+
+### Buyer feature unlocks per tier
+
+**Tier 1 ($69)** — 1 site · 5 Cloud/mo · BYOK unlimited · 3 content types · basic schema · GSC connect · Pexels images
+
+**Tier 2 ($129) = Pro for life** — All 21 content types · Multilingual · AI Featured Image · Brand Voice (1) · AI Citation Tracker (1 prompt × 4 engines × weekly) · 15 Cloud/mo · 3 sites
+
+**Tier 3 ($249) = Pro+ for life** — Adds: 3 Brand Voices · GSC-driven Freshness · Internal Links suggester · WooCommerce Category Intros · AI Citation Tracker (5 prompts) · 30 Cloud/mo · 5 sites
+
+**Tier 4 ($349) = Agency for life** — Adds: Bulk CSV (50/day, quality gate) · Cannibalization · Refresh-brief · GSC Indexing API · Basic WL · API access · AI Citation Tracker (25 prompts) · 75 Cloud/mo · 10 sites · 5 seats
+
+**Tier 5 ($499) = Agency+ for life** — Adds: Premium WL (custom domain + full UI rebrand) · 25 sites · dedicated support · 150 Cloud/mo
+
+---
+
+## 6. Cloud Credits Add-on
+
+**Purpose:** capture users who want extra Cloud articles beyond their tier's monthly cap, without forcing a tier upgrade.
+
+### Pack pricing
+
+| Pack | Price | Articles | $/article | Cost to Ben | Margin |
+|---|---|---|---|---|---|
+| Starter | $19 | ~50 | $0.38 | $6.50 | 66% |
+| Creator | $49 | ~150 | $0.33 | $19.50 | 60% |
+| Agency | $129 | ~500 | $0.26 | $65.00 | 50% |
+
+### Build & launch timing
+
+| Phase | Cloud Credits status |
+|---|---|
+| **Phase 1** (beta, 20 users) | Not yet — beta users on $99/yr founder pricing get full Pro Cloud quota |
+| **Phase 2** (Freemius integration) | **Build the backend + UI** — pack purchase, balance tracking, debit on Cloud article generation |
+| **Phase 3** (AppSumo launch) | **Activate publicly** — LTD buyers exceeding lifetime Cloud cap can buy packs |
+| **Phase 4-5** (WP.org + MRR scale) | Standard offering — credit packs available to all paid tiers as overage option |
+
+### UX
+
+- Credit balance always visible in plugin top bar: `❇ 43 credits`
+- One-click top-up modal when balance < 10
+- Per-generation success card shows real spend: `"This article cost 1 credit / $0.38 — Pro saves you 30%"`
+
+### Mirror
+
+GitHub Copilot + Cursor's credit-pack model — dominant 2026 AI-tool pricing pattern per [Schematic HQ 2026](https://schematichq.com/blog/software-monetization-models).
+
+---
+
+## 7. The "Don't Build" List (locked NOs)
+
+These were considered and explicitly rejected. Do not bring them back without clear new evidence.
+
+| Item | Why we're not building |
+|---|---|
+| ❌ Native rank tracking | Every solopreneur already has Ahrefs/SEMrush/RankMath; commodity feature; massive data cost; off-wedge |
+| ❌ Backlink analysis | Massive data costs; off-wedge; scope creep; specialized tools (Ahrefs/Majestic) own this category |
+| ❌ AI chatbot for site visitors / on-site search | Different product, different buyer (e-commerce vs content sites), infrastructure tarpit |
+| ❌ Newsletter blocks / email capture Pro | We're a content-generation tool, not a marketing-funnel tool. Out of scope. |
+| ❌ Inject buttons (Analyze & Improve) | Removed entirely from codebase — not just degated. Was a feature without clear value vs full content regeneration. |
+| ❌ Auto-publish bulk articles (no draft) | Reputation risk — CAS-style spam patterns. Default to draft + quality gate (GEO ≥ 40, < 40 = rejected). |
+| ❌ Automatic content updater (autonomous rewrite + publish) | Reputational landmine. LLM rewrites flip meaning of nuanced sentences. Refresh-brief generator (suggest only, human approves) is the sanctioned alternative. |
+| ❌ Decay alerts via email | WP.org policy violation (unsolicited email). Killed in v1.5.206d-fix17. |
+| ❌ Generic Gutenberg blocks for hand-typed content (FAQ, Key Takeaways, ToC, Pros/Cons, Code, Callouts, Comparison Table) | Already auto-rendered by `Content_Formatter` during generation. Adding standalone blocks defers to user demand post-launch. |
+| ❌ Social media post scheduling | 4-8 week build, off-wedge |
+| ❌ Email newsletter generation | Off-wedge |
+| ❌ Video script generation | Off-wedge |
+| ❌ Native A/B testing of titles/meta | 4-8 week build, off-wedge |
+| ❌ Ahrefs / Google Analytics integrations | Webhook out instead — don't rebuild what existing tools do |
+
+---
+
+## 8. License Gating Decisions Locked
+
+The 7 features the internal audit (2026-04-29) flagged as "currently free for testing — decide before launch":
+
+| Feature | Decision | Rationale |
+|---|---|---|
+| `bulk_content_generation` | **Agency only** | High API cost + reputation risk; premium feature anchor |
+| `content_brief` | **Pro+ unlimited** (free 3/mo) | Free tease drives habit; Pro+ unlocks scale |
+| `citation_tracker` | **Pro/Pro+/Agency tiered (1/5/25 prompts)** | THE wedge — every paid tier gets it; scaled by tier |
+| `internal_link_suggestions` | **Pro+ suggester (5/post); Agency unlimited + auto-rules** | Override 2026-04-15 removal lock; Link Whisper proves $77/yr WTP |
+| `cannibalization_detector` | **Agency only** | Power-user feature; low free-tier value |
+| `freshness_suggestions` | **Free age-based; Pro+ GSC-driven** | Report drives habit; smart prioritization is Pro+ |
+| `content_refresh` | **Pro+** | Real cost (research API calls); clearest Pro value |
+
+---
+
+## 9. Pricing Quick Reference
+
+| Tier | Monthly | Annual | Sites | Seats | Cloud articles | Brand Voices |
+|---|---|---|---|---|---|---|
+| Free | $0 | — | 1 | 1 | BYOK ∞ | 0 |
+| Pro | $39 | $349 | 1 | 1 | 50 | 1 |
+| Pro+ | $69 | $619 | 3 | 1 | 100 | 3 |
+| Agency | $179 | $1,790 | 10 | 5 | 250 | ∞ + per-language |
+
+**Cloud Credit packs (stacks on any paid tier or AppSumo LTD):**
+- Starter: $19 / 50 articles
+- Creator: $49 / 150 articles
+- Agency: $129 / 500 articles
+
+**AppSumo LTD (Phase 3 promotion, 500 buyers cap):**
+- Tier 1 $69 · Tier 2 $129 · Tier 3 $249 · Tier 4 $349 · Tier 5 $499
+
+**Phase 1 founder-tier (first 20 beta users only):**
+- $99/year locked forever (50% off $349 regular Pro; closes at 20 sold)
+
+**Premium white-label add-on (Phase 5+, Agency only):**
+- $99/mo on top of Agency $179
+
+---
+
+## 10. Cross-references
+
+- `pro-plan-pricing.md` — pricing math, unit economics, Phase 1-6 launch sequencing, MRR projections, contextual upgrade CTAs
+- `website-ideas.md` §1 — locked positioning + marketing taglines
+- `article-marketing.md` — 20-article competitor traffic-stealing plan + 30 keyword targets + 12-week editorial calendar
+- `security.md` — 4-layer security architecture (Layer 1 ✅ shipped; Layers 2-3 Phase 1-2; Layer 4 Phase 5+)
+- `BUILD_LOG.md` — chronological record of what's actually shipped with file:line anchors
+- `plugin_UX.md` / `plugin_functionality_wordpress.md` — UI checklist + technical reference
+- `SEO-GEO-AI-GUIDELINES.md` — content generation rules
+- `structured-data.md` — schema reference
+
+---
+
+*This file is the authoritative roadmap. When in doubt about whether a feature ships free, Pro, Pro+, or Agency — check §2 (Tier Matrix). When in doubt about when something ships — check §3 (Build Roadmap). When in doubt about whether to build something at all — check §7 (Don't Build List) first.*
