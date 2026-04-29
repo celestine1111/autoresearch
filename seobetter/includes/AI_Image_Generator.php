@@ -693,13 +693,22 @@ class AI_Image_Generator {
     }
 
     /**
-     * Load brand settings from the seobetter_settings option. Returns an
-     * array with normalized keys or empty array if branding is not configured.
+     * Load brand settings from the seobetter_settings option. Always returns
+     * the full normalized array — `provider` is empty when no AI image
+     * generator is configured (Pexels-only mode).
+     *
+     * v1.5.216.17 — Stopped early-returning `[]` when `branding_provider` is
+     * empty. The early-return broke the PHP text overlay for Pexels-only
+     * users because $brand_for_crop['text_overlay'] / 'style' / 'color_accent'
+     * were all undefined → $has_overlay = false → overlay skipped silently.
+     *
+     * Callers that need to detect "no AI provider" check
+     * `! empty( $brand['provider'] )` — that test still works correctly with
+     * the new always-return-array behavior because provider is the empty
+     * string in that case.
      */
     public static function get_brand_settings(): array {
         $settings = get_option( 'seobetter_settings', [] );
-        $provider = $settings['branding_provider'] ?? '';
-        if ( empty( $provider ) ) return [];
 
         // v1.5.216.9 — text_overlay defaults to true (existing behavior). The
         // saved option is null/empty for users who haven't seen the new toggle
@@ -707,7 +716,7 @@ class AI_Image_Generator {
         $text_overlay_raw = $settings['branding_text_overlay'] ?? '1';
 
         return [
-            'provider'        => $provider,
+            'provider'        => $settings['branding_provider'] ?? '',
             'api_key'         => $settings['branding_api_key'] ?? '',
             'style'           => $settings['branding_style'] ?? 'realistic',
             'business_name'   => $settings['branding_business_name'] ?? '',

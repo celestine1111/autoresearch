@@ -7,12 +7,76 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-29 (v1.5.216.16)
+> **Last updated:** 2026-04-29 (v1.5.216.17)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.17 — Pexels overlay actual fix (get_brand_settings early-return) + Trend_Researcher $content_type warning
+
+**Date:** 2026-04-29
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben's debug.log from v1.5.216.16 showed the smoking gun:
+
+```
+SEOBetter set_featured_image: overlay gate — text_overlay_raw=NULL has_overlay=false
+SEOBetter set_featured_image: overlay SKIPPED because text_overlay setting is disabled
+```
+
+The diagnostic logging I added in v1.5.216.15 paid off — it pointed straight at `$brand_for_crop['text_overlay']` being undefined (NULL after the `?? null` fallback), which meant `get_brand_settings()` was returning an array missing the `text_overlay` key entirely.
+
+Root cause: [AI_Image_Generator.php::get_brand_settings()](seobetter/includes/AI_Image_Generator.php) had an early-return at line 702:
+
+```php
+if ( empty( $provider ) ) return [];
+```
+
+When the user has Image Provider set to "Disabled" in Settings → Branding (Pexels-only mode), `$provider` is empty so the function returned `[]` — meaning **none** of the brand settings (text_overlay, style, color_accent, etc.) were available downstream. `set_featured_image()` then called `! empty( $brand_for_crop['text_overlay'] )` which was always false.
+
+The image source path was a red herring — the issue was never that JPEGs failed to load. The overlay code never even **ran** because the gate failed before reaching it.
+
+### Fix
+
+Removed the early-return. `get_brand_settings()` now always returns the full normalized array; provider is just empty string when no AI image generator is configured. Both callers (`set_featured_image()` lines 4011 and 4067) use `! empty( $brand['provider'] )` to detect AI-vs-stock mode, which still works correctly with the always-return-array behavior.
+
+Anchor: `seobetter/includes/AI_Image_Generator.php::get_brand_settings()` line **~699-721**.
+
+### Pre-fix checklist
+
+- ✅ All keywords, all 21 content types, all AI models AND Pexels — fix applies universally.
+- ✅ Backward compat — saved settings unchanged; only the in-memory return shape changed.
+- ✅ All language codes — orthogonal.
+
+### Also fixed
+
+- **`$content_type` undefined warning in Trend_Researcher.php:301** — `cloud_research()` referenced `$content_type` but it wasn't a function parameter. The caller `research()` had it but didn't pass it through. Added the parameter to `cloud_research()` signature and the pass-through at line 135.
+- Verify: `grep -n "content_type" seobetter/includes/Trend_Researcher.php`
+
+### What was NOT changed
+
+- The diagnostic logging from v1.5.216.15 stays in place — it will show the new flow:
+  - `text_overlay_raw=true has_overlay=true` (the toggle is checked) → overlay runs
+  - `text_overlay_raw=false has_overlay=false` → user explicitly turned off the toggle
+- The 3-tier robust image loading from v1.5.216.16 stays in place — defensive coverage for future encoding edge cases (now that the gate is fixed, those rescues will activate when needed).
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump only
+2. `seobetter/includes/AI_Image_Generator.php` — drop the `if (empty($provider)) return [];` early-return
+3. `seobetter/includes/Trend_Researcher.php` — thread `$content_type` through `cloud_research()`
+4. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+**Verified by user:** UNTESTED — Ben to:
+1. Regenerate one Pexels article and confirm the overlay now appears.
+2. The debug.log line should now read `text_overlay_raw=true has_overlay=true ... apply returned TRUE (overlay drawn)`.
+3. Confirm the unrelated `$content_type` warning is gone from debug.log when running Trend Researcher.
 
 ---
 

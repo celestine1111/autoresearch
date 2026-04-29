@@ -132,7 +132,7 @@ class Trend_Researcher {
         }
 
         // 1. Try Vercel cloud endpoint (works everywhere, no Python needed)
-        $result = self::cloud_research( $keyword, $type, $country );
+        $result = self::cloud_research( $keyword, $type, $country, $content_type );
         if ( $result['success'] && ! empty( $result['for_prompt'] ) ) {
             $result = self::ensure_local_intent_fields( $result, $keyword );
 
@@ -283,7 +283,7 @@ class Trend_Researcher {
      * Call the Vercel cloud research endpoint.
      * Searches Reddit + HN in real-time via the SEOBetter Cloud API.
      */
-    private static function cloud_research( string $keyword, string $domain = 'general', string $country = '' ): array {
+    private static function cloud_research( string $keyword, string $domain = 'general', string $country = '', string $content_type = '' ): array {
         $cloud_url = Cloud_API::get_cloud_url();
         $settings = get_option( 'seobetter_settings', [] );
 
