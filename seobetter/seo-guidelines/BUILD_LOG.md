@@ -19,7 +19,7 @@
 ## v1.5.216.18 — Dark-on-light overlay legibility fix (top_divider + upper_left_dark)
 
 **Date:** 2026-04-29
-**Commit:** `[pending]`
+**Commit:** `71dd32d`
 
 ### Why this ships
 
