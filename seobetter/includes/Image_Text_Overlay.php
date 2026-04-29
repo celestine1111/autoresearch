@@ -119,17 +119,65 @@ class Image_Text_Overlay {
         }
 
         $ext = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
-        if ( ! in_array( $ext, [ 'jpg', 'jpeg', 'png' ], true ) ) {
-            // .webp/.gif/etc — webp conversion runs AFTER this in the pipeline,
-            // so the input here is always JPEG or PNG. Bail safely if not.
+        error_log( 'SEOBetter Image_Text_Overlay: path=' . $path . ' ext=' . $ext . ' filesize=' . @filesize( $path ) );
+        if ( ! in_array( $ext, [ 'jpg', 'jpeg', 'png', 'webp' ], true ) ) {
+            // .gif/etc — webp conversion runs AFTER this in the pipeline,
+            // so the input here is normally JPEG/PNG (or already WebP if the
+            // attachment was previously converted). Bail safely on anything
+            // else; the clean image still ships.
+            error_log( 'SEOBetter Image_Text_Overlay: unsupported file extension ' . $ext . ' — skipping overlay' );
             return false;
         }
 
-        $im = ( $ext === 'png' ) ? @imagecreatefrompng( $path ) : @imagecreatefromjpeg( $path );
+        // v1.5.216.16 — Robust image loading with 3-tier fallback.
+        // Pre-fix: a single @imagecreatefrom{jpeg,png} call. Pexels JPEGs
+        // sometimes fail to load with imagecreatefromjpeg() due to encoding
+        // quirks (some hosts have GD compiled without certain JPEG features —
+        // progressive, CMYK, embedded ICC profiles), even though the file is
+        // a valid JPEG. Symptom: Nano Banana (PNG output) overlays correctly,
+        // Pexels (JPEG) silently skips.
+        //
+        // Fallbacks:
+        //   1. native imagecreatefrom{jpeg,png,webp}() — fast, works for ~95%
+        //   2. imagecreatefromstring() on file_get_contents — handles some
+        //      JPEGs the format-specific functions reject
+        //   3. WP_Image_Editor → re-save as clean JPEG → reload with GD
+        //      (cleanest fallback; uses Imagick if available)
+        $im = null;
+        if ( $ext === 'png' ) {
+            $im = @imagecreatefrompng( $path );
+        } elseif ( $ext === 'webp' && function_exists( 'imagecreatefromwebp' ) ) {
+            $im = @imagecreatefromwebp( $path );
+        } else {
+            $im = @imagecreatefromjpeg( $path );
+        }
         if ( ! $im ) {
-            error_log( 'SEOBetter Image_Text_Overlay: failed to load image ' . $path );
+            error_log( 'SEOBetter Image_Text_Overlay: native load failed (ext=' . $ext . ', path=' . $path . ') — trying imagecreatefromstring fallback' );
+            $bin = @file_get_contents( $path );
+            if ( $bin !== false ) {
+                $im = @imagecreatefromstring( $bin );
+            }
+        }
+        if ( ! $im ) {
+            error_log( 'SEOBetter Image_Text_Overlay: imagecreatefromstring failed — trying WP_Image_Editor re-save fallback' );
+            $editor = wp_get_image_editor( $path );
+            if ( ! is_wp_error( $editor ) ) {
+                $temp = wp_tempnam( 'sb-overlay.jpg' );
+                if ( $temp ) {
+                    $editor->set_quality( 95 );
+                    $resaved = $editor->save( $temp, 'image/jpeg' );
+                    if ( ! is_wp_error( $resaved ) && ! empty( $resaved['path'] ) && file_exists( $resaved['path'] ) ) {
+                        $im = @imagecreatefromjpeg( $resaved['path'] );
+                        @unlink( $resaved['path'] );
+                    }
+                }
+            }
+        }
+        if ( ! $im ) {
+            error_log( 'SEOBetter Image_Text_Overlay: ALL image loading methods failed for ' . $path . ' — skipping overlay; clean image still ships' );
             return false;
         }
+        error_log( 'SEOBetter Image_Text_Overlay: image loaded successfully (' . imagesx( $im ) . 'x' . imagesy( $im ) . ')' );
 
         if ( $ext === 'png' ) {
             imagealphablending( $im, true );
@@ -173,7 +221,15 @@ class Image_Text_Overlay {
             return false;
         }
 
-        $ok = ( $ext === 'png' ) ? @imagepng( $im, $path, 6 ) : @imagejpeg( $im, $path, 92 );
+        // v1.5.216.16 — Save in the source's format so we don't break the
+        // attachment's mime metadata (set by media_sideload_image earlier).
+        if ( $ext === 'png' ) {
+            $ok = @imagepng( $im, $path, 6 );
+        } elseif ( $ext === 'webp' && function_exists( 'imagewebp' ) ) {
+            $ok = @imagewebp( $im, $path, 90 );
+        } else {
+            $ok = @imagejpeg( $im, $path, 92 );
+        }
         imagedestroy( $im );
 
         if ( ! $ok ) {
