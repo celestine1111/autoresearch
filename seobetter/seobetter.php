@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.14
+ * Version: 1.5.216.15
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.14' );
+define( 'SEOBETTER_VERSION', '1.5.216.15' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4105,6 +4105,20 @@ final class SEOBetter {
         // headline server-side using bundled fonts. Brand color_accent (or
         // color_primary fallback) drives the accent-block technique used by
         // the illustration / flat style presets.
+        //
+        // v1.5.216.15 — Verbose decision logging. Ben reported "no text over
+        // Pexels featured image" on v1.5.216.14 even though the gate had been
+        // broadened to drop the AI-provider requirement. Logs every input so
+        // debug.log shows whether the gate was reached, with what values,
+        // and what apply() returned.
+        $tx_raw = $brand_for_crop['text_overlay'] ?? null;
+        error_log( sprintf(
+            'SEOBetter set_featured_image: overlay gate — text_overlay_raw=%s has_overlay=%s style_key=%s image_id=%d',
+            var_export( $tx_raw, true ),
+            $has_overlay ? 'true' : 'false',
+            $style_key,
+            $image_id
+        ) );
         if ( $has_overlay ) {
             $accent_color = $brand_for_crop['color_accent'] ?? '';
             if ( $accent_color === '' ) {
@@ -4114,13 +4128,25 @@ final class SEOBetter {
                 $accent_color = '#0F172A';
             }
             $article_lang = (string) ( get_post_meta( $post_id, '_seobetter_language', true ) ?: 'en' );
-            \SEOBetter\Image_Text_Overlay::apply(
+            $title_for_overlay = get_the_title( $post_id );
+            error_log( sprintf(
+                'SEOBetter set_featured_image: calling Image_Text_Overlay::apply image_id=%d style=%s lang=%s accent=%s title="%s"',
                 $image_id,
-                get_the_title( $post_id ),
+                $style_key,
+                $article_lang,
+                $accent_color,
+                substr( (string) $title_for_overlay, 0, 80 )
+            ) );
+            $overlay_ok = \SEOBetter\Image_Text_Overlay::apply(
+                $image_id,
+                $title_for_overlay,
                 $style_key,
                 $article_lang,
                 $accent_color
             );
+            error_log( 'SEOBetter set_featured_image: Image_Text_Overlay::apply returned ' . ( $overlay_ok ? 'TRUE (overlay drawn)' : 'FALSE (skipped — see prior log line for reason)' ) );
+        } else {
+            error_log( 'SEOBetter set_featured_image: overlay SKIPPED because text_overlay setting is disabled — flip "Text Overlay" checkbox ON in Settings → Branding to enable' );
         }
 
         // v1.5.215 — Best-effort WebP conversion at quality 85 for the

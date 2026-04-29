@@ -7,12 +7,67 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-29 (v1.5.216.14)
+> **Last updated:** 2026-04-29 (v1.5.216.15)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.15 — Verbose overlay-gate logging (diagnostic)
+
+**Date:** 2026-04-29
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben reported "no text over Pexels featured image" on v1.5.216.14 — even though that release was supposed to drop the AI-provider gate so Pexels images get the PHP overlay too. Code review of `set_featured_image()` shows the gate is correct (`$has_overlay = ! empty( $brand_for_crop['text_overlay'] )`) and the apply() call is unconditional within the if-block, so the failure point is somewhere we can't see without runtime telemetry.
+
+This release adds verbose `error_log` calls at every decision point so the next regenerate produces a debug.log trace showing exactly what's happening.
+
+### Added
+
+- **Decision-point log at the gate** — `seobetter.php::set_featured_image()` line **~4108**
+  - Logs `text_overlay_raw`, `has_overlay`, `style_key`, `image_id` so we know whether the gate was reached and with what values
+  - If `has_overlay` is false → logs explicit reason ("text_overlay setting is disabled — flip checkbox ON")
+  - If `has_overlay` is true → logs the apply() call inputs (style, lang, accent, title) AND the return value (TRUE = overlay drawn, FALSE = skipped + see prior log line)
+  - Verify: `grep -n "overlay gate\|Image_Text_Overlay::apply returned\|overlay SKIPPED" seobetter/seobetter.php`
+
+### How Ben uses this
+
+1. Enable WP debug.log: `define('WP_DEBUG', true); define('WP_DEBUG_LOG', true);` in wp-config.php (most installs already have this).
+2. Generate a new article that lands on a Pexels image (set Image Provider to "Disabled" in Settings → Branding, or just don't have an AI key).
+3. After the article publishes, open `wp-content/debug.log` and grep for `SEOBetter`. The relevant lines show:
+   - `set_featured_image: START` (entry)
+   - `set_featured_image: brand_provider=(none)` (so Pexels path is taken)
+   - `set_featured_image: Pexels returned URL ...`
+   - `set_featured_image: overlay gate — text_overlay_raw=true has_overlay=true style_key=realistic image_id=123`
+   - `set_featured_image: calling Image_Text_Overlay::apply image_id=123 style=realistic lang=en accent=#0F172A title="..."`
+   - `Image_Text_Overlay: applied technique=bottom_scrim style=realistic to attachment=123` (success)
+     OR
+   - `Image_Text_Overlay: <bail reason>` followed by `Image_Text_Overlay::apply returned FALSE`
+4. Paste the SEOBetter lines back to the assistant and we pinpoint the failure.
+
+### Hypotheses we can rule in/out from the trace
+
+| Symptom in debug.log | Diagnosis | Fix |
+|---|---|---|
+| `overlay gate — text_overlay_raw=null has_overlay=false` | Setting not saved / settings array missing the key | Re-save Settings → Branding |
+| `overlay gate — text_overlay_raw=false has_overlay=false` | Checkbox is OFF | Flip checkbox ON |
+| `overlay gate ... has_overlay=true` followed by `apply returned FALSE` AND `GD or FreeType missing` | Host doesn't have GD with FreeType | Need server upgrade or Imagick path |
+| `apply returned FALSE` AND `attached file not found` | enforce_featured_aspect_169 changed the path | Bug in our path handling |
+| `apply returned FALSE` AND `no font available for script=...` | Lazy-fetch failed | Network issue or sandboxed install |
+| `apply returned FALSE` AND `failed to load image` | Pexels JPEG has unusual encoding (CMYK / weird color profile) | Add image conversion before overlay |
+| No `overlay gate` line at all | set_featured_image never reached the gate (early bail at has_post_thumbnail) | Post had existing thumbnail |
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + 4 new error_log calls in set_featured_image
+2. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+**Verified by user:** UNTESTED — Ben to regenerate one article that resolves to a Pexels image, then share the SEOBetter-tagged lines from `wp-content/debug.log`. Once the failure mode is pinpointed, the actual fix ships in v1.5.216.16.
 
 ---
 
