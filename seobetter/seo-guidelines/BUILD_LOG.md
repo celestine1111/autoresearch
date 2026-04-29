@@ -19,7 +19,7 @@
 ## v1.5.216.15 — Verbose overlay-gate logging (diagnostic)
 
 **Date:** 2026-04-29
-**Commit:** `[pending]`
+**Commit:** `8be3ac8`
 
 ### Why this ships
 
