@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.13
+ * Version: 1.5.216.14
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.13' );
+define( 'SEOBETTER_VERSION', '1.5.216.14' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4065,7 +4065,14 @@ final class SEOBetter {
         // overlay is enabled — preserves the headline intact instead of
         // slicing through it with a center-crop.
         $brand_for_crop = \SEOBetter\AI_Image_Generator::get_brand_settings();
-        $has_overlay = ! empty( $brand_for_crop['provider'] ) && ! empty( $brand_for_crop['text_overlay'] );
+        // v1.5.216.14 — Apply PHP text overlay regardless of image source.
+        // Pre-fix the gate required `provider` (AI gen) AND `text_overlay`
+        // which meant Pexels-sourced featured images never got the headline
+        // burned in. Image_Text_Overlay is provider-agnostic — it draws on
+        // whatever image was just saved (Pollinations, Nano Banana, Pexels,
+        // Picsum, all valid). Now gated only by the user's text_overlay
+        // preference (still respects the Settings checkbox).
+        $has_overlay = ! empty( $brand_for_crop['text_overlay'] );
         // v1.5.216.11 — Per-style crop bias. Different banner styles place
         // the headline in different regions, so a one-size crop bias slices
         // through some styles' text. Map from style-key to crop strategy:

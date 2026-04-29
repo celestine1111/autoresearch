@@ -12,35 +12,64 @@ namespace SEOBetter;
  * bundled Inter font — no spelling errors, exact control over typography.
  *
  * Per-style overlay technique map (matches the dropdown in Settings →
- * Branding → Image Style Preset):
+ * Branding → Image Style Preset). v1.5.216.14 made each technique
+ * visually distinct and aligned with its dropdown description:
  *
- *   realistic / editorial → bottom linear scrim, 68-72px Inter Bold, white
- *   hero (cinematic)      → full dark tint + centered serif-feel, 96px ExtraBold
- *   magazine_cover (alias of realistic) → top tint band, 96px ExtraBold
- *   illustration / flat   → accent color block (left 45%), 56-60px white
- *   minimalist            → bottom-right corner card, 36px on white
- *   3d                    → glass card centered, 54px white
+ *   realistic    → bottom_scrim       — bottom-third headline, ExtraBold white
+ *   editorial    → top_divider        — title top + brand-accent divider line, dark
+ *   hero         → cinema_letterbox   — 50px black bars top+bottom, centered title
+ *   illustration → upper_left_dark    — upper-left soft white wash + dark headline
+ *   flat         → split_left         — solid block left 50% (brand color), photo right
+ *   minimalist   → corner_card        — bottom-right white card, dark text
+ *   3d           → glass_card         — centered translucent panel, white text
  *
  * All techniques meet WCAG AA 4.5:1 contrast. Input is the 1200×630 cropped
  * image written by enforce_featured_aspect_169(); output is the same path
  * with the overlay drawn in place.
  *
- * Coverage: Inter Bold + ExtraBold (Latin Extended + Cyrillic + Greek). For
- * scripts outside that set (CJK, Arabic, Devanagari, Thai, Hebrew) the
- * overlay is skipped — the post still gets a clean AI-generated image, just
- * without burned-in text. Future v1.5.217+ will lazy-fetch Noto subsets.
+ * Coverage:
+ *   - Latin / Cyrillic / Greek → bundled Inter Bold + ExtraBold (assets/fonts/)
+ *   - Japanese / Korean / Simplified Chinese / Traditional Chinese → lazy-fetch
+ *     Noto Sans CJK variant on first use
+ *   - Arabic / Hebrew / Devanagari (Hindi/Marathi/Nepali) / Thai → lazy-fetch
+ *     Noto Sans variable subset on first use
+ *
+ * Lazy-fetched fonts are cached under wp-content/uploads/seobetter-fonts/
+ * indefinitely (one-time ~200ms-2s download per script per WP install). If
+ * the fetch fails the overlay is skipped — the clean image still ships, the
+ * post just gets no headline burned in.
+ *
+ * Known limitation (v1.5.216.14): PHP GD/FreeType doesn't do bidi shaping,
+ * so Arabic glyphs won't connect with their proper contextual ligatures —
+ * each character renders in its isolated form. Still legible but not as
+ * elegant as native Arabic typesetting. Imagick handles this correctly;
+ * future versions may dispatch to Imagick for Arabic when available.
  */
 class Image_Text_Overlay {
 
     /**
-     * Map dropdown style-key → overlay technique.
+     * v1.5.216.14 — Map dropdown style-key → overlay technique.
+     *
+     * Each technique is visually distinct AND matches the description shown
+     * in the dropdown (Settings → Branding → Image Style Preset). Pre-fix
+     * `illustration` and `flat` both mapped to `accent_block` so they
+     * looked identical despite Ben picking different presets.
+     *
+     * Dropdown ↔ technique alignment:
+     *   📰 Magazine Cover   "bottom-third headline overlay"           → bottom_scrim
+     *   🗞️ Classic Editorial "title top with horizontal divider"        → top_divider
+     *   🎬 Cinematic Hero    "centered title + cinema black bars"       → cinema_letterbox
+     *   🎨 Modern Illustr.   "upper-left dark headline"                 → upper_left_dark
+     *   ⬜ Title-led Flat    "split layout: headline left, icon right"  → split_left
+     *   ◽ Minimalist        "small corner title, image dominant"       → corner_card
+     *   🎯 3D Hero           "floating centered title overlay"          → glass_card
      */
     const STYLE_TECHNIQUE_MAP = [
-        'realistic'    => 'magazine_top_band',  // magazine-cover style
-        'editorial'    => 'bottom_scrim',
-        'hero'         => 'cinematic_tint',     // centered serif over full tint
-        'illustration' => 'accent_block',
-        'flat'         => 'accent_block',
+        'realistic'    => 'bottom_scrim',
+        'editorial'    => 'top_divider',
+        'hero'         => 'cinema_letterbox',
+        'illustration' => 'upper_left_dark',
+        'flat'         => 'split_left',
         'minimalist'   => 'corner_card',
         '3d'           => 'glass_card',
     ];
@@ -51,11 +80,11 @@ class Image_Text_Overlay {
      * @param int    $attachment_id  WP attachment post ID.
      * @param string $headline       Headline text to render.
      * @param string $style_key      Dropdown style key (realistic, editorial, hero, illustration, flat, minimalist, 3d).
-     * @param string $lang           Article language (en, ja, etc.) — used to skip unsupported scripts.
-     * @param string $accent_color   Brand accent hex color used for accent_block technique. Defaults to dark slate.
-     * @return bool                  True if overlay was applied and saved; false on any failure (script unsupported,
-     *                               GD missing, file unreadable, etc.). Failure is graceful — the underlying clean
-     *                               image is still saved, the caller doesn't need to do anything special.
+     * @param string $lang           Article language (en, ja, etc.) — drives script-aware font dispatch.
+     * @param string $accent_color   Brand accent hex color used by the split_left + top_divider techniques. Defaults to dark slate.
+     * @return bool                  True if overlay was applied and saved; false on any failure (font lazy-fetch
+     *                               failure, GD missing, file unreadable, etc.). Failure is graceful — the
+     *                               underlying clean image is still saved, the caller doesn't need to do anything.
      */
     public static function apply( int $attachment_id, string $headline, string $style_key = 'realistic', string $lang = 'en', string $accent_color = '#0F172A' ): bool {
         $headline = trim( wp_strip_all_tags( $headline ) );
@@ -68,8 +97,18 @@ class Image_Text_Overlay {
             return false;
         }
 
-        if ( self::is_unsupported_script( $headline ) ) {
-            error_log( 'SEOBetter Image_Text_Overlay: unsupported script in headline — skipping overlay (Inter only covers Latin/Cyrillic/Greek)' );
+        // v1.5.216.14 — Script-aware font dispatch. Inter covers Latin/Cyrillic/
+        // Greek; for Arabic/Hebrew/Devanagari/Thai/Japanese/Korean/Chinese we
+        // lazy-fetch the matching Noto Sans subset to wp-content/uploads on
+        // first use. detect_script() reads the article language code first
+        // (most reliable since Ben sets it explicitly per article); falls back
+        // to character analysis for headlines whose script doesn't match the
+        // declared language.
+        $script = self::detect_script( $headline, $lang );
+        $font_bold = self::ensure_font( $script, 'bold' );
+        $font_extrabold = self::ensure_font( $script, 'extrabold' );
+        if ( ! $font_bold || ! $font_extrabold ) {
+            error_log( 'SEOBetter Image_Text_Overlay: no font available for script=' . $script . ' (lazy-fetch may have failed) — skipping overlay; clean image still ships' );
             return false;
         }
 
@@ -83,13 +122,6 @@ class Image_Text_Overlay {
         if ( ! in_array( $ext, [ 'jpg', 'jpeg', 'png' ], true ) ) {
             // .webp/.gif/etc — webp conversion runs AFTER this in the pipeline,
             // so the input here is always JPEG or PNG. Bail safely if not.
-            return false;
-        }
-
-        $font_bold      = SEOBETTER_PLUGIN_DIR . 'assets/fonts/Inter-Bold.ttf';
-        $font_extrabold = SEOBETTER_PLUGIN_DIR . 'assets/fonts/Inter-ExtraBold.ttf';
-        if ( ! file_exists( $font_bold ) || ! file_exists( $font_extrabold ) ) {
-            error_log( 'SEOBetter Image_Text_Overlay: bundled font files missing in assets/fonts/' );
             return false;
         }
 
@@ -112,14 +144,17 @@ class Image_Text_Overlay {
 
         try {
             switch ( $technique ) {
-                case 'cinematic_tint':
-                    self::draw_cinematic_tint( $im, $w, $h, $headline, $font_extrabold );
+                case 'top_divider':
+                    self::draw_top_divider( $im, $w, $h, $headline, $font_bold, $accent_rgb );
                     break;
-                case 'magazine_top_band':
-                    self::draw_magazine_top_band( $im, $w, $h, $headline, $font_extrabold );
+                case 'cinema_letterbox':
+                    self::draw_cinema_letterbox( $im, $w, $h, $headline, $font_extrabold );
                     break;
-                case 'accent_block':
-                    self::draw_accent_block( $im, $w, $h, $headline, $font_bold, $accent_rgb );
+                case 'upper_left_dark':
+                    self::draw_upper_left_dark( $im, $w, $h, $headline, $font_bold );
+                    break;
+                case 'split_left':
+                    self::draw_split_left( $im, $w, $h, $headline, $font_extrabold, $accent_rgb );
                     break;
                 case 'corner_card':
                     self::draw_corner_card( $im, $w, $h, $headline, $font_bold );
@@ -129,7 +164,7 @@ class Image_Text_Overlay {
                     break;
                 case 'bottom_scrim':
                 default:
-                    self::draw_bottom_scrim( $im, $w, $h, $headline, $font_bold );
+                    self::draw_bottom_scrim( $im, $w, $h, $headline, $font_extrabold );
                     break;
             }
         } catch ( \Throwable $e ) {
@@ -205,64 +240,75 @@ class Image_Text_Overlay {
     }
 
     /**
-     * Magazine cover — top tint band 200px tall + headline starting ~220px.
+     * Classic Editorial — top section with title + horizontal divider, photo below.
+     * Matches dropdown copy: "title top with horizontal divider, photo below (NYT/Atlantic style)".
      */
-    private static function draw_magazine_top_band( $im, int $w, int $h, string $headline, string $font ): void {
-        $band_h = 220;
-        $tint_alpha = (int) round( ( 1 - 0.55 ) * 127 ); // 0.55 black
-        $tint = imagecolorallocatealpha( $im, 0, 0, 0, $tint_alpha );
-        imagefilledrectangle( $im, 0, 0, $w - 1, $band_h - 1, $tint );
-
-        // Bottom shadow for headline body legibility
-        $shadow_top = (int) round( $h * 0.45 );
-        for ( $y = $shadow_top; $y < $h; $y++ ) {
-            $t = ( $y - $shadow_top ) / ( $h - $shadow_top );
-            $alpha_norm = pow( $t, 1.5 ) * 0.65;
+    private static function draw_top_divider( $im, int $w, int $h, string $headline, string $font, array $accent_rgb ): void {
+        // Top 38% gets a soft white-tint band so the dark headline is legible
+        // regardless of the underlying photo. Tint fades from 0.85 alpha at the
+        // top to 0 at the bottom of the band so it blends into the photo.
+        $band_h = (int) round( $h * 0.38 );
+        for ( $y = 0; $y < $band_h; $y++ ) {
+            $t = $y / max( 1, $band_h );
+            $alpha_norm = ( 1 - $t ) * 0.85; // 0.85 at top → 0 at bottom of band
             $gd_alpha = (int) round( ( 1 - $alpha_norm ) * 127 );
-            $color = imagecolorallocatealpha( $im, 0, 0, 0, $gd_alpha );
+            $color = imagecolorallocatealpha( $im, 255, 255, 255, $gd_alpha );
             imageline( $im, 0, $y, $w - 1, $y, $color );
         }
 
         $padding_x = 60;
         $max_w = $w - ( $padding_x * 2 );
 
-        // Headline sits across the bottom 50% in big type
-        [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 92, 60, 3 );
-        $line_h = (int) round( $size * 1.05 );
+        [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 78, 46, 2 );
+        $line_h = (int) round( $size * 1.10 );
 
-        $white = imagecolorallocate( $im, 255, 255, 255 );
-        $shadow = imagecolorallocatealpha( $im, 0, 0, 0, 65 );
+        $dark = imagecolorallocate( $im, 17, 24, 39 ); // slate-900
 
+        // Stack lines from the top of the canvas with 50px breathing room
         $n = count( $lines );
-        $block_h = $line_h * $n;
-        $block_top = $h - 60 - $block_h;
+        $block_top = 50;
         for ( $i = 0; $i < $n; $i++ ) {
             $y = $block_top + ( $i * $line_h ) + $size;
-            imagettftext( $im, $size, 0, $padding_x + 1, $y + 2, $shadow, $font, $lines[ $i ] );
-            imagettftext( $im, $size, 0, $padding_x, $y, $white, $font, $lines[ $i ] );
+            imagettftext( $im, $size, 0, $padding_x, $y, $dark, $font, $lines[ $i ] );
         }
+
+        // 2px horizontal divider in brand accent color (or slate fallback) BELOW the headline block
+        $divider_y = $block_top + ( $line_h * $n ) + 18;
+        $accent = imagecolorallocate( $im, $accent_rgb[0], $accent_rgb[1], $accent_rgb[2] );
+        imagefilledrectangle( $im, $padding_x, $divider_y, $w - $padding_x, $divider_y + 2, $accent );
     }
 
     /**
-     * Cinematic — full-canvas dark tint + centered headline.
+     * Cinematic Hero — 50px black bars top + bottom (cinema letterbox), centered title.
+     * Matches dropdown copy: "full-bleed photo with centered title + cinema black bars".
      */
-    private static function draw_cinematic_tint( $im, int $w, int $h, string $headline, string $font ): void {
-        $tint_alpha = (int) round( ( 1 - 0.55 ) * 127 );
-        $tint = imagecolorallocatealpha( $im, 0, 0, 0, $tint_alpha );
-        imagefilledrectangle( $im, 0, 0, $w - 1, $h - 1, $tint );
+    private static function draw_cinema_letterbox( $im, int $w, int $h, string $headline, string $font ): void {
+        $bar_h = 50;
+        $black = imagecolorallocate( $im, 0, 0, 0 );
+        // Top + bottom solid black bars (the "cinema" letterbox)
+        imagefilledrectangle( $im, 0, 0, $w - 1, $bar_h - 1, $black );
+        imagefilledrectangle( $im, 0, $h - $bar_h, $w - 1, $h - 1, $black );
+
+        // Subtle 0.25 dim on the photo region for headline contrast pop
+        $dim_alpha = (int) round( ( 1 - 0.25 ) * 127 );
+        $dim = imagecolorallocatealpha( $im, 0, 0, 0, $dim_alpha );
+        imagefilledrectangle( $im, 0, $bar_h, $w - 1, $h - $bar_h - 1, $dim );
 
         $padding_x = 100;
         $max_w = $w - ( $padding_x * 2 );
 
-        [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 96, 56, 2 );
+        [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 92, 56, 2 );
         $line_h = (int) round( $size * 1.05 );
 
         $white = imagecolorallocate( $im, 255, 255, 255 );
         $shadow = imagecolorallocatealpha( $im, 0, 0, 0, 60 );
 
+        // Center vertically inside the photo region (between the two bars)
+        $photo_top = $bar_h;
+        $photo_h = $h - ( $bar_h * 2 );
         $n = count( $lines );
         $block_h = $line_h * $n;
-        $block_top = (int) round( ( $h - $block_h ) / 2 );
+        $block_top = $photo_top + (int) round( ( $photo_h - $block_h ) / 2 );
 
         for ( $i = 0; $i < $n; $i++ ) {
             $line = $lines[ $i ];
@@ -276,17 +322,77 @@ class Image_Text_Overlay {
     }
 
     /**
-     * Accent block — solid color rectangle covers left 45%, white text inside.
+     * Modern Illustration — upper-left DARK headline on flat editorial illustration.
+     * Matches dropdown copy: "upper-left dark headline on flat editorial illustration".
+     *
+     * A soft white wash in the upper-left quadrant ensures the dark headline
+     * stays legible regardless of the underlying flat illustration's palette.
      */
-    private static function draw_accent_block( $im, int $w, int $h, string $headline, string $font, array $accent_rgb ): void {
-        $block_w = (int) round( $w * 0.45 );
+    private static function draw_upper_left_dark( $im, int $w, int $h, string $headline, string $font ): void {
+        // Soft white wash in upper-left — fades horizontally from 0.85 at left
+        // to 0 at 60% width, AND vertically from 0.85 at top to 0 at 55% height.
+        $wash_w = (int) round( $w * 0.60 );
+        $wash_h = (int) round( $h * 0.55 );
+        for ( $y = 0; $y < $wash_h; $y++ ) {
+            $ty = $y / max( 1, $wash_h );
+            for ( $x = 0; $x < $wash_w; $x += 4 ) {
+                $tx = $x / max( 1, $wash_w );
+                $combined_t = max( $tx, $ty );
+                $alpha_norm = ( 1 - $combined_t ) * 0.85;
+                if ( $alpha_norm <= 0.05 ) continue;
+                $gd_alpha = (int) round( ( 1 - $alpha_norm ) * 127 );
+                $color = imagecolorallocatealpha( $im, 255, 255, 255, $gd_alpha );
+                imagefilledrectangle( $im, $x, $y, $x + 3, $y, $color );
+            }
+        }
+
+        $padding_x = 60;
+        $padding_t = 70;
+        $max_w = (int) round( $w * 0.55 ); // headline contained within the wash zone
+
+        [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 72, 42, 3 );
+        $line_h = (int) round( $size * 1.10 );
+
+        $dark = imagecolorallocate( $im, 17, 24, 39 ); // slate-900
+
+        $n = count( $lines );
+        for ( $i = 0; $i < $n; $i++ ) {
+            $y = $padding_t + ( $i * $line_h ) + $size;
+            imagettftext( $im, $size, 0, $padding_x, $y, $dark, $font, $lines[ $i ] );
+        }
+    }
+
+    /**
+     * Title-led Flat — split layout: large headline LEFT, photo ("icon") RIGHT.
+     * Matches dropdown copy: "split layout: large headline left, abstract icon right".
+     *
+     * Uses brand accent color for the left block (or slate-900 fallback). Photo
+     * shows in the right 50% as the "abstract icon" — its center subject is
+     * shifted left by 300px so the most-likely-centered subject sits in the
+     * visible right-half region instead of being hidden behind the block.
+     */
+    private static function draw_split_left( $im, int $w, int $h, string $headline, string $font, array $accent_rgb ): void {
+        $block_w = (int) round( $w * 0.50 );
+
+        // Shift the photo: copy the center 600×630 region to the right half
+        // so the subject is visible after the left block covers the original
+        // left half. We work on a copy because imagecopy on the same resource
+        // can produce streaks when source/dest overlap.
+        $tmp = imagecreatetruecolor( $w, $h );
+        imagecopy( $tmp, $im, 0, 0, 0, 0, $w, $h );
+        // Source rect: x = ($w - $block_w) / 2, width = $block_w  (center band)
+        $src_x = (int) round( ( $w - $block_w ) / 2 );
+        imagecopy( $im, $tmp, $block_w, 0, $src_x, 0, $block_w, $h );
+        imagedestroy( $tmp );
+
+        // Solid color block on the left
         $color = imagecolorallocate( $im, $accent_rgb[0], $accent_rgb[1], $accent_rgb[2] );
         imagefilledrectangle( $im, 0, 0, $block_w - 1, $h - 1, $color );
 
         $padding_x = 60;
         $max_w = $block_w - ( $padding_x * 2 );
 
-        [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 60, 36, 4 );
+        [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 76, 42, 4 );
         $line_h = (int) round( $size * 1.10 );
 
         $white = imagecolorallocate( $im, 255, 255, 255 );
@@ -432,62 +538,172 @@ class Image_Text_Overlay {
     }
 
     /**
-     * Detect headlines that contain characters Inter Bold / ExtraBold can't
-     * render. Inter covers Latin, Latin Extended, Cyrillic and Greek. Returns
-     * true if the headline is mostly composed of CJK / Arabic / Devanagari /
-     * Thai / Hebrew / etc. glyphs — at which point overlay is skipped because
-     * GD would render them as boxes/tofu.
+     * v1.5.216.14 — Detect which script a headline is written in and return a
+     * canonical key that maps to a bundled or lazy-fetched font.
      *
-     * "Mostly" = >=20% of characters are in an unsupported block. A single
-     * stray emoji shouldn't disable the overlay.
+     * Strategy: prefer the language code (most reliable, the user explicitly
+     * selects it per article). Fall back to character analysis when the
+     * declared language is generic ('en') but the headline contains non-Latin
+     * characters — e.g. an English-tagged article whose title was actually
+     * written in Japanese.
+     *
+     * @return string One of: 'latin', 'arabic', 'hebrew', 'devanagari', 'thai',
+     *                'cjk_jp', 'cjk_kr', 'cjk_sc', 'cjk_tc'.
      */
-    private static function is_unsupported_script( string $text ): bool {
-        if ( $text === '' ) return false;
-        $unsupported = 0;
-        $total = 0;
-        $len = mb_strlen( $text, 'UTF-8' );
-        for ( $i = 0; $i < $len; $i++ ) {
-            $ch = mb_substr( $text, $i, 1, 'UTF-8' );
-            if ( preg_match( '/\s/u', $ch ) ) continue;
-            $total++;
-            $cp = self::utf8_codepoint( $ch );
-            // CJK Unified, Hiragana, Katakana, Hangul, Arabic, Hebrew,
-            // Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu,
-            // Kannada, Malayalam, Sinhala, Thai, Lao, Tibetan, Myanmar,
-            // Georgian, Ethiopic, Khmer.
-            if (
-                ( $cp >= 0x4E00 && $cp <= 0x9FFF )    // CJK Unified Ideographs
-                || ( $cp >= 0x3400 && $cp <= 0x4DBF ) // CJK Extension A
-                || ( $cp >= 0x3040 && $cp <= 0x309F ) // Hiragana
-                || ( $cp >= 0x30A0 && $cp <= 0x30FF ) // Katakana
-                || ( $cp >= 0xAC00 && $cp <= 0xD7AF ) // Hangul Syllables
-                || ( $cp >= 0x0600 && $cp <= 0x06FF ) // Arabic
-                || ( $cp >= 0x0750 && $cp <= 0x077F ) // Arabic Supplement
-                || ( $cp >= 0xFB50 && $cp <= 0xFDFF ) // Arabic Presentation A
-                || ( $cp >= 0x0590 && $cp <= 0x05FF ) // Hebrew
-                || ( $cp >= 0x0900 && $cp <= 0x097F ) // Devanagari
-                || ( $cp >= 0x0980 && $cp <= 0x09FF ) // Bengali
-                || ( $cp >= 0x0A00 && $cp <= 0x0A7F ) // Gurmukhi
-                || ( $cp >= 0x0A80 && $cp <= 0x0AFF ) // Gujarati
-                || ( $cp >= 0x0B00 && $cp <= 0x0B7F ) // Oriya
-                || ( $cp >= 0x0B80 && $cp <= 0x0BFF ) // Tamil
-                || ( $cp >= 0x0C00 && $cp <= 0x0C7F ) // Telugu
-                || ( $cp >= 0x0C80 && $cp <= 0x0CFF ) // Kannada
-                || ( $cp >= 0x0D00 && $cp <= 0x0D7F ) // Malayalam
-                || ( $cp >= 0x0D80 && $cp <= 0x0DFF ) // Sinhala
-                || ( $cp >= 0x0E00 && $cp <= 0x0E7F ) // Thai
-                || ( $cp >= 0x0E80 && $cp <= 0x0EFF ) // Lao
-                || ( $cp >= 0x0F00 && $cp <= 0x0FFF ) // Tibetan
-                || ( $cp >= 0x1000 && $cp <= 0x109F ) // Myanmar
-                || ( $cp >= 0x10A0 && $cp <= 0x10FF ) // Georgian
-                || ( $cp >= 0x1200 && $cp <= 0x137F ) // Ethiopic
-                || ( $cp >= 0x1780 && $cp <= 0x17FF ) // Khmer
-            ) {
-                $unsupported++;
+    private static function detect_script( string $headline, string $lang ): string {
+        $lang_norm = strtolower( str_replace( '_', '-', trim( $lang ) ) );
+        $base = strpos( $lang_norm, '-' ) !== false ? substr( $lang_norm, 0, strpos( $lang_norm, '-' ) ) : $lang_norm;
+
+        // Traditional Chinese variants (zh-tw, zh-hant) need the TC font; all
+        // other zh variants use Simplified.
+        if ( in_array( $lang_norm, [ 'zh-tw', 'zh-hant', 'zh-hk' ], true ) ) {
+            return 'cjk_tc';
+        }
+
+        $lang_to_script = [
+            'ja' => 'cjk_jp',
+            'ko' => 'cjk_kr',
+            'zh' => 'cjk_sc',
+            'ar' => 'arabic', 'fa' => 'arabic', 'ur' => 'arabic',
+            'he' => 'hebrew',
+            'hi' => 'devanagari', 'mr' => 'devanagari', 'ne' => 'devanagari',
+            'th' => 'thai',
+        ];
+        if ( isset( $lang_to_script[ $base ] ) ) {
+            return $lang_to_script[ $base ];
+        }
+
+        // Fall back to character-based detection when language code is ambiguous.
+        if ( $headline !== '' ) {
+            $counts = [
+                'cjk_jp' => 0, 'cjk_kr' => 0, 'cjk_sc' => 0,
+                'arabic' => 0, 'hebrew' => 0,
+                'devanagari' => 0, 'thai' => 0,
+            ];
+            $len = mb_strlen( $headline, 'UTF-8' );
+            for ( $i = 0; $i < $len; $i++ ) {
+                $ch = mb_substr( $headline, $i, 1, 'UTF-8' );
+                if ( preg_match( '/\s/u', $ch ) ) continue;
+                $cp = self::utf8_codepoint( $ch );
+                if ( ( $cp >= 0x3040 && $cp <= 0x309F ) || ( $cp >= 0x30A0 && $cp <= 0x30FF ) ) {
+                    $counts['cjk_jp']++;
+                } elseif ( $cp >= 0xAC00 && $cp <= 0xD7AF ) {
+                    $counts['cjk_kr']++;
+                } elseif ( ( $cp >= 0x4E00 && $cp <= 0x9FFF ) || ( $cp >= 0x3400 && $cp <= 0x4DBF ) ) {
+                    $counts['cjk_sc']++; // generic CJK ideograph → assume Simplified
+                } elseif ( ( $cp >= 0x0600 && $cp <= 0x06FF ) || ( $cp >= 0x0750 && $cp <= 0x077F ) || ( $cp >= 0xFB50 && $cp <= 0xFDFF ) ) {
+                    $counts['arabic']++;
+                } elseif ( $cp >= 0x0590 && $cp <= 0x05FF ) {
+                    $counts['hebrew']++;
+                } elseif ( $cp >= 0x0900 && $cp <= 0x097F ) {
+                    $counts['devanagari']++;
+                } elseif ( $cp >= 0x0E00 && $cp <= 0x0E7F ) {
+                    $counts['thai']++;
+                }
+            }
+            arsort( $counts );
+            $top = array_key_first( $counts );
+            if ( $top !== null && $counts[ $top ] >= 2 ) {
+                return $top;
             }
         }
-        if ( $total === 0 ) return false;
-        return ( $unsupported / $total ) >= 0.20;
+
+        return 'latin';
+    }
+
+    /**
+     * v1.5.216.14 — Resolve a font file path for the given script + weight.
+     *
+     * - Latin uses the bundled Inter Bold / ExtraBold (assets/fonts/).
+     * - All other scripts lazy-fetch Noto Sans variable TTF from the
+     *   google/fonts GitHub repo to wp-content/uploads/seobetter-fonts/ on
+     *   first use, then re-use the cached file forever after.
+     *
+     * The variable Noto fonts default to ~Regular weight when GD reads them
+     * (PHP's FreeType binding can't access variable axes), so for non-Latin
+     * scripts the "bold" and "extrabold" requests both return the same file —
+     * the visual weight will be the variable's default instance. Acceptable
+     * trade-off vs. shipping multiple static-weight files per script.
+     *
+     * @return string|false Font path on success, false on lazy-fetch failure.
+     */
+    private static function ensure_font( string $script, string $weight = 'bold' ) {
+        if ( $script === 'latin' ) {
+            $file = $weight === 'extrabold' ? 'Inter-ExtraBold.ttf' : 'Inter-Bold.ttf';
+            $path = SEOBETTER_PLUGIN_DIR . 'assets/fonts/' . $file;
+            return file_exists( $path ) ? $path : false;
+        }
+
+        // Map script → google/fonts repo path
+        $remote_files = [
+            'arabic'     => 'ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf',
+            'hebrew'     => 'ofl/notosanshebrew/NotoSansHebrew%5Bwdth%2Cwght%5D.ttf',
+            'devanagari' => 'ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf',
+            'thai'       => 'ofl/notosansthai/NotoSansThai%5Bwdth%2Cwght%5D.ttf',
+            'cjk_jp'     => 'ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf',
+            'cjk_kr'     => 'ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf',
+            'cjk_sc'     => 'ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf',
+            'cjk_tc'     => 'ofl/notosanstc/NotoSansTC%5Bwght%5D.ttf',
+        ];
+        if ( ! isset( $remote_files[ $script ] ) ) {
+            return false;
+        }
+
+        if ( ! function_exists( 'wp_upload_dir' ) ) {
+            return false;
+        }
+        $upload = wp_upload_dir();
+        if ( ! empty( $upload['error'] ) ) {
+            error_log( 'SEOBetter Image_Text_Overlay: wp_upload_dir error — ' . $upload['error'] );
+            return false;
+        }
+        $font_dir = trailingslashit( $upload['basedir'] ) . 'seobetter-fonts/';
+        if ( ! file_exists( $font_dir ) ) {
+            wp_mkdir_p( $font_dir );
+        }
+
+        $local_path = $font_dir . $script . '.ttf';
+        if ( file_exists( $local_path ) && filesize( $local_path ) > 10000 ) {
+            return $local_path;
+        }
+
+        // Lazy-fetch from google/fonts repo. CJK files are ~10MB so allow a
+        // generous timeout. wp_remote_get respects the host's HTTP API.
+        $url = 'https://raw.githubusercontent.com/google/fonts/main/' . $remote_files[ $script ];
+        error_log( 'SEOBetter Image_Text_Overlay: lazy-fetching ' . $script . ' font from ' . $url );
+
+        $response = wp_remote_get( $url, [
+            'timeout'    => 90, // CJK files are ~10MB
+            'sslverify'  => true,
+            'user-agent' => 'SEOBetter/' . ( defined( 'SEOBETTER_VERSION' ) ? SEOBETTER_VERSION : '0' ) . '; +https://seobetter.com',
+        ] );
+        if ( is_wp_error( $response ) ) {
+            error_log( 'SEOBetter Image_Text_Overlay: ' . $script . ' fetch wp_error — ' . $response->get_error_message() );
+            return false;
+        }
+        $code = (int) wp_remote_retrieve_response_code( $response );
+        if ( $code !== 200 ) {
+            error_log( 'SEOBetter Image_Text_Overlay: ' . $script . ' fetch HTTP ' . $code );
+            return false;
+        }
+        $body = wp_remote_retrieve_body( $response );
+        if ( strlen( $body ) < 50000 ) {
+            error_log( 'SEOBetter Image_Text_Overlay: ' . $script . ' download too small (' . strlen( $body ) . ' bytes) — likely an error page, aborting' );
+            return false;
+        }
+        // Sanity-check first 4 bytes look like a TTF header (00 01 00 00) or
+        // OTF header (4F 54 54 4F). Otherwise we fetched HTML/garbage.
+        $magic = substr( $body, 0, 4 );
+        if ( $magic !== "\x00\x01\x00\x00" && $magic !== 'OTTO' && $magic !== 'true' && $magic !== 'ttcf' ) {
+            error_log( 'SEOBetter Image_Text_Overlay: ' . $script . ' fetch did not return a valid TTF (magic=' . bin2hex( $magic ) . ')' );
+            return false;
+        }
+        if ( file_put_contents( $local_path, $body ) === false ) {
+            error_log( 'SEOBetter Image_Text_Overlay: failed to write ' . $script . ' font to ' . $local_path );
+            return false;
+        }
+        error_log( 'SEOBetter Image_Text_Overlay: cached ' . $script . ' font at ' . $local_path . ' (' . strlen( $body ) . ' bytes)' );
+        return $local_path;
     }
 
     private static function utf8_codepoint( string $ch ): int {

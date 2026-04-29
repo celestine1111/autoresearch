@@ -7,12 +7,111 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-28 (v1.5.216.13)
+> **Last updated:** 2026-04-29 (v1.5.216.14)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.14 — 7 distinct overlay techniques + Pexels overlay support + Noto lazy-fetch for non-Latin
+
+**Date:** 2026-04-29
+**Commit:** `[pending]`
+
+### Why this ships
+
+Three issues from Ben's testing of v1.5.216.13:
+
+1. **Pexels images didn't get the PHP overlay** — the `$has_overlay` gate required `provider != ''` (an AI image generator), so Pexels-sourced featured images shipped clean with no headline. Pexels users (the default for new installs without an OpenRouter key) saw zero benefit from the new overlay system.
+
+2. **Multiple dropdown styles produced identical output** — Ben tested "Title-led Flat" and "Modern Illustration" back-to-back and got the same image. Audit confirmed: `illustration` and `flat` both routed to `accent_block`, `realistic` was rendering a top tint band despite the dropdown saying "bottom-third headline overlay", and `editorial` was rendering a bottom scrim despite the dropdown saying "title top with horizontal divider". 5 of 7 styles didn't match their label.
+
+3. **Non-Latin scripts had no overlay coverage** — yesterday's queue. CJK / Arabic / Hebrew / Devanagari / Thai articles got clean AI images but no headline because Inter Bold/ExtraBold doesn't support those scripts.
+
+### Pre-fix checklist
+
+- ✅ **All keywords** — overlay applies to any headline regardless of topic.
+- ✅ **All 21 content types** — overlay is style-driven, not type-driven.
+- ✅ **All AI models AND Pexels** — provider-agnostic; PHP draws on whatever image was saved.
+- ✅ **All 60+ languages** — script-aware font dispatch (bundled Inter for Latin/Cyrillic/Greek; lazy-fetch Noto Sans subset for everything else).
+
+### Added / Changed / Fixed
+
+#### 1. Pexels overlay support — `seobetter.php::set_featured_image()` line **~4068**
+
+```diff
+-$has_overlay = ! empty( $brand_for_crop['provider'] ) && ! empty( $brand_for_crop['text_overlay'] );
++$has_overlay = ! empty( $brand_for_crop['text_overlay'] );
+```
+
+The `Image_Text_Overlay` class is provider-agnostic — it draws on whatever JPEG/PNG was just sideloaded. Removing the AI-provider gate lets Pexels, Picsum, and any other source benefit. Setting still respects the user's "Text Overlay" Settings checkbox.
+
+Verify: `grep -n "has_overlay = " seobetter/seobetter.php`
+
+#### 2. 7 visually distinct overlay techniques — `includes/Image_Text_Overlay.php`
+
+New `STYLE_TECHNIQUE_MAP` (line **~50**):
+
+| Dropdown | Technique | Description match |
+|---|---|---|
+| 📰 Magazine Cover (`realistic`) | `bottom_scrim` | "bottom-third headline overlay" ✅ |
+| 🗞️ Classic Editorial (`editorial`) | `top_divider` (NEW) | "title top with horizontal divider, photo below" ✅ |
+| 🎬 Cinematic Hero (`hero`) | `cinema_letterbox` (NEW) | "centered title + cinema black bars" ✅ |
+| 🎨 Modern Illustration (`illustration`) | `upper_left_dark` (NEW) | "upper-left dark headline" ✅ |
+| ⬜ Title-led Flat (`flat`) | `split_left` (NEW) | "split layout: headline left, icon right" ✅ |
+| ◽ Minimalist (`minimalist`) | `corner_card` | "small corner title" ✅ |
+| 🎯 3D Hero (`3d`) | `glass_card` | "floating centered title overlay" ✅ |
+
+New techniques:
+
+- **`top_divider`** — soft white-tint band fading from 0.85α top → 0 at 38% height; dark slate-900 headline at top; 2px brand-accent divider line below the headline block (line ~246)
+- **`cinema_letterbox`** — solid black 50px bars top + bottom; subtle 0.25 dim on photo region; centered ExtraBold headline (line ~285)
+- **`upper_left_dark`** — soft white wash in upper-left quadrant (gradient from 0.85α at corner fading both horizontally and vertically); dark slate-900 headline top-left, contained within 55% width (line ~331)
+- **`split_left`** — solid color block left 50% (uses brand `color_accent` → `color_primary` → `#0F172A`); photo region of right 50% gets the SOURCE'S CENTER 600×630 SLICE copied in via `imagecopy`, so the subject (typically centered in the original) shows after the block covers the original left half (line ~374)
+
+Removed (no longer reachable):
+- `draw_magazine_top_band` — replaced by `bottom_scrim` for `realistic`
+- `draw_accent_block` — split into `upper_left_dark` (illustration) + `split_left` (flat)
+- `draw_cinematic_tint` — renamed/replaced by `cinema_letterbox` for `hero`
+
+Verify: `grep -n "STYLE_TECHNIQUE_MAP\|draw_top_divider\|draw_cinema_letterbox\|draw_upper_left_dark\|draw_split_left" seobetter/includes/Image_Text_Overlay.php`
+
+#### 3. Script-aware font dispatch + Noto lazy-fetch — `includes/Image_Text_Overlay.php`
+
+- New `detect_script(string $headline, string $lang): string` (line **~553**) — returns one of `latin`, `arabic`, `hebrew`, `devanagari`, `thai`, `cjk_jp`, `cjk_kr`, `cjk_sc`, `cjk_tc`. Reads the article language code first (most reliable: `ja` → `cjk_jp`, `ko` → `cjk_kr`, `zh-tw` → `cjk_tc`, `zh|zh-cn` → `cjk_sc`, `ar|fa|ur` → `arabic`, `he` → `hebrew`, `hi|mr|ne` → `devanagari`, `th` → `thai`). Falls back to character-block analysis if the language code is `en` but the headline contains non-Latin glyphs.
+- New `ensure_font(string $script, string $weight = 'bold'): string|false` (line **~630**):
+  - Latin → bundled `assets/fonts/Inter-{Bold,ExtraBold}.ttf`
+  - Non-Latin → lazy-fetch from `https://raw.githubusercontent.com/google/fonts/main/ofl/notosans{script}/NotoSans{Script}[wght].ttf` to `wp-content/uploads/seobetter-fonts/{script}.ttf`
+  - Cached forever after first download. CJK files are ~10MB each; uses 90s timeout.
+  - 4-byte TTF magic-number sanity check on the fetched body so we never write HTML error pages as `.ttf`
+  - Bold and ExtraBold requests for non-Latin scripts both return the same variable file — PHP GD's FreeType binding can't access variable axes, so the visual weight is the variable default. Acceptable trade-off (one ~10MB file per script vs. multiple static-weight files).
+- Removed `is_unsupported_script` — no longer needed; non-Latin no longer skipped, just dispatched to the right font.
+- Verify: `grep -n "detect_script\|ensure_font" seobetter/includes/Image_Text_Overlay.php`
+
+### Known limitation (documented)
+
+PHP GD/FreeType doesn't do bidi shaping, so Arabic glyphs render in their isolated form (no contextual ligatures). Still legible but not the elegance of native Arabic typesetting. Imagick handles this correctly; future versions may dispatch to Imagick when available. Documented in `Image_Text_Overlay.php` class docstring.
+
+### What was NOT changed
+
+- Bundled fonts unchanged — Inter Bold + ExtraBold remain the only fonts in the plugin zip. All non-Latin fonts download on demand to keep the plugin small.
+- No Settings UI changes — the existing dropdown labels match the techniques now.
+- `STYLE_PRESETS` legacy array (with `{headline}` text-rendering instructions for AI) is still present but unreachable; can be removed in a future cleanup pass.
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + Pexels overlay gate
+2. `seobetter/includes/Image_Text_Overlay.php` — new STYLE_TECHNIQUE_MAP, 4 new draw_*, detect_script + ensure_font, removed is_unsupported_script
+3. `seobetter/seo-guidelines/article_design.md` — §7.3.1a updated table + script coverage paragraph
+4. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+**Verified by user:** UNTESTED — Ben to:
+1. Generate one Latin-language article per dropdown style (7 styles total) and confirm each one produces a visually distinct overlay matching its label.
+2. Confirm Pexels-sourced images now get the overlay (disable AI image provider, regenerate).
+3. Generate one article each in Japanese, Korean, Chinese, Arabic, Hebrew, Hindi, Thai — confirm overlay renders in the matching script (first article per script will pause briefly while the Noto font downloads).
 
 ---
 

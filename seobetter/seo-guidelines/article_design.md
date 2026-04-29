@@ -483,31 +483,57 @@ The plugin auto-generates a featured image from the article title using the user
 
 Featured image is just the article title rendered as a clickable image — no logo overlay, no text-on-image, no variations. Per Ben's v1.5.215 design call to keep the feature lean. Logo embedding, per-article style override, and content-type-filtered style libraries are documented in `pro-features-ideas.md` for future revisits.
 
-### 7.3.1a Deterministic PHP text overlay (v1.5.216.13)
+### 7.3.1a Deterministic PHP text overlay (v1.5.216.14)
 
-The AI image is **always** generated clean (no embedded text) — `STYLE_PRESETS_CLEAN` in `AI_Image_Generator.php`. The headline is then drawn server-side by `Image_Text_Overlay::apply()` using the bundled Inter font. Pre-fix: AI providers (Nano Banana especially) produced typos in non-English headlines ("**discobbir**" instead of "descobrir", "**mellores**" instead of "melhores"); deterministic PHP eliminates that class entirely.
+The AI image is **always** generated clean (no embedded text) — `STYLE_PRESETS_CLEAN` in `AI_Image_Generator.php`. The headline is then drawn server-side by `Image_Text_Overlay::apply()`. Pre-fix: AI providers (Nano Banana especially) produced typos in non-English headlines ("**discobbir**" instead of "descobrir", "**mellores**" instead of "melhores"); deterministic PHP eliminates that class entirely. Applies to **all** featured-image sources (AI providers AND Pexels AND Picsum) — the overlay layer is provider-agnostic.
 
-Per-style overlay technique (driven by the dropdown style key — same dropdown that drives the AI prompt template):
+#### Per-style overlay technique
 
-| Style key | Technique | Font / size | Anchor |
+Each dropdown style maps to a visually distinct technique that matches its dropdown description verbatim:
+
+| Dropdown label (`style_key`) | Description shown to user | Technique | Font / size |
 |---|---|---|---|
-| `realistic` | Magazine top tint band 220px + bottom-stacked headline | Inter ExtraBold 60-92px white | bottom |
-| `editorial` | Bottom linear scrim (ease-in α to 0.85) | Inter Bold 56-76px white left | bottom |
-| `hero` | Full 0.55 black tint + centered headline | Inter ExtraBold 56-96px white center | center |
-| `illustration` | Solid accent block left 45% + headline inside | Inter Bold 36-60px white left | left-side |
-| `flat` | Solid accent block left 45% + headline inside | Inter Bold 36-60px white left | left-side |
-| `minimalist` | Bottom-right white card with drop shadow | Inter Bold 24-40px slate-900 | corner |
-| `3d` | Centered translucent glass card with subtle dim | Inter Bold 36-58px white center | center |
+| 📰 Magazine Cover (`realistic`) | "bottom-third headline overlay" | `bottom_scrim` — gradient ease-in to 0.85α at bottom | Inter ExtraBold 56-76px white left |
+| 🗞️ Classic Editorial (`editorial`) | "title top with horizontal divider, photo below" | `top_divider` — soft white tint band fading top→38%; dark headline; brand-accent 2px divider | Inter Bold 46-78px slate-900 |
+| 🎬 Cinematic Hero (`hero`) | "centered title + cinema black bars" | `cinema_letterbox` — solid 50px black bars top+bottom, 0.25 dim on photo, centered title | Inter ExtraBold 56-92px white center |
+| 🎨 Modern Illustration (`illustration`) | "upper-left dark headline" | `upper_left_dark` — soft white wash fading from upper-left corner | Inter Bold 42-72px slate-900 left |
+| ⬜ Title-led Flat (`flat`) | "split layout: headline left, abstract icon right" | `split_left` — solid brand-color block left 50%; photo's center slice copied to right 50% | Inter ExtraBold 42-76px white left |
+| ◽ Minimalist (`minimalist`) | "small corner title, image dominant" | `corner_card` — bottom-right white card with drop shadow | Inter Bold 24-40px slate-900 |
+| 🎯 3D Hero (`3d`) | "floating centered title overlay" | `glass_card` — centered translucent white panel with subtle dim | Inter Bold 36-58px white center |
 
-Auto-fit shrinks the font 4px at a time until the headline fits within `max_lines` for that technique. Word-wrap is multibyte-safe (`preg_split('/\s+/u')`) and uses `imagettfbbox` for precise width measurement so French/German/Russian/Greek headlines wrap correctly.
+#### Mechanics
 
-The `accent_block` technique (illustration / flat) reads `branding_color_accent` → fallback `branding_color_primary` → fallback `#0F172A` (slate-900). Brand color is therefore visible as the side-panel backdrop.
+- **Auto-fit** — shrinks font size 4px at a time until the headline fits within the technique's `max_lines`. Floor returns whatever fits.
+- **Word-wrap** — multibyte-safe (`preg_split('/\s+/u')`); uses `imagettfbbox` for precise width measurement so French / German / Russian / Greek / non-Latin headlines wrap correctly without breaking mid-word.
+- **Brand color integration** — `top_divider` divider line + `split_left` left block both read `branding_color_accent` → fallback `branding_color_primary` → fallback `#0F172A`.
+- **Photo composition for `split_left`** — when a 50% solid color block covers the left half, the right half would normally just show the right half of the AI photo. We pre-copy the center 600×630 slice of the source to the right 600px so the subject (typically centered in the AI render) is visible after the block overlays the left.
 
-**Script coverage** — Inter Bold/ExtraBold supports Latin Extended A+B, Cyrillic, Cyrillic Extended, Greek, Vietnamese. When ≥20% of the headline is in CJK / Arabic / Hebrew / Devanagari / Bengali / Tamil / Thai / Lao / Tibetan / Myanmar / Georgian / Ethiopic / Khmer the overlay is **skipped** — the clean AI image is still saved, the post just gets a no-text featured image. Future v1.5.217+ will lazy-fetch Noto Sans CJK / Arabic / Devanagari subsets to expand coverage.
+#### Script coverage (lazy-fetch architecture)
 
-**Failure modes (graceful)** — missing GD, missing FreeType, missing font file, unreadable attachment, non-JPEG/PNG ext, or any render exception → bail with `error_log` line, leave the clean AI image untouched. The pipeline never produces a broken image because of the overlay step.
+`Image_Text_Overlay::detect_script()` returns one of: `latin`, `arabic`, `hebrew`, `devanagari`, `thai`, `cjk_jp`, `cjk_kr`, `cjk_sc`, `cjk_tc`. Detection prefers the article's language code (set explicitly via the content-generator's Language dropdown); falls back to character-block analysis when the language is generic English but the headline contains non-Latin glyphs.
 
-**Bundled fonts** — `assets/fonts/Inter-Bold.ttf` (~405KB) + `assets/fonts/Inter-ExtraBold.ttf` (~406KB) + `LICENSE.txt` (SIL OFL 1.1). Inter v4.0 from rsms/inter (Nov 2023). Font choice grounded in 2026 typography research: Inter Tight / Inter family is the consensus pick for editorial/news/SaaS featured images per Fontfabric, Smashing Magazine, Creative Boom, and the London Web Design Agency 2026 Google Fonts ranking.
+`ensure_font()` resolves a TTF path:
+
+| Script | Source |
+|---|---|
+| `latin` | Bundled `assets/fonts/Inter-{Bold,ExtraBold}.ttf` (~810KB total in plugin zip) |
+| `arabic`, `hebrew`, `devanagari`, `thai` | Lazy-fetch Noto Sans variable TTF from `github.com/google/fonts/main/ofl/notosans{script}/` on first use; cache to `wp-content/uploads/seobetter-fonts/{script}.ttf` |
+| `cjk_jp`, `cjk_kr`, `cjk_sc`, `cjk_tc` | Same lazy-fetch mechanism. CJK files are ~10MB each; first article in that script pauses briefly (~1-2s on a fast connection) while the font downloads, then is cached forever. |
+
+Bold and ExtraBold requests for non-Latin scripts both return the same variable file — PHP GD's FreeType binding can't access variable axes, so the rendered weight is the variable's default instance. Acceptable trade-off vs. shipping multiple static-weight TTFs per script.
+
+#### Known limitation — Arabic ligatures
+
+PHP GD/FreeType doesn't do bidi shaping. Arabic glyphs render in their **isolated** form (no contextual ligatures connecting the letters). Still legible but visually less elegant than native Arabic typesetting. Imagick handles this correctly; future versions may dispatch to Imagick for `arabic` when the host has it. Documented in the class docstring.
+
+#### Failure modes (graceful)
+
+- Missing GD / FreeType → skip overlay, log, save clean image
+- Lazy-fetch HTTP failure (no network, Google Fonts CDN down, sandboxed install) → skip overlay, log, save clean image
+- TTF magic-number sanity check fails (we got HTML instead of font bytes) → skip overlay, log, don't write garbage to uploads dir
+- Unreadable attachment / non-JPEG-PNG ext / render exception → skip overlay, log, leave the saved image untouched
+
+The pipeline never produces a broken image because of the overlay step.
 
 ### 7.3.2 WebP conversion (v1.5.215)
 
