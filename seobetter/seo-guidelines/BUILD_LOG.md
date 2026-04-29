@@ -7,12 +7,49 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-29 (v1.5.216.18)
+> **Last updated:** 2026-04-29 (v1.5.216.19)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.19 — Brand color fallback fix (slate-900 → SEOBetter purple) + diagnostic log
+
+**Date:** 2026-04-29
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben tested all 7 dropdown styles after v1.5.216.18 and reported "all either black text on white background or vice versa with shading background, only black and white" — no brand color visible anywhere. Critical confusion: Title-led Flat is supposed to render the brand `color_accent` as the entire LEFT 50% of the image (unmissable), but Ben saw a black left block.
+
+Root cause: `set_featured_image()` falls back to `#0F172A` (slate-900) when both `branding_color_accent` and `branding_color_primary` are empty in Settings. Slate-900 is so dark it's visually indistinguishable from black, so users couldn't tell whether brand color "didn't work" or whether it was just an unset default rendering as a near-black slate.
+
+### Fix
+
+- **Changed default fallback** from `#0F172A` (slate-900, looks black) to `#764ba2` (SEOBetter signature purple). Users with no brand color configured now see an obviously-branded color and know it's the SEOBetter default — and can override in Settings → Branding → Brand Color (Accent).
+- **Diagnostic log** at `seobetter.php::set_featured_image()` line **~4117** shows the actual color values: `color_accent="#abc123" color_primary="#def456" final_accent="#abc123"`. Next test will show whether the issue is settings being empty (most likely) or a code issue reading them.
+
+### What appears with brand color
+
+Brand color only renders in 2 of the 7 techniques:
+- **Classic Editorial** (`top_divider`) → 2px horizontal divider line below the headline (subtle — easy to miss visually)
+- **Title-led Flat** (`split_left`) → entire LEFT 50% solid color block (unmissable)
+
+The other 5 techniques are intentionally monochrome (white/black scrim + text) per their dropdown descriptions. If Ben wants brand color in more techniques, that's a design decision for future versions.
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + fallback change + diagnostic log
+2. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+**Verified by user:** UNTESTED — Ben to:
+1. Regenerate one Pexels article on **Title-led Flat** style; confirm the LEFT 50% is now purple (or your custom accent if you've set one in Settings → Branding).
+2. Optional: regenerate on **Classic Editorial**; confirm a 2px purple divider line appears below the headline.
+3. Set custom brand color in Settings → Branding → Brand Color (Accent); regenerate; confirm overlay uses YOUR color, not the purple default.
+4. Check debug.log for the new line: `brand color resolution — color_accent="..." color_primary="..." final_accent="..."` — confirms what's actually being read from settings.
 
 ---
 

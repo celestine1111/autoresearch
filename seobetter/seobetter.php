@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.18
+ * Version: 1.5.216.19
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.18' );
+define( 'SEOBETTER_VERSION', '1.5.216.19' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -4120,13 +4120,28 @@ final class SEOBetter {
             $image_id
         ) );
         if ( $has_overlay ) {
-            $accent_color = $brand_for_crop['color_accent'] ?? '';
+            $raw_accent  = $brand_for_crop['color_accent'] ?? '';
+            $raw_primary = $brand_for_crop['color_primary'] ?? '';
+            $accent_color = $raw_accent;
             if ( $accent_color === '' ) {
-                $accent_color = $brand_for_crop['color_primary'] ?? '';
+                $accent_color = $raw_primary;
             }
+            // v1.5.216.19 — Default fallback changed from slate-900 (looked
+            // identical to "no brand color"; users testing Title-led Flat
+            // saw a black left block and reported brand color "didn't work")
+            // to SEOBetter's signature purple. Now if no brand color is set
+            // in Settings, the user sees an obviously-branded color and
+            // knows it's the default — and can override in Settings →
+            // Branding → Brand Color (Accent).
             if ( $accent_color === '' ) {
-                $accent_color = '#0F172A';
+                $accent_color = '#764ba2';
             }
+            error_log( sprintf(
+                'SEOBetter set_featured_image: brand color resolution — color_accent="%s" color_primary="%s" final_accent="%s"',
+                $raw_accent,
+                $raw_primary,
+                $accent_color
+            ) );
             $article_lang = (string) ( get_post_meta( $post_id, '_seobetter_language', true ) ?: 'en' );
             $title_for_overlay = get_the_title( $post_id );
             error_log( sprintf(
