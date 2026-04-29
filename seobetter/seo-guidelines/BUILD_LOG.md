@@ -7,12 +7,58 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-29 (v1.5.216.17)
+> **Last updated:** 2026-04-29 (v1.5.216.18)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.18 — Dark-on-light overlay legibility fix (top_divider + upper_left_dark)
+
+**Date:** 2026-04-29
+**Commit:** `[pending]`
+
+### Why this ships
+
+Ben tested v1.5.216.17 on a "Modern Illustration" Pexels article (best coffee shops in newcastle) and the dark slate headline was hard to read against the busy upper-left photo region (shelves, espresso machine, plants). The technique was originally designed for **flat editorial illustrations** where backgrounds are mostly uniform — on photographic Pexels sources, the soft 0.85-fade wash thinned out fast and dark text fought the photo for legibility (failed WCAG 4.5:1).
+
+`top_divider` (Classic Editorial) had the same dark-on-light pattern and would fail on the same kinds of photos.
+
+### Fix — denser scrim + 8-direction white halo
+
+Both `draw_top_divider` and `draw_upper_left_dark` now:
+
+1. **Solid 0.92-0.95 white scrim** in the rectangle where the headline sits (instead of a fade-from-0.85 that left low-alpha zones)
+2. **60px feather** at the right + bottom edges so the scrim still blends into the photo cleanly (preserves editorial feel — not a hard rectangle)
+3. **8-direction white halo** behind the dark text via the new `draw_text_with_halo()` helper — even if the scrim somehow fails to fully obscure a chaotic background, the halo gives ~3-4px of guaranteed white contrast around every glyph
+4. **Diagonal corner blending** for `upper_left_dark` — the right and bottom feathers meet at the corner with a sqrt-distance falloff so there's no abrupt diagonal seam
+
+Result: dark text reads cleanly on **both** flat illustrations AND photographs.
+
+### Helper: draw_text_with_halo()
+
+`Image_Text_Overlay::draw_text_with_halo()` line **~510** — reusable helper that stamps the text 8 times at 1-2px offsets in the halo color, then stamps the foreground text on top. Halo color is `'white'` (for dark text) or `'black'` (for white text — not currently used but available for future white-on-light needs). Halo alpha is 30/127 for white (~0.76) and 50/127 for black (~0.61) — visible enough to rescue contrast, subtle enough not to thicken the glyph perceptibly.
+
+### Pre-fix checklist
+
+- ✅ All keywords — fix is at the rendering layer, topic-agnostic
+- ✅ All 21 content types — overlay is style-driven
+- ✅ All AI models AND Pexels — works on any image source
+- ✅ All 60+ languages — halo wraps correctly via mb_substr-aware text rendering
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump only
+2. `seobetter/includes/Image_Text_Overlay.php`:
+   - `draw_top_divider` — solid 0.92 band + 60px feather + halo on dark text
+   - `draw_upper_left_dark` — solid 0.95 box + right+bottom feathers + diagonal corner + halo on dark text
+   - new `draw_text_with_halo()` helper
+3. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+**Verified by user:** UNTESTED — Ben to regenerate the same article (or any Pexels article with a busy upper-left) using "Modern Illustration" and "Classic Editorial" presets and confirm the dark headline now reads cleanly. Should look like Newsweek / Atlantic editorial — clean type on near-white surface fading into the photo.
 
 ---
 

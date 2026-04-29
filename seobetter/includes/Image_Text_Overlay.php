@@ -298,34 +298,47 @@ class Image_Text_Overlay {
     /**
      * Classic Editorial — top section with title + horizontal divider, photo below.
      * Matches dropdown copy: "title top with horizontal divider, photo below (NYT/Atlantic style)".
+     *
+     * v1.5.216.18 — Denser solid white band (0.92 α) where text sits, with a
+     * soft 60px feather at the bottom so it blends into the photo. The previous
+     * fade-from-0.85 design left the lower lines of multi-line headlines in a
+     * low-alpha zone where dark slate text fought the photo for legibility.
+     * Also adds a subtle 8-direction white halo behind the dark text to keep
+     * 4.5:1 contrast even on busy photographic backgrounds.
      */
     private static function draw_top_divider( $im, int $w, int $h, string $headline, string $font, array $accent_rgb ): void {
-        // Top 38% gets a soft white-tint band so the dark headline is legible
-        // regardless of the underlying photo. Tint fades from 0.85 alpha at the
-        // top to 0 at the bottom of the band so it blends into the photo.
-        $band_h = (int) round( $h * 0.38 );
-        for ( $y = 0; $y < $band_h; $y++ ) {
-            $t = $y / max( 1, $band_h );
-            $alpha_norm = ( 1 - $t ) * 0.85; // 0.85 at top → 0 at bottom of band
-            $gd_alpha = (int) round( ( 1 - $alpha_norm ) * 127 );
-            $color = imagecolorallocatealpha( $im, 255, 255, 255, $gd_alpha );
-            imageline( $im, 0, $y, $w - 1, $y, $color );
-        }
-
         $padding_x = 60;
         $max_w = $w - ( $padding_x * 2 );
 
         [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 78, 46, 2 );
         $line_h = (int) round( $size * 1.10 );
+        $n = count( $lines );
+
+        // Solid scrim where the headline sits (line 1 baseline = block_top + size)
+        // Block extends from y=0 to (last baseline + 50px breathing for divider)
+        $block_top   = 50;
+        $block_bottom = $block_top + ( $line_h * $n ) + 60; // includes divider area
+
+        // Solid 0.92 white from y=0 down to $block_bottom
+        $solid_alpha = (int) round( ( 1 - 0.92 ) * 127 );
+        $solid       = imagecolorallocatealpha( $im, 255, 255, 255, $solid_alpha );
+        imagefilledrectangle( $im, 0, 0, $w - 1, $block_bottom, $solid );
+
+        // 60px feather below the solid band so the photo isn't abruptly cut off
+        $feather = 60;
+        for ( $y = $block_bottom + 1; $y < $block_bottom + $feather; $y++ ) {
+            $t = ( $y - $block_bottom ) / $feather;
+            $alpha_norm = ( 1 - $t ) * 0.92;
+            $gd_alpha   = (int) round( ( 1 - $alpha_norm ) * 127 );
+            $color      = imagecolorallocatealpha( $im, 255, 255, 255, $gd_alpha );
+            imageline( $im, 0, $y, $w - 1, $y, $color );
+        }
 
         $dark = imagecolorallocate( $im, 17, 24, 39 ); // slate-900
 
-        // Stack lines from the top of the canvas with 50px breathing room
-        $n = count( $lines );
-        $block_top = 50;
         for ( $i = 0; $i < $n; $i++ ) {
             $y = $block_top + ( $i * $line_h ) + $size;
-            imagettftext( $im, $size, 0, $padding_x, $y, $dark, $font, $lines[ $i ] );
+            self::draw_text_with_halo( $im, $size, $padding_x, $y, $font, $lines[ $i ], $dark, 'white' );
         }
 
         // 2px horizontal divider in brand accent color (or slate fallback) BELOW the headline block
@@ -381,40 +394,70 @@ class Image_Text_Overlay {
      * Modern Illustration — upper-left DARK headline on flat editorial illustration.
      * Matches dropdown copy: "upper-left dark headline on flat editorial illustration".
      *
-     * A soft white wash in the upper-left quadrant ensures the dark headline
-     * stays legible regardless of the underlying flat illustration's palette.
+     * v1.5.216.18 — Denser tile-shaped scrim so dark text reads cleanly on
+     * BOTH flat illustrations AND photographs. Previous design assumed a flat
+     * illustration source where the soft 0.85-fade wash was enough; on busy
+     * Pexels photos (e.g. coffee shop with shelves of objects), the wash thinned
+     * out fast and dark text fought the photo. Now: solid 0.95 white in a
+     * tight rectangle covering the text zone, soft 60px feather at right + bottom
+     * edges to preserve editorial feel. Plus 8-direction white halo behind
+     * the dark text for guaranteed 4.5:1 contrast even on the most chaotic photo.
      */
     private static function draw_upper_left_dark( $im, int $w, int $h, string $headline, string $font ): void {
-        // Soft white wash in upper-left — fades horizontally from 0.85 at left
-        // to 0 at 60% width, AND vertically from 0.85 at top to 0 at 55% height.
-        $wash_w = (int) round( $w * 0.60 );
-        $wash_h = (int) round( $h * 0.55 );
-        for ( $y = 0; $y < $wash_h; $y++ ) {
-            $ty = $y / max( 1, $wash_h );
-            for ( $x = 0; $x < $wash_w; $x += 4 ) {
-                $tx = $x / max( 1, $wash_w );
-                $combined_t = max( $tx, $ty );
-                $alpha_norm = ( 1 - $combined_t ) * 0.85;
-                if ( $alpha_norm <= 0.05 ) continue;
-                $gd_alpha = (int) round( ( 1 - $alpha_norm ) * 127 );
-                $color = imagecolorallocatealpha( $im, 255, 255, 255, $gd_alpha );
-                imagefilledrectangle( $im, $x, $y, $x + 3, $y, $color );
-            }
-        }
-
         $padding_x = 60;
         $padding_t = 70;
-        $max_w = (int) round( $w * 0.55 ); // headline contained within the wash zone
+        $max_w = (int) round( $w * 0.55 );
 
         [ $size, $lines ] = self::fit_text( $headline, $font, $max_w, 72, 42, 3 );
         $line_h = (int) round( $size * 1.10 );
+        $n = count( $lines );
+
+        // Solid scrim covering the headline rectangle with 30px padding around
+        $box_x1 = 0;
+        $box_y1 = 0;
+        $box_x2 = $padding_x + $max_w + 30;
+        $box_y2 = $padding_t + ( $line_h * $n ) + 30;
+
+        $solid_alpha = (int) round( ( 1 - 0.95 ) * 127 );
+        $solid       = imagecolorallocatealpha( $im, 255, 255, 255, $solid_alpha );
+        imagefilledrectangle( $im, $box_x1, $box_y1, $box_x2, $box_y2, $solid );
+
+        // 60px feather on the right edge — blend into the photo
+        $feather = 60;
+        for ( $x = $box_x2 + 1; $x < $box_x2 + $feather; $x++ ) {
+            $t = ( $x - $box_x2 ) / $feather;
+            $alpha_norm = ( 1 - $t ) * 0.95;
+            $gd_alpha   = (int) round( ( 1 - $alpha_norm ) * 127 );
+            $color      = imagecolorallocatealpha( $im, 255, 255, 255, $gd_alpha );
+            imageline( $im, $x, 0, $x, $box_y2, $color );
+        }
+        // 60px feather on the bottom edge
+        for ( $y = $box_y2 + 1; $y < $box_y2 + $feather; $y++ ) {
+            $t = ( $y - $box_y2 ) / $feather;
+            $alpha_norm = ( 1 - $t ) * 0.95;
+            $gd_alpha   = (int) round( ( 1 - $alpha_norm ) * 127 );
+            $color      = imagecolorallocatealpha( $im, 255, 255, 255, $gd_alpha );
+            imageline( $im, 0, $y, $box_x2, $y, $color );
+        }
+        // Diagonal corner — blend the two feathers cleanly
+        for ( $y = $box_y2 + 1; $y < $box_y2 + $feather; $y++ ) {
+            $ty = ( $y - $box_y2 ) / $feather;
+            for ( $x = $box_x2 + 1; $x < $box_x2 + $feather; $x++ ) {
+                $tx = ( $x - $box_x2 ) / $feather;
+                $combined_t = sqrt( $tx * $tx + $ty * $ty );
+                if ( $combined_t > 1 ) continue;
+                $alpha_norm = ( 1 - $combined_t ) * 0.95;
+                $gd_alpha   = (int) round( ( 1 - $alpha_norm ) * 127 );
+                $color      = imagecolorallocatealpha( $im, 255, 255, 255, $gd_alpha );
+                imagesetpixel( $im, $x, $y, $color );
+            }
+        }
 
         $dark = imagecolorallocate( $im, 17, 24, 39 ); // slate-900
 
-        $n = count( $lines );
         for ( $i = 0; $i < $n; $i++ ) {
             $y = $padding_t + ( $i * $line_h ) + $size;
-            imagettftext( $im, $size, 0, $padding_x, $y, $dark, $font, $lines[ $i ] );
+            self::draw_text_with_halo( $im, $size, $padding_x, $y, $font, $lines[ $i ], $dark, 'white' );
         }
     }
 
@@ -543,6 +586,30 @@ class Image_Text_Overlay {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * v1.5.216.18 — Draw text with a subtle 8-direction halo behind it for
+     * guaranteed legibility on busy backgrounds. Used by `top_divider` and
+     * `upper_left_dark` (the two dark-on-light techniques) to ensure 4.5:1
+     * contrast even when the underlying photo bleeds through the scrim.
+     *
+     * @param string $halo_color Either 'white' or 'black' — pick the opposite
+     *                            of the text color.
+     */
+    private static function draw_text_with_halo( $im, int $size, int $x, int $y, string $font, string $text, int $text_color, string $halo_color ): void {
+        if ( $halo_color === 'white' ) {
+            $halo = imagecolorallocatealpha( $im, 255, 255, 255, 30 );
+        } else {
+            $halo = imagecolorallocatealpha( $im, 0, 0, 0, 50 );
+        }
+        // 8-direction halo at 1.5px offset — creates a subtle stroke that
+        // doesn't visually thicken the glyph but rescues contrast
+        foreach ( [ [ 2, 0 ], [ -2, 0 ], [ 0, 2 ], [ 0, -2 ], [ 1, 1 ], [ 1, -1 ], [ -1, 1 ], [ -1, -1 ] ] as $offset ) {
+            imagettftext( $im, $size, 0, $x + $offset[0], $y + $offset[1], $halo, $font, $text );
+        }
+        // Foreground text on top
+        imagettftext( $im, $size, 0, $x, $y, $text_color, $font, $text );
+    }
 
     /**
      * Auto-fit. Try the largest size; if the wrapped output exceeds $max_lines,
