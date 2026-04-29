@@ -19,7 +19,7 @@
 ## v1.5.216.19 — Brand color fallback fix (slate-900 → SEOBetter purple) + diagnostic log
 
 **Date:** 2026-04-29
-**Commit:** `[pending]`
+**Commit:** `5213168`
 
 ### Why this ships
 
