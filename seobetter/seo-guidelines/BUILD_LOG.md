@@ -19,7 +19,7 @@
 ## v1.5.216.17 — Pexels overlay actual fix (get_brand_settings early-return) + Trend_Researcher $content_type warning
 
 **Date:** 2026-04-29
-**Commit:** `[pending]`
+**Commit:** `07f7d64`
 
 ### Why this ships
 
