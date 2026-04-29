@@ -19,7 +19,7 @@
 ## v1.5.216.14 — 7 distinct overlay techniques + Pexels overlay support + Noto lazy-fetch for non-Latin
 
 **Date:** 2026-04-29
-**Commit:** `[pending]`
+**Commit:** `c63cc99`
 
 ### Why this ships
 
