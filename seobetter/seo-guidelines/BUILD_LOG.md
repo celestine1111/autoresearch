@@ -19,7 +19,7 @@
 ## v1.5.216.44 — Schema Blocks save button silent-fail (nested form stripped)
 
 **Date:** 2026-05-01
-**Commit:** `[pending]`
+**Commit:** `72516ec`
 
 ### Bug
 
