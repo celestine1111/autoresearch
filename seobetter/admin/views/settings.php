@@ -59,8 +59,11 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
     $settings = array_merge( $existing, [
         'auto_schema'        => ! empty( $_POST['auto_schema'] ),
         'auto_analyze'       => ! empty( $_POST['auto_analyze'] ),
-        'target_readability' => absint( $_POST['target_readability'] ?? 7 ),
-        'geo_engines'        => array_map( 'sanitize_text_field', $_POST['geo_engines'] ?? [] ),
+        // v1.5.216.32 — Phase 1 item 13: target_readability + geo_engines
+        // removed from UI but preserved here so legacy callers reading
+        // these keys don't crash. New General Settings tab no longer surfaces them
+        'target_readability' => absint( $settings['target_readability'] ?? 7 ),
+        'geo_engines'        => array_map( 'sanitize_text_field', $settings['geo_engines'] ?? [] ),
         'llms_txt_enabled'   => ! empty( $_POST['llms_txt_enabled'] ),
         // v1.5.216.31 — Phase 1 item 12: Pro/Pro+ custom summary persisted to settings
         'llms_txt_summary'   => sanitize_textarea_field( $_POST['llms_txt_summary'] ?? ( $settings['llms_txt_summary'] ?? '' ) ),
@@ -187,9 +190,91 @@ if ( isset( $_POST['seobetter_delete_brand_voice'] ) && check_admin_referer( 'se
 }
 
 $settings = get_option( 'seobetter_settings', [] );
+
+// v1.5.216.32 — Phase 1 item 13: Settings restructured into 6 tabs.
+// Active tab from ?tab= query param; defaults to license_account on first
+// visit. Each existing settings card is tagged with data-sb-tab="..." and
+// shown/hidden by inline CSS + JS. Each form's POST handler runs at the
+// top of the file regardless of active tab — handlers detect their own
+// POST keys, so per-tab save buttons continue to work after the redirect.
+$sb_tabs = [
+    'license_account'        => __( 'License & Account', 'seobetter' ),
+    'ai_provider'            => __( 'AI Provider', 'seobetter' ),
+    'general'                => __( 'General', 'seobetter' ),
+    'author_bio'             => __( 'Author Bio', 'seobetter' ),
+    'branding'               => __( 'Branding', 'seobetter' ),
+    'research_integrations'  => __( 'Research & Integrations', 'seobetter' ),
+];
+$sb_current_tab = sanitize_key( $_GET['tab'] ?? 'license_account' );
+if ( ! isset( $sb_tabs[ $sb_current_tab ] ) ) {
+    $sb_current_tab = 'license_account';
+}
+$sb_active_tier = SEOBetter\License_Manager::get_active_tier();
 ?>
 <div class="wrap seobetter-dashboard">
-    <h1><?php esc_html_e( 'SEOBetter Settings', 'seobetter' ); ?></h1>
+    <h1 style="display:flex;align-items:center;gap:12px"><?php esc_html_e( 'SEOBetter Settings', 'seobetter' ); ?>
+        <span class="seobetter-score seobetter-score-<?php echo $sb_active_tier === 'free' ? 'ok' : 'good'; ?>" style="font-size:11px;letter-spacing:0.05em;text-transform:uppercase"><?php echo esc_html( str_replace( '_', '+', $sb_active_tier ) ); ?></span>
+    </h1>
+
+    <!-- v1.5.216.32 — Phase 1 item 13: 6-tab nav-tab-wrapper. Deep-linkable
+         via ?tab=. Per-tab save buttons retain their own form/handler. -->
+    <h2 class="nav-tab-wrapper" style="margin-bottom:20px">
+        <?php foreach ( $sb_tabs as $tab_key => $tab_label ) : ?>
+            <a href="<?php echo esc_url( add_query_arg( 'tab', $tab_key, admin_url( 'admin.php?page=seobetter-settings' ) ) ); ?>"
+               class="nav-tab <?php echo $sb_current_tab === $tab_key ? 'nav-tab-active' : ''; ?>"
+               data-sb-tab-link="<?php echo esc_attr( $tab_key ); ?>">
+                <?php echo esc_html( $tab_label ); ?>
+            </a>
+        <?php endforeach; ?>
+    </h2>
+
+    <?php
+    // Style block — used by all panels to hide non-active tabs server-side
+    // (so JS doesn't have to fire before the user sees the right panel).
+    ?>
+    <style>
+        .sb-tab-panel { display: none; }
+        .sb-tab-panel.sb-tab-active { display: block; }
+    </style>
+
+    <!-- License & Account tab opens here -->
+    <div class="sb-tab-panel <?php echo $sb_current_tab === 'license_account' ? 'sb-tab-active' : ''; ?>" data-sb-tab="license_account">
+
+    <?php
+    // v1.5.216.32 — Phase 1 item 13: tier-aware 3-card upsell grid.
+    // Free users see Pro / Pro+ / Agency cards. Paid users see only the
+    // higher tier cards (no upsell shown to current tier). Agency users
+    // see no upsell grid at all.
+    if ( $sb_active_tier !== 'agency' ) :
+        $sb_cards = [];
+        if ( $sb_active_tier === 'free' ) {
+            $sb_cards[] = [ 'tier' => 'pro', 'name' => 'Pro', 'price' => '$39/mo', 'color' => '#3b82f6', 'features' => [ 'Cloud generation 25 articles/mo', 'Brand Voice 1 profile', 'Bulk CSV (preview)', 'GSC Freshness driver', 'Internal Links suggester (Pro+ for full)', 'llms.txt optimized', '50+ schema types' ] ];
+            $sb_cards[] = [ 'tier' => 'pro_plus', 'name' => 'Pro+', 'price' => '$69/mo', 'color' => '#7c3aed', 'features' => [ 'Cloud 50/mo · 80+ countries', 'Brand Voice 3 profiles', '5 Schema Blocks (manual)', '/llms-full.txt + multilingual', 'Internal Links full', 'AI Citation Tracker 5 prompts', 'Voice Search Speakable' ] ];
+            $sb_cards[] = [ 'tier' => 'agency', 'name' => 'Agency', 'price' => '$179/mo', 'color' => '#059669', 'features' => [ 'Cloud 250/mo · 10 sites · 5 seats', 'Bulk CSV (full UX layer)', 'Brand Voice unlimited', 'Internal Links unlimited + auto', 'White-label basic', 'AI Citation Tracker 25 prompts', 'GSC Indexing API' ] ];
+        } elseif ( $sb_active_tier === 'pro' ) {
+            $sb_cards[] = [ 'tier' => 'pro_plus', 'name' => 'Pro+', 'price' => '$69/mo', 'color' => '#7c3aed', 'features' => [ '+50 articles/mo Cloud', '+80 countries (vs your 6)', '+2 Brand Voices (3 total)', '+5 Schema Blocks manual', '+/llms-full.txt + multilingual', '+AI Citation Tracker' ] ];
+            $sb_cards[] = [ 'tier' => 'agency', 'name' => 'Agency', 'price' => '$179/mo', 'color' => '#059669', 'features' => [ '+250 articles/mo · 10 sites · 5 seats', '+Bulk CSV full UX layer', '+Brand Voice unlimited', '+White-label basic', '+GSC Indexing API' ] ];
+        } elseif ( $sb_active_tier === 'pro_plus' ) {
+            $sb_cards[] = [ 'tier' => 'agency', 'name' => 'Agency', 'price' => '$179/mo', 'color' => '#059669', 'features' => [ '+200 articles/mo Cloud', '+10 sites · 5 team seats', '+Bulk CSV full UX layer', '+Brand Voice unlimited', '+Internal Links unlimited + auto', '+White-label basic', '+GSC Indexing API' ] ];
+        }
+    ?>
+    <div style="display:grid;grid-template-columns:repeat(<?php echo count( $sb_cards ); ?>,1fr);gap:16px;margin-bottom:24px">
+        <?php foreach ( $sb_cards as $card ) : ?>
+        <div style="padding:18px;background:#fff;border:2px solid <?php echo esc_attr( $card['color'] ); ?>;border-radius:8px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+                <h3 style="margin:0;color:<?php echo esc_attr( $card['color'] ); ?>;font-size:18px;font-weight:700"><?php echo esc_html( $card['name'] ); ?></h3>
+                <span style="font-size:13px;font-weight:600;color:#6b7280"><?php echo esc_html( $card['price'] ); ?></span>
+            </div>
+            <ul style="margin:0 0 14px;padding:0;list-style:none;font-size:12px;color:#374151;line-height:1.8">
+                <?php foreach ( $card['features'] as $f ) : ?>
+                    <li style="display:flex;gap:6px;align-items:flex-start"><span style="color:<?php echo esc_attr( $card['color'] ); ?>">✓</span> <span><?php echo esc_html( $f ); ?></span></li>
+                <?php endforeach; ?>
+            </ul>
+            <a href="https://seobetter.com/pricing" target="_blank" style="display:block;padding:8px 14px;background:<?php echo esc_attr( $card['color'] ); ?>;color:#fff;text-align:center;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">Upgrade to <?php echo esc_html( $card['name'] ); ?> &rarr;</a>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
 
     <!-- License Section -->
     <div class="seobetter-card" style="margin-bottom:20px">
@@ -220,6 +305,11 @@ $settings = get_option( 'seobetter_settings', [] );
     </div>
 
     <!-- v1.5.216 — AI generation source card (rewritten for BYOK-only free tier) -->
+    </div><!-- /.sb-tab-panel license_account -->
+
+    <!-- AI Provider tab -->
+    <div class="sb-tab-panel <?php echo $sb_current_tab === 'ai_provider' ? 'sb-tab-active' : ''; ?>" data-sb-tab="ai_provider">
+
     <?php
     $cloud_status = SEOBetter\Cloud_API::check_status();
     $is_byok      = ! empty( $cloud_status['has_own_key'] );
@@ -401,19 +491,23 @@ $settings = get_option( 'seobetter_settings', [] );
         </form>
     </div>
 
+    </div><!-- /.sb-tab-panel ai_provider -->
+
+    <!-- General tab -->
+    <div class="sb-tab-panel <?php echo $sb_current_tab === 'general' ? 'sb-tab-active' : ''; ?>" data-sb-tab="general">
+
     <!-- General Settings -->
     <div class="seobetter-card" style="margin-bottom:20px">
         <h2><?php esc_html_e( 'General Settings', 'seobetter' ); ?></h2>
         <form method="post">
             <?php wp_nonce_field( 'seobetter_settings_nonce' ); ?>
             <table class="form-table">
-                <tr>
-                    <th><?php esc_html_e( 'Target Readability', 'seobetter' ); ?></th>
-                    <td>
-                        <input type="number" name="target_readability" value="<?php echo esc_attr( $settings['target_readability'] ?? 7 ); ?>" min="4" max="12" />
-                        <p class="description"><?php esc_html_e( 'Flesch-Kincaid grade level (recommended: 6-8)', 'seobetter' ); ?></p>
-                    </td>
-                </tr>
+                <?php // v1.5.216.32 — Phase 1 item 13: removed dead `target_readability` and `geo_engines`
+                       //               settings per locked plan. target_readability was advisory-only and
+                       //               never enforced; geo_engines was an artifact from the v1.4 era when
+                       //               the plugin gated checks per-engine. Current GEO_Analyzer is engine-
+                       //               agnostic. Both fields stay readable from settings array for any
+                       //               legacy callers but are no longer surfaced in the UI. ?>
                 <tr>
                     <th><?php esc_html_e( 'Auto-generate Schema', 'seobetter' ); ?></th>
                     <td><label><input type="checkbox" name="auto_schema" value="1" <?php checked( $settings['auto_schema'] ?? true ); ?> /> <?php esc_html_e( 'Generate JSON-LD schema on post save', 'seobetter' ); ?></label></td>
@@ -421,17 +515,6 @@ $settings = get_option( 'seobetter_settings', [] );
                 <tr>
                     <th><?php esc_html_e( 'Auto-analyze Content', 'seobetter' ); ?></th>
                     <td><label><input type="checkbox" name="auto_analyze" value="1" <?php checked( $settings['auto_analyze'] ?? true ); ?> /> <?php esc_html_e( 'Run GEO analysis on post save', 'seobetter' ); ?></label></td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e( 'Target AI Engines', 'seobetter' ); ?></th>
-                    <td>
-                        <?php
-                        $engines = [ 'google_aio' => 'Google AI Overviews', 'perplexity' => 'Perplexity', 'searchgpt' => 'SearchGPT', 'gemini' => 'Gemini', 'claude' => 'Claude' ];
-                        $selected = $settings['geo_engines'] ?? array_keys( $engines );
-                        foreach ( $engines as $key => $label ) : ?>
-                            <label style="display:block;margin-bottom:4px"><input type="checkbox" name="geo_engines[]" value="<?php echo esc_attr( $key ); ?>" <?php checked( in_array( $key, $selected, true ) ); ?> /> <?php echo esc_html( $label ); ?></label>
-                        <?php endforeach; ?>
-                    </td>
                 </tr>
                 <tr>
                     <th><?php esc_html_e( 'llms.txt', 'seobetter' ); ?></th>
@@ -509,6 +592,11 @@ $settings = get_option( 'seobetter_settings', [] );
             <?php submit_button( __( 'Save Settings', 'seobetter' ), 'primary', 'seobetter_save_settings' ); ?>
         </form>
     </div>
+
+    </div><!-- /.sb-tab-panel general -->
+
+    <!-- Author Bio tab -->
+    <div class="sb-tab-panel <?php echo $sb_current_tab === 'author_bio' ? 'sb-tab-active' : ''; ?>" data-sb-tab="author_bio">
 
     <!-- Author Bio / E-E-A-T (v1.5.139) -->
     <div class="seobetter-card" style="margin-bottom:20px">
@@ -590,6 +678,11 @@ $settings = get_option( 'seobetter_settings', [] );
             <?php submit_button( __( 'Save Author Bio', 'seobetter' ), 'primary', 'seobetter_save_author' ); ?>
         </form>
     </div>
+
+    </div><!-- /.sb-tab-panel author_bio -->
+
+    <!-- Research & Integrations tab -->
+    <div class="sb-tab-panel <?php echo $sb_current_tab === 'research_integrations' ? 'sb-tab-active' : ''; ?>" data-sb-tab="research_integrations">
 
     <!-- Places Integrations (v1.5.24) -->
     <div class="seobetter-card" style="margin-bottom:20px">
@@ -924,6 +1017,11 @@ $bv_edit_id   = sanitize_key( $_GET['edit_voice'] ?? '' );
 $bv_editing   = $bv_edit_id !== '' && isset( $bv_voices[ $bv_edit_id ] ) ? $bv_voices[ $bv_edit_id ] : null;
 $bv_tier_label = $bv_cap === 0 ? 'Pro' : ( $bv_cap === 1 ? 'Pro' : ( $bv_cap === 3 ? 'Pro+' : 'Agency' ) );
 ?>
+</div><!-- /.sb-tab-panel research_integrations -->
+
+<!-- Branding tab -->
+<div class="sb-tab-panel <?php echo $sb_current_tab === 'branding' ? 'sb-tab-active' : ''; ?>" data-sb-tab="branding">
+
 <div class="seobetter-card" id="brand-voice" style="margin-top:24px;margin-bottom:20px">
     <h2><?php esc_html_e( 'Brand Voice Profiles', 'seobetter' ); ?>
         <span class="seobetter-score" style="font-size:10px;margin-left:8px;background:#ede9fe;color:#5b21b6;font-weight:600;letter-spacing:0.05em;text-transform:uppercase"><?php
@@ -1220,6 +1318,36 @@ $bv_tier_label = $bv_cap === 0 ? 'Pro' : ( $bv_cap === 1 ? 'Pro' : ( $bv_cap ===
         </p>
     </div>
 </div>
+
+</div><!-- /.sb-tab-panel branding -->
+
+<script>
+// v1.5.216.32 — Phase 1 item 13: Tab navigation enhancement.
+// Server-side renders the active tab via PHP `sb-tab-active` class. JS handles
+// in-page tab switches (without page reload) when user clicks a tab link, and
+// keeps the URL ?tab= in sync via history.replaceState so deep-links work.
+(function() {
+    var tabLinks = document.querySelectorAll('[data-sb-tab-link]');
+    var panels   = document.querySelectorAll('.sb-tab-panel');
+    tabLinks.forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            // Allow Cmd/Ctrl+click to open in new tab as a real navigation
+            if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+            e.preventDefault();
+            var target = this.getAttribute('data-sb-tab-link');
+            tabLinks.forEach(function(l) { l.classList.remove('nav-tab-active'); });
+            this.classList.add('nav-tab-active');
+            panels.forEach(function(p) {
+                p.classList.toggle('sb-tab-active', p.getAttribute('data-sb-tab') === target);
+            });
+            // Update URL without reload so the user can copy/share the deep link
+            var url = new URL(window.location.href);
+            url.searchParams.set('tab', target);
+            history.replaceState(null, '', url.toString());
+        });
+    });
+})();
+</script>
 
 <script>
 jQuery(function($) {

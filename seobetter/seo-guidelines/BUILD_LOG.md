@@ -7,12 +7,90 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.31)
+> **Last updated:** 2026-04-30 (v1.5.216.32)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.32 — Settings.php restructure into 6 tabs (Phase 1 item 13)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Pre-rewrite `settings.php` was a 1588-line single-page wall of 9 cards stacked vertically. Users had to scroll past Brand Voice, GSC, Places APIs, AI Provider, Author Bio just to find one knob. Item 13 splits the page into 6 logical tabs using the WordPress `nav-tab-wrapper` pattern with `?tab=` deep-links, while preserving every existing per-form save handler (no behaviour changes — just navigation).
+
+Tabs match the locked plan §3 item 13 spec: **License & Account / AI Provider / General / Author Bio / Branding / Research & Integrations**.
+
+Bonus deliverables baked into the same ship:
+- **Tier-aware 3-card upsell grid** — Free sees Pro/Pro+/Agency cards; Pro sees Pro+/Agency; Pro+ sees Agency; Agency sees no upsell. Each card lists tier-correct features pulled from `pro-features-ideas.md §2` Tier Matrix
+- **Dead settings removed** — `target_readability` and `geo_engines` UI fields stripped per locked plan. Settings array values preserved for any legacy callers (sanitize handler now reads from `$settings` array fallback rather than POST)
+
+### What shipped
+
+- **6-tab nav** — `seobetter/admin/views/settings.php` ~line 192
+  - `$sb_tabs` map (slug → label) + `$sb_current_tab = sanitize_key($_GET['tab'] ?? 'license_account')` with allowlist guard
+  - `<h2 class="nav-tab-wrapper">` renders 6 tab links with `nav-tab-active` class on the current tab
+  - Each link href is a deep-link `admin.php?page=seobetter-settings&tab={slug}` so reload + bookmark work natively
+  - Inline CSS hides non-active panels server-side so the right tab shows immediately (no FOUC)
+
+- **Per-tab panel wrappers** — 6 `<div class="sb-tab-panel" data-sb-tab="{slug}">` blocks wrap the existing cards:
+  - `license_account` (lines ~280-311): License card + 3-card upsell grid above it
+  - `ai_provider` (lines ~313-491): AI generation source banner + Connect AI provider (BYOK)
+  - `general` (lines ~495-595): General Settings (auto-schema, auto-analyze, llms.txt with full Phase 1 item 12 surface)
+  - `author_bio` (lines ~597-680): Author Bio E-E-A-T form
+  - `research_integrations` (lines ~682-1018): Places Integrations + Google Search Console
+  - `branding` (lines ~1020-end): Brand Voice Profiles + Branding & AI Featured Image
+
+- **JS tab switcher** — appended near end of file
+  - In-page tab switch via `data-sb-tab-link` click handler (no full reload)
+  - `history.replaceState` keeps URL `?tab=` in sync so copy/share works
+  - Cmd/Ctrl/Shift+click falls through to native navigation (open in new tab works)
+
+- **3-card upsell grid** — at top of License & Account tab
+  - Tier-aware composition: Free (3 cards), Pro (2 cards), Pro+ (1 card), Agency (0 cards)
+  - Per-card: tier name, monthly price, 6-7 feature bullets, primary "Upgrade →" CTA in tier color
+  - Feature lists sourced verbatim from `pro-features-ideas.md §2` Tier Matrix (e.g. Pro+ "+/llms-full.txt + multilingual" matches what item 12 just shipped)
+
+- **Dead-setting removal**
+  - `Target Readability` field (advisory-only, never enforced) — removed from General Settings UI
+  - `Target AI Engines` checkboxes (artifact from v1.4 era of per-engine gating; current `GEO_Analyzer` is engine-agnostic) — removed
+  - POST handler refactored to read `target_readability` and `geo_engines` from existing settings array as fallback so legacy code paths reading these keys don't crash
+
+- **Header tier badge upgrade** — h1 now shows `Free / Pro / Pro+ / Agency` from `License_Manager::get_active_tier()` (was just "Pro/Free" binary)
+
+### Verify (file:method anchors)
+
+```bash
+# Tab navigation infrastructure
+grep -n "sb_tabs\|sb_current_tab\|nav-tab-wrapper\|sb-tab-panel\|data-sb-tab" seobetter/admin/views/settings.php | head -20
+
+# 3-card upsell grid
+grep -n "sb_active_tier\|sb_cards" seobetter/admin/views/settings.php | head -10
+
+# Dead settings removed
+grep -n "target_readability\|geo_engines" seobetter/admin/views/settings.php
+```
+
+The grep for `target_readability` / `geo_engines` should return ONLY the POST handler fallback reads + the Author Bio hidden-input preservation block — no UI fields surface them anymore.
+
+### Tier gating
+
+- All tabs visible regardless of tier — tabs are navigation, not features
+- Per-tab content gates remain unchanged (Brand Voice tier-gated by `Brand_Voice_Manager::tier_cap`, GSC by `gsc_freshness_driver`, etc.)
+- 3-card upsell grid is the only tier-aware UI surface added by this ship
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No structural changes to other guideline files — this is pure UI restructure. Form handlers + saved option keys + REST endpoints all unchanged
+
+**Verified by user:** UNTESTED
 
 ---
 
