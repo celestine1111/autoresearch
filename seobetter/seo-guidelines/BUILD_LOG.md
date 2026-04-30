@@ -7,12 +7,59 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.38)
+> **Last updated:** 2026-04-30 (v1.5.216.39)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.39 — Recent Articles columns: Score / GEO / Cites / AI Ready (Phase 1 item 20)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Item 7 (v1.5.216.26) shipped the SEOBetter Score 0-100 composite — surfaced in the Posts list "SEOBetter" column and the metabox tab. The dashboard's Recent Articles table was the last place still showing only the legacy GEO Score. Item 20 adds the composite column there + reserves placeholder slots for two Phase 2 columns (AI Citations badge from Citation_Tracker, AI Readiness mini-score) so the layout stabilises now and Phase 2 can swap placeholders for real data without restructuring the table.
+
+### What shipped
+
+- **Recent Articles table column expansion** — `seobetter/admin/views/dashboard.php::section ~line 446`
+  - Was: `Article | Status | GEO Score | Date | Edit` (5 cols)
+  - Now: `Article | Status | Score | GEO | Cites P2 | AI Ready P2 | Date | Edit` (8 cols)
+  - **Score** column (90px wide) — primary surface. Reads `_seobetter_score` post meta (item 7), live-computes via `Score_Composite::compute()` when meta unavailable. Tooltip shows full label "SEOBetter Score N (Grade)"
+  - **GEO** column (80px wide, smaller font) — kept for backward-compat with users who internalised the legacy 14-check number. Smaller width signals it's secondary
+  - **Cites** column (90px wide) — placeholder rendering "—" with tooltip "AI Citations data ships in Phase 2 with the Citation_Tracker backend." Header gets `<span>P2</span>` mini-badge
+  - **AI Ready** column (90px wide) — placeholder rendering "—" with tooltip "AI Readiness mini-score ships in Phase 2." Header `P2` mini-badge
+  - Footer caption clarifies: "Score = SEOBetter Score (composite). GEO = legacy weighted average. Cites + AI Ready columns ship in Phase 2."
+
+- **Phase 2 column reservations are intentional**
+  - When `Citation_Tracker` Phase 2 backend ships, the Cites column flips to render the per-post citation count from the existing `Citation_Tracker::get_post_citations( $post->ID )` API. Zero structural change to this table needed
+  - When AI Readiness mini-score Phase 2 backend ships, the AI Ready column flips to render the composite from the upcoming `AI_Readiness_Score` class (per locked plan §2 line 93). Same zero-restructure path
+
+### Verify (file:method anchors)
+
+```bash
+# 8-column header
+grep -n "esc_html_e( 'Score'\|esc_html_e( 'GEO'\|esc_html_e( 'Cites'\|esc_html_e( 'AI Ready'" seobetter/admin/views/dashboard.php
+
+# Score_Composite live-compute fallback
+grep -n "Score_Composite::compute\|_seobetter_score" seobetter/admin/views/dashboard.php
+```
+
+### Tier gating
+
+- All tiers see all 4 score columns. The placeholder columns render the same "—" for every tier in Phase 1; Phase 2 will gate the AI Readiness mini-score behind Pro+ per `pro-features-ideas.md §2` line 93 (Pro+ = full per-page breakdown)
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No changes to other guidelines — pure UI surface adding columns to an existing table over already-shipped data (Score_Composite from item 7) and reserving placeholder slots for Phase 2 backends
+
+**Verified by user:** UNTESTED
 
 ---
 

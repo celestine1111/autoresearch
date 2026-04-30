@@ -443,39 +443,71 @@ $avg_geo_color = $avg_geo >= 80 ? '#10b981' : ( $avg_geo >= 60 ? '#f59e0b' : ( $
             <h2 style="margin:0">Recent Articles</h2>
             <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-generate' ) ); ?>" class="button sb-btn-sm sb-btn-secondary">+ New Article</a>
         </div>
+        <?php
+        // v1.5.216.39 — Phase 1 item 20: Recent Articles columns expansion.
+        // Adds SEOBetter Score (composite from item 7 / Score_Composite.php)
+        // alongside the existing GEO Score, plus 2 placeholder slots for
+        // Phase 2 surfaces (AI Citations badge from Citation_Tracker, and
+        // AI Readiness mini-score). Placeholders render "—" for now and
+        // get an info tooltip explaining the Phase 2 ETA.
+        ?>
         <table class="widefat striped">
             <thead>
                 <tr>
                     <th><?php esc_html_e( 'Article', 'seobetter' ); ?></th>
                     <th style="width:80px"><?php esc_html_e( 'Status', 'seobetter' ); ?></th>
-                    <th style="width:100px"><?php esc_html_e( 'GEO Score', 'seobetter' ); ?></th>
-                    <th style="width:100px"><?php esc_html_e( 'Date', 'seobetter' ); ?></th>
-                    <th style="width:80px"></th>
+                    <th style="width:90px" title="<?php esc_attr_e( 'SEOBetter Score 0-100 — composite across 5 optimization layers (item 7)', 'seobetter' ); ?>"><?php esc_html_e( 'Score', 'seobetter' ); ?></th>
+                    <th style="width:80px" title="<?php esc_attr_e( 'GEO Score — legacy 14-check weighted average', 'seobetter' ); ?>"><?php esc_html_e( 'GEO', 'seobetter' ); ?></th>
+                    <th style="width:90px" title="<?php esc_attr_e( 'AI Citations — count of times this article was cited by Claude / ChatGPT / Perplexity / Gemini in the last 30 days. Phase 2 (Citation_Tracker backend ships separately).', 'seobetter' ); ?>"><?php esc_html_e( 'Cites', 'seobetter' ); ?> <span style="font-size:9px;color:#94a3b8;font-weight:400">P2</span></th>
+                    <th style="width:90px" title="<?php esc_attr_e( 'AI Readiness mini-score 0-100 — composite of Crawler access + AI bot activity (last 30d) + Schema completeness + Citation extractability + llms.txt + sitemap submitted + Freshness signals. Phase 2 (Pro+ tier).', 'seobetter' ); ?>"><?php esc_html_e( 'AI Ready', 'seobetter' ); ?> <span style="font-size:9px;color:#94a3b8;font-weight:400">P2</span></th>
+                    <th style="width:80px"><?php esc_html_e( 'Date', 'seobetter' ); ?></th>
+                    <th style="width:60px"></th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ( $generated_posts as $post ) :
-                    $score_data = get_post_meta( $post->ID, '_seobetter_geo_score', true );
-                    $score = $score_data['geo_score'] ?? '—';
-                    $grade = $score_data['grade'] ?? '';
-                    $score_class = is_numeric( $score ) ? ( $score >= 80 ? 'good' : ( $score >= 60 ? 'ok' : 'poor' ) ) : '';
+                    $score_data    = get_post_meta( $post->ID, '_seobetter_geo_score', true );
+                    $geo_score     = $score_data['geo_score'] ?? '—';
+                    $geo_class     = is_numeric( $geo_score ) ? ( $geo_score >= 80 ? 'good' : ( $geo_score >= 60 ? 'ok' : 'poor' ) ) : '';
+                    // SEOBetter Score composite — read pre-computed meta first
+                    // (sync_seo_plugin_meta writes it on save). Fall back to
+                    // live compute when meta hasn't backfilled yet.
+                    $sb_score_data = get_post_meta( $post->ID, '_seobetter_score', true );
+                    if ( ! is_array( $sb_score_data ) && is_array( $score_data ) ) {
+                        $sb_score_data = SEOBetter\Score_Composite::compute( $score_data, $post->ID );
+                    }
+                    $sb_score      = is_array( $sb_score_data ) ? (int) ( $sb_score_data['score'] ?? 0 ) : 0;
+                    $sb_grade      = is_array( $sb_score_data ) ? (string) ( $sb_score_data['grade'] ?? '' ) : '';
+                    $sb_class      = $sb_score > 0 ? ( $sb_score >= 80 ? 'good' : ( $sb_score >= 60 ? 'ok' : 'poor' ) ) : '';
                 ?>
                 <tr>
                     <td><a href="<?php echo esc_url( get_edit_post_link( $post->ID ) ); ?>"><strong><?php echo esc_html( $post->post_title ); ?></strong></a></td>
                     <td><span style="font-size:12px"><?php echo esc_html( get_post_status_object( $post->post_status )->label ?? $post->post_status ); ?></span></td>
                     <td>
-                        <?php if ( $score_class ) : ?>
-                            <span class="seobetter-score seobetter-score-<?php echo esc_attr( $score_class ); ?>"><?php echo esc_html( $score ); ?></span>
+                        <?php if ( $sb_class ) : ?>
+                            <span class="seobetter-score seobetter-score-<?php echo esc_attr( $sb_class ); ?>" title="<?php echo esc_attr( sprintf( __( 'SEOBetter Score %d (%s)', 'seobetter' ), $sb_score, $sb_grade ) ); ?>"><?php echo esc_html( $sb_score ); ?></span>
                         <?php else : ?>
-                            —
+                            <span style="color:#94a3b8">—</span>
                         <?php endif; ?>
                     </td>
+                    <td>
+                        <?php if ( $geo_class ) : ?>
+                            <span class="seobetter-score seobetter-score-<?php echo esc_attr( $geo_class ); ?>" style="font-size:11px"><?php echo esc_html( $geo_score ); ?></span>
+                        <?php else : ?>
+                            <span style="color:#94a3b8">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><span style="color:#94a3b8;font-size:11px" title="<?php esc_attr_e( 'AI Citations data ships in Phase 2 with the Citation_Tracker backend.', 'seobetter' ); ?>">—</span></td>
+                    <td><span style="color:#94a3b8;font-size:11px" title="<?php esc_attr_e( 'AI Readiness mini-score ships in Phase 2.', 'seobetter' ); ?>">—</span></td>
                     <td style="font-size:12px;color:var(--sb-text-secondary,#64748b)"><?php echo esc_html( get_the_date( 'M j', $post ) ); ?></td>
                     <td><a href="<?php echo esc_url( get_edit_post_link( $post->ID ) ); ?>" class="button sb-btn-sm">Edit</a></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
+        <p style="font-size:11px;color:#94a3b8;margin:10px 0 0;font-style:italic">
+            <?php esc_html_e( 'Score = SEOBetter Score (composite). GEO = legacy weighted average. Cites + AI Ready columns ship in Phase 2.', 'seobetter' ); ?>
+        </p>
     </div>
     <?php endif; ?>
 
