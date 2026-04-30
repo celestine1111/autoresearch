@@ -19,7 +19,7 @@
 ## v1.5.216.23 — Freshness inventory MVP — sortable table + GSC-driven priority (Phase 1 item 4)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `528d0f4`
 
 ### Why this ships
 
