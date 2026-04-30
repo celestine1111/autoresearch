@@ -19,7 +19,7 @@
 ## v1.5.216.30 — Country allowlist split + UI lock badges (Phase 1 item 11)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `c8c1eaa`
 
 ### Why this ships
 
