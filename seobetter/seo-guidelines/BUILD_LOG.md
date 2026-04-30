@@ -19,7 +19,7 @@
 ## v1.5.216.29 — 5 Schema Blocks (Phase 1 item 10) — Pro+ user-editable structured data
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `9242f58`
 
 ### Why this ships
 
