@@ -19,7 +19,7 @@
 ## v1.5.216.33 — Brand Voice sample-post uploader + drag-drop (Phase 1 item 14)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `b52df34`
 
 ### Why this ships
 
