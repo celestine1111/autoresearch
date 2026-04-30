@@ -7,12 +7,81 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.34)
+> **Last updated:** 2026-04-30 (v1.5.216.35)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.35 — Tier-aware UI gating: Tavily + AI Image lock badges (Phase 1 item 16)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Per the locked plan §3 item 16: "gate AI Image provider/style preset behind Pro license check with lock badges + upsell tooltips. Tavily field shows Pro lock badge. Places APIs stay free-accessible per Option B."
+
+The server-side gate at `AI_Image_Generator::generate()` already rejects AI Image generation for Free users (item 6 / v1.5.216.25). What was missing: the UI never communicated this — Free users would configure their AI Image provider, paste an API key, save settings, then get silent Pexels-stock fallback at generation time. Item 16 closes the communication gap with visible lock badges + hover tooltips.
+
+Tavily gets the same Pro-badge treatment. Tavily itself is universally free (1,000 calls/month with the user's own key) — the gate is informational ("this is a Pro-tier value-add") rather than a hard server-side block, so Free users with the badge see the upsell context without losing the ability to paste a key (saved settings persist; pipeline-side enforcement is left to the Phase 1 test gate with `SEOBETTER_GATE_LIVE`).
+
+Places APIs explicitly stay free-accessible per Option B — the locked plan's article-quality decision: place-citation articles need this and users provide their own keys at $0 cost to Ben. No badge added to Places fields.
+
+### What shipped
+
+- **`tavily_search` feature key** — `seobetter/includes/License_Manager.php` line ~119
+  - Added to `PRO_FEATURES` array. New key, no existing usage. Sole purpose right now is the badge gate
+
+- **`seobetter_pro_lock_badge()` helper** — `seobetter/admin/views/settings.php` ~line 8
+  - Reusable function emitting a tier-colored badge (🔒 Pro / Pro+ / Agency)
+  - Returns empty string when feature is unlocked → callers can echo unconditionally
+  - Accepts feature slug, optional tooltip, optional required_tier override
+  - Tier colors mirror the 3-card upsell grid (Pro #3b82f6 / Pro+ #7c3aed / Agency #059669)
+  - `cursor:help` styling so users know the badge is hover-explainable
+
+- **Tavily field badge** — settings.php ~line 605
+  - Renders `🔒 PRO` badge next to "Tavily API Key" label for Free users
+  - Tooltip: "Tavily-powered expert quotes + citations is a Pro feature ($39/mo). Free 1,000/month from Tavily; you provide your own key. Upgrade unlocks it."
+  - Field stays editable — saving still persists the key. Server-side enforcement comes when `SEOBETTER_GATE_LIVE` flips to true (Phase 1 item 24)
+
+- **AI Image Provider badge** — settings.php ~line 1410
+  - Badge next to "AI Image Provider" label
+  - Tooltip: "AI Featured Image generation is a Pro feature ($39/mo). Free tier uses Pexels stock images via the 3-tier fallback chain (your key → Cloud pool → Picsum)."
+  - Locked state adds `opacity:0.6` to the cell + `title=` attribute on the select element
+  - Existing `AI_Image_Generator::generate()` server-side gate already rejects unlicensed calls — this is the missing UI layer
+
+- **AI Image Style Preset badge** — settings.php ~line 1443
+  - Same treatment. Style presets only fire when AI Image is active, so the badge clarifies that for Free users
+  - Same `opacity:0.6` + tooltip pattern
+
+### Verify (file:method anchors)
+
+```bash
+# tavily_search added to Pro feature list
+grep -n "tavily_search" seobetter/includes/License_Manager.php
+
+# Reusable badge helper
+grep -n "function seobetter_pro_lock_badge\|seobetter_pro_lock_badge\\(" seobetter/admin/views/settings.php
+
+# Three locked surfaces
+grep -n "ai_featured_image\|tavily_search" seobetter/admin/views/settings.php
+```
+
+### Tier gating
+
+- **Free**: 3 visible lock badges (Tavily, AI Image Provider, AI Image Style). All fields stay editable; saved settings persist through tier changes (restoring on upgrade is automatic — no data loss). Server-side AI Image gate at `AI_Image_Generator::generate()` rejects with Pexels fallback. Tavily field has no server-side block yet (informational badge only — full enforcement comes with item 24 flag flip)
+- **Pro / Pro+ / Agency**: badges return empty string from helper. UI is identical to pre-rewrite
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No changes to other guidelines — this is pure UI layer over existing server-side gates. Helper function lives in the view file (single-callsite) rather than a shared partial; can be promoted later when more Pro fields need lock badges
+
+**Verified by user:** UNTESTED
 
 ---
 

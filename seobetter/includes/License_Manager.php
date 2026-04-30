@@ -113,6 +113,7 @@ class License_Manager {
         'multilingual_60_languages',
         'country_localization_80',        // full 80+ countries with Regional_Context
         'ai_featured_image',              // Pollinations / OpenRouter / Gemini Nano Banana
+        'tavily_search',                  // v1.5.216.35 — Tavily field shows Pro lock badge per locked plan §3 item 16
         'inline_citations',               // Citation Pool clickable markdown links
         // Schema (advanced)
         'schema_advanced',                // Recipe wrapper, Speakable, citation[], TechArticle, ScholarlyArticle

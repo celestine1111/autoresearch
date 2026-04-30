@@ -5,6 +5,39 @@ $license_info = SEOBetter\License_Manager::get_info();
 $providers = SEOBetter\AI_Provider_Manager::get_providers();
 $saved_providers = SEOBetter\AI_Provider_Manager::get_saved_providers();
 
+/**
+ * v1.5.216.35 — Phase 1 item 16: reusable Pro lock-badge helper.
+ *
+ * Renders a small purple "🔒 Pro" badge inline next to a setting label
+ * when the active tier doesn't include the named feature. Returns empty
+ * string when the user already has the feature unlocked — so the calling
+ * site can echo it unconditionally.
+ *
+ * Tooltip text comes from the optional 2nd arg; falls back to a generic
+ * upgrade message. Renders HTML — caller is responsible for output context.
+ */
+if ( ! function_exists( 'seobetter_pro_lock_badge' ) ) {
+    function seobetter_pro_lock_badge( string $feature, string $tooltip = '', string $required_tier = '' ): string {
+        if ( SEOBetter\License_Manager::can_use( $feature ) ) {
+            return '';
+        }
+        if ( $required_tier === '' ) {
+            $required_tier = SEOBetter\License_Manager::get_required_tier( $feature ) ?: 'pro';
+        }
+        $tier_label = [ 'pro' => 'Pro', 'pro_plus' => 'Pro+', 'agency' => 'Agency' ][ $required_tier ] ?? 'Pro';
+        $color      = [ 'pro' => '#3b82f6', 'pro_plus' => '#7c3aed', 'agency' => '#059669' ][ $required_tier ] ?? '#7c3aed';
+        $bg         = [ 'pro' => '#eff6ff', 'pro_plus' => '#f5f3ff', 'agency' => '#ecfdf5' ][ $required_tier ] ?? '#f5f3ff';
+        $tooltip    = $tooltip !== '' ? $tooltip : sprintf( __( 'Requires SEOBetter %s. Upgrade to unlock.', 'seobetter' ), $tier_label );
+        return sprintf(
+            '<span title="%s" style="display:inline-block;margin-left:6px;padding:2px 8px;background:%s;color:%s;border-radius:8px;font-size:10px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;cursor:help">🔒 %s</span>',
+            esc_attr( $tooltip ),
+            esc_attr( $bg ),
+            esc_attr( $color ),
+            esc_html( $tier_label )
+        );
+    }
+}
+
 // Handle license activation
 if ( isset( $_POST['seobetter_activate_license'] ) && check_admin_referer( 'seobetter_settings_nonce' ) ) {
     $result = SEOBetter\License_Manager::activate( $_POST['license_key'] ?? '' );
@@ -573,7 +606,10 @@ $sb_active_tier = SEOBetter\License_Manager::get_active_tier();
                 }
                 ?>
                 <tr>
-                    <th><?php esc_html_e( 'Tavily API Key', 'seobetter' ); ?></th>
+                    <th>
+                        <?php esc_html_e( 'Tavily API Key', 'seobetter' ); ?>
+                        <?php echo seobetter_pro_lock_badge( 'tavily_search', __( 'Tavily-powered expert quotes + citations is a Pro feature. Free 1,000/month from Tavily; you provide your own key. Upgrade unlocks it.', 'seobetter' ), 'pro' ); ?>
+                    </th>
                     <td>
                         <input type="password" name="tavily_api_key" value="<?php echo esc_attr( $settings['tavily_api_key'] ?? '' ); ?>" class="regular-text" placeholder="tvly-..." />
                         <a href="https://tavily.com" target="_blank" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Free Key', 'seobetter' ); ?></a>
@@ -1364,11 +1400,23 @@ $bv_tier_label = $bv_cap === 0 ? 'Pro' : ( $bv_cap === 1 ? 'Pro' : ( $bv_cap ===
                 </tr>
 
                 <!-- AI Provider -->
+                <?php
+                // v1.5.216.35 — Phase 1 item 16: Pro lock badge on AI Image
+                // provider + style preset. Server-side gate at
+                // AI_Image_Generator::generate() already in place since item 6;
+                // these UI badges + tooltips communicate the gate to Free
+                // users without disabling the form (saved settings persist
+                // through tier changes — restoring on upgrade is automatic).
+                $sb_ai_image_locked = ! SEOBetter\License_Manager::can_use( 'ai_featured_image' );
+                ?>
                 <tr>
-                    <th><?php esc_html_e( 'AI Image Provider', 'seobetter' ); ?></th>
-                    <td>
+                    <th>
+                        <?php esc_html_e( 'AI Image Provider', 'seobetter' ); ?>
+                        <?php echo seobetter_pro_lock_badge( 'ai_featured_image', __( 'AI Featured Image generation is a Pro feature ($39/mo). Free tier uses Pexels stock images via the 3-tier fallback chain (your key → Cloud pool → Picsum).', 'seobetter' ), 'pro' ); ?>
+                    </th>
+                    <td<?php echo $sb_ai_image_locked ? ' style="opacity:0.6"' : ''; ?>>
                         <?php $bp = $settings['branding_provider'] ?? ''; ?>
-                        <select name="branding_provider" id="branding_provider">
+                        <select name="branding_provider" id="branding_provider"<?php echo $sb_ai_image_locked ? ' title="' . esc_attr__( 'AI Image generation requires Pro. Free tier falls back to Pexels stock images.', 'seobetter' ) . '"' : ''; ?>>
                             <option value="" <?php selected( $bp, '' ); ?>>— <?php esc_html_e( 'Disabled (use Pexels stock images: your key → Cloud pool → Picsum)', 'seobetter' ); ?> —</option>
                             <option value="pollinations" <?php selected( $bp, 'pollinations' ); ?>><?php esc_html_e( 'Pollinations.ai — FREE, no API key, no signup (Recommended to start)', 'seobetter' ); ?></option>
                             <option value="openrouter" <?php selected( $bp, 'openrouter' ); ?>><?php esc_html_e( 'OpenRouter → Gemini Nano Banana — uses your existing OpenRouter key, ~$0.04/image', 'seobetter' ); ?></option>
@@ -1396,10 +1444,13 @@ $bv_tier_label = $bv_cap === 0 ? 'Pro' : ( $bv_cap === 1 ? 'Pro' : ( $bv_cap ===
 
                 <!-- Style preset -->
                 <tr>
-                    <th><?php esc_html_e( 'Image Style Preset', 'seobetter' ); ?></th>
-                    <td>
+                    <th>
+                        <?php esc_html_e( 'Image Style Preset', 'seobetter' ); ?>
+                        <?php echo seobetter_pro_lock_badge( 'ai_featured_image', __( 'Style presets only fire when AI Image is active (Pro feature).', 'seobetter' ), 'pro' ); ?>
+                    </th>
+                    <td<?php echo $sb_ai_image_locked ? ' style="opacity:0.6"' : ''; ?>>
                         <?php $bs = $settings['branding_style'] ?? 'realistic'; ?>
-                        <select name="branding_style">
+                        <select name="branding_style"<?php echo $sb_ai_image_locked ? ' title="' . esc_attr__( 'Activates only when AI Image is enabled (Pro tier).', 'seobetter' ) . '"' : ''; ?>>
                             <option value="realistic" <?php selected( $bs, 'realistic' ); ?>><?php esc_html_e( '📰 Magazine Cover (recommended) — bottom-third headline overlay, NYT/Wired editorial photo', 'seobetter' ); ?></option>
                             <option value="editorial" <?php selected( $bs, 'editorial' ); ?>><?php esc_html_e( '🗞️ Classic Editorial — title top with horizontal divider, photo below (NYT/Atlantic style)', 'seobetter' ); ?></option>
                             <option value="hero" <?php selected( $bs, 'hero' ); ?>><?php esc_html_e( '🎬 Cinematic Hero — full-bleed photo with centered title + cinema black bars', 'seobetter' ); ?></option>
