@@ -19,7 +19,7 @@
 ## v1.5.216.35 — Tier-aware UI gating: Tavily + AI Image lock badges (Phase 1 item 16)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `02ec2cf`
 
 ### Why this ships
 
