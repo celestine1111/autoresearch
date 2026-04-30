@@ -7,12 +7,71 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.32)
+> **Last updated:** 2026-04-30 (v1.5.216.33)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.33 — Brand Voice sample-post uploader + drag-drop (Phase 1 item 14)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Most of Phase 1 item 14 (Brand Voice profile section) already shipped as item 6 (v1.5.216.25): `Brand_Voice_Manager` class, full Settings UI form (name / description / sample_text / tone_directives / banned_phrases textareas), tier-cap counter, list table, edit/delete. Item 13's Settings tab restructure placed this card correctly inside the **Branding** tab.
+
+What was missing per the locked plan: the **sample uploader** — drag-drop file support and "pick from existing posts" dropdown. Pre-rewrite, users could only paste plain text; now they have three input paths:
+
+1. **Pick from existing post** — dropdown with up to 50 most-recent published posts/pages. Selection fetches content via WP core REST and writes to textarea
+2. **Upload .txt** — file picker button with FileReader (no network, 100KB cap)
+3. **Drag-drop .txt** — drop zone overlays the textarea, validates extension + size, same FileReader path
+4. **Paste** — original plain-text paste still works (unchanged)
+
+All three new paths write to the same `voice_sample_text` textarea. The form continues to POST through the existing `seobetter_save_brand_voice` handler (zero server-side change).
+
+### What shipped
+
+- **Picker dropdown** — `seobetter/admin/views/settings.php` ~line 1119
+  - `get_posts(['post_type' => ['post','page'], 'posts_per_page' => 50, 'fields' => 'ids'])` populates `<select id="voice_sample_picker">`
+  - JS: `change` event fetches `/wp-json/wp/v2/posts/{id}?_fields=content,title` (with `wp_rest` nonce header). Falls back to `/wp/v2/pages/{id}` when post-type is page (404 → retry as page)
+  - HTML stripped to plaintext via temporary div + paragraph/br/li → newline conversion. Multiple consecutive newlines collapsed to 2
+
+- **Upload .txt button** — labelled file input next to picker
+  - Hidden `<input type="file" accept=".txt,text/plain">` triggered by styled label
+  - 100KB hard cap; oversize → alert
+  - `FileReader.readAsText()` writes to textarea
+
+- **Drag-drop overlay** — wraps the textarea in `#voice_sample_dropzone`
+  - `dragenter` / `dragover` show purple-tinted "Drop .txt file to load" hint overlaid on textarea
+  - `drop` validates `.txt` extension or `text/plain` MIME (rejects with alert otherwise)
+  - Same 100KB cap as button-click upload
+  - `dragleave` and `drop` hide the hint
+
+### Verify (file:method anchors)
+
+```bash
+# Three new sample-input paths
+grep -n "voice_sample_picker\|voice_sample_file\|voice_sample_dropzone" seobetter/admin/views/settings.php
+
+# Server side unchanged — still uses Brand_Voice_Manager from item 6
+grep -n "seobetter_save_brand_voice\|Brand_Voice_Manager::save" seobetter/admin/views/settings.php
+```
+
+### Tier gating
+
+Unchanged from item 6: Free 0 voices, Pro 1, Pro+ 3, Agency unlimited via `Brand_Voice_Manager::tier_cap()`. The new uploader UIs are visible to all tiers because the FORM already gates rendering behind `$bv_can_create || $bv_editing` — Free users see the upsell card, never the uploader.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No changes to other guidelines — this is pure UX layer over existing storage + pipeline. Brand_Voice_Manager and its `seobetter_brand_voices` option schema are unchanged
+
+**Verified by user:** UNTESTED
 
 ---
 

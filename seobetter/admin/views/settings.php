@@ -1118,8 +1118,142 @@ $bv_tier_label = $bv_cap === 0 ? 'Pro' : ( $bv_cap === 1 ? 'Pro' : ( $bv_cap ===
                 <tr>
                     <th><label for="voice_sample_text"><?php esc_html_e( 'Sample text', 'seobetter' ); ?></label></th>
                     <td>
-                        <textarea name="voice_sample_text" id="voice_sample_text" rows="8" class="large-text" placeholder="Paste 500-1500 words of an existing article that exemplifies the voice. Plain text — no HTML."><?php echo esc_textarea( $bv_editing['sample_text'] ?? '' ); ?></textarea>
-                        <p class="description"><?php esc_html_e( 'The AI mirrors sentence rhythm, vocabulary, and formality from this sample. ~1500 chars used in the prompt; longer is fine but trimmed at the boundary.', 'seobetter' ); ?></p>
+                        <?php
+                        // v1.5.216.33 — Phase 1 item 14: sample uploader.
+                        // Two new sources for sample text alongside paste:
+                        //   1. "Pick from existing post" dropdown — populated
+                        //      with the 50 most-recent posts in the site so
+                        //      the user can pull voice from their own writing
+                        //      without copy/paste friction
+                        //   2. Drag-drop .txt file dropzone — for users who
+                        //      want to upload a sample from outside WordPress
+                        // Both write to the same textarea. Free paste still works.
+                        $bv_recent_posts = get_posts( [
+                            'post_type'      => [ 'post', 'page' ],
+                            'post_status'    => 'publish',
+                            'posts_per_page' => 50,
+                            'orderby'        => 'date',
+                            'order'          => 'DESC',
+                            'fields'         => 'ids',
+                        ] );
+                        ?>
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+                            <label style="font-size:12px;color:#374151;font-weight:600"><?php esc_html_e( 'Pick from existing post:', 'seobetter' ); ?></label>
+                            <select id="voice_sample_picker" style="flex:1;min-width:200px;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">
+                                <option value="">— <?php esc_html_e( 'choose a post to load its content', 'seobetter' ); ?> —</option>
+                                <?php foreach ( $bv_recent_posts as $bv_pid ) :
+                                    $bv_title = get_the_title( $bv_pid );
+                                    if ( $bv_title === '' ) continue;
+                                ?>
+                                    <option value="<?php echo esc_attr( $bv_pid ); ?>"><?php echo esc_html( wp_trim_words( $bv_title, 10, '…' ) ); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <span style="font-size:11px;color:#6b7280"><?php esc_html_e( 'or', 'seobetter' ); ?></span>
+                            <label for="voice_sample_file" style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border:1px dashed #c4b5fd;background:#f5f3ff;color:#5b21b6;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">
+                                📎 <?php esc_html_e( 'Upload .txt', 'seobetter' ); ?>
+                                <input type="file" id="voice_sample_file" accept=".txt,text/plain" style="display:none" />
+                            </label>
+                        </div>
+                        <div id="voice_sample_dropzone" style="position:relative">
+                            <textarea name="voice_sample_text" id="voice_sample_text" rows="8" class="large-text" placeholder="Paste 500-1500 words of an existing article that exemplifies the voice. Plain text — no HTML. Or pick a post above / drag a .txt file in."><?php echo esc_textarea( $bv_editing['sample_text'] ?? '' ); ?></textarea>
+                            <div id="voice_sample_drop_hint" style="position:absolute;inset:0;background:rgba(124,58,237,0.08);border:2px dashed #7c3aed;border-radius:6px;display:none;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#5b21b6;pointer-events:none"><?php esc_html_e( 'Drop .txt file to load', 'seobetter' ); ?></div>
+                        </div>
+                        <p class="description"><?php esc_html_e( 'The AI mirrors sentence rhythm, vocabulary, and formality from this sample. ~1500 chars used in the prompt; longer is fine but trimmed at the boundary. Pasting, picking, or dropping a file replaces the textarea contents.', 'seobetter' ); ?></p>
+                        <script>
+                        (function() {
+                            // v1.5.216.33 — sample-text loaders. All three writers
+                            // target #voice_sample_text. WP core REST is used for
+                            // the post-picker since it already handles capability
+                            // checks for editors+; .txt uploads use FileReader and
+                            // never touch the network.
+                            var ta       = document.getElementById('voice_sample_text');
+                            var picker   = document.getElementById('voice_sample_picker');
+                            var fileIn   = document.getElementById('voice_sample_file');
+                            var dropzone = document.getElementById('voice_sample_dropzone');
+                            var dropHint = document.getElementById('voice_sample_drop_hint');
+                            if (!ta) return;
+
+                            // Strip HTML to plaintext, preserve paragraph breaks
+                            function htmlToText(html) {
+                                var tmp = document.createElement('div');
+                                tmp.innerHTML = html
+                                    .replace(/<\/p>/gi, '\n\n')
+                                    .replace(/<br\s*\/?>/gi, '\n')
+                                    .replace(/<li[^>]*>/gi, '- ')
+                                    .replace(/<\/li>/gi, '\n');
+                                return (tmp.textContent || tmp.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
+                            }
+
+                            // Picker → fetch post content via WP REST
+                            if (picker) {
+                                picker.addEventListener('change', function() {
+                                    var id = this.value;
+                                    if (!id) return;
+                                    var url = '<?php echo esc_url_raw( rest_url( 'wp/v2/' ) ); ?>posts/' + id + '?_fields=content,title';
+                                    fetch(url, { headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' } })
+                                        .then(function(r) {
+                                            if (r.ok) return r.json();
+                                            // Fallback to /pages/{id} when /posts/{id} 404s
+                                            return fetch('<?php echo esc_url_raw( rest_url( 'wp/v2/' ) ); ?>pages/' + id + '?_fields=content,title', {
+                                                headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' }
+                                            }).then(function(r2) { return r2.json(); });
+                                        })
+                                        .then(function(data) {
+                                            if (data && data.content && data.content.rendered) {
+                                                ta.value = htmlToText(data.content.rendered);
+                                            }
+                                        })
+                                        .catch(function() {});
+                                });
+                            }
+
+                            // File upload → read text and write to textarea
+                            if (fileIn) {
+                                fileIn.addEventListener('change', function() {
+                                    var f = this.files && this.files[0];
+                                    if (!f) return;
+                                    if (f.size > 100 * 1024) {
+                                        alert('File too large (max 100KB).');
+                                        return;
+                                    }
+                                    var reader = new FileReader();
+                                    reader.onload = function(ev) { ta.value = ev.target.result; };
+                                    reader.readAsText(f);
+                                });
+                            }
+
+                            // Drag-drop on the textarea — same .txt validation
+                            if (dropzone) {
+                                ['dragenter', 'dragover'].forEach(function(evt) {
+                                    dropzone.addEventListener(evt, function(e) {
+                                        e.preventDefault();
+                                        if (dropHint) dropHint.style.display = 'flex';
+                                    });
+                                });
+                                ['dragleave', 'drop'].forEach(function(evt) {
+                                    dropzone.addEventListener(evt, function(e) {
+                                        e.preventDefault();
+                                        if (dropHint) dropHint.style.display = 'none';
+                                    });
+                                });
+                                dropzone.addEventListener('drop', function(e) {
+                                    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+                                    if (!f) return;
+                                    if (!/\.txt$/i.test(f.name) && f.type !== 'text/plain') {
+                                        alert('Only .txt files supported. Use the post picker for HTML content.');
+                                        return;
+                                    }
+                                    if (f.size > 100 * 1024) {
+                                        alert('File too large (max 100KB).');
+                                        return;
+                                    }
+                                    var reader = new FileReader();
+                                    reader.onload = function(ev) { ta.value = ev.target.result; };
+                                    reader.readAsText(f);
+                                });
+                            }
+                        })();
+                        </script>
                     </td>
                 </tr>
                 <tr>
