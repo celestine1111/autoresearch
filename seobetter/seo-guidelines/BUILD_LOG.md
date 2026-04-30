@@ -7,12 +7,89 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.27)
+> **Last updated:** 2026-04-30 (v1.5.216.28)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.28 — Bulk CSV UX layer rewrite (Phase 1 item 9)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Item 9 of the locked Phase 1 plan: full Bulk Generator UX rewrite — five locked deliverables in a single ship. The pre-existing bulk generator worked but was friction-heavy for Agency users running 50-keyword overnight batches: no preset reuse, no quality gate (junk articles polluted the CMS), no per-row override visualization, browser had to stay open for hours. All five gaps now closed.
+
+Tier: **Agency only** ($179/mo). Free/Pro/Pro+ users see the new amber "$179/mo Agency" upsell card with the locked-plan value prop (100 keywords, GEO 40 floor, default-to-draft, 10 sites, 5 seats).
+
+### What shipped — five locked deliverables
+
+**1. PRESETS — save/load named configurations**
+- `Bulk_Generator::save_preset()` / `get_preset()` / `get_presets()` / `delete_preset()` lines ~340-390 — CRUD via single `seobetter_bulk_presets` option (array keyed by `p_{8-hex}` ids)
+- Settings persisted: name, word_count, tone, domain, content_type, country, language, auto_publish
+- Tier cap: Agency-only (no per-tier preset limit — Agency assumed unlimited)
+- UI: top-of-page Saved Presets card with click-to-load chips + delete button per preset; modal triggered by "💾 Save current settings as preset" button below the form
+
+**2. PER-ROW OVERRIDE — visualization**
+- Already worked at the parser level; UI now shows which CSV columns overrode the page defaults
+- `Bulk_Generator::parse_csv()` line ~80 — captures `_csv_overrides` array per row (which optional columns were non-empty)
+- Result table gets a new "Overrides" column rendering each override as a small purple chip (`word_count`, `tone`, `domain`, etc)
+
+**3. ACTION SCHEDULER QUEUE — graceful fallback**
+- `Bulk_Generator::has_action_scheduler()` line ~398 — detects via `function_exists('as_enqueue_async_action')`
+- `Bulk_Generator::register_action_scheduler_hook()` — registers AS callback at plugin boot (no-op when AS absent)
+- `Bulk_Generator::as_handle_item()` line ~412 — re-enqueue-on-completion pattern keeps queue shallow + cancelable. 5-second delay between items to avoid hammering the generator endpoint
+- Hook: `seobetter_bulk_process_item`, group: `seobetter-bulk` (visible under Tools → Scheduled Actions)
+- AS mode adds new REST route `/seobetter/v1/bulk-status/{batch_id}` (read-only GET) — UI polls this for progress instead of driving processing
+- Banner UI: green "⚡ Background queue active" when AS present, amber "📡 Browser-driven mode" otherwise (with link to install Action Scheduler plugin)
+
+**4. GEO 40 FLOOR — quality gate**
+- `Bulk_Generator::QUALITY_FLOOR` constant = 40 (F-grade boundary in the existing rubric)
+- Items scoring below the configured floor get `status = 'failed_quality'` and the post is **NOT saved**. Score is preserved in the result row so the user can see WHY each was rejected
+- New batch counter `failed_quality` (separate from generic `failed`)
+- UI quality-gate field with 4 thresholds: 0 (off), 40 (recommended), 60 (D-grade min), 80 (A-grade only). Per-batch — overrideable per run
+- Result table 4-stat header: Total / Completed / Failed / Quality-rejected (amber)
+
+**5. DEFAULT-TO-DRAFT — explicit toggle**
+- Already existed at the code level (`'post_status' => 'draft'`); now surfaced as an explicit unchecked-by-default checkbox: "Auto-publish (skip draft review)"
+- When OFF (default): all items save as draft regardless of GEO score (assuming they pass the quality floor). User reviews then publishes manually
+- When ON: items pass the quality floor get `'post_status' => 'publish'`. Per-batch — overrideable per run
+- UI batch progress shows colored badge: 📝 "Saving as drafts" (blue) or ⚠️ "Auto-publish" (amber)
+
+### Bonus ship: Item 22 partial (tier label fix)
+
+Per item 22 of the locked plan: bulk-generator.php tier badge changed from binary FREE/PRO → uses `License_Manager::get_active_tier()` which returns Free / Pro / Pro+ / Agency. Upsell card copy updated from "$39/mo Pro" → "$179/mo Agency" with Agency-specific value prop (10 sites + 5 seats + GEO floor + default-to-draft). Full item 22 sweep across all admin views happens when item 22 ships.
+
+### Verify (file:method anchors)
+
+```bash
+# Bulk_Generator deliverables
+grep -n "public static function save_preset\|public static function get_presets\|public static function has_action_scheduler\|public static function as_handle_item\|public static function register_action_scheduler_hook\|QUALITY_FLOOR" seobetter/includes/Bulk_Generator.php
+
+# REST + boot
+grep -n "rest_bulk_status\|register_action_scheduler_hook\|bulk-status" seobetter/seobetter.php
+
+# UI deliverables
+grep -n "seobetter_save_bulk_preset\|seobetter_delete_bulk_preset\|sb-load-preset\|quality_floor\|auto_publish\|sb-stat-quality" seobetter/admin/views/bulk-generator.php
+```
+
+### Tier gating
+
+- Bulk generation: Agency-only (`License_Manager::can_use('bulk_content_generation')` — already in AGENCY_FEATURES)
+- Preset CRUD: gated behind same Agency check (cannot save/delete without `$is_agency`)
+- AS queue mode: gated behind `has_action_scheduler()`; AJAX-polled fallback works for everyone
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No structural changes to SEO-GEO-AI-GUIDELINES / structured-data / article_design — this is a UX layer over existing generation pipeline. Async_Generator behaviour is unchanged
+
+**Verified by user:** UNTESTED
 
 ---
 

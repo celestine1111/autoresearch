@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.27
+ * Version: 1.5.216.28
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.27' );
+define( 'SEOBETTER_VERSION', '1.5.216.28' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -98,6 +98,10 @@ final class SEOBetter {
 
         // v1.5.216.22 — GSC daily sync cron (Phase 1 item 3)
         add_action( 'seobetter_gsc_daily_sync', [ SEOBetter\GSC_Manager::class, 'cron_daily_sync' ] );
+
+        // v1.5.216.28 — Phase 1 item 9: Action Scheduler hook for bulk batches.
+        // Registers only when AS is available (graceful no-op when absent).
+        SEOBetter\Bulk_Generator::register_action_scheduler_hook();
 
         // Export handler
         add_action( 'admin_init', [ $this, 'handle_export' ] );
@@ -534,6 +538,16 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
+        // v1.5.216.28 — Phase 1 item 9: read-only batch status endpoint for
+        // Action Scheduler mode (item processing happens in AS background;
+        // the UI just polls this for progress display).
+        register_rest_route( 'seobetter/v1', '/bulk-status/(?P<batch_id>\d+)', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_bulk_status' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
         register_rest_route( 'seobetter/v1', '/refresh/(?P<post_id>\d+)', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_refresh_post' ],
@@ -947,6 +961,41 @@ final class SEOBetter {
 
         $bulk = new SEOBetter\Bulk_Generator();
         return new \WP_REST_Response( $bulk->process_next( (int) $request->get_param( 'batch_id' ) ) );
+    }
+
+    /**
+     * v1.5.216.28 — Phase 1 item 9: read-only batch status endpoint.
+     *
+     * Used by the bulk UI when the batch is running in Action Scheduler mode
+     * (background queue) — items are being processed by AS workers, so the
+     * UI just polls this for progress instead of driving processing itself.
+     */
+    public function rest_bulk_status( \WP_REST_Request $request ): \WP_REST_Response {
+        $bulk = new SEOBetter\Bulk_Generator();
+        $batch = $bulk->get_batch( (int) $request->get_param( 'batch_id' ) );
+        if ( ! $batch ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Batch not found.' ], 404 );
+        }
+        $progress = round( ( $batch['completed'] + $batch['failed'] ) / max( 1, $batch['total'] ) * 100 );
+        $items_with_urls = array_map( function ( $it ) {
+            if ( ! empty( $it['post_id'] ) ) {
+                $it['edit_url'] = get_edit_post_link( $it['post_id'], 'raw' );
+            }
+            return $it;
+        }, $batch['items'] );
+        $pending = count( array_filter( $batch['items'], fn( $i ) => $i['status'] === 'pending' ) );
+        return new \WP_REST_Response( [
+            'success'        => true,
+            'done'           => $pending === 0,
+            'status'         => $batch['status'] ?? 'pending',
+            'progress'       => $progress,
+            'items'          => $items_with_urls,
+            'remaining'      => $pending,
+            'completed'      => $batch['completed'] ?? 0,
+            'failed'         => $batch['failed'] ?? 0,
+            'failed_quality' => (int) ( $batch['failed_quality'] ?? 0 ),
+            'queue_mode'     => $batch['queue_mode'] ?? 'ajax',
+        ] );
     }
 
     public function rest_refresh_post( \WP_REST_Request $request ): \WP_REST_Response {
