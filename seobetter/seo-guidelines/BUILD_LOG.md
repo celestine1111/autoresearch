@@ -7,12 +7,73 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.26)
+> **Last updated:** 2026-04-30 (v1.5.216.27)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.27 — Rich Results validation preview surfacing (Phase 1 item 8)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Schema generation, the metabox Rich Results tab (28 appearance surfaces, eligibility checks, sub-view catalog), and the pre-generation hint (schema bundle for the picked content type) all already exist. What was missing: a **post-generation, pre-save Rich Results preview** in the generator result panel + a one-click **"Test in Google Rich Results"** link in the post-save status message. The locked plan flagged this as "data exists; needs polish" — both polish gaps now closed.
+
+User flow before item 8:
+1. Pick content type → see schema bundle hint ✓
+2. Generate article → see GEO score + breakdown — **no Rich Results context** ✗
+3. Save draft → "Edit post →" link only, no validation shortcut ✗
+4. Open post in editor → metabox Rich Results tab shows full eligibility ✓ (only place validation surfaced)
+
+User flow after item 8:
+1. Pick content type → see schema bundle hint ✓
+2. Generate article → green Rich Results preview card showing predicted lanes (Recipe, FAQ, Review, HowTo, Top Stories, ItemList carousel, Speakable, Product, Dataset, Breadcrumb) with hover-to-reveal "why this matters" ✓ NEW
+3. Save draft → status message now includes 🔍 Test Rich Results link that opens Google's official tester pre-filled with the new permalink ✓ NEW
+4. Open post in editor → metabox Rich Results tab unchanged ✓
+
+### What shipped
+
+- **Server-side response shape** — `seobetter/seobetter.php::rest_save_draft()` ~line 1853
+  - Adds 3 new fields to the JSON response: `permalink`, `rich_results_types` (deduped @type list parsed from `_seobetter_schema` `@graph`), and `rich_results_test_url` (`https://search.google.com/test/rich-results?url=` + rawurlencoded permalink)
+  - Falls back gracefully when schema meta is missing (empty types, empty test URL)
+
+- **Generator result Rich Results card** — `seobetter/admin/views/content-generator.php` ~line 1215
+  - Reuses the pre-generation `schemaMap` (line 619) so predicted @types match what Schema_Generator will actually emit at save time — single source of truth
+  - 11 appearance lanes mapped from schema bundle: Recipe card, FAQ dropdowns, Review snippet, How-To carousel, Top Stories, Live blog, Scholarly, ItemList carousel, Speakable voice, Product listings, Dataset Search, Breadcrumb trail
+  - Each lane is a colored chip with `title=` tooltip explaining why that schema matters (extracted from structured-data.md §3 rich-result status)
+  - Card explains "Schema markup will be generated when you save the draft. After save, click Test in Google Rich Results below to validate."
+
+- **Post-save validation link** — `seobetter/admin/views/content-generator.php` ~line 1660
+  - Appends ` · 🔍 Test Rich Results →` to the status message when `r.rich_results_test_url` is non-empty
+  - `target="_blank" rel="noopener"` opens Google's tester in new tab with permalink pre-filled
+  - Tooltip shows count of active @types so user knows what they're validating
+
+### Verify (file:method anchors)
+
+```bash
+# Server response includes the new 3 fields
+grep -n "rich_results_types\|rich_results_test_url\|permalink" seobetter/seobetter.php | head -10
+
+# Generator result card + post-save link
+grep -n "Rich Results Preview\|rich_results_test_url\|rrLanes" seobetter/admin/views/content-generator.php
+```
+
+### Tier gating
+
+ALL tiers see the Rich Results preview card and the post-save validation link (per locked tier matrix `pro-features-ideas.md` §2 — `rich_results_preview` is a Free feature). The metabox Rich Results tab gating is unchanged.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No changes to SEO-GEO-AI-GUIDELINES.md / structured-data.md / article_design.md — this is pure UI surfacing of existing data; the schema bundle map mirrors `Schema_Generator::CONTENT_TYPE_MAP` (already in sync per prior commits)
+
+**Verified by user:** UNTESTED
 
 ---
 

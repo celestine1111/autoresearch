@@ -1212,6 +1212,51 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         }
         h += '</div></div>';
 
+        // ===== v1.5.216.27 — Phase 1 item 8: Rich Results validation preview =====
+        // Shows which Google rich-result lanes WILL fire for this content type
+        // BEFORE save. Reuses the same schemaMap used for the pre-generation
+        // hint so the preview is byte-consistent with pre-flight expectations.
+        // After save, the post-save status line gets a "Test in Google Rich
+        // Results Test" link wired through `r.rich_results_test_url`.
+        var ctForRR = (document.querySelector('[name="content_type"]')||{}).value||'blog_post';
+        var rrBundle = (typeof schemaMap !== 'undefined' && schemaMap[ctForRR]) ? schemaMap[ctForRR] : null;
+        if (rrBundle) {
+            // Map schema bundle → rich-result appearance lanes the user actually sees
+            // in Google search. Mirrors the metabox Rich Results tab logic at
+            // seobetter.php:5077+ but pre-save (predicted, not measured).
+            var rrLanes = [];
+            if (/Recipe/.test(rrBundle.primary)) rrLanes.push({icon:'🍳', label:'Recipe card', color:'#dc2626', why:'Recipe @type → eligible for Recipe rich result with prep time, ratings, image'});
+            if (/FAQPage/.test(rrBundle.primary) || rrBundle.extras.indexOf('FAQPage (auto)') !== -1) rrLanes.push({icon:'❓', label:'FAQ dropdowns', color:'#7c3aed', why:'FAQPage @type → expandable Q&A blocks under your search result'});
+            if (/Review/.test(rrBundle.primary)) rrLanes.push({icon:'⭐', label:'Review snippet', color:'#f59e0b', why:'Review @type → star rating + reviewer info displayed in search'});
+            if (/HowTo/.test(rrBundle.primary)) rrLanes.push({icon:'📋', label:'How-To carousel', color:'#0891b2', why:'HowTo @type → numbered steps may show inline above results'});
+            if (/NewsArticle/.test(rrBundle.primary)) rrLanes.push({icon:'📰', label:'Top Stories carousel', color:'#1d4ed8', why:'NewsArticle @type → eligible for Top Stories news carousel'});
+            if (/LiveBlog/.test(rrBundle.primary)) rrLanes.push({icon:'📡', label:'Live blog updates', color:'#dc2626', why:'LiveBlogPosting @type → ongoing-event rich result'});
+            if (/ScholarlyArticle/.test(rrBundle.primary)) rrLanes.push({icon:'🎓', label:'Scholarly article', color:'#7c2d12', why:'ScholarlyArticle @type → academic citation eligibility'});
+            if (/ItemList/.test(rrBundle.primary)) rrLanes.push({icon:'📚', label:'Carousel (ItemList)', color:'#9333ea', why:'ItemList @type → numbered items may render as horizontal carousel'});
+            if (rrBundle.extras.indexOf('Speakable') !== -1) rrLanes.push({icon:'🔊', label:'Voice search (Speakable)', color:'#059669', why:'Speakable property → eligible for Google Assistant voice answers'});
+            if (rrBundle.extras.some(function(e){return /Product/.test(e)})) rrLanes.push({icon:'🛒', label:'Product listings', color:'#0d9488', why:'Product[] @type → price, availability, rating in product carousel'});
+            if (rrBundle.extras.some(function(e){return /Dataset/.test(e)})) rrLanes.push({icon:'📊', label:'Dataset (Google Dataset Search)', color:'#1f2937', why:'Dataset @type → indexed in Google Dataset Search'});
+            // Always-on for any article: BreadcrumbList renders trail in search result
+            rrLanes.push({icon:'🍞', label:'Breadcrumb trail', color:'#6b7280', why:'BreadcrumbList @type → site hierarchy shown above title in search'});
+
+            h += '<div style="margin-bottom:16px;padding:14px 16px;background:linear-gradient(135deg,#f0fdf4 0%,#ecfdf5 100%);border:1px solid #bbf7d0;border-radius:10px">';
+            h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
+            h += '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>';
+            h += '<div style="font-size:13px;font-weight:700;color:#064e3b">Rich Results Preview</div>';
+            h += '<span style="font-size:10px;color:#065f46;background:#a7f3d0;padding:2px 6px;border-radius:8px;font-weight:600">'+rrLanes.length+' lanes eligible</span>';
+            h += '</div>';
+            h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+            rrLanes.forEach(function(lane) {
+                h += '<span title="'+esc(lane.why)+'" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fff;border:1px solid '+lane.color+'33;border-radius:14px;font-size:11px;font-weight:600;color:'+lane.color+'">';
+                h += lane.icon+' '+esc(lane.label)+'</span>';
+            });
+            h += '</div>';
+            h += '<div style="margin-top:10px;font-size:11px;color:#065f46;line-height:1.5">';
+            h += 'Schema markup will be generated when you save the draft. After save, click <strong>Test in Google Rich Results</strong> below to validate.';
+            h += '</div>';
+            h += '</div>';
+        }
+
         // ===== PRO UPSELL (if score < 80) =====
         if (score < 80) {
             var missingPoints = 80 - score;
@@ -1663,7 +1708,18 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     else if (r.schema_dest === 'yoast') schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → Yoast SEO</span>';
                     else if (r.schema_dest === 'rankmath') schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → RankMath</span>';
                     else schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → SEOBetter (auto-injected)</span>';
-                    statusEl.innerHTML = '<a href="'+r.edit_url+'" style="color:#764ba2;font-weight:600">Edit post &rarr;</a>' + schemaNote;
+
+                    // v1.5.216.27 — Phase 1 item 8: surface Rich Results validation link.
+                    // r.rich_results_test_url is built server-side in rest_save_draft()
+                    // using rawurlencode(get_permalink). Empty when post lacks a permalink
+                    // (shouldn't happen for saved posts, but defensive). Also show a
+                    // count of active rich-result lanes for at-a-glance feedback.
+                    var rrValidate = '';
+                    if (r.rich_results_test_url) {
+                        var rrCount = (r.rich_results_types && r.rich_results_types.length) || 0;
+                        rrValidate = ' &middot; <a href="'+r.rich_results_test_url+'" target="_blank" rel="noopener" style="color:#059669;font-weight:600;text-decoration:none" title="Validate '+rrCount+' schema @types in Google\'s official tester">🔍 Test Rich Results &rarr;</a>';
+                    }
+                    statusEl.innerHTML = '<a href="'+r.edit_url+'" style="color:#764ba2;font-weight:600">Edit post &rarr;</a>' + schemaNote + rrValidate;
                 } else {
                     btn.disabled = false;
                     btn.textContent = 'Save as WordPress Draft';

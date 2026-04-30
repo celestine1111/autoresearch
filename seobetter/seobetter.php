@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.26
+ * Version: 1.5.216.27
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.26' );
+define( 'SEOBETTER_VERSION', '1.5.216.27' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1850,11 +1850,40 @@ final class SEOBetter {
         // Detect where schema is going for user feedback
         $schema_dest = 'article';
 
+        // v1.5.216.27 — Phase 1 item 8: Rich Results validation preview.
+        // Surface the post's permalink so the generator result panel can
+        // build a Google Rich Results Test URL after save. Also surface the
+        // active schema @types for a quick "X rich-result lanes eligible"
+        // summary in the post-save status message.
+        $permalink = (string) get_permalink( $post_id );
+        $rr_types  = [];
+        $schema_raw = get_post_meta( $post_id, '_seobetter_schema', true );
+        if ( is_string( $schema_raw ) && $schema_raw !== '' ) {
+            $decoded = json_decode( $schema_raw, true );
+            if ( is_array( $decoded ) && ! empty( $decoded['@graph'] ) && is_array( $decoded['@graph'] ) ) {
+                foreach ( $decoded['@graph'] as $node ) {
+                    if ( ! is_array( $node ) ) continue;
+                    $t = $node['@type'] ?? null;
+                    if ( is_string( $t ) ) {
+                        $rr_types[] = $t;
+                    } elseif ( is_array( $t ) ) {
+                        foreach ( $t as $sub ) {
+                            if ( is_string( $sub ) ) $rr_types[] = $sub;
+                        }
+                    }
+                }
+                $rr_types = array_values( array_unique( $rr_types ) );
+            }
+        }
+
         return new \WP_REST_Response( [
-            'success'     => true,
-            'post_id'     => $post_id,
-            'edit_url'    => get_edit_post_link( $post_id, 'raw' ),
-            'schema_dest' => $schema_dest,
+            'success'              => true,
+            'post_id'              => $post_id,
+            'edit_url'             => get_edit_post_link( $post_id, 'raw' ),
+            'schema_dest'          => $schema_dest,
+            'permalink'            => $permalink,
+            'rich_results_types'   => $rr_types,
+            'rich_results_test_url' => $permalink ? 'https://search.google.com/test/rich-results?url=' . rawurlencode( $permalink ) : '',
         ] );
     }
 
