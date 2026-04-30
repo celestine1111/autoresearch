@@ -1014,7 +1014,13 @@ $sb_active_tier = SEOBetter\License_Manager::get_active_tier();
             <?php esc_html_e( 'For any article with a local-intent keyword, the plugin tries Perplexity Sonar → OpenStreetMap → Foursquare → HERE → Google Places in order, stopping at the first tier returning 2+ verified places. Unconfigured tiers are skipped. If no tier returns enough data, the plugin writes a general informational article — it NEVER invents business names.', 'seobetter' ); ?>
         </p>
     </div>
-</div>
+
+<?php // v1.5.216.42 — Phase 1 fix: removed orphan </div> that was here.
+// Pre-rewrite this stray close was harmless (no tab containment), but item
+// 13's <div class="sb-tab-panel"> wrapper made it a panel-breaker — the
+// orphan was prematurely closing research_integrations after the Places
+// card, so GSC + AI Crawler Audit cards rendered OUTSIDE any panel and
+// were visible on every tab. Cards now stay scoped to their tab. ?>
 
 <?php // v1.5.216.22 — Phase 1 item 3: Google Search Console integration ?>
 <?php

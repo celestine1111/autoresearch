@@ -7,12 +7,58 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.41)
+> **Last updated:** 2026-04-30 (v1.5.216.42)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.42 — Settings tabs fix: GSC + AI Crawler Audit leaking out of research_integrations panel
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Bug
+
+User reported: "Google Search Console AND AI Crawler Access Audit show under every tab — should only show on Research & Integrations." Confirmed via inspection — both cards rendered globally regardless of which tab was active.
+
+### Root cause
+
+Pre-existing orphan `</div>` at the end of the Places Integrations card (line 1017 pre-fix, indent 0). Pre-rewrite this stray close was harmless because the page was a flat single-column layout — the orphan just closed `.wrap` or some outer container the parser was lenient about. Item 13's tab restructure (v1.5.216.32) wrapped the card in `<div class="sb-tab-panel" data-sb-tab="research_integrations">`, and the orphan close started prematurely closing THAT panel after the Places card. Result: GSC card (line 1027+) and AI Crawler Audit card (line 1186+) rendered OUTSIDE any `.sb-tab-panel`, so the `display:none` rule didn't apply and they were visible on every tab.
+
+Found via div-balance counting: `awk` reported opens=39, closes=40 inside the research panel range — the 1-extra-close was the orphan.
+
+### Fix
+
+Removed the orphan `</div>` line. Verified post-fix: opens=40, closes=40 (balanced) in the research panel range. Replaced the deleted line with a multi-line PHP comment documenting the bug + fix so any future maintainer reading the area sees what happened.
+
+### Verify (file:method anchors)
+
+```bash
+# Panel balance is 0 inside research_integrations
+awk 'NR>=835 && NR<=1307 {
+  line=$0; while(match(line,/<div[^>]*>/)){opens++; line=substr(line,RSTART+RLENGTH)}
+  line=$0; while(match(line,/<\/div>/)){closes++; line=substr(line,RSTART+RLENGTH)}
+} END {print opens, closes}' seobetter/admin/views/settings.php
+# Should print "40 40"
+
+# Comment marker for the removed orphan
+grep -n "removed orphan" seobetter/admin/views/settings.php
+```
+
+### Tier-specific behaviour
+
+Unchanged. This is a pure markup fix — every existing feature works the same; cards now correctly stay scoped to their tab.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — UI markup fix only
+
+**Verified by user:** UNTESTED
 
 ---
 
