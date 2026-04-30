@@ -19,7 +19,7 @@
 ## v1.5.216.26 — SEOBetter Score 0-100 composite (Phase 1 item 7)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `a685ba5`
 
 ### Why this ships
 
