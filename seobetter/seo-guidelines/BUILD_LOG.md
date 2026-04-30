@@ -19,7 +19,7 @@
 ## v1.5.216.25 — Brand Voice profiles MVP — sample-style + tone directives + banned-phrase scrub (Phase 1 item 6)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `512165d`
 
 ### Why this ships
 
