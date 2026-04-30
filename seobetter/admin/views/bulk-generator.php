@@ -11,8 +11,20 @@
 
 // v1.5.216.28 — switched from binary is_pro check to Agency-only feature gate.
 // Agency users see full UI; everyone else sees upsell with $179/mo target.
-$is_agency = SEOBetter\License_Manager::can_use( 'bulk_content_generation' );
-$tier_label = SEOBetter\License_Manager::get_active_tier();
+//
+// v1.5.216.41 — Phase 1 item 22: header tier badge polish — render the
+// 4-tier display label (Free / Pro / Pro+ / Agency) with the tier color
+// matrix matching items 13/16/17/19 dashboard. get_active_tier() returns
+// lowercase slugs ('free' / 'pro' / 'pro_plus' / 'agency'); the badge map
+// converts to display strings + colors. Pre-fix: text-transform:uppercase
+// was rendering 'pro_plus' as 'PRO_PLUS' which looked ugly.
+$is_agency        = SEOBetter\License_Manager::can_use( 'bulk_content_generation' );
+$bulk_tier        = SEOBetter\License_Manager::get_active_tier();
+$bulk_tier_label  = [ 'free' => 'Free', 'pro' => 'Pro', 'pro_plus' => 'Pro+', 'agency' => 'Agency' ][ $bulk_tier ] ?? 'Free';
+$bulk_tier_color  = [ 'free' => '#6b7280', 'pro' => '#3b82f6', 'pro_plus' => '#7c3aed', 'agency' => '#059669' ][ $bulk_tier ] ?? '#6b7280';
+$bulk_tier_bg     = [ 'free' => '#f3f4f6', 'pro' => '#eff6ff', 'pro_plus' => '#f5f3ff', 'agency' => '#ecfdf5' ][ $bulk_tier ] ?? '#f3f4f6';
+// Legacy var kept for backward-compat with any downstream references in this view
+$tier_label       = $bulk_tier_label;
 $batch = null;
 $batch_id = absint( $_GET['batch_id'] ?? 0 );
 
@@ -104,8 +116,9 @@ $has_action_scheduler = SEOBetter\Bulk_Generator::has_action_scheduler();
             <p style="margin:4px 0 0;font-size:14px;color:var(--sb-text-secondary,#64748b)">Generate articles for multiple keywords at once via CSV or keyword list. Quality-gated to GEO ≥ 40, saved as drafts by default.</p>
         </div>
         <div style="display:flex;gap:10px;align-items:center">
-            <span class="seobetter-score seobetter-score-<?php echo $is_agency ? 'good' : 'ok'; ?>" style="font-size:13px;text-transform:uppercase">
-                <?php echo esc_html( $tier_label ); ?>
+            <?php // v1.5.216.41 — Phase 1 item 22: 4-tier display badge consistent with items 17/19. ?>
+            <span style="display:inline-flex;align-items:center;padding:4px 12px;background:<?php echo esc_attr( $bulk_tier_bg ); ?>;color:<?php echo esc_attr( $bulk_tier_color ); ?>;border:1px solid <?php echo esc_attr( $bulk_tier_color ); ?>33;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase">
+                <?php echo esc_html( $bulk_tier_label ); ?>
             </span>
             <?php if ( ! $is_agency ) : ?>
                 <a href="https://seobetter.com/pricing" target="_blank" class="button sb-btn-primary" style="height:36px;padding:6px 16px;font-size:13px;line-height:22px">

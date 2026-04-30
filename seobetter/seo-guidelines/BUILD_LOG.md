@@ -7,12 +7,63 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.40)
+> **Last updated:** 2026-04-30 (v1.5.216.41)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.41 — Bulk Generate page tier badge polish (Phase 1 item 22)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Item 22 of the locked plan is a "tier-correctness sweep that ships alongside" item 9's full bulk-generator UX rewrite. The substantive deliverables — Pro→Agency copy, $39→$179 CTA, gate fix to `bulk_content_generation`, Agency value-prop card — all shipped as part of v1.5.216.28 (item 9). One gap remained: the header tier badge was rendering raw `get_active_tier()` output with `text-transform:uppercase`, so a Pro+ user saw "PRO_PLUS" with the underscore visible. Item 22 closes that gap by adopting the same tier-color badge pattern used on the dashboard (item 19) and License & Account tab (item 17) for consistency across surfaces.
+
+### What shipped
+
+- **Header tier badge polish** — `seobetter/admin/views/bulk-generator.php` ~line 14
+  - Added `$bulk_tier_label` / `$bulk_tier_color` / `$bulk_tier_bg` map at the top of the file using the same key→display conversion as items 13/16/17/19 (Pro #3b82f6 / Pro+ #7c3aed / Agency #059669 / Free #6b7280). Single source of truth for tier color matrix
+  - Header badge replaced from `<span class="seobetter-score">` with a tier-colored chip `<span style="...">` matching the dashboard pattern
+  - `pro_plus` slug now renders as "Pro+" (was "PRO_PLUS"); other tiers unchanged in display text but get the proper tier color
+  - Legacy `$tier_label` variable kept assigned to `$bulk_tier_label` so any downstream references in the file don't break
+
+### What was already in place from item 9 (v1.5.216.28)
+
+Per locked plan §3 item 22, the substantive deliverables were already done — listing here for the audit trail:
+
+- ✅ "Bulk Generation requires Pro" → "**Bulk Generation requires Agency ($179/mo)**" (line ~123)
+- ✅ CTA buttons updated to "Upgrade to Agency" (line ~112)
+- ✅ Gate fix: `$is_agency = License_Manager::can_use('bulk_content_generation')` replacing the old `$is_pro` check (line ~14). Locked plan referred to the feature key as `bulk_csv` but the canonical constant in `License_Manager::AGENCY_FEATURES` is `bulk_content_generation` — same tier-gating effect
+- ✅ Upgrade card shows the locked-plan Agency value prop: 100 keywords, GEO 40 floor, default-to-draft, 10 sites, 5 seats (line ~120)
+
+### Verify (file:method anchors)
+
+```bash
+# Tier badge polish
+grep -n "bulk_tier_label\|bulk_tier_color\|bulk_tier_bg" seobetter/admin/views/bulk-generator.php
+
+# Sanity: PRO_PLUS underscore-rendering bug fixed
+grep -n "text-transform:uppercase" seobetter/admin/views/bulk-generator.php
+# Should NOT match the tier badge anymore
+```
+
+### Tier-specific behaviour
+
+- **Free / Pro / Pro+**: Free/Pro/Pro+ tier-colored chip + amber "Bulk Generation requires Agency ($179/mo)" upsell card. Form disabled (visual + pointer-events) per item 9
+- **Agency**: green Agency chip, no upsell card, full form active
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No structural changes to other guidelines — this is a tier-display polish over an already-shipped tier-gating refactor (item 9)
+
+**Verified by user:** UNTESTED
 
 ---
 
