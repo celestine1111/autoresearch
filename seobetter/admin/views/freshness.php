@@ -32,7 +32,10 @@ $avg_priority = $rows ? (int) round( $priority_total / count( $rows ) ) : 0;
             </p>
         </div>
         <?php if ( ! $gsc_connected ) : ?>
-            <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>" class="button">
+            <?php // v1.5.216.43 — link points at the tab where GSC actually lives.
+                  // Pre-fix landed on default License & Account tab so GSC card
+                  // wasn't visible — user reported "click does nothing". ?>
+            <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings&tab=research_integrations#gsc' ) ); ?>" class="button">
                 <?php esc_html_e( 'Connect Google Search Console →', 'seobetter' ); ?>
             </a>
         <?php endif; ?>

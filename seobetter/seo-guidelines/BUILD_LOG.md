@@ -7,12 +7,39 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.42)
+> **Last updated:** 2026-05-01 (v1.5.216.43)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.43 — Freshness page → "Connect GSC" button lands on wrong tab
+
+**Date:** 2026-05-01
+**Commit:** `[pending]`
+
+### Bug
+
+User reported: "on the link content freshness and i click on GSC it doesnt do anything." Verified via Browserbase browse-cli driving a real Chrome — the link works (no JS error, navigation succeeds) but lands on Settings → License & Account tab (the default), not the tab where the GSC card lives. User's mental model was right: clicking it should land on the GSC connection card, but it dropped them on a tab that shows License key activation. Looks like the click did nothing.
+
+### Fix
+
+Updated link target in `freshness.php` from `?page=seobetter-settings` to `?page=seobetter-settings&tab=research_integrations#gsc` so the click lands on the right tab with the GSC card visible.
+
+### Verify (file:method anchors)
+
+```bash
+grep -n "tab=research_integrations#gsc" seobetter/admin/views/freshness.php
+```
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+
+**Verified by user:** UNTESTED
 
 ---
 
