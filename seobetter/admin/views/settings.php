@@ -274,6 +274,120 @@ $sb_active_tier = SEOBetter\License_Manager::get_active_tier();
     <div class="sb-tab-panel <?php echo $sb_current_tab === 'license_account' ? 'sb-tab-active' : ''; ?>" data-sb-tab="license_account">
 
     <?php
+    // v1.5.216.36 — Phase 1 item 17: Account dashboard card.
+    // Surfaces tier badge + site usage meter + Cloud article meter + Cloud
+    // Credits balance + Buy Credits button (placeholder until Phase 2 ships
+    // Credits backend) + dollar-amount annual savings. Renders BEFORE the
+    // 3-card upsell grid so the user sees their current state first, then
+    // the upsell context underneath.
+    //
+    // Tier color matches the rest of the matrix (item 13 / item 16 colors).
+    $sb_tier_label   = [ 'free' => 'Free', 'pro' => 'Pro', 'pro_plus' => 'Pro+', 'agency' => 'Agency' ][ $sb_active_tier ] ?? 'Free';
+    $sb_tier_color   = [ 'free' => '#6b7280', 'pro' => '#3b82f6', 'pro_plus' => '#7c3aed', 'agency' => '#059669' ][ $sb_active_tier ] ?? '#6b7280';
+    $sb_tier_bg      = [ 'free' => '#f3f4f6', 'pro' => '#eff6ff', 'pro_plus' => '#f5f3ff', 'agency' => '#ecfdf5' ][ $sb_active_tier ] ?? '#f3f4f6';
+    $sb_sites_max    = SEOBetter\License_Manager::get_sites_allowed();
+    $sb_sites_used   = 1; // Single-install signal — multi-site activation count comes with Phase 2 Cloud Credits backend
+    $sb_cloud_cap    = SEOBetter\License_Manager::get_cloud_cap();
+    $sb_cloud_used   = SEOBetter\License_Manager::get_monthly_usage();
+    $sb_cloud_status_early = SEOBetter\Cloud_API::check_status();
+    $sb_byok_active  = ! empty( $sb_cloud_status_early['has_own_key'] );
+    $sb_credits_bal  = (int) get_option( 'seobetter_cloud_credits_balance', 0 ); // Placeholder — Phase 2 backend
+    $sb_annual_save  = [
+        'pro'      => 78,   // ($39 × 12) - ($390/yr) = $78 saved
+        'pro_plus' => 138,  // ($69 × 12) - ($690/yr) = $138 saved
+        'agency'   => 358,  // ($179 × 12) - ($1790/yr) = $358 saved
+    ];
+    ?>
+    <div class="seobetter-card" style="margin-bottom:20px;padding:0;overflow:hidden">
+        <div style="padding:18px 20px;background:linear-gradient(135deg,<?php echo esc_attr( $sb_tier_bg ); ?> 0%,#fff 70%);border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div style="display:flex;align-items:center;gap:14px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:12px;background:<?php echo esc_attr( $sb_tier_color ); ?>;color:#fff;font-size:20px;font-weight:800"><?php echo esc_html( substr( $sb_tier_label, 0, 1 ) ); ?></span>
+                <div>
+                    <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;font-weight:600"><?php esc_html_e( 'Active tier', 'seobetter' ); ?></div>
+                    <div style="font-size:20px;font-weight:700;color:<?php echo esc_attr( $sb_tier_color ); ?>"><?php echo esc_html( $sb_tier_label ); ?></div>
+                </div>
+            </div>
+            <?php if ( $sb_active_tier !== 'free' && isset( $sb_annual_save[ $sb_active_tier ] ) ) : ?>
+                <div style="text-align:right;font-size:11px;color:#6b7280">
+                    <?php
+                    /* translators: %s: dollar amount user could save with annual billing */
+                    printf( esc_html__( 'Switch to annual: save %s/year', 'seobetter' ), '<strong style="color:#059669">$' . esc_html( $sb_annual_save[ $sb_active_tier ] ) . '</strong>' );
+                    ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div style="padding:18px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px">
+            <!-- Sites usage meter -->
+            <div>
+                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px"><?php esc_html_e( 'Sites', 'seobetter' ); ?></div>
+                <div style="font-size:18px;font-weight:700;color:#1f2937;margin-bottom:6px">
+                    <?php echo esc_html( $sb_sites_used ); ?>
+                    <span style="font-size:12px;color:#6b7280;font-weight:500"><?php
+                    /* translators: %d: max sites allowed */
+                    printf( esc_html__( 'of %d', 'seobetter' ), $sb_sites_max );
+                    ?></span>
+                </div>
+                <div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden">
+                    <?php $sites_pct = $sb_sites_max > 0 ? min( 100, round( ( $sb_sites_used / $sb_sites_max ) * 100 ) ) : 0; ?>
+                    <div style="width:<?php echo esc_attr( $sites_pct ); ?>%;height:100%;background:<?php echo $sites_pct >= 90 ? '#dc2626' : $sb_tier_color; ?>;transition:width 0.3s"></div>
+                </div>
+            </div>
+
+            <!-- Cloud article usage meter -->
+            <div>
+                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px"><?php esc_html_e( 'Cloud articles this month', 'seobetter' ); ?></div>
+                <?php if ( $sb_byok_active ) : ?>
+                    <div style="font-size:18px;font-weight:700;color:#3b82f6;margin-bottom:6px">
+                        <?php esc_html_e( 'Unlimited', 'seobetter' ); ?>
+                        <span style="font-size:12px;color:#6b7280;font-weight:500"><?php esc_html_e( 'via your provider', 'seobetter' ); ?></span>
+                    </div>
+                    <div style="height:6px;background:linear-gradient(90deg,#3b82f6 0%,#3b82f6 100%);border-radius:3px"></div>
+                <?php elseif ( $sb_cloud_cap === -1 ) : ?>
+                    <div style="font-size:18px;font-weight:700;color:#1f2937;margin-bottom:6px">
+                        <?php echo esc_html( number_format( $sb_cloud_used ) ); ?>
+                        <span style="font-size:12px;color:#6b7280;font-weight:500"><?php esc_html_e( 'used', 'seobetter' ); ?></span>
+                    </div>
+                    <div style="height:6px;background:#f3f4f6;border-radius:3px"></div>
+                <?php elseif ( $sb_cloud_cap === 0 ) : ?>
+                    <div style="font-size:18px;font-weight:700;color:#9ca3af;margin-bottom:6px">
+                        <?php esc_html_e( 'BYOK only', 'seobetter' ); ?>
+                    </div>
+                    <div style="font-size:11px;color:#6b7280"><?php esc_html_e( 'Connect your own AI provider in the AI Provider tab to generate.', 'seobetter' ); ?></div>
+                <?php else :
+                    $cloud_pct = $sb_cloud_cap > 0 ? min( 100, round( ( $sb_cloud_used / $sb_cloud_cap ) * 100 ) ) : 0;
+                ?>
+                    <div style="font-size:18px;font-weight:700;color:#1f2937;margin-bottom:6px">
+                        <?php echo esc_html( number_format( $sb_cloud_used ) ); ?>
+                        <span style="font-size:12px;color:#6b7280;font-weight:500"><?php
+                        /* translators: %d: monthly Cloud article cap */
+                        printf( esc_html__( 'of %d', 'seobetter' ), $sb_cloud_cap );
+                        ?></span>
+                    </div>
+                    <div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden">
+                        <div style="width:<?php echo esc_attr( $cloud_pct ); ?>%;height:100%;background:<?php echo $cloud_pct >= 90 ? '#dc2626' : ( $cloud_pct >= 70 ? '#d97706' : $sb_tier_color ); ?>;transition:width 0.3s"></div>
+                    </div>
+                    <?php if ( $cloud_pct >= 90 ) : ?>
+                        <div style="margin-top:6px;font-size:11px;color:#dc2626;font-weight:600"><?php esc_html_e( '⚠ Approaching cap — buy Cloud Credits to keep generating', 'seobetter' ); ?></div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- Cloud Credits balance + Buy Credits placeholder -->
+            <div>
+                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:6px"><?php esc_html_e( 'Cloud Credits', 'seobetter' ); ?></div>
+                <div style="font-size:18px;font-weight:700;color:#1f2937;margin-bottom:6px">
+                    <?php echo esc_html( number_format( $sb_credits_bal ) ); ?>
+                    <span style="font-size:12px;color:#6b7280;font-weight:500"><?php esc_html_e( 'credits', 'seobetter' ); ?></span>
+                </div>
+                <button type="button" disabled class="button" style="width:100%;font-size:12px;cursor:not-allowed" title="<?php esc_attr_e( 'Buy Credits opens in Phase 2 — Cloud Credits backend ships separately. Track progress in pro-features-ideas.md §6.', 'seobetter' ); ?>">
+                    <?php esc_html_e( 'Buy Credits — coming soon', 'seobetter' ); ?>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <?php
     // v1.5.216.32 — Phase 1 item 13: tier-aware 3-card upsell grid.
     // Free users see Pro / Pro+ / Agency cards. Paid users see only the
     // higher tier cards (no upsell shown to current tier). Agency users

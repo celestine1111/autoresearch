@@ -7,12 +7,66 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.35)
+> **Last updated:** 2026-04-30 (v1.5.216.36)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.36 — License & Account dashboard card (Phase 1 item 17)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Item 13 added the tier-aware 3-card upsell grid; item 17 adds the Account Dashboard card that sits ABOVE it. Per the locked plan §3 item 17: "tier badge · site usage meter · Cloud article usage · Cloud Credits balance + Buy Credits button (placeholder until Phase 2 ships Credits backend) · 3-card Pro/Pro+/Agency upsell grid for free users · upgrade-to-next-tier card for current paid users · Annual savings copy in dollars not percent."
+
+Visual hierarchy after this ship: User opens License & Account tab → sees Account Dashboard (current tier + usage) → 3-card upsell grid (already in place from item 13) → License key activation card. Reads top-down: "this is what you have, this is what's next, this is how to manage."
+
+### What shipped
+
+- **Account Dashboard card** — `seobetter/admin/views/settings.php` ~line 274
+  - Header strip: tier-colored 48×48 badge with first letter (F/P/A), tier label, conditional "Switch to annual: save $X/year" copy on the right (Pro $78 / Pro+ $138 / Agency $358 — exact dollar amounts not percentages)
+  - Body grid: 3 metric cards in `auto-fit minmax(240px, 1fr)` so it reflows on narrow viewports
+    - **Sites meter** — "1 of {N}" with progress bar. Max comes from `License_Manager::get_sites_allowed()` (item 15). Single-install signal for now (multi-site activation count comes with Phase 2 Cloud Credits backend)
+    - **Cloud articles meter** — branches by license shape:
+      - BYOK active → "Unlimited via your provider" with solid blue bar
+      - Subscription tier (cap = -1) → "{N} used" with no cap
+      - Free tier (cap = 0) → "BYOK only" with hint to connect provider
+      - LTD tier (numeric cap) → "{used} of {cap}" with progress bar; bar color shifts amber at 70%, red at 90%, plus "Approaching cap — buy Cloud Credits" warning at 90%+
+    - **Cloud Credits** — balance from `seobetter_cloud_credits_balance` option (Phase 2 backend writes this; Phase 1 reads 0). "Buy Credits — coming soon" disabled button with tooltip explaining Phase 2 schedule
+  - Tier-color matrix matches item 13's upsell grid + item 16's lock badges (Pro #3b82f6 / Pro+ #7c3aed / Agency #059669 / Free #6b7280)
+
+- **`$sb_cloud_status_early` hoist** — `Cloud_API::check_status()` was originally called inside the AI Provider tab section (line ~460); now hoisted to license_account scope so the Cloud Credits card can read `has_own_key` without scope leak. The original AI Provider tab still calls `check_status()` independently — keeping both calls since their lifetimes are scoped per-tab and Cloud_API::check_status() is cheap (cached internally)
+
+### Verify (file:method anchors)
+
+```bash
+# Account dashboard card
+grep -n "sb_tier_label\|sb_sites_max\|sb_cloud_cap\|sb_cloud_used\|sb_byok_active\|sb_credits_bal\|sb_annual_save" seobetter/admin/views/settings.php
+
+# Buy Credits placeholder
+grep -n "Buy Credits — coming soon\|seobetter_cloud_credits_balance" seobetter/admin/views/settings.php
+```
+
+### Tier-specific behaviour
+
+- **Free**: Sites 1/1, Cloud "BYOK only" with provider hint, Credits 0, no annual-savings copy. Below: 3-card upsell grid (Pro/Pro+/Agency)
+- **Pro**: Sites 1/1, Cloud "{used} (no cap shown)", Credits balance, "Switch to annual: save $78/year". Below: 2-card upsell (Pro+/Agency)
+- **Pro+**: Sites 1/1, Cloud "{used}", Credits balance, "save $138/year". Below: 1-card upsell (Agency)
+- **Agency**: Sites 1/10, Cloud "{used}", Credits balance, "save $358/year". No upsell grid below
+- **AppSumo LTD T1-T5** (item 15): Sites 1/{1-25} from `get_sites_allowed()`, Cloud meter shows hard cap (5/15/30/75/150), warnings fire at 70%/90% to nudge Cloud Credit pack purchase
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No changes to other guidelines — pure UI surfacing of existing License_Manager + Cloud_API APIs. Annual savings amounts pulled from inline math `(price × 12) - (price × 10)` matching the standard "annual = 10× monthly" pricing convention; documented in pro-features-ideas.md §9 implicitly
+
+**Verified by user:** UNTESTED
 
 ---
 
