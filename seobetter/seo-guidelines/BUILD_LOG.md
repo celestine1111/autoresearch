@@ -19,7 +19,7 @@
 ## v1.5.216.43 — Freshness page → "Connect GSC" button lands on wrong tab
 
 **Date:** 2026-05-01
-**Commit:** `[pending]`
+**Commit:** `4062c4d`
 
 ### Bug
 
