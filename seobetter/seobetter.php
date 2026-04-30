@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.21
+ * Version: 1.5.216.22
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.21' );
+define( 'SEOBETTER_VERSION', '1.5.216.22' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -96,6 +96,9 @@ final class SEOBetter {
         // Content decay alerts cron
         add_action( 'seobetter_decay_check', [ $this, 'run_decay_check' ] );
 
+        // v1.5.216.22 — GSC daily sync cron (Phase 1 item 3)
+        add_action( 'seobetter_gsc_daily_sync', [ SEOBetter\GSC_Manager::class, 'cron_daily_sync' ] );
+
         // Export handler
         add_action( 'admin_init', [ $this, 'handle_export' ] );
 
@@ -135,10 +138,16 @@ final class SEOBetter {
         }
         flush_rewrite_rules();
         SEOBetter\Decay_Alert_Manager::schedule();
+
+        // v1.5.216.22 — Phase 1 item 3: GSC Manager
+        SEOBetter\GSC_Manager::install_table();
+        SEOBetter\GSC_Manager::schedule_cron();
     }
 
     public function deactivate(): void {
         SEOBetter\Decay_Alert_Manager::unschedule();
+        // v1.5.216.22 — clear GSC cron on plugin deactivation
+        SEOBetter\GSC_Manager::unschedule_cron();
     }
 
     public function register_admin_menu(): void {
@@ -612,6 +621,29 @@ final class SEOBetter {
             'callback'            => [ $this, 'rest_save_draft' ],
             'permission_callback' => function () {
                 return current_user_can( 'edit_posts' );
+            },
+        ]);
+
+        // v1.5.216.22 — Phase 1 item 3: Google Search Console integration
+        // Public callback (Google redirects user back here after OAuth consent;
+        // state nonce verifies the request authenticity inside the handler).
+        register_rest_route( 'seobetter/v1', '/gsc/oauth-callback', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_gsc_oauth_callback' ],
+            'permission_callback' => '__return_true',
+        ]);
+        register_rest_route( 'seobetter/v1', '/gsc/sync', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_gsc_sync' ],
+            'permission_callback' => function () {
+                return current_user_can( 'manage_options' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/gsc/disconnect', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_gsc_disconnect' ],
+            'permission_callback' => function () {
+                return current_user_can( 'manage_options' );
             },
         ]);
         // v1.5.211 — Proxies for browser-initiated cloud-api calls.
@@ -1432,6 +1464,59 @@ final class SEOBetter {
      * [content-generator.php:608 + 739] which returned 401 after v1.5.211
      * locked down the /api/topic-research endpoint.
      */
+
+    // ── v1.5.216.22 — Google Search Console integration handlers ───────
+
+    /**
+     * OAuth callback. Google redirects the user here after they grant
+     * consent. We exchange the code for tokens, store them, then redirect
+     * to the Settings page with a success/error notice query param.
+     */
+    public function rest_gsc_oauth_callback( \WP_REST_Request $request ): \WP_REST_Response {
+        $code  = sanitize_text_field( (string) $request->get_param( 'code' ) );
+        $state = sanitize_text_field( (string) $request->get_param( 'state' ) );
+        $err   = sanitize_text_field( (string) $request->get_param( 'error' ) );
+
+        $settings_url = admin_url( 'admin.php?page=seobetter-settings' );
+
+        // User clicked "Cancel" or denied access on Google's consent screen
+        if ( $err !== '' ) {
+            wp_safe_redirect( add_query_arg( [ 'gsc' => 'error', 'msg' => rawurlencode( $err ) ], $settings_url ) );
+            exit;
+        }
+
+        if ( $code === '' || $state === '' ) {
+            wp_safe_redirect( add_query_arg( [ 'gsc' => 'error', 'msg' => rawurlencode( 'missing code or state' ) ], $settings_url ) );
+            exit;
+        }
+
+        $result = SEOBetter\GSC_Manager::handle_oauth_callback( $code, $state );
+        if ( ! empty( $result['success'] ) ) {
+            wp_safe_redirect( add_query_arg( [ 'gsc' => 'connected', 'email' => rawurlencode( (string) ( $result['email'] ?? '' ) ) ], $settings_url ) );
+        } else {
+            wp_safe_redirect( add_query_arg( [ 'gsc' => 'error', 'msg' => rawurlencode( (string) ( $result['error'] ?? 'unknown' ) ) ], $settings_url ) );
+        }
+        exit;
+    }
+
+    /**
+     * Manual "Sync now" trigger. Admin-only. Returns sync result as JSON
+     * so the Settings UI button can show success/error inline without a
+     * page refresh.
+     */
+    public function rest_gsc_sync( \WP_REST_Request $request ): \WP_REST_Response {
+        $result = SEOBetter\GSC_Manager::sync();
+        return new \WP_REST_Response( $result, ! empty( $result['success'] ) ? 200 : 400 );
+    }
+
+    /**
+     * Disconnect: revoke the token at Google + clear local storage + clear cron.
+     */
+    public function rest_gsc_disconnect( \WP_REST_Request $request ): \WP_REST_Response {
+        SEOBetter\GSC_Manager::disconnect();
+        return new \WP_REST_Response( [ 'success' => true ] );
+    }
+
     public function rest_topic_research_proxy( \WP_REST_Request $request ): \WP_REST_Response {
         $niche    = sanitize_text_field( $request->get_param( 'niche' ) ?? '' );
         $country  = sanitize_text_field( $request->get_param( 'country' ) ?? '' );

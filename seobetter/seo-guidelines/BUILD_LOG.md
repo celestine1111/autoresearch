@@ -7,12 +7,138 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.21)
+> **Last updated:** 2026-04-30 (v1.5.216.22)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.22 — GSC integration MVP — OAuth + daily sync + Settings UI (Phase 1 item 3)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Third task in the locked Phase 1 build queue (`pro-features-ideas.md` §3 item 3). Per the locked tier matrix, GSC connect+view is **Free** (matches RankMath free, Google's API is free at our scale). Pro+ adds GSC-driven Freshness inventory prioritization (item 4 dependency).
+
+Decision: hand-rolled OAuth + searchAnalytics/query rather than routing through Pica. Rationale documented in this commit's chat log — Pica fits Pattern A (centralized SaaS) but SEOBetter is Pattern B (distributed WP plugin); per-install OAuth + token storage is privacy-clean for WP.org review and free of per-call cost. Phase 2 (Freemius integration) will introduce a centralized cloud-api proxy where Pica can become the engine if pricing fits at scale.
+
+### Added
+
+**New class `SEOBetter\GSC_Manager`** — `includes/GSC_Manager.php` (~360 lines)
+
+Public API:
+
+| Method | Purpose |
+|---|---|
+| `is_oauth_configured()` | True when `SEOBETTER_GSC_CLIENT_ID` + `SEOBETTER_GSC_CLIENT_SECRET` defined |
+| `is_connected()` | True when refresh_token stored |
+| `get_status()` | Status dict for Settings UI (email, site_url, last_sync, urls_tracked) |
+| `build_auth_url()` | Returns the Google OAuth consent URL with state nonce |
+| `handle_oauth_callback($code, $state)` | Exchanges auth code for tokens + stores encrypted |
+| `disconnect()` | Revokes token at Google + clears local state + unschedules cron |
+| `sync($limit=1000)` | Pulls last 28d perf data; returns `{success, urls, error?}` |
+| `get_post_stats($post_id)` | Public: returns latest snapshot for a post — used by Freshness inventory + post-edit sidebar widget (Phase 1 item 4 dependency) |
+| `cron_daily_sync()` | Hooked to `seobetter_gsc_daily_sync` action |
+| `schedule_cron()` / `unschedule_cron()` | Lifecycle |
+| `install_table()` | Creates `{prefix}_seobetter_gsc_snapshots` via dbDelta |
+| `get_redirect_uri()` | The OAuth callback URL (registered in Google Cloud Console) |
+
+Schema (custom table `{prefix}_seobetter_gsc_snapshots`):
+
+| Column | Type | Notes |
+|---|---|---|
+| id | BIGINT AUTO_INCREMENT | PK |
+| post_id | BIGINT | indexed |
+| captured_at | DATE | unique with post_id |
+| clicks_28d | INT | |
+| impressions_28d | INT | |
+| ctr_28d | DECIMAL(8,6) | |
+| position_28d | DECIMAL(6,2) | |
+
+`UNIQUE KEY post_date (post_id, captured_at)` lets `$wpdb->replace()` UPSERT — re-syncing the same day doesn't duplicate rows.
+
+Token security: access_token + refresh_token encrypted via `openssl_encrypt('aes-256-cbc')` with key derived from `AUTH_KEY` constant. Tokens at rest are unreadable from `wp_options` without WP secrets.
+
+### Wired infrastructure
+
+`seobetter.php`:
+
+| Where | What |
+|---|---|
+| `activate()` line **~140** | Calls `GSC_Manager::install_table()` + `schedule_cron()` |
+| `deactivate()` line **~149** | Calls `GSC_Manager::unschedule_cron()` |
+| `__construct()` add_action line **~99** | Registers `seobetter_gsc_daily_sync` cron handler |
+| REST routes line **~625** | `/seobetter/v1/gsc/oauth-callback` (public) + `/sync` (admin) + `/disconnect` (admin) |
+| Handler methods line **~1467** | `rest_gsc_oauth_callback`, `rest_gsc_sync`, `rest_gsc_disconnect` |
+
+OAuth callback handler redirects back to Settings page with `?gsc=connected&email=...` or `?gsc=error&msg=...` query param. Settings UI renders the appropriate notice.
+
+### Settings UI section
+
+`admin/views/settings.php` line **~694** — new "Google Search Console" card placed between Places Integrations and Branding & AI Featured Image. Shows different states based on configuration:
+
+| State | Display |
+|---|---|
+| `is_oauth_configured() === false` | Yellow setup-instructions card with 6-step Google Cloud setup + the redirect URI to register + the wp-config.php constants to add |
+| Configured but not connected | "Connect Google Search Console" button (links to `build_auth_url()`) |
+| Connected | Account email + property URL + last-sync time + URLs-tracked count + "Sync now" + "Disconnect" buttons |
+
+Settings tab structure (item 13) will relocate this card from "below Places" into the Research & Integrations tab when that ships.
+
+### Testing as Phase 1 user (with `SEOBETTER_GATE_LIVE=false`)
+
+Ben's setup (per the in-card instructions):
+1. Create a Google Cloud project, enable Google Search Console API
+2. Create OAuth 2.0 Client ID (Web application) with redirect URI `https://srv1608940.hstgr.cloud/wp-json/seobetter/v1/gsc/oauth-callback`
+3. Add to wp-config.php:
+   ```php
+   define( 'SEOBETTER_GSC_CLIENT_ID',     '...apps.googleusercontent.com' );
+   define( 'SEOBETTER_GSC_CLIENT_SECRET', '...' );
+   ```
+4. Reload Settings → click "Connect Google Search Console" → Google consent screen → returns connected
+5. Click "Sync now" → confirms data flows + table populates
+6. Daily cron auto-runs at scheduled tick; can verify via `wp cron event list`
+
+### Pre-fix checklist
+
+- ✅ All keywords / All 21 content types — orthogonal (this is data ingestion, not generation)
+- ✅ All AI models — orthogonal
+- ✅ Free-tier-safe — no Ben-side cost; user's GSC API quota is plenty for daily 28d pulls
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + activation/deactivation hooks + cron action + 3 REST routes + 3 handler methods
+2. `seobetter/includes/GSC_Manager.php` — NEW class (~360 lines)
+3. `seobetter/admin/views/settings.php` — NEW Google Search Console section
+4. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+### What's NOT in this ship (deferred)
+
+- **Per-post sidebar widget** showing top queries + sparkline — depends on data being live; ships in Phase 1 item 4 (Freshness inventory) where the data display story lives
+- **GSC-driven Freshness priority sort** — Phase 1 item 4 (consumes `GSC_Manager::get_post_stats()` directly)
+- **Centralized OAuth proxy via cloud-api** — Phase 2 work; possibly using Pica internally
+- **Site picker UI** for users with multiple GSC properties — current MVP assumes home_url() matches a property; future enhancement uses the `sites/list` endpoint
+
+### Verify
+
+```
+grep -n "class GSC_Manager\|seobetter_gsc_daily_sync\|/gsc/oauth-callback\|GSC_Manager::install_table" seobetter/seobetter.php seobetter/includes/GSC_Manager.php
+```
+
+Should show class definition, cron action, REST route, and table install call.
+
+**Verified by user:** UNTESTED — Ben to:
+1. Confirm activation creates `{prefix}_seobetter_gsc_snapshots` table (`wp db query "SHOW TABLES LIKE '%seobetter_gsc%'"`)
+2. Set up Google Cloud OAuth credentials per Settings UI instructions
+3. Click "Connect Google Search Console" → confirm OAuth flow returns successfully with email displayed
+4. Click "Sync now" → confirm "Synced N URLs" success message
+5. Inspect snapshot table: `wp db query "SELECT post_id, clicks_28d, impressions_28d, position_28d FROM {prefix}_seobetter_gsc_snapshots LIMIT 10"`
+6. Click "Disconnect" → confirm Google revokes token and local state clears
 
 ---
 

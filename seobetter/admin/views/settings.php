@@ -692,6 +692,147 @@ $settings = get_option( 'seobetter_settings', [] );
     </div>
 </div>
 
+<?php // v1.5.216.22 — Phase 1 item 3: Google Search Console integration ?>
+<?php
+$gsc_status = \SEOBetter\GSC_Manager::get_status();
+// Surface the OAuth callback redirect notice (?gsc=connected | error)
+$gsc_flash = sanitize_text_field( $_GET['gsc'] ?? '' );
+$gsc_flash_msg = sanitize_text_field( $_GET['msg'] ?? '' );
+$gsc_flash_email = sanitize_email( urldecode( $_GET['email'] ?? '' ) );
+?>
+<div class="seobetter-card" style="margin-top:24px;margin-bottom:20px">
+    <h2><?php esc_html_e( 'Google Search Console', 'seobetter' ); ?>
+        <span class="seobetter-score seobetter-score-<?php echo $gsc_status['connected'] ? 'good' : 'ok'; ?>" style="font-size:11px;margin-left:8px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase">
+            <?php
+            if ( $gsc_status['connected'] ) echo esc_html__( 'CONNECTED', 'seobetter' );
+            elseif ( ! $gsc_status['configured'] ) echo esc_html__( 'NEEDS SETUP', 'seobetter' );
+            else echo esc_html__( 'NOT CONNECTED', 'seobetter' );
+            ?>
+        </span>
+        <span class="seobetter-score" style="font-size:10px;margin-left:6px;background:#dcfce7;color:#166534;font-weight:600;letter-spacing:0.05em;text-transform:uppercase"><?php esc_html_e( 'FREE', 'seobetter' ); ?></span>
+    </h2>
+
+    <p class="description" style="margin-bottom:14px">
+        <?php esc_html_e( 'Connect Google Search Console to pull last-28-day clicks/impressions/position per article. Powers the GSC-driven Freshness inventory (Pro+) and the per-post performance widget. Free tier: connect + view dashboard. Pro+ unlocks GSC-driven refresh prioritization.', 'seobetter' ); ?>
+    </p>
+
+    <?php if ( $gsc_flash === 'connected' ) : ?>
+        <div class="notice notice-success inline" style="margin:10px 0 14px;padding:10px 14px">
+            <p style="margin:0;font-size:13px"><strong>✓</strong> <?php
+                printf(
+                    /* translators: 1: account email */
+                    esc_html__( 'Connected as %s. The first sync will run on the next cron tick (within an hour). You can also click "Sync now" below to test immediately.', 'seobetter' ),
+                    '<code>' . esc_html( $gsc_flash_email ) . '</code>'
+                ); ?></p>
+        </div>
+    <?php elseif ( $gsc_flash === 'error' ) : ?>
+        <div class="notice notice-error inline" style="margin:10px 0 14px;padding:10px 14px">
+            <p style="margin:0;font-size:13px"><strong>✗ <?php esc_html_e( 'Connect failed:', 'seobetter' ); ?></strong> <?php echo esc_html( urldecode( $gsc_flash_msg ) ); ?></p>
+        </div>
+    <?php endif; ?>
+
+    <?php if ( ! $gsc_status['configured'] ) : ?>
+        <!-- OAuth credentials not set in wp-config.php — show setup instructions -->
+        <div style="padding:14px 18px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px">
+            <strong style="color:#92400e;font-size:14px">⚠️ <?php esc_html_e( 'OAuth credentials required', 'seobetter' ); ?></strong>
+            <p style="margin:8px 0 10px;font-size:13px;line-height:1.55">
+                <?php esc_html_e( 'During Phase 1 testing each install registers its own Google Cloud OAuth client. Phase 2 will replace this with a centralized SEOBetter proxy so users never need their own Google credentials.', 'seobetter' ); ?>
+            </p>
+            <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.7">
+                <li><?php
+                    printf(
+                        /* translators: 1: link to Google Cloud Console */
+                        esc_html__( 'Go to %s and create or select a project.', 'seobetter' ),
+                        '<a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>'
+                    ); ?></li>
+                <li><?php esc_html_e( 'APIs & Services → Library → enable "Google Search Console API".', 'seobetter' ); ?></li>
+                <li><?php esc_html_e( 'Credentials → Create Credentials → OAuth 2.0 Client ID → Web application.', 'seobetter' ); ?></li>
+                <li><?php esc_html_e( 'Authorized redirect URI:', 'seobetter' ); ?> <code style="background:#fff;padding:2px 6px;font-size:11px;border:1px solid #fcd34d;word-break:break-all"><?php echo esc_html( \SEOBetter\GSC_Manager::get_redirect_uri() ); ?></code></li>
+                <li><?php esc_html_e( 'Add the Client ID and Client Secret to your wp-config.php:', 'seobetter' ); ?>
+                    <pre style="background:#fff;padding:8px 10px;font-size:11px;border:1px solid #fcd34d;overflow-x:auto;margin:6px 0">define( 'SEOBETTER_GSC_CLIENT_ID',     'YOUR_CLIENT_ID.apps.googleusercontent.com' );
+define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
+                </li>
+                <li><?php esc_html_e( 'Reload this page — the Connect button will appear.', 'seobetter' ); ?></li>
+            </ol>
+        </div>
+    <?php elseif ( ! $gsc_status['connected'] ) : ?>
+        <!-- Configured but not connected — show Connect button -->
+        <p style="margin:0 0 12px;font-size:13px">
+            <?php esc_html_e( 'OAuth credentials configured. Click below to authorize SEOBetter to read your Google Search Console data (read-only — we never write to your GSC account).', 'seobetter' ); ?>
+        </p>
+        <a href="<?php echo esc_url( \SEOBetter\GSC_Manager::build_auth_url() ); ?>" class="button button-primary" style="height:40px;padding:8px 18px;font-size:14px;line-height:22px">
+            <span style="display:inline-block;width:14px;height:14px;background:#fff;border-radius:2px;margin-right:8px;vertical-align:middle;text-align:center;color:#4285f4;font-weight:700">G</span>
+            <?php esc_html_e( 'Connect Google Search Console', 'seobetter' ); ?>
+        </a>
+        <p class="description" style="margin-top:8px;font-size:11px">
+            <?php
+            printf(
+                /* translators: 1: site URL */
+                esc_html__( 'We will request data for the GSC property matching: %s', 'seobetter' ),
+                '<code>' . esc_html( rtrim( home_url( '/' ), '/' ) . '/' ) . '</code>'
+            );
+            ?>
+        </p>
+    <?php else : ?>
+        <!-- Connected — show status + sync + disconnect -->
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px;margin-bottom:14px;background:#f8fafc;padding:14px 18px;border-radius:8px">
+            <strong><?php esc_html_e( 'Account:', 'seobetter' ); ?></strong>
+            <span><?php echo esc_html( $gsc_status['email'] ?: '(unknown)' ); ?></span>
+            <strong><?php esc_html_e( 'Property:', 'seobetter' ); ?></strong>
+            <code><?php echo esc_html( $gsc_status['site_url'] ); ?></code>
+            <strong><?php esc_html_e( 'Connected:', 'seobetter' ); ?></strong>
+            <span><?php echo $gsc_status['connected_at'] ? esc_html( human_time_diff( $gsc_status['connected_at'] ) . ' ' . __( 'ago', 'seobetter' ) ) : '—'; ?></span>
+            <strong><?php esc_html_e( 'Last sync:', 'seobetter' ); ?></strong>
+            <span><?php echo $gsc_status['last_sync'] ? esc_html( human_time_diff( $gsc_status['last_sync'] ) . ' ' . __( 'ago', 'seobetter' ) ) : '<span style="color:#94a3b8">' . esc_html__( 'never', 'seobetter' ) . '</span>'; ?></span>
+            <strong><?php esc_html_e( 'URLs tracked:', 'seobetter' ); ?></strong>
+            <span><?php echo esc_html( $gsc_status['urls_tracked'] ); ?></span>
+        </div>
+
+        <button type="button" id="seobetter-gsc-sync" class="button button-primary" style="margin-right:8px"><?php esc_html_e( 'Sync now', 'seobetter' ); ?></button>
+        <button type="button" id="seobetter-gsc-disconnect" class="button" style="color:#991b1b"><?php esc_html_e( 'Disconnect', 'seobetter' ); ?></button>
+        <span id="seobetter-gsc-status-msg" style="margin-left:12px;font-size:12px;color:#6b7280"></span>
+
+        <script>
+        jQuery(function($) {
+            $('#seobetter-gsc-sync').on('click', function() {
+                var $btn = $(this);
+                var $msg = $('#seobetter-gsc-status-msg');
+                $btn.prop('disabled', true).text('<?php echo esc_js( __( 'Syncing…', 'seobetter' ) ); ?>');
+                $msg.text('').css('color', '#6b7280');
+                $.ajax({
+                    url: '<?php echo esc_js( rest_url( 'seobetter/v1/gsc/sync' ) ); ?>',
+                    method: 'POST',
+                    headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
+                }).done(function(res) {
+                    if (res && res.success) {
+                        $msg.text('✓ <?php echo esc_js( __( 'Synced', 'seobetter' ) ); ?> ' + (res.urls || 0) + ' <?php echo esc_js( __( 'URLs. Reload to refresh stats.', 'seobetter' ) ); ?>').css('color', '#059669');
+                    } else {
+                        $msg.text('✗ ' + (res && res.error ? res.error : '<?php echo esc_js( __( 'Sync failed', 'seobetter' ) ); ?>')).css('color', '#dc2626');
+                    }
+                }).fail(function(xhr) {
+                    var msg = '<?php echo esc_js( __( 'Sync failed', 'seobetter' ) ); ?>';
+                    try { var r = JSON.parse(xhr.responseText); msg = r.error || msg; } catch(e) {}
+                    $msg.text('✗ ' + msg).css('color', '#dc2626');
+                }).always(function() {
+                    $btn.prop('disabled', false).text('<?php echo esc_js( __( 'Sync now', 'seobetter' ) ); ?>');
+                });
+            });
+
+            $('#seobetter-gsc-disconnect').on('click', function() {
+                if (!confirm('<?php echo esc_js( __( 'Disconnect Google Search Console? Stored snapshots will remain but no new data will be pulled until you reconnect.', 'seobetter' ) ); ?>')) return;
+                $.ajax({
+                    url: '<?php echo esc_js( rest_url( 'seobetter/v1/gsc/disconnect' ) ); ?>',
+                    method: 'POST',
+                    headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
+                }).done(function() {
+                    window.location.reload();
+                });
+            });
+        });
+        </script>
+    <?php endif; ?>
+</div>
+
 <?php // v1.5.32 — Branding + AI Featured Image card ?>
 <div class="seobetter-dashboard-card" style="margin-top:24px">
     <div class="seobetter-card-body">
