@@ -19,7 +19,7 @@
 ## v1.5.216.38 — Dashboard restructure (Phase 1 item 19)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `101b4e0`
 
 ### Why this ships
 
