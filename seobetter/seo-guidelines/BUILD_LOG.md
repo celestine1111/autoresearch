@@ -19,7 +19,7 @@
 ## v1.5.216.28 — Bulk CSV UX layer rewrite (Phase 1 item 9)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `6d128e1`
 
 ### Why this ships
 
