@@ -19,7 +19,7 @@
 ## v1.5.216.22 — GSC integration MVP — OAuth + daily sync + Settings UI (Phase 1 item 3)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `c44e078`
 
 ### Why this ships
 
