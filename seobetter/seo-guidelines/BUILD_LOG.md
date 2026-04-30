@@ -19,7 +19,7 @@
 ## v1.5.216.39 — Recent Articles columns: Score / GEO / Cites / AI Ready (Phase 1 item 20)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `ac0361b`
 
 ### Why this ships
 
