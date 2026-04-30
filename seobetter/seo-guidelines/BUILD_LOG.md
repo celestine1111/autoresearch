@@ -19,7 +19,7 @@
 ## v1.5.216.36 — License & Account dashboard card (Phase 1 item 17)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `7c23bea`
 
 ### Why this ships
 
