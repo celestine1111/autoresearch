@@ -19,7 +19,7 @@
 ## v1.5.216.37 — AI Crawler Access audit + one-click fix (Phase 1 item 18)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `ce118e7`
 
 ### Why this ships
 
