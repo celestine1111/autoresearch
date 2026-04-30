@@ -18,8 +18,12 @@ class Internal_Link_Suggester {
      * Suggest internal links for a specific post.
      */
     public function suggest_for_post( int $post_id, int $max = 10 ): array {
-        if ( ! License_Manager::can_use( 'internal_link_suggestions' ) ) {
-            return [ 'success' => false, 'error' => 'Internal link suggestions require SEOBetter Pro.' ];
+        // v1.5.216.24 — Phase 1 item 5: gate moved to `internal_links_suggester`
+        // (Pro+ tier per locked matrix). Old `internal_link_suggestions` key
+        // stays in FREE_FEATURES for back-compat with v1.5.13 testing flag,
+        // but the suggester proper is Pro+.
+        if ( ! License_Manager::can_use( 'internal_links_suggester' ) ) {
+            return [ 'success' => false, 'error' => 'Internal link suggestions require Pro+ ($69/mo).', 'upgrade_tier' => 'pro_plus' ];
         }
 
         $source = get_post( $post_id );
@@ -219,5 +223,85 @@ class Internal_Link_Suggester {
      */
     public function count_internal_links( string $content ): int {
         return count( $this->get_existing_internal_links( $content ) );
+    }
+
+    // ── v1.5.216.24 — Phase 1 item 5: orphan-pages report (Free tier) ──
+
+    /**
+     * Find orphan posts — published posts with ZERO inbound internal links
+     * from elsewhere on the site. The single most actionable internal-link
+     * SEO signal: orphans are invisible to internal crawl, hard to rank,
+     * and signal weak topical authority to AI search engines.
+     *
+     * Tier: FREE — table-stakes feature (Link Whisper proves $77/yr WTP
+     * for the suggester upgrade; the orphan report is the conversion bait).
+     *
+     * Single SQL pass:
+     *   1. Fetch all published posts/pages with id, title, content
+     *   2. Build a map: post_id → existing internal-link target post_ids
+     *      (resolved via url_to_postid for each <a href> in content)
+     *   3. Mark each post that appears as a target as "linked"
+     *   4. Posts NOT in the linked set are orphans
+     */
+    public function find_orphan_posts( int $limit = 200 ): array {
+        $posts = get_posts( [
+            'post_type'      => [ 'post', 'page' ],
+            'post_status'    => 'publish',
+            'posts_per_page' => $limit,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ] );
+
+        $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+        $linked    = []; // post_id of every post that has at least one inbound internal link
+
+        // Pass 1 — for every post, scan its content for internal anchor tags,
+        // resolve each to a post_id, mark the target as linked.
+        foreach ( $posts as $post ) {
+            preg_match_all( '/<a[^>]+href=["\']([^"\']+)["\']/i', $post->post_content, $href_matches );
+            foreach ( $href_matches[1] ?? [] as $href ) {
+                $host = wp_parse_url( $href, PHP_URL_HOST );
+                // Skip external (different host)
+                if ( $host && $host !== $site_host ) continue;
+                $target_id = url_to_postid( $href );
+                if ( $target_id && $target_id !== $post->ID ) {
+                    $linked[ $target_id ] = true;
+                }
+            }
+        }
+
+        // Pass 2 — anything not in $linked is an orphan
+        $orphans = [];
+        $now     = time();
+        foreach ( $posts as $post ) {
+            if ( isset( $linked[ $post->ID ] ) ) continue;
+            $age_days = max( 0, (int) round( ( $now - strtotime( $post->post_date ) ) / DAY_IN_SECONDS ) );
+            $word_count = str_word_count( wp_strip_all_tags( $post->post_content ) );
+            $geo_score = get_post_meta( $post->ID, '_seobetter_geo_score', true );
+            $orphans[] = [
+                'id'         => $post->ID,
+                'title'      => $post->post_title,
+                'url'        => get_permalink( $post->ID ),
+                'edit_url'   => get_edit_post_link( $post->ID, 'raw' ),
+                'age_days'   => $age_days,
+                'word_count' => $word_count,
+                'geo_score'  => is_array( $geo_score ) ? (int) ( $geo_score['geo_score'] ?? 0 ) : 0,
+            ];
+        }
+
+        // Sort by GEO score DESC (best content first — highest opportunity
+        // cost of being orphaned), then by age DESC (older = longer it's
+        // been invisible)
+        usort( $orphans, function ( $a, $b ) {
+            if ( $a['geo_score'] !== $b['geo_score'] ) return $b['geo_score'] - $a['geo_score'];
+            return $b['age_days'] - $a['age_days'];
+        });
+
+        return [
+            'orphans'        => $orphans,
+            'orphan_count'   => count( $orphans ),
+            'total_scanned'  => count( $posts ),
+            'orphan_pct'     => $posts ? round( count( $orphans ) / count( $posts ) * 100, 1 ) : 0,
+        ];
     }
 }

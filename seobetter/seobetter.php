@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.23
+ * Version: 1.5.216.24
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.23' );
+define( 'SEOBETTER_VERSION', '1.5.216.24' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -164,6 +164,8 @@ final class SEOBetter {
         add_submenu_page( 'seobetter', __( 'Bulk Generate', 'seobetter' ), __( 'Bulk Generate', 'seobetter' ), 'edit_posts', 'seobetter-bulk', [ $this, 'render_bulk_generator' ] );
         // v1.5.216.23 — Phase 1 item 4: Freshness inventory standalone menu
         add_submenu_page( 'seobetter', __( 'Content Freshness', 'seobetter' ), __( 'Freshness', 'seobetter' ), 'edit_posts', 'seobetter-freshness', [ $this, 'render_freshness' ] );
+        // v1.5.216.24 — Phase 1 item 5: Internal Links standalone menu
+        add_submenu_page( 'seobetter', __( 'Internal Links', 'seobetter' ), __( 'Internal Links', 'seobetter' ), 'edit_posts', 'seobetter-links', [ $this, 'render_link_suggestions' ] );
         // v1.5.190 — Removed 4 empty menu items (Content Brief, Citation Tracker, Link Suggestions, Cannibalization).
         // Content Brief is redundant — the generator already does research+outline internally.
         // Citation Tracker, Link Suggestions, Cannibalization → moved to Pro features backlog.

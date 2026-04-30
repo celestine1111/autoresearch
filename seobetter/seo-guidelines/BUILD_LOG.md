@@ -7,12 +7,97 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.23)
+> **Last updated:** 2026-04-30 (v1.5.216.24)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.24 — Internal Links MVP — orphan report (Free) + suggester (Pro+) (Phase 1 item 5)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Fifth task in the locked Phase 1 build queue. **Override** of the 2026-04-15 "Internal linking REMOVED from roadmap" decision per pro-features-ideas.md Decision Log 2026-04-29 — the strategic deep-dive recommended adding because Link Whisper proves $77/yr willingness-to-pay just for the suggester. Tier matrix splits the feature across 3 tiers:
+
+- **Free:** orphan-pages report (the table-stakes signal — every site needs to find these)
+- **Pro+:** editor-side suggester (5 ranked suggestions per post with anchor text + relevance score)
+- **Agency:** unlimited + auto-linking rules (Phase 5+)
+
+### Added
+
+**`Internal_Link_Suggester::find_orphan_posts()`** — `includes/Internal_Link_Suggester.php` line **~244**
+
+Two-pass algorithm:
+1. For every published post: scan content for `<a href>` tags, resolve each to a target post_id via `url_to_postid()`, mark target as linked
+2. Any post NOT in the linked set is an orphan
+
+Returns: `{orphans[], orphan_count, total_scanned, orphan_pct}`. Sort priority: GEO score DESC (high-quality orphans = highest opportunity cost) → age DESC (older = longer invisible).
+
+Free tier — no license gate, runs locally on user's own posts at zero cost.
+
+**Tier gate update:** `suggest_for_post()` line **~21** — gate moved from legacy `internal_link_suggestions` (FREE_FEATURES back-compat key from v1.5.13 testing) → `internal_links_suggester` (Pro+ tier per locked matrix).
+
+### Settings UI rewrite — `admin/views/link-suggestions.php` (full rewrite)
+
+2-tab layout via WordPress `nav-tab-wrapper`:
+
+**Tab 1 — Orphan Pages (Free):**
+- 3-stat header: Orphan posts / % orphaned / Total scanned (color-graded)
+- Pro+ upsell card (only when orphans found AND tier < Pro+)
+- Sortable orphan table: title · GEO score badge · age · word count · action
+- Action button differs by tier: Free shows "Edit"; Pro+ shows "Find inbound links →" deep-link to suggester tab pre-loaded with that post
+
+**Tab 2 — Link Suggestions (Pro+):**
+- Locked state for Free/Pro: full-card upsell with $69/mo CTA + value-prop copy
+- Active state for Pro+/Agency: post picker → 5 ranked suggestions with anchor text + relevance score + GEO score per source post
+
+Both tabs are deep-linkable via `?tab=orphan` or `?tab=suggester`. Tab nav shows orphan count badge + tier badges (FREE/PRO+) inline.
+
+### Menu registration
+
+New submenu: `SEOBetter → Internal Links` registered at `seobetter.php` line **~167**. Capability: `edit_posts`.
+
+### Pre-fix checklist
+
+- ✅ All keywords / All 21 content types — orthogonal (scans existing posts)
+- ✅ All AI models — orthogonal
+- ✅ Free-tier-safe — orphan scan runs in PHP on user's own DB (zero external cost)
+- ✅ Tier-correctly-gated — `internal_links_suggester` is in PROPLUS_FEATURES; `find_orphan_posts()` ungated (Free)
+- ✅ With GATE_LIVE=false (Phase 1 testing) Ben sees Pro+ behavior; with true, Free users see orphan tab + Pro+ lock card on suggester tab
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + Internal Links submenu registration
+2. `seobetter/includes/Internal_Link_Suggester.php` — `find_orphan_posts()` method + updated gate key on `suggest_for_post()`
+3. `seobetter/admin/views/link-suggestions.php` — full rewrite as 2-tab page
+4. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+### What's NOT in this ship (deferred)
+
+- **Editor sidebar suggester widget** (Gutenberg sidebar panel showing 5 in-context suggestions) — Phase 1 item 13 (Settings tabs) overlaps; could ship in a follow-up sweep that surfaces SEOBetter widgets in the post-edit screen
+- **Auto-linking rules** (Link Whisper-style "every mention of X auto-links to Y") — Agency tier, Phase 5+
+- **Anchor text diversity report** — Phase 5+
+- **PageRank/InRank simulation** — out of scope (Sitebulb/Screaming Frog territory)
+
+### Verify
+
+```
+grep -n "find_orphan_posts\|internal_links_suggester\|seobetter-links\b" seobetter/seobetter.php seobetter/includes/Internal_Link_Suggester.php seobetter/admin/views/link-suggestions.php | head
+```
+
+Should show new method, updated gate key, and submenu registration.
+
+**Verified by user:** UNTESTED — Ben to:
+1. Visit `wp-admin/admin.php?page=seobetter-links` → confirm Orphan Pages tab loads with stats + table
+2. Click any orphan's "Find inbound links →" button → suggester tab loads pre-selected with that post → confirm 5 ranked suggestions appear with anchor text + relevance score
+3. Click empty post picker on suggester tab → pick a different post → confirm suggestions reload
+4. Set `define('SEOBETTER_GATE_LIVE', true);` temporarily + activate as Free license → confirm Suggester tab shows the locked Pro+ upsell card; revert to false to resume Phase 1 testing
 
 ---
 
