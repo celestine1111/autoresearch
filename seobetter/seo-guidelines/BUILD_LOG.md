@@ -19,7 +19,7 @@
 ## v1.5.216.41 — Bulk Generate page tier badge polish (Phase 1 item 22)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `4299bec`
 
 ### Why this ships
 
