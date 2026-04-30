@@ -19,7 +19,7 @@
 ## v1.5.216.32 — Settings.php restructure into 6 tabs (Phase 1 item 13)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `105c79a`
 
 ### Why this ships
 
