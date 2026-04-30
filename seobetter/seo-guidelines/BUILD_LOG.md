@@ -19,7 +19,7 @@
 ## v1.5.216.34 — License tier display logic — internal types vs external Free/Pro/Pro+/Agency (Phase 1 item 15)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `50d90df`
 
 ### Why this ships
 
