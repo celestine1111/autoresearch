@@ -19,7 +19,7 @@
 ## v1.5.216.20 — Canonical URL sync to all 4 SEO plugins (Phase 1 item 1)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `903852c`
 
 ### Why this ships
 
