@@ -19,7 +19,7 @@
 ## v1.5.216.42 — Settings tabs fix: GSC + AI Crawler Audit leaking out of research_integrations panel
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `5510164`
 
 ### Bug
 
