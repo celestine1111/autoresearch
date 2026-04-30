@@ -356,6 +356,142 @@ class License_Manager {
         return 'pro';
     }
 
+    // ====================================================================
+    // v1.5.216.34 — Phase 1 item 15: License tier display logic.
+    //
+    // Internal license types tracked in the `type` field of the option:
+    //   free / pro_subscription / pro_plus_subscription / agency_subscription
+    //   pro_lifetime / pro_plus_lifetime / agency_lifetime
+    //
+    // The internal types feed three INTERNAL-ONLY decisions:
+    //   1. Cloud cap enforcement — LTD buyers have hard monthly caps per
+    //      `pro-features-ideas.md §5` (5/15/30/75/150). Subscription tiers
+    //      have unlimited Cloud (within published quotas) per §2.
+    //   2. Cheap-config-forced flag — LTD Cloud articles MUST use cheap
+    //      config (gpt-4.1-mini extraction only) to keep margin sustainable
+    //      across 5-year lifetime exposure.
+    //   3. Cloud Credits eligibility — LTD buyers exceeding caps can buy
+    //      credit packs to top up; subscription buyers can't (already
+    //      unlimited within their tier).
+    //
+    // None of these surface to the UI as "LTD" / "Lifetime" badges. Public
+    // tier name from get_active_tier() is the only thing users see.
+    // ====================================================================
+
+    /**
+     * All recognised internal license type strings. Anything else stored
+     * in the `type` field is normalised to 'pro' display via legacy fallback.
+     */
+    public const LICENSE_TYPES = [
+        'free',
+        'pro_subscription',
+        'pro_plus_subscription',
+        'agency_subscription',
+        'pro_lifetime',
+        'pro_plus_lifetime',
+        'agency_lifetime',
+    ];
+
+    /**
+     * AppSumo 5-tier LTD ladder — monthly Cloud cap per tier.
+     * Sourced from `pro-features-ideas.md §5` 5-tier ladder. Mapped from
+     * the internal license type used at activation. New LTD types may
+     * specialise these by appending a suffix (`pro_lifetime_t1`) — fall
+     * back to the base type's cap.
+     */
+    private const LTD_CLOUD_CAPS = [
+        'pro_lifetime'      => 15,   // Tier 2 ($129) baseline — also matches free++ (Tier 1) when appsumo_tier=1
+        'pro_plus_lifetime' => 30,   // Tier 3 ($249)
+        'agency_lifetime'   => 75,   // Tier 4 ($349) baseline — Tier 5 ($499) gets 150 via appsumo_tier=5 stored field
+    ];
+
+    /**
+     * Get the precise internal license type. Returns 'free' when no
+     * active license. Used by the billing system, Cloud cap enforcement,
+     * and the cheap-config gate.
+     *
+     * NEVER call this from UI code — UI calls `get_active_tier()`.
+     */
+    public static function get_license_type_internal(): string {
+        $license = get_option( self::OPTION_KEY, [] );
+        if ( empty( $license['is_active'] ) ) return 'free';
+        $type = (string) ( $license['type'] ?? 'pro_subscription' );
+        return in_array( $type, self::LICENSE_TYPES, true ) ? $type : 'pro_subscription';
+    }
+
+    /**
+     * Whether the active license is a lifetime (AppSumo LTD) deal.
+     * Used by Cloud cap enforcement and cheap-config gating.
+     */
+    public static function is_lifetime(): bool {
+        return str_ends_with( self::get_license_type_internal(), '_lifetime' );
+    }
+
+    /**
+     * Whether the active license is a recurring subscription. Mutually
+     * exclusive with `is_lifetime()` (free returns false for both).
+     */
+    public static function is_subscription(): bool {
+        return str_ends_with( self::get_license_type_internal(), '_subscription' );
+    }
+
+    /**
+     * Monthly Cloud article cap for the active license. Returns -1 to
+     * signal "unlimited" (subscription tiers within published quota).
+     * 0 for free tier (no Cloud — must use BYOK).
+     *
+     * LTD tiers return their hard cap from the AppSumo ladder; subscription
+     * tiers return -1 (handled by tier-specific quota in Cloud_API).
+     */
+    public static function get_cloud_cap(): int {
+        $type = self::get_license_type_internal();
+        if ( $type === 'free' ) return 0;
+        if ( str_ends_with( $type, '_subscription' ) ) return -1;
+
+        // LTD: read AppSumo tier from license option (1-5 ladder). When
+        // unset, default to the base cap for the license type.
+        $license = get_option( self::OPTION_KEY, [] );
+        $appsumo_tier = (int) ( $license['appsumo_tier'] ?? 0 );
+
+        // 5-tier ladder per pro-features-ideas.md §5
+        $ladder_caps = [ 1 => 5, 2 => 15, 3 => 30, 4 => 75, 5 => 150 ];
+        if ( $appsumo_tier >= 1 && $appsumo_tier <= 5 ) {
+            return $ladder_caps[ $appsumo_tier ];
+        }
+
+        return self::LTD_CLOUD_CAPS[ $type ] ?? 0;
+    }
+
+    /**
+     * Whether the user must use cheap-config (gpt-4.1-mini extraction)
+     * for Cloud articles. True for LTD buyers — keeps lifetime exposure
+     * sustainable per `pro-features-ideas.md §5` margin model. False for
+     * subscription buyers (their MRR funds Sonnet/Opus extraction).
+     *
+     * Free tier never reaches Cloud (forced BYOK); flag is moot.
+     */
+    public static function should_force_cheap_config(): bool {
+        return self::is_lifetime();
+    }
+
+    /**
+     * Number of site activations allowed by the active license. From the
+     * AppSumo LTD ladder (1/3/5/10/25) for lifetime buyers, or the
+     * `sites_*` feature for subscription tiers. Used by license activation
+     * to check site count before binding.
+     */
+    public static function get_sites_allowed(): int {
+        if ( self::is_lifetime() ) {
+            $license = get_option( self::OPTION_KEY, [] );
+            $appsumo_tier = (int) ( $license['appsumo_tier'] ?? 0 );
+            $ladder_sites = [ 1 => 1, 2 => 3, 3 => 5, 4 => 10, 5 => 25 ];
+            return $ladder_sites[ $appsumo_tier ] ?? 1;
+        }
+        // Subscription: tier-implicit quota (Pro 1, Pro+ 1, Agency 10)
+        if ( self::can_use( 'sites_10' ) ) return 10;
+        return 1;
+    }
+
     /**
      * Activate a license key.
      */
@@ -366,16 +502,42 @@ class License_Manager {
             return [ 'success' => false, 'message' => 'License key is required.' ];
         }
 
-        // For development/testing: accept a test key
-        if ( $key === 'SEOBETTER-DEV-PRO' && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-            update_option( self::OPTION_KEY, [
-                'key'         => $key,
-                'is_active'   => true,
-                'tier'        => 'pro',
-                'valid_until' => time() + DAY_IN_SECONDS,
-                'activated'   => current_time( 'mysql' ),
-            ] );
-            return [ 'success' => true, 'message' => 'Development Pro license activated.' ];
+        // v1.5.216.34 — Phase 1 item 15: Dev test keys for each tier so Ben
+        // can exercise the full UI matrix locally. Only honoured when
+        // WP_DEBUG is on. The display tier in the UI matches the type field.
+        // LTD test keys store appsumo_tier so cap/sites helpers return the
+        // correct ladder values.
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            $dev_keys = [
+                'SEOBETTER-DEV-PRO'           => [ 'type' => 'pro_subscription' ],
+                'SEOBETTER-DEV-PRO-PLUS'      => [ 'type' => 'pro_plus_subscription' ],
+                'SEOBETTER-DEV-AGENCY'        => [ 'type' => 'agency_subscription' ],
+                'SEOBETTER-DEV-LTD-T1'        => [ 'type' => 'pro_lifetime',      'appsumo_tier' => 1 ],
+                'SEOBETTER-DEV-LTD-T2'        => [ 'type' => 'pro_lifetime',      'appsumo_tier' => 2 ],
+                'SEOBETTER-DEV-LTD-T3'        => [ 'type' => 'pro_plus_lifetime', 'appsumo_tier' => 3 ],
+                'SEOBETTER-DEV-LTD-T4'        => [ 'type' => 'agency_lifetime',   'appsumo_tier' => 4 ],
+                'SEOBETTER-DEV-LTD-T5'        => [ 'type' => 'agency_lifetime',   'appsumo_tier' => 5 ],
+            ];
+            if ( isset( $dev_keys[ $key ] ) ) {
+                $stored = array_merge( [
+                    'key'         => $key,
+                    'is_active'   => true,
+                    'activated'   => current_time( 'mysql' ),
+                ], $dev_keys[ $key ] );
+                // Subscriptions get a far-future valid_until; LTD keys never expire
+                if ( str_ends_with( $stored['type'], '_subscription' ) ) {
+                    $stored['valid_until'] = time() + YEAR_IN_SECONDS;
+                }
+                update_option( self::OPTION_KEY, $stored );
+                return [
+                    'success' => true,
+                    'message' => sprintf(
+                        /* translators: %s: license type internal slug */
+                        __( 'Development license activated (%s).', 'seobetter' ),
+                        $stored['type']
+                    ),
+                ];
+            }
         }
 
         $valid = self::validate_license( $key );

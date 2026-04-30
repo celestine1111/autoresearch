@@ -7,12 +7,77 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.33)
+> **Last updated:** 2026-04-30 (v1.5.216.34)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.34 — License tier display logic — internal types vs external Free/Pro/Pro+/Agency (Phase 1 item 15)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Per the locked plan §3 item 15: `License_Manager` must internally track the precise license type (subscription vs lifetime, per-tier) so billing, Cloud cap enforcement, and the cheap-config-forced flag can branch correctly — but the UI must NEVER surface "LTD" / "Lifetime" / AppSumo nomenclature. Reason from the plan: "would deter future paying customers from joining if they see lifetime equivalence shown publicly."
+
+`get_active_tier()` (item 2, v1.5.216.21) already returns the display tier (Free/Pro/Pro+/Agency) — that part was correct. What was missing: the internal-only accessors that the billing system, Cloud cap enforcement, and credit-pack system need to differentiate AppSumo LTD buyers from subscription buyers without leaking that distinction into UI surfaces.
+
+### What shipped
+
+- **`License_Manager::LICENSE_TYPES`** — `seobetter/includes/License_Manager.php` ~line 365
+  - 7-element constant: `free / pro_subscription / pro_plus_subscription / agency_subscription / pro_lifetime / pro_plus_lifetime / agency_lifetime`
+  - Source of truth for what gets stored in the `type` field of the license option
+
+- **`get_license_type_internal()`** — returns precise internal type, validated against LICENSE_TYPES (unknown values normalised to `pro_subscription` for safe-defaults). Documented as INTERNAL-ONLY — UI must call `get_active_tier()` instead
+
+- **`is_lifetime()` / `is_subscription()`** — boolean helpers via `str_ends_with('_lifetime')` / `str_ends_with('_subscription')`. Free tier returns false for both
+
+- **`get_cloud_cap()`** — returns -1 for unlimited (subscription), 0 for free, or the AppSumo ladder cap (5/15/30/75/150) per `pro-features-ideas.md §5` 5-tier ladder. Reads `appsumo_tier` field (1-5) from license option to disambiguate Tier 1 vs Tier 2 within `pro_lifetime`, and Tier 4 vs Tier 5 within `agency_lifetime`. Falls back to base type cap when `appsumo_tier` unset
+
+- **`should_force_cheap_config()`** — returns `true` for LTD buyers, `false` for subscription. Used by the AI pipeline to gate gpt-4.1-mini extraction (cheap config) vs Sonnet/Opus (premium). Sustainability mechanic per locked plan §5: LTD margin is 67-92% over 5 years ONLY if cheap config is enforced
+
+- **`get_sites_allowed()`** — site count from AppSumo ladder (1/3/5/10/25 for LTD) or `sites_10` feature for subscription. Used by license activation to check site count before binding
+
+- **Dev test keys for the full tier matrix** — `activate()` recognises 8 dev keys when WP_DEBUG is on:
+  - `SEOBETTER-DEV-PRO` / `-PRO-PLUS` / `-AGENCY` (subscription)
+  - `SEOBETTER-DEV-LTD-T1` through `-T5` (lifetime, sets appsumo_tier 1-5)
+  - Lets Ben switch between all 7 internal types + 5 LTD ladder positions during Phase 1 testing without paying anything. Subscription test keys get a year-out `valid_until`; LTD keys omit `valid_until` entirely (lifetime = never expires)
+
+### Verify (file:method anchors)
+
+```bash
+# All internal-only accessors
+grep -n "public const LICENSE_TYPES\|public static function is_lifetime\|public static function is_subscription\|public static function get_license_type_internal\|public static function get_cloud_cap\|public static function should_force_cheap_config\|public static function get_sites_allowed" seobetter/includes/License_Manager.php
+
+# Dev test keys for the full matrix
+grep -n "SEOBETTER-DEV-PRO\|SEOBETTER-DEV-LTD" seobetter/includes/License_Manager.php
+
+# Sanity: NO UI surface uses "lifetime" / "LTD" / "AppSumo" terminology
+grep -rn "lifetime\|LTD\|AppSumo\|appsumo" seobetter/admin/ | head
+# (should return zero results)
+```
+
+### What this enables (next ships)
+
+- **Cloud cap enforcement** — `Cloud_API` will read `get_cloud_cap()` to track LTD monthly usage and reject overflow. Item not in Phase 1 — comes with the Cloud Credits backend
+- **Cheap-config gate** — AI provider selection in `Async_Generator` will check `should_force_cheap_config()` before allowing premium models. Item not in Phase 1 — comes when AppSumo phase ships (week 7-14)
+- **Site activation cap** — License activation flow will check `get_sites_allowed()` against the count of activations on this license key. Phase 2 work
+
+### Tier gating
+
+This item is infrastructure — no user-visible tier gates added. The display layer (`get_active_tier()`) was already correct from item 2. Item 15 adds the INTERNAL distinction that the billing + caps system depend on, with the explicit guarantee that it never reaches the UI.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No structural changes to other guidelines — this is internal license-tracking infrastructure. `pro-features-ideas.md §5` AppSumo ladder is the source-of-truth spec; this implementation reads from it but doesn't modify it (user-managed file)
+
+**Verified by user:** UNTESTED
 
 ---
 
