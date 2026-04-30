@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.43
+ * Version: 1.5.216.44
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.43' );
+define( 'SEOBETTER_VERSION', '1.5.216.44' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -5964,7 +5964,12 @@ final class SEOBetter {
                     <strong>How this works:</strong> Enabled blocks emit JSON-LD into the @graph and <strong>override</strong> Schema_Generator's auto-detection for the same @type. Required fields are marked <span style="color:#dc2626">*</span> — blocks with missing required fields are silently skipped (we never emit invalid schema).
                 </div>
 
-                <form id="sb-schema-blocks-form" data-post-id="<?php echo esc_attr( $post->ID ); ?>">
+                <?php // v1.5.216.44 — div, not form. Browsers + WordPress strip
+                       // nested <form> tags (this metabox lives inside the post-edit
+                       // form). Save button hits the REST endpoint via fetch directly,
+                       // no native form submission needed. Pre-fix the form tag was
+                       // dropped silently → JS never bound → save did nothing. ?>
+                <div id="sb-schema-blocks-form" data-post-id="<?php echo esc_attr( $post->ID ); ?>">
                     <?php wp_nonce_field( 'wp_rest', '_sb_schema_blocks_nonce' ); ?>
 
                     <?php
@@ -6029,33 +6034,41 @@ final class SEOBetter {
                     <?php endforeach; ?>
 
                     <div style="margin-top:16px;display:flex;gap:8px;align-items:center">
-                        <button type="submit" class="button button-primary" id="sb-schema-blocks-save">Save Schema Blocks</button>
+                        <?php // v1.5.216.44 — type="button" not "submit" so we never accidentally submit the parent post-edit form ?>
+                        <button type="button" class="button button-primary" id="sb-schema-blocks-save">Save Schema Blocks</button>
                         <span id="sb-schema-blocks-status" style="font-size:12px;color:#6b7280"></span>
                     </div>
-                </form>
+                </div>
 
                 <script>
                 (function() {
-                    var form = document.getElementById('sb-schema-blocks-form');
-                    if (!form) return;
-                    form.addEventListener('submit', function(e) {
+                    // v1.5.216.44 — bind to the Save button click directly, not form submit
+                    // (the wrapper is now a <div>, not a <form>). Walk every input + checkbox
+                    // inside the wrapper to build the payload, since FormData only works on forms.
+                    var wrapper = document.getElementById('sb-schema-blocks-form');
+                    var saveBtn = document.getElementById('sb-schema-blocks-save');
+                    if (!wrapper || !saveBtn) return;
+                    saveBtn.addEventListener('click', function(e) {
                         e.preventDefault();
-                        var btn = document.getElementById('sb-schema-blocks-save');
                         var status = document.getElementById('sb-schema-blocks-status');
-                        btn.disabled = true;
+                        saveBtn.disabled = true;
                         status.textContent = 'Saving…';
                         status.style.color = '#6b7280';
 
-                        var fd = new FormData(form);
-                        // Reshape FormData → nested blocks object for clean JSON
+                        // Collect inputs by name → reshape into { blocks: { product: {...}, ... } }
                         var payload = { blocks: {} };
-                        for (var pair of fd.entries()) {
-                            var m = pair[0].match(/^blocks\[(\w+)\]\[(\w+)\]$/);
-                            if (m) {
-                                if (!payload.blocks[m[1]]) payload.blocks[m[1]] = {};
-                                payload.blocks[m[1]][m[2]] = pair[1];
+                        var inputs = wrapper.querySelectorAll('input[name^="blocks["], select[name^="blocks["], textarea[name^="blocks["]');
+                        inputs.forEach(function(el) {
+                            var m = el.name.match(/^blocks\[(\w+)\]\[(\w+)\]$/);
+                            if (!m) return;
+                            if (!payload.blocks[m[1]]) payload.blocks[m[1]] = {};
+                            // Checkbox: write boolean only when checked, skip when not
+                            if (el.type === 'checkbox') {
+                                if (el.checked) payload.blocks[m[1]][m[2]] = '1';
+                            } else {
+                                payload.blocks[m[1]][m[2]] = el.value;
                             }
-                        }
+                        });
 
                         fetch('<?php echo esc_url( rest_url( 'seobetter/v1/schema-blocks/' . $post->ID ) ); ?>', {
                             method: 'POST',
@@ -6067,7 +6080,7 @@ final class SEOBetter {
                         })
                         .then(function(r) { return r.json(); })
                         .then(function(data) {
-                            btn.disabled = false;
+                            saveBtn.disabled = false;
                             if (data && data.success) {
                                 status.textContent = '✓ Saved. Re-save the post to refresh the @graph.';
                                 status.style.color = '#059669';
@@ -6077,7 +6090,7 @@ final class SEOBetter {
                             }
                         })
                         .catch(function() {
-                            btn.disabled = false;
+                            saveBtn.disabled = false;
                             status.textContent = 'Network error.';
                             status.style.color = '#dc2626';
                         });

@@ -7,12 +7,43 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-01 (v1.5.216.43)
+> **Last updated:** 2026-05-01 (v1.5.216.44)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.44 — Schema Blocks save button silent-fail (nested form stripped)
+
+**Date:** 2026-05-01
+**Commit:** `[pending]`
+
+### Bug
+
+Found via Browserbase live test on staging VPS. Clicked the "Save Schema Blocks" button after filling Product fields — button claimed "clicked" but status field stayed empty. The save did nothing. Root cause: the metabox renders inside the WordPress post-edit `<form>` element; my `<form id="sb-schema-blocks-form">` was a NESTED form. Browsers and WordPress both strip nested form tags (DOM spec forbids them, KSES enforces it). Result: the form tag was silently removed from the rendered HTML, my JS `getElementById('sb-schema-blocks-form')` returned null, the submit handler never bound, button click did nothing.
+
+### Fix
+
+Three changes:
+1. `<form id="sb-schema-blocks-form">` → `<div id="sb-schema-blocks-form">` so WP doesn't strip it
+2. Save button `type="submit"` → `type="button"` so a stray click doesn't accidentally submit the parent post-edit form
+3. JS handler — bind to button click (not form submit). Walk inputs via `querySelectorAll('input[name^="blocks["]...`) to build payload (FormData only works on real `<form>` elements). Checkbox state correctly serialised: write `'1'` when checked, omit when not (matches PHP `empty()` server-side check)
+
+### Verify (file:method anchors)
+
+```bash
+grep -n "sb-schema-blocks-form\|sb-schema-blocks-save" seobetter/seobetter.php
+# Should show: <div id="sb-schema-blocks-form">, <button type="button" id="sb-schema-blocks-save">
+```
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+
+**Verified by user:** UNTESTED
 
 ---
 
