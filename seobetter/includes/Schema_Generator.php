@@ -418,10 +418,34 @@ class Schema_Generator {
             }
         }
 
-        // LocalBusiness — auto-detect from content with addresses
-        $local = $this->generate_localbusiness_schemas( $post );
-        foreach ( $local as $lb ) {
-            $schemas[] = $lb;
+        // v1.5.216.29 — Phase 1 item 10: User-edited Schema Blocks override
+        // auto-detection. Read manually-curated blocks first; track which
+        // @types the user has explicitly defined so we skip auto-detect for
+        // those types (avoiding duplicate / conflicting nodes in @graph).
+        $manual_blocks    = Schema_Blocks_Manager::build_all_jsonld( $post->ID );
+        $manual_types_set = [];
+        foreach ( $manual_blocks as $node ) {
+            $t = $node['@type'] ?? '';
+            if ( is_string( $t ) ) $manual_types_set[ $t ] = true;
+            elseif ( is_array( $t ) ) {
+                foreach ( $t as $sub ) if ( is_string( $sub ) ) $manual_types_set[ $sub ] = true;
+            }
+            $schemas[] = $node;
+        }
+        $has_manual = function ( array $check_types ) use ( $manual_types_set ): bool {
+            foreach ( $check_types as $t ) {
+                if ( ! empty( $manual_types_set[ $t ] ) ) return true;
+            }
+            return false;
+        };
+
+        // LocalBusiness — auto-detect from content with addresses (skip if
+        // manual block already supplied LocalBusiness/Restaurant/Store/etc.)
+        if ( ! $has_manual( [ 'LocalBusiness', 'Restaurant', 'Store', 'FoodEstablishment', 'LodgingBusiness' ] ) ) {
+            $local = $this->generate_localbusiness_schemas( $post );
+            foreach ( $local as $lb ) {
+                $schemas[] = $lb;
+            }
         }
 
         // v1.5.119 — Content-detected schemas (triggered by what's IN the article)
@@ -441,10 +465,12 @@ class Schema_Generator {
             $schemas[] = $software;
         }
 
-        // Event — content has future date + location + event name
-        $event = $this->detect_event_schema( $post, $content, $content_type );
-        if ( $event ) {
-            $schemas[] = $event;
+        // Event — content has future date + location + event name (skip if manual)
+        if ( ! $has_manual( [ 'Event' ] ) ) {
+            $event = $this->detect_event_schema( $post, $content, $content_type );
+            if ( $event ) {
+                $schemas[] = $event;
+            }
         }
 
         // ImageObject — license metadata for article images
@@ -484,10 +510,12 @@ class Schema_Generator {
         }
 
         // v1.5.135 — New content-detected schema types
-        // Product — review/buying_guide/comparison with prices
-        $product = $this->detect_product_schema( $post, $content, $content_type, $category );
-        if ( $product ) {
-            $schemas[] = $product;
+        // Product — review/buying_guide/comparison with prices (skip if manual)
+        if ( ! $has_manual( [ 'Product' ] ) ) {
+            $product = $this->detect_product_schema( $post, $content, $content_type, $category );
+            if ( $product ) {
+                $schemas[] = $product;
+            }
         }
 
         // Organization — press_release/case_study/sponsored
@@ -508,16 +536,21 @@ class Schema_Generator {
             $schemas[] = $factcheck;
         }
 
-        // JobPosting — content with job listings
-        $job = $this->detect_job_schema( $post, $content, $content_type );
-        if ( $job ) {
-            $schemas[] = $job;
+        // JobPosting — content with job listings (skip if manual)
+        if ( ! $has_manual( [ 'JobPosting' ] ) ) {
+            $job = $this->detect_job_schema( $post, $content, $content_type );
+            if ( $job ) {
+                $schemas[] = $job;
+            }
         }
 
         // VacationRental / LodgingBusiness — travel content with accommodation
-        $vacation = $this->detect_vacation_rental_schema( $post, $content, $content_type, $category );
-        if ( $vacation ) {
-            $schemas[] = $vacation;
+        // (skip if manual VacationRental/LodgingBusiness block supplied)
+        if ( ! $has_manual( [ 'VacationRental', 'LodgingBusiness' ] ) ) {
+            $vacation = $this->detect_vacation_rental_schema( $post, $content, $content_type, $category );
+            if ( $vacation ) {
+                $schemas[] = $vacation;
+            }
         }
 
         // v1.5.212 — Top-level E-E-A-T Organization + Person entities on every article.

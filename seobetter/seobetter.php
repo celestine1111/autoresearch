@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.28
+ * Version: 1.5.216.29
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.28' );
+define( 'SEOBETTER_VERSION', '1.5.216.29' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -548,6 +548,17 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
+        // v1.5.216.29 — Phase 1 item 10: Schema Blocks save endpoint.
+        // Receives { blocks: { product: {...}, event: {...}, ... } } JSON
+        // and persists via Schema_Blocks_Manager. Pro+ gated at handler level.
+        register_rest_route( 'seobetter/v1', '/schema-blocks/(?P<post_id>\d+)', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_schema_blocks' ],
+            'permission_callback' => function ( \WP_REST_Request $request ) {
+                $post_id = (int) $request->get_param( 'post_id' );
+                return $post_id && current_user_can( 'edit_post', $post_id );
+            },
+        ]);
         register_rest_route( 'seobetter/v1', '/refresh/(?P<post_id>\d+)', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_refresh_post' ],
@@ -996,6 +1007,19 @@ final class SEOBetter {
             'failed_quality' => (int) ( $batch['failed_quality'] ?? 0 ),
             'queue_mode'     => $batch['queue_mode'] ?? 'ajax',
         ] );
+    }
+
+    /**
+     * v1.5.216.29 — Phase 1 item 10: Save Schema Blocks for a post.
+     */
+    public function rest_save_schema_blocks( \WP_REST_Request $request ): \WP_REST_Response {
+        $post_id = (int) $request->get_param( 'post_id' );
+        $blocks  = $request->get_param( 'blocks' );
+        if ( ! is_array( $blocks ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Invalid payload — `blocks` must be an object.' ], 400 );
+        }
+        $result = SEOBetter\Schema_Blocks_Manager::save_all( $post_id, $blocks );
+        return new \WP_REST_Response( $result, ! empty( $result['success'] ) ? 200 : 403 );
     }
 
     public function rest_refresh_post( \WP_REST_Request $request ): \WP_REST_Response {
@@ -4612,6 +4636,104 @@ final class SEOBetter {
     }
 
     /**
+     * v1.5.216.29 — Phase 1 item 10: Per-type field definitions for the
+     * Schema Blocks metabox tab. Returns an ordered map of
+     * field_name → ['label' => …, 'type' => 'text|select|textarea|checkbox|date|datetime',
+     * 'required' => bool, 'options' => […], 'placeholder' => …, 'hint' => …].
+     *
+     * Required fields per `structured-data.md` §4 + Google Rich Results docs.
+     */
+    public static function schema_block_field_defs( string $type ): array {
+        switch ( $type ) {
+            case 'product':
+                return [
+                    'name'         => [ 'label' => 'Name',          'type' => 'text',     'required' => true,  'placeholder' => 'Acme Trail Runner Pro' ],
+                    'description'  => [ 'label' => 'Description',   'type' => 'textarea' ],
+                    'brand'        => [ 'label' => 'Brand',         'type' => 'text',     'placeholder' => 'Acme' ],
+                    'image_url'    => [ 'label' => 'Image URL',     'type' => 'url' ],
+                    'sku'          => [ 'label' => 'SKU',           'type' => 'text' ],
+                    'mpn'          => [ 'label' => 'MPN',           'type' => 'text' ],
+                    'gtin'         => [ 'label' => 'GTIN',          'type' => 'text' ],
+                    'price'        => [ 'label' => 'Price',         'type' => 'text',     'required' => true,  'placeholder' => '129.00' ],
+                    'currency'     => [ 'label' => 'Currency',      'type' => 'text',     'required' => true,  'placeholder' => 'USD' ],
+                    'availability' => [ 'label' => 'Availability',  'type' => 'select',   'options' => [ 'InStock', 'OutOfStock', 'PreOrder', 'BackOrder', 'Discontinued' ] ],
+                    'condition'    => [ 'label' => 'Condition',     'type' => 'select',   'options' => [ 'NewCondition', 'UsedCondition', 'RefurbishedCondition' ] ],
+                    'rating_value' => [ 'label' => 'Rating value',  'type' => 'text',     'placeholder' => '4.6' ],
+                    'rating_count' => [ 'label' => 'Review count',  'type' => 'number',   'placeholder' => '128' ],
+                ];
+            case 'event':
+                return [
+                    'name'             => [ 'label' => 'Name',           'type' => 'text',     'required' => true ],
+                    'description'      => [ 'label' => 'Description',    'type' => 'textarea' ],
+                    'start_date'       => [ 'label' => 'Start',          'type' => 'datetime-local', 'required' => true ],
+                    'end_date'         => [ 'label' => 'End',            'type' => 'datetime-local' ],
+                    'event_status'     => [ 'label' => 'Status',         'type' => 'select',   'options' => [ 'EventScheduled', 'EventPostponed', 'EventCancelled', 'EventMovedOnline', 'EventRescheduled' ] ],
+                    'attendance_mode'  => [ 'label' => 'Mode',           'type' => 'select',   'options' => [ 'OfflineEventAttendanceMode', 'OnlineEventAttendanceMode', 'MixedEventAttendanceMode' ] ],
+                    'location_name'    => [ 'label' => 'Location name',  'type' => 'text',     'required' => true ],
+                    'location_address' => [ 'label' => 'Location addr',  'type' => 'textarea' ],
+                    'organizer_name'   => [ 'label' => 'Organizer',      'type' => 'text' ],
+                    'organizer_url'    => [ 'label' => 'Organizer URL',  'type' => 'url' ],
+                    'offers_url'       => [ 'label' => 'Tickets URL',    'type' => 'url' ],
+                    'offers_price'     => [ 'label' => 'Ticket price',   'type' => 'text' ],
+                    'offers_currency'  => [ 'label' => 'Ticket curr.',   'type' => 'text',     'placeholder' => 'USD' ],
+                ];
+            case 'localbusiness':
+                return [
+                    'business_type'    => [ 'label' => 'Type',           'type' => 'select',   'options' => [ 'LocalBusiness', 'Restaurant', 'Store', 'FoodEstablishment', 'CafeOrCoffeeShop', 'Bakery', 'BarOrPub', 'AutomotiveBusiness', 'HealthAndBeautyBusiness', 'MedicalBusiness', 'ProfessionalService', 'HomeAndConstructionBusiness' ] ],
+                    'name'             => [ 'label' => 'Name',           'type' => 'text',     'required' => true ],
+                    'description'      => [ 'label' => 'Description',    'type' => 'textarea' ],
+                    'street_address'   => [ 'label' => 'Street address', 'type' => 'text',     'required' => true ],
+                    'locality'         => [ 'label' => 'City',           'type' => 'text' ],
+                    'region'           => [ 'label' => 'State/Region',   'type' => 'text' ],
+                    'postal_code'      => [ 'label' => 'Postal code',    'type' => 'text' ],
+                    'country'          => [ 'label' => 'Country (ISO)',  'type' => 'text',     'placeholder' => 'US' ],
+                    'telephone'        => [ 'label' => 'Telephone',      'type' => 'text' ],
+                    'image_url'        => [ 'label' => 'Image URL',      'type' => 'url' ],
+                    'opening_hours'    => [ 'label' => 'Opening hours',  'type' => 'textarea', 'placeholder' => "Mo-Fr 09:00-17:00\nSa 10:00-14:00" ],
+                    'price_range'      => [ 'label' => 'Price range',    'type' => 'text',     'placeholder' => '$$' ],
+                    'latitude'         => [ 'label' => 'Latitude',       'type' => 'text',     'placeholder' => '40.7128' ],
+                    'longitude'        => [ 'label' => 'Longitude',      'type' => 'text',     'placeholder' => '-74.0060' ],
+                ];
+            case 'vacationrental':
+                return [
+                    'name'             => [ 'label' => 'Name',           'type' => 'text',     'required' => true ],
+                    'description'      => [ 'label' => 'Description',    'type' => 'textarea' ],
+                    'street_address'   => [ 'label' => 'Street address', 'type' => 'text',     'required' => true ],
+                    'locality'         => [ 'label' => 'City',           'type' => 'text' ],
+                    'region'           => [ 'label' => 'State/Region',   'type' => 'text' ],
+                    'postal_code'      => [ 'label' => 'Postal code',    'type' => 'text' ],
+                    'country'          => [ 'label' => 'Country (ISO)',  'type' => 'text' ],
+                    'image_url'        => [ 'label' => 'Image URL',      'type' => 'url' ],
+                    'number_of_rooms'  => [ 'label' => '# of rooms',     'type' => 'number' ],
+                    'occupancy_max'    => [ 'label' => 'Max occupancy',  'type' => 'number' ],
+                    'amenities'        => [ 'label' => 'Amenities',      'type' => 'textarea', 'placeholder' => "WiFi\nPool\nKitchen\nParking" ],
+                    'price_range'      => [ 'label' => 'Price range',    'type' => 'text',     'placeholder' => '$$$' ],
+                    'pet_friendly'     => [ 'label' => 'Pet friendly',   'type' => 'checkbox', 'hint' => 'Pets allowed' ],
+                ];
+            case 'jobposting':
+                return [
+                    'title'                   => [ 'label' => 'Title',                'type' => 'text',     'required' => true ],
+                    'description'             => [ 'label' => 'Description',          'type' => 'textarea', 'required' => true ],
+                    'date_posted'             => [ 'label' => 'Date posted',          'type' => 'date',     'required' => true ],
+                    'valid_through'           => [ 'label' => 'Valid through',        'type' => 'date' ],
+                    'employment_type'         => [ 'label' => 'Employment',           'type' => 'select',   'options' => [ 'FULL_TIME', 'PART_TIME', 'CONTRACTOR', 'TEMPORARY', 'INTERN', 'VOLUNTEER', 'PER_DIEM', 'OTHER' ] ],
+                    'hiring_organization'     => [ 'label' => 'Hiring company',       'type' => 'text',     'required' => true ],
+                    'hiring_organization_url' => [ 'label' => 'Company URL',          'type' => 'url' ],
+                    'job_location_address'    => [ 'label' => 'Job address',          'type' => 'text' ],
+                    'job_location_locality'   => [ 'label' => 'Job city',             'type' => 'text' ],
+                    'job_location_region'     => [ 'label' => 'Job region',           'type' => 'text' ],
+                    'job_location_country'    => [ 'label' => 'Job country (ISO)',    'type' => 'text' ],
+                    'remote_ok'               => [ 'label' => 'Remote OK',            'type' => 'checkbox', 'hint' => 'Telecommute eligible' ],
+                    'salary_min'              => [ 'label' => 'Min salary',           'type' => 'text' ],
+                    'salary_max'              => [ 'label' => 'Max salary',           'type' => 'text' ],
+                    'salary_currency'         => [ 'label' => 'Currency',             'type' => 'text',     'placeholder' => 'USD' ],
+                    'salary_unit'             => [ 'label' => 'Salary unit',          'type' => 'select',   'options' => [ 'HOUR', 'DAY', 'WEEK', 'MONTH', 'YEAR' ] ],
+                ];
+        }
+        return [];
+    }
+
+    /**
      * Add SEOBetter column to posts/pages list.
      */
     public function add_posts_columns( array $columns ): array {
@@ -4880,6 +5002,7 @@ final class SEOBetter {
                 <button type="button" class="sb-meta-tab" data-tab="analysis" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Page Analysis</button>
                 <button type="button" class="sb-meta-tab" data-tab="readability" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Readability</button>
                 <button type="button" class="sb-meta-tab" data-tab="richresults" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Rich Results</button>
+                <button type="button" class="sb-meta-tab" data-tab="schemablocks" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Schema Blocks<?php echo SEOBetter\License_Manager::can_use( 'schema_blocks_5' ) ? '' : ' 🔒'; ?></button>
                 <div style="margin-left:auto;display:flex;align-items:center;padding-right:16px;gap:8px">
                     <span style="font-size:13px;font-weight:700;color:<?php echo esc_attr( $score_color ); ?>"><?php echo esc_html( $score ); ?>/100</span>
                     <span style="font-size:11px;padding:2px 8px;background:<?php echo esc_attr( $score_color ); ?>20;color:<?php echo esc_attr( $score_color ); ?>;border-radius:4px;font-weight:600"><?php echo esc_html( $grade ); ?></span>
@@ -5803,6 +5926,154 @@ final class SEOBetter {
                         Rich Results data unavailable. Save the post to generate schema.
                     </div>
                 <?php } ?>
+            </div>
+
+            <!-- v1.5.216.29 — Phase 1 item 10: Schema Blocks Tab (Pro+ gated).
+                 5 user-editable structured-data panels — Product / Event /
+                 LocalBusiness / VacationRental / JobPosting. Each panel has an
+                 enable toggle; saved blocks override Schema_Generator's
+                 auto-detection for the same @type. Free/Pro users see a locked
+                 upsell card. -->
+            <div class="sb-meta-panel" data-panel="schemablocks" style="padding:20px;display:none">
+                <?php
+                $can_blocks = SEOBetter\License_Manager::can_use( 'schema_blocks_5' );
+                $saved_blocks = SEOBetter\Schema_Blocks_Manager::get_all( $post->ID );
+                ?>
+
+                <?php if ( ! $can_blocks ) : ?>
+                <div style="padding:20px;background:linear-gradient(135deg,#f5f3ff 0%,#fdf4ff 100%);border:2px solid #c4b5fd;border-radius:8px;text-align:center">
+                    <div style="font-size:32px;margin-bottom:8px">🔒</div>
+                    <div style="font-size:16px;font-weight:700;color:#5b21b6;margin-bottom:6px">Schema Blocks require Pro+</div>
+                    <p style="margin:0 0 12px;font-size:13px;color:#6b21a8">Manually fill in authoritative Product / Event / LocalBusiness / VacationRental / JobPosting structured data — overrides AI auto-detection for high-stakes pages where exact SKU, price, salary, address values matter for Google Rich Results compliance.</p>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>" class="button" style="background:#7c3aed;color:#fff;border-color:#7c3aed">Upgrade to Pro+ &rarr;</a>
+                </div>
+                <?php else : ?>
+
+                <div style="margin-bottom:16px;padding:12px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;font-size:12px;color:#065f46">
+                    <strong>How this works:</strong> Enabled blocks emit JSON-LD into the @graph and <strong>override</strong> Schema_Generator's auto-detection for the same @type. Required fields are marked <span style="color:#dc2626">*</span> — blocks with missing required fields are silently skipped (we never emit invalid schema).
+                </div>
+
+                <form id="sb-schema-blocks-form" data-post-id="<?php echo esc_attr( $post->ID ); ?>">
+                    <?php wp_nonce_field( 'wp_rest', '_sb_schema_blocks_nonce' ); ?>
+
+                    <?php
+                    // Render each block as a collapsible <details> panel
+                    $blocks_meta = [
+                        'product'        => [ 'icon' => '🛒', 'label' => 'Product', 'note' => 'Required: name, price, currency. Recommended: image, brand, SKU, availability.' ],
+                        'event'          => [ 'icon' => '📅', 'label' => 'Event', 'note' => 'Required: name, startDate, location (name OR address).' ],
+                        'localbusiness'  => [ 'icon' => '🏢', 'label' => 'LocalBusiness', 'note' => 'Required: name, address (street OR locality). Recommended: telephone, openingHours, priceRange.' ],
+                        'vacationrental' => [ 'icon' => '🏖️', 'label' => 'Vacation Rental', 'note' => 'Required: name, address. Recommended: numberOfRooms, occupancy, amenities.' ],
+                        'jobposting'     => [ 'icon' => '💼', 'label' => 'Job Posting', 'note' => 'Required: title, description, datePosted, hiringOrganization. Recommended: jobLocation, baseSalary, employmentType.' ],
+                    ];
+
+                    foreach ( $blocks_meta as $type => $meta ) :
+                        $b = $saved_blocks[ $type ] ?? [];
+                        $enabled = ! empty( $b['enabled'] );
+                    ?>
+                    <details style="margin-bottom:8px;border:1px solid #e5e7eb;border-radius:6px;background:#fff" <?php echo $enabled ? 'open' : ''; ?>>
+                        <summary style="padding:10px 12px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:8px;list-style:none">
+                            <span style="font-size:18px"><?php echo esc_html( $meta['icon'] ); ?></span>
+                            <span><?php echo esc_html( $meta['label'] ); ?></span>
+                            <?php if ( $enabled ) : ?>
+                                <span style="margin-left:auto;font-size:10px;padding:2px 8px;background:#ecfdf5;color:#065f46;border-radius:8px;font-weight:700">ENABLED</span>
+                            <?php endif; ?>
+                        </summary>
+                        <div style="padding:12px;border-top:1px solid #f3f4f6">
+                            <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13px">
+                                <input type="checkbox" name="blocks[<?php echo esc_attr( $type ); ?>][enabled]" value="1" <?php checked( $enabled ); ?> />
+                                Enable this block
+                            </label>
+                            <div style="font-size:11px;color:#6b7280;margin-bottom:10px"><?php echo esc_html( $meta['note'] ); ?></div>
+
+                            <?php
+                            // Per-type field rendering (compact key-value form)
+                            $field_defs = self::schema_block_field_defs( $type );
+                            foreach ( $field_defs as $field => $def ) :
+                                $val = $b[ $field ] ?? '';
+                                $name = sprintf( 'blocks[%s][%s]', $type, $field );
+                            ?>
+                                <div style="display:grid;grid-template-columns:140px 1fr;gap:8px;margin-bottom:6px;align-items:start">
+                                    <label style="font-size:12px;color:#374151;padding-top:6px"><?php echo esc_html( $def['label'] ); ?><?php echo ! empty( $def['required'] ) ? ' <span style="color:#dc2626">*</span>' : ''; ?></label>
+                                    <?php if ( $def['type'] === 'textarea' ) : ?>
+                                        <textarea name="<?php echo esc_attr( $name ); ?>" rows="2" style="padding:6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px"><?php echo esc_textarea( (string) $val ); ?></textarea>
+                                    <?php elseif ( $def['type'] === 'select' ) : ?>
+                                        <select name="<?php echo esc_attr( $name ); ?>" style="padding:6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">
+                                            <option value="">—</option>
+                                            <?php foreach ( $def['options'] as $opt ) : ?>
+                                                <option value="<?php echo esc_attr( $opt ); ?>" <?php selected( $val, $opt ); ?>><?php echo esc_html( $opt ); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php elseif ( $def['type'] === 'checkbox' ) : ?>
+                                        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding-top:4px">
+                                            <input type="checkbox" name="<?php echo esc_attr( $name ); ?>" value="1" <?php checked( ! empty( $val ) ); ?> />
+                                            <?php echo esc_html( $def['hint'] ?? '' ); ?>
+                                        </label>
+                                    <?php else : ?>
+                                        <input type="<?php echo esc_attr( $def['type'] ); ?>" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( (string) $val ); ?>" placeholder="<?php echo esc_attr( $def['placeholder'] ?? '' ); ?>" style="padding:6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px" />
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </details>
+                    <?php endforeach; ?>
+
+                    <div style="margin-top:16px;display:flex;gap:8px;align-items:center">
+                        <button type="submit" class="button button-primary" id="sb-schema-blocks-save">Save Schema Blocks</button>
+                        <span id="sb-schema-blocks-status" style="font-size:12px;color:#6b7280"></span>
+                    </div>
+                </form>
+
+                <script>
+                (function() {
+                    var form = document.getElementById('sb-schema-blocks-form');
+                    if (!form) return;
+                    form.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        var btn = document.getElementById('sb-schema-blocks-save');
+                        var status = document.getElementById('sb-schema-blocks-status');
+                        btn.disabled = true;
+                        status.textContent = 'Saving…';
+                        status.style.color = '#6b7280';
+
+                        var fd = new FormData(form);
+                        // Reshape FormData → nested blocks object for clean JSON
+                        var payload = { blocks: {} };
+                        for (var pair of fd.entries()) {
+                            var m = pair[0].match(/^blocks\[(\w+)\]\[(\w+)\]$/);
+                            if (m) {
+                                if (!payload.blocks[m[1]]) payload.blocks[m[1]] = {};
+                                payload.blocks[m[1]][m[2]] = pair[1];
+                            }
+                        }
+
+                        fetch('<?php echo esc_url( rest_url( 'seobetter/v1/schema-blocks/' . $post->ID ) ); ?>', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-WP-Nonce': document.querySelector('[name="_sb_schema_blocks_nonce"]').value
+                            },
+                            body: JSON.stringify(payload)
+                        })
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            btn.disabled = false;
+                            if (data && data.success) {
+                                status.textContent = '✓ Saved. Re-save the post to refresh the @graph.';
+                                status.style.color = '#059669';
+                            } else {
+                                status.textContent = (data && data.error) || 'Save failed.';
+                                status.style.color = '#dc2626';
+                            }
+                        })
+                        .catch(function() {
+                            btn.disabled = false;
+                            status.textContent = 'Network error.';
+                            status.style.color = '#dc2626';
+                        });
+                    });
+                })();
+                </script>
+                <?php endif; ?>
             </div>
         </div>
 

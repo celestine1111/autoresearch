@@ -340,6 +340,30 @@ Prior to v1.5.210, `SPEAKABLE_TYPES` was `[blog_post, news_article, opinion, pil
 
 Sponsored deliberately remains excluded per Google policy — voice assistants should not read paid placements without audible disclosure.
 
+### 4.X User-edited Schema Blocks (v1.5.216.29 — Phase 1 item 10)
+
+`Schema_Blocks_Manager` exposes 5 user-editable structured-data blocks for **Pro+ ($69/mo) and Agency ($179/mo)** tiers. These OVERRIDE `Schema_Generator`'s auto-detection for the same `@type` — when a user has manually filled in authoritative values, the heuristic regex parser is skipped for that type.
+
+**Why the override pattern (not merge):** If both fired, the @graph would contain conflicting nodes (auto-detected price `$129` from prose vs user-entered `$129.00` with currency=USD). Google Rich Results would flag the inconsistency. Override = single source of truth per @type per post.
+
+| Block (`Schema_Blocks_Manager::BLOCK_TYPES`) | Emitted @type | Required fields (Google) | Skipped auto-detect when user block enabled |
+|---|---|---|---|
+| `product` | `Product` | name, offers.price, offers.priceCurrency, offers.availability | `Schema_Generator::detect_product_schema()` |
+| `event` | `Event` | name, startDate, location.name OR location.address | `Schema_Generator::detect_event_schema()` |
+| `localbusiness` | `LocalBusiness` (or sub-type — Restaurant / Store / FoodEstablishment / etc.) | name, address (street OR locality) | `Schema_Generator::generate_localbusiness_schemas()` (skipped for ALL Local* sub-types when manual block present) |
+| `vacationrental` | `LodgingBusiness` + `VacationRental` (multi-type array) | name, address | `Schema_Generator::detect_vacation_rental_schema()` |
+| `jobposting` | `JobPosting` | title, description, datePosted, hiringOrganization.name | `Schema_Generator::detect_job_schema()` |
+
+**Storage:** `_seobetter_schema_blocks` post meta (single array keyed by block_type slug). Each block has `enabled` flag + per-field values. `enabled = false` preserves the user's inputs without emitting JSON-LD (so toggling off doesn't lose data).
+
+**Validation:** `Schema_Blocks_Manager::build_jsonld()` returns null when required fields are missing — we never emit invalid schema (better silent skip than Rich Results Test failure).
+
+**Field defs:** see `SEOBetter::schema_block_field_defs()` in `seobetter.php` for the per-type field schema (label, type, required, options for select fields). Keep in sync with the per-block sanitizer schema in `Schema_Blocks_Manager::sanitize_block()`.
+
+**Auto-detect remains** for users without Pro+ — the heuristic auto-detection of all 5 types continues to work for Free/Pro tier. Pro+ adds the manual override surface, not the underlying detection.
+
+**REST endpoint:** `POST /seobetter/v1/schema-blocks/{post_id}` with payload `{ blocks: { product: {...}, event: {...}, ... } }`. Pro+ gated at handler level via `License_Manager::can_use('schema_blocks_5')`.
+
 ---
 
 ## 5. CONTENT TYPE → SCHEMA TYPE MAPPING

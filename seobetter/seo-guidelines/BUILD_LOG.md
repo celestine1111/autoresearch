@@ -7,12 +7,85 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.28)
+> **Last updated:** 2026-04-30 (v1.5.216.29)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.29 — 5 Schema Blocks (Phase 1 item 10) — Pro+ user-editable structured data
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+`Schema_Generator` already auto-detects Product / Event / LocalBusiness / VacationRental / JobPosting from article content via heuristic regex. That works well enough for casual content but is unreliable for high-stakes pages: an actual product listing needs an exact SKU, currency, and availability state — not a guess from "$129" found in prose. A real job posting needs `employmentType` + `baseSalary` structure that Google REJECTS if mistyped.
+
+Item 10 ships **5 user-editable Schema Blocks** for Pro+ ($69/mo) and Agency ($179/mo) tiers — each block lets the user manually fill authoritative values that **override** auto-detection for the same `@type`. Single source of truth per @type per post; no merge conflicts.
+
+### What shipped
+
+- **`Schema_Blocks_Manager` class** — `seobetter/includes/Schema_Blocks_Manager.php` (new, ~430 lines)
+  - `Schema_Blocks_Manager::BLOCK_TYPES` — `[ 'product', 'event', 'localbusiness', 'vacationrental', 'jobposting' ]`
+  - `get_all($post_id)` / `get($post_id, $type)` line ~50/68 — read accessors
+  - `save_all($post_id, $blocks)` line ~80 — Pro+ gated (`License_Manager::can_use('schema_blocks_5')`); per-type sanitization via `sanitize_block()`
+  - `build_all_jsonld($post_id)` line ~210 — assembles JSON-LD for all enabled blocks; skips disabled and invalid (missing required) blocks silently
+  - `build_jsonld($type, $b)` line ~227 — dispatcher to per-type builders
+  - 5 per-type builders (`build_product_jsonld()`, `build_event_jsonld()`, `build_localbusiness_jsonld()`, `build_vacationrental_jsonld()`, `build_jobposting_jsonld()`) — each enforces required fields per `structured-data.md §4`; returns null on missing required → no invalid schema ever emitted
+  - Storage: `_seobetter_schema_blocks` post meta (single array keyed by block_type slug). `enabled` flag preserves user inputs when toggled off
+
+- **Schema_Generator integration** — `seobetter/includes/Schema_Generator.php::generate()`
+  - Reads manual blocks first via `Schema_Blocks_Manager::build_all_jsonld()`; tracks `$manual_types_set` of @types the user has explicitly defined
+  - 5 auto-detect call sites now wrapped in `if ( ! $has_manual( [...] ) )` guards → manual block bypasses heuristic detection for same @type
+  - Override pattern (not merge) prevents conflicting/duplicate nodes in @graph
+
+- **Metabox "Schema Blocks" tab** — `seobetter/seobetter.php::render_metabox()` ~line 4882
+  - 5th tab added after Rich Results; tab label shows 🔒 emoji for Free/Pro users
+  - Free/Pro users see locked Pro+ upsell card with value prop ("Manually fill in authoritative … structured data — overrides AI auto-detection for high-stakes pages where exact SKU, price, salary, address values matter")
+  - Pro+/Agency: 5 collapsible `<details>` panels (auto-open when block enabled); each panel has enable toggle + per-type field grid. Required fields marked `*`. Save button POSTs to REST endpoint
+
+- **Field definitions** — `seobetter/seobetter.php::schema_block_field_defs( string $type ): array`
+  - Per-type ordered field map: label, type (text/select/textarea/checkbox/date/datetime/url/number), required flag, options (for selects), placeholder, hint
+  - Product: 13 fields. Event: 13 fields. LocalBusiness: 14 fields. VacationRental: 13 fields. JobPosting: 16 fields
+  - Keep in sync with `Schema_Blocks_Manager::sanitize_block()` schema map (drift between the two = silent data loss)
+
+- **REST endpoint** — `seobetter/seobetter.php::rest_save_schema_blocks()`
+  - Route: `POST /seobetter/v1/schema-blocks/{post_id}`
+  - Payload: `{ blocks: { product: {...}, event: {...}, ... } }`
+  - Capability check: `current_user_can('edit_post', $post_id)` AT THE PERMISSION LAYER + Pro+ feature gate at handler layer (defense in depth)
+  - Returns 403 on tier mismatch; 400 on malformed payload; 200 on success with sanitized blocks echoed back
+
+### Verify (file:method anchors)
+
+```bash
+# Manager class
+grep -n "public static function save_all\|public static function build_all_jsonld\|public static function build_jsonld\|BLOCK_TYPES" seobetter/includes/Schema_Blocks_Manager.php
+
+# Schema_Generator override integration
+grep -n "Schema_Blocks_Manager::build_all_jsonld\|has_manual" seobetter/includes/Schema_Generator.php
+
+# Metabox tab + REST endpoint + field defs
+grep -n "schemablocks\|schema_block_field_defs\|rest_save_schema_blocks\|/schema-blocks/" seobetter/seobetter.php
+```
+
+### Tier gating
+
+- Pro+ ($69/mo) and Agency ($179/mo) — `License_Manager::PROPLUS_FEATURES` includes `schema_blocks_5`
+- Free/Pro: tab visible with 🔒, panel shows upsell. REST endpoint rejects with 403. `Schema_Generator::generate()` continues to use auto-detect (no regression for non-Pro+ users)
+- Phase 1 testing path (`SEOBETTER_GATE_LIVE = false`): all gates return true, so Ben can test the full Pro+ surface with no license
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- structured-data.md §4.X (new): 5-block override matrix, required fields, storage shape, override-not-merge rationale, REST endpoint spec
+- SEO-GEO-AI-GUIDELINES.md §10.4: bullet added pointing to structured-data.md §4.X
+- article_design.md §11: 4th data source noted (manual blocks override auto-detection but don't change per-type CSS variation; visual rendering unchanged)
+
+**Verified by user:** UNTESTED
 
 ---
 

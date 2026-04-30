@@ -755,7 +755,7 @@ Each content type affects **three layers** of the generated article:
 
 1. **Prompt guidance** — `Async_Generator::get_prose_template()` injects type-specific writing rules into every section prompt
 2. **Styled block detection** — `Content_Formatter::format_hybrid()` applies different inline styles based on heading context
-3. **Schema output** — `Schema_Generator::generate()` in `includes/Schema_Generator.php` AND `build_aioseo_schema()` in `seobetter.php` emit different `@type` values and secondary schemas
+3. **Schema output** — `Schema_Generator::generate()` in `includes/Schema_Generator.php` AND `build_aioseo_schema()` in `seobetter.php` emit different `@type` values and secondary schemas. **v1.5.216.29 (Pro+/Agency)** adds a 4th data source: user-edited Schema Blocks (`Schema_Blocks_Manager`) — Product / Event / LocalBusiness / VacationRental / JobPosting panels in the metabox. Manual blocks override auto-detection for the same @type but emit no per-type CSS variation; visual rendering is unchanged. See `structured-data.md §4.X`.
 
 ### Type-badge localization (v1.5.206d-fix8)
 
