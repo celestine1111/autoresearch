@@ -7,12 +7,96 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.30)
+> **Last updated:** 2026-04-30 (v1.5.216.31)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.31 — llms.txt rewrite + /llms-full.txt + caching (Phase 1 item 12)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+llms.txt is the "robots.txt for AI crawlers" — Claude / ChatGPT / Perplexity / Gemini / regional LLMs (Baidu ERNIE / YandexGPT / Naver HyperCLOVA) read it to discover, parse, and cite content. The pre-rewrite generator emitted a flat list of the 20 most-recent posts with no categorization, no quality filter, no language/country signals, and no caching (re-rendered on every request).
+
+Item 12 rewrites it as a tier-aware generator + adds `/llms-full.txt` (Pro+ comprehensive content dump) + multilingual variants `/{lang}/llms.txt` + 24-hour transient caching with auto-invalidation on every post save.
+
+**Wedge alignment:** This directly maps to `article-marketing.md` Top-10 keyword #6 ("llms.txt wordpress") — having a best-in-class implementation reinforces SEOBetter's positioning on that high-intent keyword.
+
+### Tier matrix
+
+| Tier | Behaviour |
+|---|---|
+| **Free** | Basic flat list of 20 most-recent posts (backward-compatible with pre-rewrite output) |
+| **Pro ($39/mo)** | Optimized — content-type categorization (How-To, Reviews, Buying Guides, etc) + GEO ≥ 40 quality filter + custom site summary + 100-post limit + Primary-Language/Country signal lines + FAQ pointers block |
+| **Pro+ ($69/mo)** | Full — adds `/llms-full.txt` comprehensive markdown dump + multilingual variants `/{lang}/llms.txt` + GEO ≥ 60 quality bar + 200-post limit |
+| **Agency ($179/mo)** | Same as Pro+ (Agency includes everything Pro+ ships) |
+
+### What shipped
+
+- **`LLMS_Txt_Generator` rewrite** — `seobetter/includes/LLMS_Txt_Generator.php` (full rewrite, ~430 lines)
+  - `generate( $language = '' )` — dispatches to render_basic / render_optimized / render_full based on `resolve_tier()`. Reads from transient cache; writes 24h cache on miss
+  - `generate_full()` — Pro+ `/llms-full.txt` content dump. Returns empty string for non-Pro+ (caller serves 403)
+  - `clear_cache()` — invalidates all per-tier + multilingual cache keys
+  - `render_basic()` — Free tier, flat list, backward-compat with pre-rewrite
+  - `render_optimized()` — Pro tier, content-type categorization + GEO ≥ 40 + Primary-Language/Country signal lines + FAQ pointers
+  - `render_full( $language )` — Pro+ tier, all of Pro plus FullContentIndex pointer, multilingual languages list, optional language filter
+  - `render_full_dump()` — Pro+ `/llms-full.txt` body. Markdown-style headings + per-post URL/Last-Modified/GEO-Score/full body
+  - `fetch_posts( $limit, $geo_floor, $language )` — overfetches 2x then filters by GEO score post-meta (legacy posts without GEO data included by default)
+  - `group_by_content_type()` — priority order: how_to → buying_guide → review → comparison → listicle → recipe → faq_page (high-citation-leverage types first)
+  - `faq_pointers_block()` — lists posts with `_seobetter_content_type = 'faq_page'` under "## Direct-Answer Q&A (FAQ)" heading
+  - `detect_site_languages()` — reads distinct `_seobetter_language` post meta for multilingual variant listing
+
+- **Routes & handlers** — `seobetter/seobetter.php`
+  - `register_llms_txt_rewrite()` — adds `^llms-full\.txt$` and `^([a-z]{2})/llms\.txt$` rewrite rules. One-time flush via `seobetter_rewrite_flushed_version` option so upgrades pick up new rules without re-saving permalinks
+  - `serve_llms_txt()` rewritten to branch by query var: `/llms.txt` / `/llms-full.txt` / `/{lang}/llms.txt`. Pro+ gates surface as 403 + plain-text upsell message (LLM-readable)
+  - `Cache-Control: public, max-age=3600` header on all served responses (CDN/edge caching layer above the transient layer)
+  - `clear_llms_txt_cache_on_save()` — `save_post` action handler; skips revisions and non-post/page types
+
+- **Settings UI** — `seobetter/admin/views/settings.php`
+  - Tier-aware status banner: amber/blue/green based on active tier with clear value-prop copy
+  - Free shows upsell pointing at Pro/Pro+ tiers with locked plan §2 prices
+  - Pro/Pro+ get the custom summary textarea (`llms_txt_summary` settings key) + manual "Regenerate now" button
+  - Settings save now invalidates cache so summary changes surface immediately
+
+- **License gates** — already in `License_Manager.php`:
+  - `llms_txt_basic` (FREE_FEATURES line 86)
+  - `llms_txt_optimized` (PRO_FEATURES line 140)
+  - `llms_txt_full`, `llms_txt_multilingual`, `llms_txt_custom_editor` (PROPLUS_FEATURES lines 167-169)
+
+### Verify (file:method anchors)
+
+```bash
+# Generator rewrite
+grep -n "public function generate\|public function generate_full\|public static function clear_cache\|render_basic\|render_optimized\|render_full\|render_full_dump\|faq_pointers_block" seobetter/includes/LLMS_Txt_Generator.php
+
+# Routes + cache invalidation hook
+grep -n "llms_full\|llms_txt\|seobetter_rewrite_flushed_version\|clear_llms_txt_cache_on_save" seobetter/seobetter.php
+
+# Settings UI
+grep -n "llms_txt_summary\|seobetter_llms_clear_cache\|llms_txt_full\|llms_txt_optimized" seobetter/admin/views/settings.php
+```
+
+### Tier gating at request time
+
+- `/llms.txt` — always served (basic for Free, optimized for Pro, full for Pro+)
+- `/llms-full.txt` — 403 + plain-text upsell when tier doesn't include `llms_txt_full`
+- `/{lang}/llms.txt` — 403 + plain-text upsell when tier doesn't include `llms_txt_multilingual`
+
+Phase 1 testing path (`SEOBETTER_GATE_LIVE = false`): all `can_use()` calls return true → Ben sees Pro+ output for testing. Cache key includes resolved tier so flag flip doesn't return stale free-tier output.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No structural changes to SEO-GEO-AI-GUIDELINES / structured-data / article_design needed — llms.txt is a separate content-routing surface for AI crawlers; doesn't affect article generation pipeline, schema mapping, or visual design
+
+**Verified by user:** UNTESTED
 
 ---
 

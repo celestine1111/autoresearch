@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.30
+ * Version: 1.5.216.31
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.30' );
+define( 'SEOBETTER_VERSION', '1.5.216.31' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -92,6 +92,8 @@ final class SEOBetter {
         // llms.txt support
         add_action( 'init', [ $this, 'register_llms_txt_rewrite' ] );
         add_action( 'template_redirect', [ $this, 'serve_llms_txt' ] );
+        // v1.5.216.31 — Phase 1 item 12: cache invalidation on any post save
+        add_action( 'save_post', [ $this, 'clear_llms_txt_cache_on_save' ], 10, 3 );
 
         // Content decay alerts cron
         add_action( 'seobetter_decay_check', [ $this, 'run_decay_check' ] );
@@ -6202,14 +6204,34 @@ final class SEOBetter {
 
     public function register_llms_txt_rewrite(): void {
         add_rewrite_rule( '^llms\.txt$', 'index.php?seobetter_llms_txt=1', 'top' );
+        // v1.5.216.31 — Phase 1 item 12: /llms-full.txt endpoint (Pro+ only)
+        add_rewrite_rule( '^llms-full\.txt$', 'index.php?seobetter_llms_full=1', 'top' );
+        // v1.5.216.31 — Multilingual variants: /en/llms.txt, /ja/llms.txt etc.
+        // (Pro+ only — handler enforces the gate). 2-letter locale code only.
+        add_rewrite_rule( '^([a-z]{2})/llms\.txt$', 'index.php?seobetter_llms_txt=1&seobetter_llms_lang=$matches[1]', 'top' );
         add_filter( 'query_vars', function ( $vars ) {
             $vars[] = 'seobetter_llms_txt';
+            $vars[] = 'seobetter_llms_full';
+            $vars[] = 'seobetter_llms_lang';
             return $vars;
         });
+
+        // v1.5.216.31 — One-time flush after upgrade so existing installs
+        // pick up the new /llms-full.txt + /{lang}/llms.txt rules without
+        // requiring the user to re-save permalinks. Flushes once per version
+        // bump (cheap; transient on hit ensures no repeated flushes).
+        $flushed_for = get_option( 'seobetter_rewrite_flushed_version', '' );
+        if ( $flushed_for !== SEOBETTER_VERSION ) {
+            flush_rewrite_rules( false );
+            update_option( 'seobetter_rewrite_flushed_version', SEOBETTER_VERSION );
+        }
     }
 
     public function serve_llms_txt(): void {
-        if ( ! get_query_var( 'seobetter_llms_txt' ) ) {
+        // v1.5.216.31 — Branch by query var: /llms.txt, /llms-full.txt, or /{lang}/llms.txt
+        $is_full = (bool) get_query_var( 'seobetter_llms_full' );
+        $is_txt  = (bool) get_query_var( 'seobetter_llms_txt' );
+        if ( ! $is_full && ! $is_txt ) {
             return;
         }
         $settings = get_option( 'seobetter_settings', [] );
@@ -6217,10 +6239,48 @@ final class SEOBetter {
             status_header( 404 );
             exit;
         }
+
         $generator = new SEOBetter\LLMS_Txt_Generator();
+
+        if ( $is_full ) {
+            // Pro+ only — empty string returned when caller's tier doesn't include llms_txt_full
+            $output = $generator->generate_full();
+            if ( $output === '' ) {
+                status_header( 403 );
+                header( 'Content-Type: text/plain; charset=utf-8' );
+                echo "/llms-full.txt requires SEOBetter Pro+ ($69/mo). Upgrade at https://seobetter.com/pricing.\n";
+                exit;
+            }
+            header( 'Content-Type: text/plain; charset=utf-8' );
+            header( 'Cache-Control: public, max-age=3600' );
+            echo $output;
+            exit;
+        }
+
+        $lang = (string) get_query_var( 'seobetter_llms_lang' );
+        if ( $lang !== '' && ! \SEOBetter\License_Manager::can_use( 'llms_txt_multilingual' ) ) {
+            // Multilingual variant requested but tier doesn't include it
+            status_header( 403 );
+            header( 'Content-Type: text/plain; charset=utf-8' );
+            echo "/{$lang}/llms.txt requires SEOBetter Pro+ ($69/mo). Default /llms.txt remains available.\n";
+            exit;
+        }
+
         header( 'Content-Type: text/plain; charset=utf-8' );
-        echo $generator->generate();
+        header( 'Cache-Control: public, max-age=3600' );
+        echo $generator->generate( $lang );
         exit;
+    }
+
+    /**
+     * v1.5.216.31 — Phase 1 item 12: cache invalidation on post save.
+     * Wired in __construct() via add_action('save_post', ...). Cheap —
+     * just deletes 4-5 transients via LLMS_Txt_Generator::clear_cache().
+     */
+    public function clear_llms_txt_cache_on_save( int $post_id, \WP_Post $post = null, bool $update = false ): void {
+        if ( $post && $post->post_type !== 'post' && $post->post_type !== 'page' ) return;
+        if ( wp_is_post_revision( $post_id ) ) return;
+        \SEOBetter\LLMS_Txt_Generator::clear_cache();
     }
 }
 

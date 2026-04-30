@@ -62,9 +62,16 @@ if ( isset( $_POST['seobetter_save_settings'] ) && check_admin_referer( 'seobett
         'target_readability' => absint( $_POST['target_readability'] ?? 7 ),
         'geo_engines'        => array_map( 'sanitize_text_field', $_POST['geo_engines'] ?? [] ),
         'llms_txt_enabled'   => ! empty( $_POST['llms_txt_enabled'] ),
+        // v1.5.216.31 — Phase 1 item 12: Pro/Pro+ custom summary persisted to settings
+        'llms_txt_summary'   => sanitize_textarea_field( $_POST['llms_txt_summary'] ?? ( $settings['llms_txt_summary'] ?? '' ) ),
         'tavily_api_key'     => sanitize_text_field( $_POST['tavily_api_key'] ?? '' ),
         'pexels_api_key'     => sanitize_text_field( $_POST['pexels_api_key'] ?? '' ),
     ] );
+    // v1.5.216.31 — invalidate llms.txt cache when settings change so the
+    // new summary / signal lines surface immediately.
+    if ( class_exists( '\\SEOBetter\\LLMS_Txt_Generator' ) ) {
+        \SEOBetter\LLMS_Txt_Generator::clear_cache();
+    }
     // Author bio fields are NOT in this form — don't touch them
     update_option( 'seobetter_settings', $settings );
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'seobetter' ) . '</p></div>';
@@ -430,9 +437,58 @@ $settings = get_option( 'seobetter_settings', [] );
                     <th><?php esc_html_e( 'llms.txt', 'seobetter' ); ?></th>
                     <td>
                         <label><input type="checkbox" name="llms_txt_enabled" value="1" <?php checked( $settings['llms_txt_enabled'] ?? true ); ?> /> <?php esc_html_e( 'Enable llms.txt for AI crawlers', 'seobetter' ); ?></label>
-                        <p class="description"><code><?php echo esc_html( home_url( '/llms.txt' ) ); ?></code></p>
+                        <p class="description">
+                            <code><?php echo esc_html( home_url( '/llms.txt' ) ); ?></code>
+                            <?php if ( SEOBetter\License_Manager::can_use( 'llms_txt_full' ) ) : ?>
+                                · <code><?php echo esc_html( home_url( '/llms-full.txt' ) ); ?></code> <span style="color:#7c3aed;font-weight:600">Pro+</span>
+                            <?php endif; ?>
+                        </p>
+                        <?php
+                        // v1.5.216.31 — Phase 1 item 12: tier-aware status banner.
+                        // Free shows the basic notice; Pro highlights optimized;
+                        // Pro+ shows full + multilingual + custom-summary fields.
+                        $can_optimized = SEOBetter\License_Manager::can_use( 'llms_txt_optimized' );
+                        $can_full      = SEOBetter\License_Manager::can_use( 'llms_txt_full' );
+                        $can_custom    = SEOBetter\License_Manager::can_use( 'llms_txt_custom_editor' );
+                        ?>
+                        <div style="margin-top:10px;padding:10px;background:<?php echo $can_full ? '#ecfdf5' : ( $can_optimized ? '#eff6ff' : '#fef3c7' ); ?>;border-radius:6px;font-size:12px">
+                            <?php if ( $can_full ) : ?>
+                                <strong style="color:#065f46">⚡ Pro+ tier active.</strong> Content-type categorization · GEO ≥ 60 quality filter · multilingual variants · /llms-full.txt comprehensive dump · custom summary editor.
+                            <?php elseif ( $can_optimized ) : ?>
+                                <strong style="color:#1e40af">✨ Pro tier active.</strong> Content-type categorization · GEO ≥ 40 quality filter · custom summary editor. Upgrade to Pro+ for /llms-full.txt + multilingual variants.
+                            <?php else : ?>
+                                <strong style="color:#92400e">📄 Free tier — basic flat list of 20 most-recent posts.</strong> <a href="https://seobetter.com/pricing" target="_blank">Upgrade to Pro</a> for content-type categorization + GEO quality filter, or <a href="https://seobetter.com/pricing" target="_blank">Pro+</a> for /llms-full.txt + multilingual variants.
+                            <?php endif; ?>
+                        </div>
                     </td>
                 </tr>
+
+                <?php if ( $can_custom ) : // v1.5.216.31 — Pro/Pro+ custom summary editor ?>
+                <tr>
+                    <th><?php esc_html_e( 'llms.txt summary', 'seobetter' ); ?> <span style="font-size:11px;color:#7c3aed">Pro</span></th>
+                    <td>
+                        <textarea name="llms_txt_summary" rows="3" class="large-text" placeholder="<?php echo esc_attr( get_bloginfo( 'description' ) ); ?>"><?php echo esc_textarea( $settings['llms_txt_summary'] ?? '' ); ?></textarea>
+                        <p class="description"><?php esc_html_e( 'One-line site summary AI crawlers see at the top of llms.txt. Leave blank to use your site description.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'llms.txt cache', 'seobetter' ); ?></th>
+                    <td>
+                        <form method="post" style="display:inline">
+                            <?php wp_nonce_field( 'seobetter_llms_clear_cache' ); ?>
+                            <button type="submit" name="seobetter_llms_clear_cache" class="button"><?php esc_html_e( 'Regenerate now', 'seobetter' ); ?></button>
+                        </form>
+                        <p class="description"><?php esc_html_e( 'Auto-invalidates on every post save. Use this only if you want to refresh manually (e.g. after a settings change).', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <?php endif; ?>
+                <?php
+                // v1.5.216.31 — Handle the regenerate-now button
+                if ( isset( $_POST['seobetter_llms_clear_cache'] ) && check_admin_referer( 'seobetter_llms_clear_cache' ) ) {
+                    SEOBetter\LLMS_Txt_Generator::clear_cache();
+                    echo '<div class="notice notice-success is-dismissible" style="margin:8px 0"><p>' . esc_html__( 'llms.txt cache cleared. Next request will regenerate.', 'seobetter' ) . '</p></div>';
+                }
+                ?>
                 <tr>
                     <th><?php esc_html_e( 'Tavily API Key', 'seobetter' ); ?></th>
                     <td>
