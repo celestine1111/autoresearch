@@ -7,12 +7,108 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.22)
+> **Last updated:** 2026-04-30 (v1.5.216.23)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.23 — Freshness inventory MVP — sortable table + GSC-driven priority (Phase 1 item 4)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Fourth task in the locked Phase 1 build queue. Replaces the prior 3-section Freshness report (stale / aging / fresh) with a single sortable inventory table where every published post gets a 0-100 **Refresh Priority** composite score. Per pro-features-ideas.md tier matrix:
+
+- **Free:** age-based priority (age + outdated-year flags + missing "Last Updated" signal)
+- **Pro+:** GSC-driven priority — weighted 50/50 with click decay + position drift signals from item 3's data
+
+### Added
+
+**`Content_Freshness_Manager::get_inventory()`** — `includes/Content_Freshness_Manager.php` line **~165**
+
+Returns sortable inventory of all published posts. Each row has:
+- post_id, title, edit_url, modified, age_days, word_count
+- outdated_years count (years < current_year - 1 mentioned in body — strong refresh signal)
+- has_signal bool ("Last Updated:" or similar present?)
+- gsc stats from `GSC_Manager::get_post_stats()` (Pro+ only — Free sees lock badge, no data leak)
+- priority composite (0-100, sorted DESC by default)
+
+**`compute_base_priority()`** — formula per the strategic deep-dive:
+```
+priority = age_days/3
+         + outdated_year_count * 15
+         + (missing_freshness_signal ? 10 : 0)
+         + (age_days > 365 ? 20 : 0)
+```
+
+**`compute_gsc_priority()`** — Pro+ only. Surfaces "striking distance" pages (position 11-30, just off page 1) as highest opportunity since a small content lift can push them to top 10. v1 uses the latest 28d snapshot only; v2 will compare 28d vs prior-28d once historical data accumulates (a few weeks of cron runs).
+
+License gate: `License_Manager::can_use('gsc_freshness_driver')` — Pro+ tier per pro-features-ideas.md §2.
+
+### Settings UI rewrite — `admin/views/freshness.php` (full rewrite)
+
+| Section | Behavior |
+|---|---|
+| Header | Title + GSC-connect prompt if not connected |
+| Stats strip | 4-card row: Stale (1yr+) / Aging (6mo+) / Fresh / Avg priority — color-graded |
+| Pro+ upsell card | Renders only when GSC IS connected but tier < Pro+ — explains the smart-priority upgrade story |
+| Inventory table | Sortable on every column; default sort by priority DESC |
+
+Table columns (Pro+ vs Free differ on the GSC pair):
+- **All tiers:** Post · Modified (relative) · Words · Old years · Signal · Priority · Edit
+- **Pro+ + GSC connected:** + GSC Clicks 28d · GSC Position 28d (real numbers)
+- **Free + GSC connected:** + spans the GSC columns with Pro+ unlock badge instead of leaking data
+- **GSC not connected:** GSC columns hidden entirely (clean Free experience)
+
+Sort UX: click any column header → toggles asc/desc with arrow indicator. Pure JS sorting (no backend round-trip). Each `<tr>` carries `data-{col}` attributes for fast DOM-based sorting.
+
+### Menu registration
+
+New submenu: `SEOBetter → Freshness` (was code-only via `render_freshness()`; menu was missing). Capability: `edit_posts`. Anchor: `seobetter.php` line **~165**.
+
+### Pre-fix checklist
+
+- ✅ All keywords / All 21 content types — orthogonal (this scans existing posts)
+- ✅ All AI models — orthogonal
+- ✅ Free-tier-safe — runs on user's own posts, no external API cost (GSC reads cached snapshots from local table)
+- ✅ License gating active even with GATE_LIVE=false — wait, false is bypass-mode. Correct: Free users see the GSC-priority columns as locked badges per the UI conditional `! $can_use_gsc`. With GATE_LIVE=false during Phase 1 testing, `can_use('gsc_freshness_driver')` returns true → Ben sees the GSC-driven priority experience as Agency.
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + Freshness submenu registration
+2. `seobetter/includes/Content_Freshness_Manager.php` — added `get_inventory()`, `compute_base_priority()`, `compute_gsc_priority()`
+3. `seobetter/admin/views/freshness.php` — full rewrite as sortable inventory
+4. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+### What's NOT in this ship (deferred)
+
+- **Per-row "Generate refresh brief" button** — deferred to Phase 5+ (refresh-brief generator is locked as Agency feature)
+- **Snapshot history table** for tracking changes-over-time — Phase 5+
+- **Outdated stat LLM detection** — Phase 5+
+- **Broken-link checker** — needs HTTP HEAD checks, expensive at sync load; Phase 5+ via daily cron with cached results
+- **Pagination** — current MVP caps at 200 posts; pagination ships when sites with 500+ posts hit the wall
+
+### Verify
+
+```
+grep -n "get_inventory\|compute_base_priority\|compute_gsc_priority\|seobetter-freshness" seobetter/includes/Content_Freshness_Manager.php seobetter/seobetter.php seobetter/admin/views/freshness.php
+```
+
+Should show the new methods in Manager + submenu registration + the rewritten view referencing get_inventory().
+
+**Verified by user:** UNTESTED — Ben to:
+1. Visit `wp-admin/admin.php?page=seobetter-freshness` → confirm new sortable table renders
+2. Click each column header → confirm sort works (priority DESC default, click again to toggle direction)
+3. Confirm Stale/Aging/Fresh stat strip totals match the table contents
+4. With GSC connected (item 3), confirm GSC Clicks + Position columns appear with real data
+5. Set `define('SEOBETTER_GATE_LIVE', true);` temporarily + activate as a Free license → confirm Free user sees Pro+ lock badge in the GSC columns instead of real data; revert to false to resume Phase 1 testing
+6. Confirm Pro+ upsell card appears only for GSC-connected free-tier users (not for the no-GSC case)
 
 ---
 
