@@ -177,6 +177,16 @@ class AI_Image_Generator {
             return '';
         }
 
+        // v1.5.216.21 — Phase 1 item 2: Pro tier gate. AI Featured Image
+        // generation is Pro per pro-features-ideas.md §2 Tier Matrix.
+        // SEOBETTER_GATE_LIVE=false (Phase 1 testing) bypasses this — Ben
+        // tests as Agency. Free users fall through to Pexels stock images
+        // via the set_featured_image() fallback chain.
+        if ( ! License_Manager::can_use( 'ai_featured_image' ) ) {
+            error_log( "SEOBetter AI_Image_Generator::generate: BAIL — ai_featured_image is Pro tier; falling back to Pexels" );
+            return '';
+        }
+
         $prompt = self::build_prompt( $title, $keyword, $brand );
         if ( $prompt === '' ) {
             error_log( "SEOBetter AI_Image_Generator::generate: BAIL — built prompt is empty" );

@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.20
+ * Version: 1.5.216.21
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,10 +18,29 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.20' );
+define( 'SEOBETTER_VERSION', '1.5.216.21' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+
+/**
+ * v1.5.216.21 — Phase 1 license gating master switch.
+ *
+ * When `false` (default during Phase 1 testing): every License_Manager::can_use()
+ * call returns true, so Ben can test ALL Pro/Pro+/Agency features as if licensed.
+ * UI lock badges and tier info still render via License_Manager::get_required_tier()
+ * so the upsell experience is testable too.
+ *
+ * When `true` (post Phase 1 test gate, item 24 in pro-features-ideas.md §3):
+ * gating becomes real — Pro/Pro+/Agency features refuse to execute for Free users.
+ *
+ * Override in wp-config.php for forced testing on any environment:
+ *     define( 'SEOBETTER_GATE_LIVE', true );  // forces gating ON
+ *     define( 'SEOBETTER_GATE_LIVE', false ); // forces gating OFF
+ */
+if ( ! defined( 'SEOBETTER_GATE_LIVE' ) ) {
+    define( 'SEOBETTER_GATE_LIVE', false );
+}
 
 /**
  * Autoloader for plugin classes.
@@ -1283,6 +1302,54 @@ final class SEOBetter {
     public function rest_generate_start( \WP_REST_Request $request ): \WP_REST_Response {
         $rate_check = $this->check_rate_limit( 'generate' );
         if ( $rate_check ) return $rate_check;
+
+        // v1.5.216.21 — Phase 1 item 2: tier gates at the generation entry point.
+        // Free tier: 3 content types only (Blog Post, How-To, Listicle); English
+        // language only; 6 EN-speaking countries only. Pro+ unlocks all 21
+        // types + 60+ languages + 80+ countries. With SEOBETTER_GATE_LIVE=false
+        // (default during Phase 1 testing) all gates pass — Ben tests as Agency.
+        $params = $request->get_params();
+
+        $content_type = sanitize_text_field( $params['content_type'] ?? 'blog_post' );
+        $free_types = [ 'blog_post', 'how_to', 'listicle' ];
+        if ( ! in_array( $content_type, $free_types, true )
+             && ! SEOBetter\License_Manager::can_use( 'all_21_content_types' ) ) {
+            return new \WP_REST_Response( [
+                'success'         => false,
+                'error'           => sprintf(
+                    __( 'Content type "%s" requires Pro. Free tier supports Blog Post, How-To, and Listicle only.', 'seobetter' ),
+                    $content_type
+                ),
+                'upgrade_tier'    => 'pro',
+                'upgrade_feature' => 'all_21_content_types',
+            ], 403 );
+        }
+
+        $language = strtolower( substr( (string) ( $params['language'] ?? 'en' ), 0, 2 ) );
+        if ( $language !== 'en'
+             && ! SEOBetter\License_Manager::can_use( 'multilingual_60_languages' ) ) {
+            return new \WP_REST_Response( [
+                'success'         => false,
+                'error'           => __( 'Multilingual generation (60+ languages) requires Pro. Free tier writes in English only.', 'seobetter' ),
+                'upgrade_tier'    => 'pro',
+                'upgrade_feature' => 'multilingual_60_languages',
+            ], 403 );
+        }
+
+        $country = strtoupper( substr( (string) ( $params['country'] ?? '' ), 0, 2 ) );
+        $free_countries = [ '', 'US', 'GB', 'AU', 'CA', 'NZ', 'IE' ]; // 6 EN-speaking + Global (no country)
+        if ( $country !== '' && ! in_array( $country, $free_countries, true )
+             && ! SEOBetter\License_Manager::can_use( 'country_localization_80' ) ) {
+            return new \WP_REST_Response( [
+                'success'         => false,
+                'error'           => sprintf(
+                    __( 'Country localization for "%s" requires Pro. Free tier supports US/UK/AU/CA/NZ/IE.', 'seobetter' ),
+                    $country
+                ),
+                'upgrade_tier'    => 'pro',
+                'upgrade_feature' => 'country_localization_80',
+            ], 403 );
+        }
 
         // v1.5.67 — wrap start_job in a try/catch so any thrown exception
         // becomes a visible JSON error with the actual message + file + line,

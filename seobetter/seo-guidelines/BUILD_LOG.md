@@ -7,12 +7,111 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.20)
+> **Last updated:** 2026-04-30 (v1.5.216.21)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.21 — License gating wire-up + SEOBETTER_GATE_LIVE flag (Phase 1 item 2)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Second task in the locked Phase 1 build queue (`pro-features-ideas.md` §3 item 2). Establishes the license-gating infrastructure for the 3-tier paid model (Pro $39 / Pro+ $69 / Agency $179) WITHOUT activating it yet — so Ben can test ALL Pro/Pro+/Agency features as if licensed during Phase 1, then flip the master switch (item 24) once everything works.
+
+### Three pieces
+
+#### 1. `SEOBETTER_GATE_LIVE` constant — `seobetter.php` line **~26-43**
+
+Master switch defaulting to `false` during Phase 1. Override in `wp-config.php` for environment-specific testing:
+```php
+define( 'SEOBETTER_GATE_LIVE', true );  // forces gating ON
+define( 'SEOBETTER_GATE_LIVE', false ); // forces gating OFF
+```
+
+#### 2. `License_Manager` 3-tier refactor — `includes/License_Manager.php`
+
+- **Replaced 2-tier model** (FREE / PRO) with **4-tier**: FREE / PRO / PRO+ / AGENCY (per pro-features-ideas.md §2 Tier Matrix). Existing v1.5.13 testing-flag commentary removed; SEOBETTER_GATE_LIVE replaces it.
+- **`can_use($feature)` rewritten**: master switch first → free auto-true → Pro check → Pro+ check → Agency check → unknown features fail closed.
+- **New helpers**:
+  - `is_pro_plus()` — Pro+ OR Agency
+  - `is_agency()` — Agency only
+  - `get_required_tier($feature)` — returns 'free'/'pro'/'pro_plus'/'agency'/'unknown' for UI lock badges (works regardless of GATE_LIVE)
+  - `get_active_tier()` — returns user's actual paid tier; AppSumo lifetime types map to display-tier names (see Decision Log entry on AppSumo internal-only lifetime tracking)
+- **`get_info()` expanded** to return `is_pro_plus`, `is_agency`, `tier`, `tier_label` (Free/Pro/Pro+/Agency), `gate_live` flag for diagnostic
+- **`FREE_FEATURES` / `PRO_FEATURES` / `PROPLUS_FEATURES` / `AGENCY_FEATURES`** constants populated from the locked tier matrix. Legacy keys (e.g. `unlimited_cloud_generation`, `decay_alerts`, `gsc_integration`) preserved for back-compat with code still referencing them.
+
+Anchors:
+- `License_Manager::can_use()` line **~221**
+- `License_Manager::get_required_tier()` line **~258**
+- `License_Manager::is_pro_plus()` line **~286**
+- `License_Manager::is_agency()` line **~292**
+- `License_Manager::get_active_tier()` line **~302**
+- `License_Manager::get_info()` line **~327**
+
+#### 3. Wire `can_use()` at existing major Pro feature routes
+
+Three entry points gated. With `SEOBETTER_GATE_LIVE=false` (default during Phase 1), all gates pass; once flipped on, gates enforce real tiers.
+
+| Route | Gate | Tier | Anchor |
+|---|---|---|---|
+| `rest_generate_start()` content type validation | `all_21_content_types` | Pro | seobetter.php line **~1306** |
+| `rest_generate_start()` language validation | `multilingual_60_languages` | Pro | seobetter.php line **~1326** |
+| `rest_generate_start()` country validation | `country_localization_80` | Pro | seobetter.php line **~1338** |
+| `AI_Image_Generator::generate()` | `ai_featured_image` | Pro | AI_Image_Generator.php line **~185** |
+| `Bulk_Generator` (already wired in v1.5.13) | `bulk_content_generation` | Agency (auto via tier list) | bulk-generator.php line 5 |
+
+When a free user hits a gated route post-flag-flip, the response is structured:
+```json
+{
+  "success": false,
+  "error": "Content type \"recipe\" requires Pro. Free tier supports Blog Post, How-To, and Listicle only.",
+  "upgrade_tier": "pro",
+  "upgrade_feature": "all_21_content_types"
+}
+```
+
+The `upgrade_tier` + `upgrade_feature` fields let UI show the correct tier badge + deep-link to the right pricing card.
+
+### Pre-fix checklist
+
+- ✅ **All keywords** — gates apply per-feature, not per-keyword
+- ✅ **All 21 content types** — gate explicitly enforces 3 free / 18 Pro
+- ✅ **All AI models** — completely orthogonal
+- ✅ **Backward compat** — `is_pro()` still works (now means "any paid tier"); legacy feature keys preserved; `SEOBETTER_GATE_LIVE=false` means zero behavior change for all existing users until item 24 flips it
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + GATE_LIVE constant + 3 gates in rest_generate_start
+2. `seobetter/includes/License_Manager.php` — 4-tier feature lists + can_use + helpers + get_info expansion
+3. `seobetter/includes/AI_Image_Generator.php` — gate at generate() entry
+4. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+### What's NOT done in this item (deferred to subsequent Phase 1 items)
+
+- License gating on features that don't exist yet (GSC, Brand Voice, Internal Links, etc.) — those wire their own gates as they're built
+- UI lock badges in Settings/Dashboard/Generate Content — Phase 1 items 13, 19, 21 add these
+- AppSumo `pro_lifetime` / `pro_plus_lifetime` / `agency_lifetime` license_type activation flow — Phase 2 (Freemius integration ships this)
+
+### Verify
+
+```
+grep -n "SEOBETTER_GATE_LIVE\|is_pro_plus\|is_agency\|get_required_tier\|get_active_tier" seobetter/seobetter.php seobetter/includes/License_Manager.php seobetter/includes/AI_Image_Generator.php
+```
+
+Should show the constant defined, all 3 helpers in License_Manager, and gates wired at the 3 generation entry points.
+
+**Verified by user:** UNTESTED — Ben to confirm:
+1. With GATE_LIVE=false (default), generating an article still works for ALL content types, languages, countries (testing-as-Agency mode)
+2. Temporarily set `define('SEOBETTER_GATE_LIVE', true);` in wp-config.php → confirm Free user can ONLY generate blog_post/how_to/listicle in English in US/UK/AU/CA/NZ/IE; rejects with structured 403 otherwise
+3. AI Featured Image generation only fires for Pro+ tier when GATE_LIVE=true
+4. Set GATE_LIVE back to false to continue Phase 1 testing
 
 ---
 
