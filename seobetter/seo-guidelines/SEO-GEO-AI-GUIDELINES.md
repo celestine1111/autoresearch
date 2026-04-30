@@ -621,6 +621,32 @@ Source: [`GEO_Analyzer.php::analyze()`](../includes/GEO_Analyzer.php) `$skip_blu
 - **D (50-59):** Significant issues — major revision needed
 - **F (below 50):** Not ready — requires complete rewrite
 
+### 6.1 SEOBetter Score 0-100 (composite — v1.5.216.26)
+
+The "GEO Score" above is a 14-15-check weighted average that surfaces as one number. Useful but opaque — a user looking at "GEO 78" can't tell whether the 22 missing points came from weak SEO foundations, missing Princeton-backed AI signals, poor extractability, missing schema coverage, or international gaps.
+
+The **SEOBetter Score 0-100** (computed by `Score_Composite::compute()`) re-aggregates the SAME GEO checks into the **5-layer + 6-vector framework**. Same input data; different lens.
+
+**Layer composition:**
+
+| Layer | GEO checks rolled up | Default weight | International weight |
+|---|---|:---:|:---:|
+| 1. SEO Foundation | readability, keyword_density, freshness, bluf_header | 25% | 20% |
+| 2. AI Citation Quality | citations, expert_quotes, factual_density, entity_usage, core_eeat | **30%** | 25% |
+| 3. Extractability | island_test, section_openings, tables, lists, humanizer | 25% | 20% |
+| 4. Schema Coverage | derived from `_seobetter_schema` post meta (count + completeness) | 20% | 15% |
+| 6. International | international_signals (when country ≠ US/GB/AU/CA/NZ/IE) | — | 20% |
+
+**Why Layer 2 gets the highest weight:** Princeton's research (§1) shows statistics +40%, quotations +41%, citations +30% are the top correlates for AI citation. Other factors are necessary but lower-leverage.
+
+**Layer 5 (article design / visual) is intentionally NOT scored** — per `feedback_layer5_not_scored.md`, it's a visual-only layer; scoring it would conflate aesthetic with SEO/AI quality.
+
+**Storage:** persisted to `_seobetter_score` post meta on save (alongside the existing `_seobetter_geo_score`). Surfaced in the SEOBetter metabox (composite + 5 layer chips) and the Recent Articles "SEOBetter" column (composite primary, GEO sub-line). The Recent Articles column will split into TWO columns in Phase 1 item 20 (locked plan); item 7 only ships the data + visibility.
+
+**When to update §6.1:** if a new GEO check is added, decide which layer it belongs in and update the LAYER_CHECKS map in `Score_Composite.php` AND this section. Schema scoring is currently coarse (count + presence of Article/Breadcrumb/FAQ/HowTo); Phase 2 may swap it for true Rich Results validation against `structured-data.md` §4 required fields.
+
+Source: [`Score_Composite.php`](../includes/Score_Composite.php) — class constants `LAYER_CHECKS`, `WEIGHTS_DEFAULT`, `WEIGHTS_INTERNATIONAL` are the authoritative mapping.
+
 ---
 
 ## 7. TITLE TAG OPTIMIZATION

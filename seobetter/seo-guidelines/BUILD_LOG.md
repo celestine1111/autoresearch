@@ -7,12 +7,73 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.25)
+> **Last updated:** 2026-04-30 (v1.5.216.26)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.26 — SEOBetter Score 0-100 composite (Phase 1 item 7)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+The "GEO Score" already shipped (in `_seobetter_geo_score` post meta) is a weighted average of 14-15 individual checks. That number is correct but opaque — a user looking at "GEO 78" can't tell whether the 22 missing points came from weak SEO foundations, missing Princeton-backed AI signals, poor extractability for LLM citation, missing schema coverage, or international gaps.
+
+SEOBetter Score 0-100 is a **re-aggregation** of those same checks into the **5-layer + 6-vector optimization framework** documented in SEO-GEO-AI-GUIDELINES.md §6.1 + the /seobetter skill. Same input data; different lens. Users see WHICH layer is weak (composite + 5 layer chips), not just a single fail-or-pass number.
+
+This is also a dependency for Phase 1 item 20 (Recent Articles dashboard column adds the composite alongside GEO).
+
+### What shipped
+
+- **`Score_Composite` class** — `seobetter/includes/Score_Composite.php` (new, ~210 lines)
+  - `Score_Composite::compute()` line ~88 — main entrypoint. Takes `$score_data` (GEO_Analyzer output) + optional `$post_id`. Returns `[ 'score', 'grade', 'layers' => [...], 'weights' => [...] ]`
+  - `Score_Composite::layer_avg()` line ~131 — averages named GEO checks; returns null if no checks present (older GEO data)
+  - `Score_Composite::compute_schema_score()` line ~150 — reads `_seobetter_schema` post meta, scores 0-100 based on @graph presence + Article-equivalent root + BreadcrumbList + FAQPage/HowTo
+  - `Score_Composite::layer_label()` line ~199 — i18n-ready human labels for the 5 layer keys
+  - Class constants: `LAYER_CHECKS` (which GEO checks roll up into which layer), `WEIGHTS_DEFAULT` (25/30/25/20), `WEIGHTS_INTERNATIONAL` (20/25/20/15/20)
+
+- **Persistence** — `seobetter/seobetter.php`
+  - `sync_seo_plugin_meta()` ~line 397 — after schema regeneration in the same save cycle, calls `Score_Composite::compute( $score, $post_id )` and writes to `_seobetter_score` post meta. Schema score reflects the freshly-updated `_seobetter_schema` because compute happens AFTER schema write
+  - Header version 1.5.216.25 → 1.5.216.26 + `SEOBETTER_VERSION` constant
+
+- **Metabox surface** — `seobetter/seobetter.php::render_metabox()`
+  - Composite score block placed above the existing 4-stat grid. Large composite number (32px) + grade + 5 layer chips with per-layer score and color (green ≥80, amber 60-79, red <60). Reads from `_seobetter_score` meta with live-compute fallback when meta hasn't been backfilled
+
+- **Recent Articles column** — `seobetter/seobetter.php::render_posts_column()`
+  - Now displays composite as the primary badge (large) with GEO score as a sub-line ("GEO 78"). This is the minimum-viable surface for item 7 — Phase 1 item 20 will split into two columns later
+  - Tooltip distinguishes "SEOBetter Score (composite)" from "GEO Score (legacy 14-check)"
+
+- **SEO-GEO-AI-GUIDELINES.md §6.1** — new section documenting the 5-layer composition, weights, why Layer 2 (AI Citation) is highest-weighted (Princeton §1 boosts), where the data lives (`_seobetter_score` meta), and the Phase 2 schema-scoring upgrade path (Rich Results validation vs current coarse coverage check)
+
+### Verify (file:method anchors)
+
+```bash
+# Composite class
+grep -n "public static function compute\|private static function layer_avg\|private static function compute_schema_score\|public static function layer_label" seobetter/includes/Score_Composite.php
+
+# Persistence on save
+grep -n "_seobetter_score\|Score_Composite::compute" seobetter/seobetter.php
+
+# Metabox + column surfaces
+grep -n "SEOBetter Score\|sb_score\|sb_layers\|composite" seobetter/seobetter.php
+```
+
+### Tier gating
+
+ALL tiers see the score (per locked tier matrix `pro-features-ideas.md` §2). The action-item suggestions per layer are deferred to Phase 2.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- SEO-GEO-AI-GUIDELINES.md §6.1 (new — composite spec, weights, layer composition)
+
+**Verified by user:** UNTESTED
 
 ---
 

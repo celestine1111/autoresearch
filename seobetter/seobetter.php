@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.25
+ * Version: 1.5.216.26
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.25' );
+define( 'SEOBETTER_VERSION', '1.5.216.26' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -388,6 +388,18 @@ final class SEOBetter {
             if ( ! empty( $schema_array ) ) {
                 $schema_ld = [ '@context' => 'https://schema.org', '@graph' => $schema_array ];
                 update_post_meta( $post_id, '_seobetter_schema', wp_json_encode( $schema_ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) );
+            }
+
+            // v1.5.216.26 — Phase 1 item 7: SEOBetter Score 0-100 composite.
+            // Re-aggregates the GEO checks computed above into 5 layer
+            // buckets (Layer 1 SEO / Layer 2 AI Citation / Layer 3
+            // Extractability / Layer 4 Schema / Layer 6 International) and
+            // produces a single composite. Schema layer reads the freshly-
+            // updated _seobetter_schema meta so its score reflects the latest
+            // schema regeneration in this same save cycle.
+            if ( $auto_analyze && isset( $score ) && is_array( $score ) ) {
+                $composite = SEOBetter\Score_Composite::compute( $score, $post_id );
+                update_post_meta( $post_id, '_seobetter_score', $composite );
             }
         } catch ( \Throwable $e ) {
             // Silently fail — don't break post saving
@@ -4552,45 +4564,52 @@ final class SEOBetter {
             return;
         }
 
-        $score = $score_data['geo_score'];
-        $grade = $score_data['grade'] ?? '';
+        // v1.5.216.26 — Phase 1 item 7: SEOBetter Score 0-100 composite.
+        // Display composite as the primary number with GEO score as a sub-line
+        // so the hierarchy reads: "this article is a 78 (with details below)".
+        // Item 20 will split this into two columns; Phase 1 item 7 only ships
+        // the visibility, not the column-layout restructure.
+        $composite = get_post_meta( $post_id, '_seobetter_score', true );
+        if ( ! is_array( $composite ) ) {
+            $composite = SEOBetter\Score_Composite::compute( $score_data, $post_id );
+        }
+        $sb_score = (int) ( $composite['score'] ?? 0 );
+        $sb_grade = (string) ( $composite['grade'] ?? '' );
+
+        $geo_score = $score_data['geo_score'];
         $word_count = $score_data['word_count'] ?? 0;
 
-        // Color based on score
-        if ( $score >= 80 ) {
+        // Color based on composite score
+        if ( $sb_score >= 80 ) {
             $color = '#059669'; $bg = '#ecfdf5';
-        } elseif ( $score >= 60 ) {
+        } elseif ( $sb_score >= 60 ) {
             $color = '#d97706'; $bg = '#fffbeb';
         } else {
             $color = '#dc2626'; $bg = '#fef2f2';
         }
 
-        // Score badge
+        // Composite score badge (primary)
         echo '<div style="display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:1.4">';
-        echo '<span style="display:inline-block;padding:2px 8px;background:' . $bg . ';color:' . $color . ';border-radius:4px;font-weight:700;font-size:13px;text-align:center;width:fit-content">';
-        echo esc_html( $score ) . ' <span style="font-weight:400;font-size:11px">' . esc_html( $grade ) . '</span>';
+        echo '<span title="SEOBetter Score (composite across 5 optimization layers)" style="display:inline-block;padding:2px 8px;background:' . $bg . ';color:' . $color . ';border-radius:4px;font-weight:700;font-size:13px;text-align:center;width:fit-content">';
+        echo esc_html( $sb_score ) . ' <span style="font-weight:400;font-size:11px">' . esc_html( $sb_grade ) . '</span>';
         echo '</span>';
 
-        // Details row
+        // GEO sub-line + details
         $details = [];
+        $details[] = '<span title="GEO Score (legacy 14-check weighted average)">GEO ' . esc_html( $geo_score ) . '</span>';
         if ( $word_count ) {
             $details[] = number_format( $word_count ) . 'w';
         }
-        if ( $keyword ) {
-            $details[] = '<span title="Focus keyword: ' . esc_attr( $keyword ) . '" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom">' . esc_html( $keyword ) . '</span>';
-        }
-
-        // Check counts from score data
         $checks = $score_data['checks'] ?? [];
         $citations = $checks['citations']['count'] ?? null;
         $quotes = $checks['expert_quotes']['count'] ?? null;
-        $tables = $checks['tables']['count'] ?? null;
-
         if ( $citations !== null ) $details[] = $citations . ' cites';
         if ( $quotes !== null ) $details[] = $quotes . ' quotes';
 
-        if ( ! empty( $details ) ) {
-            echo '<span style="color:#64748b;font-size:11px">' . implode( ' · ', $details ) . '</span>';
+        echo '<span style="color:#64748b;font-size:11px">' . implode( ' · ', $details ) . '</span>';
+
+        if ( $keyword ) {
+            echo '<span title="Focus keyword: ' . esc_attr( $keyword ) . '" style="color:#94a3b8;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block">' . esc_html( $keyword ) . '</span>';
         }
 
         echo '</div>';
@@ -4699,6 +4718,19 @@ final class SEOBetter {
         $word_count = is_array( $score_data ) ? ( $score_data['word_count'] ?? 0 ) : 0;
 
         $score_color = $score >= 80 ? '#22c55e' : ( $score >= 60 ? '#f59e0b' : '#ef4444' );
+
+        // v1.5.216.26 — Phase 1 item 7: SEOBetter Score 0-100 composite.
+        // Read pre-computed composite from `_seobetter_score` meta (written
+        // by sync_seo_plugin_meta on save). Falls back to live compute when
+        // the meta hasn't been backfilled yet.
+        $composite_data = get_post_meta( $post->ID, '_seobetter_score', true );
+        if ( ! is_array( $composite_data ) && is_array( $score_data ) ) {
+            $composite_data = SEOBetter\Score_Composite::compute( $score_data, $post->ID );
+        }
+        $sb_score  = is_array( $composite_data ) ? (int) ( $composite_data['score'] ?? 0 ) : 0;
+        $sb_grade  = is_array( $composite_data ) ? (string) ( $composite_data['grade'] ?? '?' ) : '?';
+        $sb_layers = is_array( $composite_data ) ? ( $composite_data['layers'] ?? [] ) : [];
+        $sb_color  = $sb_score >= 80 ? '#22c55e' : ( $sb_score >= 60 ? '#f59e0b' : '#ef4444' );
 
         // Check keyword placement
         $content_text = wp_strip_all_tags( $post->post_content );
@@ -4901,6 +4933,37 @@ final class SEOBetter {
                         <?php endif; ?>
                     </div>
                 </div>
+
+                <!-- v1.5.216.26 — SEOBetter Score 0-100 composite (Phase 1 item 7).
+                     Re-aggregates the GEO checks into 5 layer buckets. Per-layer
+                     chips reveal WHICH dimension is weak (SEO Foundation / AI Citation
+                     Quality / Extractability / Schema Coverage / International). -->
+                <?php if ( $sb_score > 0 ) : ?>
+                <div style="margin-bottom:16px;padding:12px;background:linear-gradient(135deg,#f5f3ff 0%,#fdf4ff 100%);border:1px solid #e9d5ff;border-radius:8px">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+                        <div style="font-size:32px;font-weight:800;color:<?php echo esc_attr( $sb_color ); ?>;line-height:1"><?php echo esc_html( $sb_score ); ?><span style="font-size:14px;color:#6b7280;font-weight:500">/100</span></div>
+                        <div>
+                            <div style="font-size:13px;font-weight:700;color:#1f2937">SEOBetter Score</div>
+                            <div style="font-size:11px;color:#6b7280">Composite across 5 optimization layers · Grade <?php echo esc_html( $sb_grade ); ?></div>
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px">
+                        <?php foreach ( [ 'seo_foundation', 'ai_citation', 'extractability', 'schema', 'international' ] as $layer_key ) : ?>
+                            <?php
+                            $layer_score = $sb_layers[ $layer_key ] ?? null;
+                            if ( $layer_score === null ) continue;
+                            $chip_color = $layer_score >= 80 ? '#059669' : ( $layer_score >= 60 ? '#d97706' : '#dc2626' );
+                            $chip_bg    = $layer_score >= 80 ? '#ecfdf5' : ( $layer_score >= 60 ? '#fffbeb' : '#fef2f2' );
+                            $label = SEOBetter\Score_Composite::layer_label( $layer_key );
+                            ?>
+                            <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:<?php echo esc_attr( $chip_bg ); ?>;border-radius:12px;font-size:11px;font-weight:600;color:<?php echo esc_attr( $chip_color ); ?>" title="<?php echo esc_attr( $label . ': ' . $layer_score . '/100' ); ?>">
+                                <?php echo esc_html( $label ); ?>
+                                <span style="font-weight:700"><?php echo esc_html( $layer_score ); ?></span>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <!-- GEO Score Summary -->
                 <?php if ( $score > 0 ) : ?>
