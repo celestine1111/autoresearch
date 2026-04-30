@@ -19,7 +19,7 @@
 ## v1.5.216.21 — License gating wire-up + SEOBETTER_GATE_LIVE flag (Phase 1 item 2)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `aa1d00b`
 
 ### Why this ships
 
