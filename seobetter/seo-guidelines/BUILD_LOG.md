@@ -19,7 +19,7 @@
 ## v1.5.216.24 — Internal Links MVP — orphan report (Free) + suggester (Pro+) (Phase 1 item 5)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `5e10930`
 
 ### Why this ships
 
