@@ -7,12 +7,91 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.37)
+> **Last updated:** 2026-04-30 (v1.5.216.38)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.38 — Dashboard restructure (Phase 1 item 19)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Pre-rewrite `admin/views/dashboard.php` had stale Pro upsell copy from the binary FREE/PRO tier era — wrong feature counts ("29 languages" was bumped to 60+ in v1.5.206d), wrong tier labels (Cloud cap moved from 5 to 50 in the v1.5.216 retier), wrong feature placement (basic schema list in Free included Recipe/Organization/Person which are now Pro detection features per item 13's split). Every paid customer who hit the dashboard saw mismatched copy that contradicted the locked tier matrix.
+
+Item 19 brings the dashboard fully in sync with the locked plan §2 Tier Matrix.
+
+### What shipped — verbatim against locked plan §3 item 19
+
+- **Header tier badge: binary FREE/PRO → Free/Pro/Pro+/Agency**
+  - Resolved via `$dash_tier = License_Manager::get_active_tier()` (item 15)
+  - Tier-colored chip with matching items 13/16/17 color matrix (Pro #3b82f6 / Pro+ #7c3aed / Agency #059669 / Free #6b7280)
+  - CTA button is tier-aware: Free → "Compare plans"; Pro → "Upgrade to Pro+"; Pro+ → "Upgrade to Agency"; Agency → no button
+
+- **Onboarding "or skip BYOK with Pro" alternative path**
+  - Step 1 of the 3-step welcome panel now offers BOTH paths: "Get a free API key" → traditional BYOK setup, OR italic line below: "skip BYOK with Pro ($39/mo) — generate via SEOBetter Cloud, no provider keys needed"
+  - Removes the friction of "must connect a key first" barrier for users who'd rather pay than configure
+
+- **Free list rewrite** — 11 lines added/changed:
+  - REMOVED Recipe / Organization / Person from schema list (those are Pro+ via Schema_Generator's content-type detection)
+  - ADDED 8 missing Free features explicitly: SEOBetter Score 0-100, Rich Results preview, basic meta sync (all 4 plugins), GSC connect+view, Internal Links orphan, age-based Freshness, AI Crawler audit, basic llms.txt
+  - ADDED 6 free countries (US/GB/AU/CA/NZ/IE) line so Free users see the 80+ Pro+ delta
+  - Now: "Basic schema: Article + FAQPage + BreadcrumbList" — exactly what locked plan §2 specifies
+
+- **Single Pro upsell card → 3-tier comparison grid (Free) + next-tier upgrade card (Pro/Pro+)**
+  - Free users see Pro / Pro+ / Agency cards in equal-width grid. Pro+ has "Most popular" pill. Each card lists 10 distinguishing features with tier color
+  - Pro users see "Upgrade to Pro+ — what you'd add" card with 8 delta features (e.g. "+25 Cloud articles/mo (50 total)")
+  - Pro+ users see "Upgrade to Agency — what you'd add" card with 8 delta features
+  - Agency users see "Agency Active — All features unlocked" confirmation
+  - Card layouts mirror item 13's License & Account upsell grid for consistency across surfaces
+
+- **Copy fixes** (per locked plan):
+  - "Premium tier LLM Claude Sonnet 4.6" → "**25 Cloud articles/mo using SEOBetter research stack**" (Pro card) / **50 Cloud articles/mo** (Pro+ card) — value is the stack + cap, not the LLM brand
+  - "Auto-translate for 29 languages" → "**Multilingual generation 60+ languages**" (post-v1.5.206d expansion count)
+  - "AIOSEO / Yoast / RankMath auto-population" → "**AIOSEO full schema sync**" (Pro distinction; basic meta sync to all 4 plugins is now Free per item 13/19)
+  - REMOVED "Analyze & Improve inject buttons" line per locked plan
+  - ADDED missing Pro features to upsell: AI Citation Tracker (1/5/25 by tier), Brand Voice (1/3/unlimited), Country localization 80+, Brave Search, inline citations, auto-detect schemas
+  - "Annual: $349/yr — save $119 vs monthly" → "Annual billing saves up to $358/year vs monthly. See full feature comparison at seobetter.com/pricing." (matches dollar amounts from item 17)
+
+### Verify (file:method anchors)
+
+```bash
+# Header tier badge logic
+grep -n "dash_tier_label\|dash_tier_color\|dash_tier_bg" seobetter/admin/views/dashboard.php
+
+# Free list new entries
+grep -n "SEOBetter Score 0-100\|Rich Results preview\|basic meta sync\|GSC connect\|Internal Links — orphan\|Freshness inventory\|AI Crawler Access audit\|Basic llms.txt\|6 free countries" seobetter/admin/views/dashboard.php
+
+# 3-tier grid + next-tier card
+grep -n "Most popular\|Upgrade to .* &mdash; what you'd add" seobetter/admin/views/dashboard.php
+
+# Copy fixes
+grep -n "60+ languages\|AIOSEO full schema sync\|using SEOBetter research stack" seobetter/admin/views/dashboard.php
+# inject buttons line should NOT exist anymore:
+grep -n "inject buttons\|Premium tier LLM\|29 languages" seobetter/admin/views/dashboard.php
+# (last grep returns zero results)
+```
+
+### Tier-specific behaviour after this ship
+
+- **Free**: tier badge "Free" + "Compare plans" button. 17-item Free list. 3-tier comparison grid below
+- **Pro ($39/mo)**: tier badge "Pro" + "Upgrade to Pro+" button. Free list visible (now applies to them). Next-tier upgrade card with 8 Pro+ delta features
+- **Pro+ ($69/mo)**: tier badge "Pro+" + "Upgrade to Agency" button. Free list visible. Next-tier upgrade card with 8 Agency delta features
+- **Agency ($179/mo)**: tier badge "Agency", no upgrade button. Free list visible. "Agency Active" confirmation card
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- pro-features-ideas.md §2 Tier Matrix is the source-of-truth for the copy fixes — that file is user-managed and unchanged. Dashboard copy now mirrors it verbatim
+- No changes to other guideline files — pure UI/copy refresh
+
+**Verified by user:** UNTESTED
 
 ---
 
