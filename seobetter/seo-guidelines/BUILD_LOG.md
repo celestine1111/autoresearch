@@ -19,7 +19,7 @@
 ## v1.5.216.31 — llms.txt rewrite + /llms-full.txt + caching (Phase 1 item 12)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `cc7f988`
 
 ### Why this ships
 
