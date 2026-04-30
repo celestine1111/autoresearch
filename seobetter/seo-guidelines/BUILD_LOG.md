@@ -19,7 +19,7 @@
 ## v1.5.216.27 — Rich Results validation preview surfacing (Phase 1 item 8)
 
 **Date:** 2026-04-30
-**Commit:** `[pending]`
+**Commit:** `4dae149`
 
 ### Why this ships
 
