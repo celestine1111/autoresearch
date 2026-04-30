@@ -1157,6 +1157,137 @@ define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
     <?php endif; ?>
 </div>
 
+<?php
+// v1.5.216.37 — Phase 1 item 18: AI Crawler Access audit card.
+// Sits inside Research & Integrations tab. Three actions:
+//   1. "Run audit" POST handler — fetches robots.txt + meta robots +
+//      X-Robots-Tag and reports per-bot pass/fail
+//   2. "Apply one-click fix" POST handler — flips the option flag so
+//      the registered robots_txt filter starts injecting Allow rules
+//   3. "Remove fix" POST handler — flips it back
+
+if ( isset( $_POST['seobetter_ai_audit_run'] ) && check_admin_referer( 'seobetter_ai_audit_nonce' ) ) {
+    set_transient( 'seobetter_ai_audit_result', SEOBetter\AI_Crawler_Audit::audit(), 5 * MINUTE_IN_SECONDS );
+    echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Audit complete — results below.', 'seobetter' ) . '</p></div>';
+}
+if ( isset( $_POST['seobetter_ai_audit_apply_fix'] ) && check_admin_referer( 'seobetter_ai_audit_nonce' ) ) {
+    SEOBetter\AI_Crawler_Audit::apply_fix();
+    delete_transient( 'seobetter_ai_audit_result' ); // force re-run on next view
+    echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'AI-bot-friendly rules applied to robots.txt. Re-run audit to verify.', 'seobetter' ) . '</p></div>';
+}
+if ( isset( $_POST['seobetter_ai_audit_remove_fix'] ) && check_admin_referer( 'seobetter_ai_audit_nonce' ) ) {
+    SEOBetter\AI_Crawler_Audit::remove_fix();
+    delete_transient( 'seobetter_ai_audit_result' );
+    echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'AI-bot-friendly rules removed. robots.txt reverted to default.', 'seobetter' ) . '</p></div>';
+}
+$ai_audit_result = get_transient( 'seobetter_ai_audit_result' );
+$ai_fix_active   = SEOBetter\AI_Crawler_Audit::is_fix_active();
+?>
+<div class="seobetter-card" style="margin-top:24px;margin-bottom:20px">
+    <h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><?php esc_html_e( 'AI Crawler Access Audit', 'seobetter' ); ?>
+        <span class="seobetter-score" style="font-size:10px;background:#dcfce7;color:#166534;font-weight:600;letter-spacing:0.05em;text-transform:uppercase"><?php esc_html_e( 'FREE', 'seobetter' ); ?></span>
+        <?php if ( $ai_fix_active ) : ?>
+            <span style="font-size:10px;padding:2px 8px;background:#ecfdf5;color:#065f46;border-radius:8px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase">⚡ <?php esc_html_e( 'Fix active', 'seobetter' ); ?></span>
+        <?php endif; ?>
+    </h2>
+    <p class="description" style="margin-bottom:14px">
+        <?php esc_html_e( 'Some WordPress security plugins block AI bots by default — costing you visibility in ChatGPT, Claude, Perplexity, and Google AI Overviews. This audit checks robots.txt, meta robots, and HTTP X-Robots-Tag headers for blocks against 8 major AI crawlers. One-click fix appends explicit Allow rules without overwriting your existing config.', 'seobetter' ); ?>
+    </p>
+
+    <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <?php wp_nonce_field( 'seobetter_ai_audit_nonce' ); ?>
+        <button type="submit" name="seobetter_ai_audit_run" class="button button-primary">
+            <?php echo $ai_audit_result ? esc_html__( 'Re-run audit', 'seobetter' ) : esc_html__( 'Run audit', 'seobetter' ); ?>
+        </button>
+        <?php if ( $ai_audit_result && ! empty( $ai_audit_result['summary']['failed'] + $ai_audit_result['summary']['warned'] ) && ! $ai_fix_active ) : ?>
+            <button type="submit" name="seobetter_ai_audit_apply_fix" class="button" style="background:#059669;color:#fff;border-color:#059669">
+                ⚡ <?php esc_html_e( 'Apply one-click fix', 'seobetter' ); ?>
+            </button>
+        <?php endif; ?>
+        <?php if ( $ai_fix_active ) : ?>
+            <button type="submit" name="seobetter_ai_audit_remove_fix" class="button" style="margin-left:auto">
+                <?php esc_html_e( 'Remove fix (revert robots.txt)', 'seobetter' ); ?>
+            </button>
+        <?php endif; ?>
+    </form>
+
+    <?php if ( $ai_audit_result ) :
+        $summary = $ai_audit_result['summary'];
+    ?>
+    <!-- Summary stat row -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+        <div style="text-align:center;padding:10px;background:#ecfdf5;border-radius:6px">
+            <div style="font-size:22px;font-weight:700;color:#059669"><?php echo esc_html( $summary['passed'] ); ?></div>
+            <div style="font-size:11px;color:#065f46"><?php esc_html_e( 'Passing', 'seobetter' ); ?></div>
+        </div>
+        <div style="text-align:center;padding:10px;background:#fffbeb;border-radius:6px">
+            <div style="font-size:22px;font-weight:700;color:#d97706"><?php echo esc_html( $summary['warned'] ); ?></div>
+            <div style="font-size:11px;color:#92400e"><?php esc_html_e( 'Wildcard-blocked', 'seobetter' ); ?></div>
+        </div>
+        <div style="text-align:center;padding:10px;background:#fef2f2;border-radius:6px">
+            <div style="font-size:22px;font-weight:700;color:#dc2626"><?php echo esc_html( $summary['failed'] ); ?></div>
+            <div style="font-size:11px;color:#991b1b"><?php esc_html_e( 'Explicitly blocked', 'seobetter' ); ?></div>
+        </div>
+    </div>
+
+    <?php if ( ! empty( $ai_audit_result['site_blocked_globally'] ) ) : ?>
+    <div style="padding:12px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;margin-bottom:14px;font-size:13px;color:#991b1b">
+        <strong>⚠ <?php esc_html_e( 'Site-wide noindex detected', 'seobetter' ); ?></strong> —
+        <?php esc_html_e( 'Your home page sets `noindex` via meta robots or HTTP X-Robots-Tag header. This blocks ALL crawlers including search engines AND AI bots. Disable it under Settings → Reading → Search engine visibility, or in your SEO plugin (Yoast / Rank Math / AIOSEO).', 'seobetter' ); ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- Per-bot table -->
+    <table class="widefat striped" style="margin-bottom:14px">
+        <thead>
+            <tr>
+                <th style="width:30px"></th>
+                <th><?php esc_html_e( 'Bot', 'seobetter' ); ?></th>
+                <th><?php esc_html_e( 'Used by', 'seobetter' ); ?></th>
+                <th><?php esc_html_e( 'Status', 'seobetter' ); ?></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ( $ai_audit_result['bots'] as $ua => $check ) :
+                $bot_meta = SEOBetter\AI_Crawler_Audit::TRACKED_BOTS[ $ua ] ?? [ 'label' => $ua, 'purpose' => '' ];
+                $icon = [ 'pass' => '✅', 'warning' => '⚠️', 'fail' => '❌' ][ $check['status'] ] ?? '–';
+                $color = [ 'pass' => '#059669', 'warning' => '#d97706', 'fail' => '#dc2626' ][ $check['status'] ] ?? '#6b7280';
+            ?>
+            <tr>
+                <td style="font-size:18px;text-align:center"><?php echo esc_html( $icon ); ?></td>
+                <td><code style="font-size:12px"><?php echo esc_html( $bot_meta['label'] ); ?></code></td>
+                <td style="font-size:12px;color:#6b7280"><?php echo esc_html( $bot_meta['purpose'] ); ?></td>
+                <td style="font-size:12px;color:<?php echo esc_attr( $color ); ?>"><?php echo esc_html( $check['reason'] ); ?></td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+
+    <!-- Raw signals (collapsed by default) -->
+    <details style="margin-top:8px">
+        <summary style="cursor:pointer;font-size:12px;color:#6b7280;font-weight:600"><?php esc_html_e( 'Raw signals checked', 'seobetter' ); ?></summary>
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr;gap:10px;font-size:11px">
+            <div>
+                <div style="font-weight:600;color:#374151;margin-bottom:4px">robots.txt</div>
+                <pre style="margin:0;padding:8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;max-height:160px;overflow:auto;font-family:Menlo,Monaco,monospace;font-size:11px;color:#1f2937;white-space:pre-wrap"><?php echo esc_html( trim( (string) $ai_audit_result['robots_txt_content'] ) ?: '(empty)' ); ?></pre>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                    <div style="font-weight:600;color:#374151;margin-bottom:4px">meta robots (home page)</div>
+                    <code style="display:block;padding:6px 8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;font-size:11px"><?php echo esc_html( $ai_audit_result['meta_robots'] ?: '(none)' ); ?></code>
+                </div>
+                <div>
+                    <div style="font-weight:600;color:#374151;margin-bottom:4px">X-Robots-Tag header</div>
+                    <code style="display:block;padding:6px 8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;font-size:11px"><?php echo esc_html( $ai_audit_result['x_robots_tag'] ?: '(none)' ); ?></code>
+                </div>
+            </div>
+        </div>
+    </details>
+    <?php else : ?>
+    <p style="font-size:13px;color:#6b7280;font-style:italic"><?php esc_html_e( 'Click Run audit to check if any of the 8 tracked AI bots are blocked.', 'seobetter' ); ?></p>
+    <?php endif; ?>
+</div>
+
 <?php // v1.5.216.25 — Phase 1 item 6: Brand Voice profiles ?>
 <?php
 $bv_voices    = \SEOBetter\Brand_Voice_Manager::all();

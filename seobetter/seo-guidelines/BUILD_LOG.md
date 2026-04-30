@@ -7,12 +7,78 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.36)
+> **Last updated:** 2026-04-30 (v1.5.216.37)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.37 — AI Crawler Access audit + one-click fix (Phase 1 item 18)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Bridge feature for AI engines that haven't adopted llms.txt yet. Aggressive WordPress security plugins (Wordfence, Solid Security, iThemes Security) often add `User-agent: *` Disallow rules to robots.txt presets — which silently block GPTBot / ClaudeBot / PerplexityBot and cost users visibility in ChatGPT, Claude, Perplexity, and Google AI Overviews. Item 18 detects + fixes those blocks in two clicks.
+
+Three layers checked per bot:
+1. **robots.txt** — `User-agent: {bot}` + `Disallow: /` (explicit block) OR wildcard `User-agent: *` + `Disallow: /` (inherits-the-block warning)
+2. **meta robots** — site-wide noindex on home page would block all crawlers
+3. **HTTP X-Robots-Tag header** — server-level noindex/nofollow
+
+8 bots tracked per locked plan §3 item 18 verbatim:
+GPTBot · ChatGPT-User · Google-Extended · ClaudeBot · anthropic-ai · PerplexityBot · Bingbot · CCBot
+
+### What shipped
+
+- **`AI_Crawler_Audit` class** — `seobetter/includes/AI_Crawler_Audit.php` (new, ~280 lines)
+  - `TRACKED_BOTS` constant — 8 bots with label + purpose hint, ordered per locked plan
+  - `audit()` — fetches robots.txt + meta robots + X-Robots-Tag, runs per-bot check, returns `[ robots_txt_content, meta_robots, x_robots_tag, site_blocked_globally, bots: [ua => [status, reason]], summary ]`
+  - `apply_fix()` / `remove_fix()` — flip `seobetter_ai_bot_friendly` option flag
+  - `register_robots_filter()` — registers a `robots_txt` filter (always at boot; gated internally on option flag so toggle flips without re-registering)
+  - `inject_ai_bot_rules()` — the filter callback. Appends explicit `User-agent: {bot}` + `Allow: /` for every tracked bot. Doesn't override user's existing rules — appends only. Respects WP "Search engine visibility" setting (no-op when site is non-public)
+  - `check_bot_in_robots_txt()` — proper robots.txt parser walking line-by-line tracking active User-agent groups. Detects 3 states: pass (explicit allow OR no rule = default-allow), fail (explicit Disallow: /), warning (wildcard Disallow: / inherited)
+
+- **Boot hook** — `seobetter/seobetter.php` ~line 105 — `AI_Crawler_Audit::register_robots_filter()` runs once at __construct
+
+- **Settings UI card** — `seobetter/admin/views/settings.php` ~line 1158
+  - Lives inside Research & Integrations tab (item 13 placement)
+  - Header with FREE badge + "⚡ Fix active" badge when applied
+  - 3 POST handlers: Run audit / Apply fix / Remove fix — each with their own nonce
+  - Audit results cached in 5-minute transient `seobetter_ai_audit_result` so refresh doesn't re-fetch
+  - Summary stat row: green Passing / amber Wildcard-blocked / red Explicitly blocked
+  - Per-bot table with ✅⚠️❌ icons + Bot label + Used-by purpose + Status reason
+  - Site-wide noindex banner when meta or X-Robots-Tag flags it (this is a separate problem — pointer to WP Reading settings + SEO plugin)
+  - Collapsed `<details>` showing raw robots.txt + meta robots + X-Robots-Tag for transparency
+  - "Apply one-click fix" button only renders when there's a failure or warning to fix; "Remove fix" replaces "Apply" once active
+
+### Verify (file:method anchors)
+
+```bash
+# Class
+grep -n "class AI_Crawler_Audit\|public static function audit\|public static function apply_fix\|public static function inject_ai_bot_rules\|TRACKED_BOTS" seobetter/includes/AI_Crawler_Audit.php
+
+# Boot hook
+grep -n "AI_Crawler_Audit::register_robots_filter" seobetter/seobetter.php
+
+# Settings UI
+grep -n "seobetter_ai_audit_run\|seobetter_ai_audit_apply_fix\|seobetter_ai_audit_remove_fix" seobetter/admin/views/settings.php
+```
+
+### Tier gating
+
+**Free** (table-stakes per locked plan §2 — Free 6 features include AI Crawler Access). All tiers see the same card. Server-side fix activation has no tier check; the underlying robots.txt filter doesn't depend on license state.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No structural changes to other guidelines — this is a new self-contained feature surface that doesn't touch the article generation pipeline, schema mapping, or visual design
+
+**Verified by user:** UNTESTED
 
 ---
 

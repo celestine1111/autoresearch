@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.36
+ * Version: 1.5.216.37
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.36' );
+define( 'SEOBETTER_VERSION', '1.5.216.37' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -104,6 +104,12 @@ final class SEOBetter {
         // v1.5.216.28 — Phase 1 item 9: Action Scheduler hook for bulk batches.
         // Registers only when AS is available (graceful no-op when absent).
         SEOBetter\Bulk_Generator::register_action_scheduler_hook();
+
+        // v1.5.216.37 — Phase 1 item 18: AI Crawler Access — robots.txt
+        // filter that injects allow rules for 8 AI bots when the one-click
+        // fix is active. Filter checks the option flag internally so toggle
+        // flips behaviour without re-registering the hook.
+        SEOBetter\AI_Crawler_Audit::register_robots_filter();
 
         // Export handler
         add_action( 'admin_init', [ $this, 'handle_export' ] );
