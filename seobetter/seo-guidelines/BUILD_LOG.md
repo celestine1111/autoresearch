@@ -7,12 +7,83 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.24)
+> **Last updated:** 2026-04-30 (v1.5.216.25)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.25 — Brand Voice profiles MVP — sample-style + tone directives + banned-phrase scrub (Phase 1 item 6)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Generated articles get the "sounds like AI" complaint — em-dash overuse, "in today's fast-paced world" openers, "let's dive in" CTAs — because the AI defaults to its own house style instead of mimicking the user's voice. Brand Voice profiles fix this at two layers: (1) prompt injection — sample of user's existing writing + tone directives + banned phrases get appended to the system prompt so the LLM is steered upfront; (2) post-process regex scrub — any banned phrase that slipped through gets stripped from the markdown before save. Belt-and-suspenders, works on any AI model (no provider-specific tricks), free of the "your prompt was the problem" failure mode.
+
+### Tier matrix (per pro-features-ideas.md §2)
+
+- **Free:** 0 voices (UI shown but disabled with upsell hint)
+- **Pro ($39/mo):** 1 voice (`brand_voice_1`)
+- **Pro+ ($69/mo):** 3 voices (`brand_voice_3`)
+- **Agency ($179/mo):** unlimited (`brand_voice_unlimited`, hard cap 999)
+
+### What shipped
+
+- **Brand_Voice_Manager class** — `seobetter/includes/Brand_Voice_Manager.php` (new, ~250 lines)
+  - `Brand_Voice_Manager::all()` line 41 — returns all voices keyed by voice_id
+  - `Brand_Voice_Manager::tier_cap()` line 65 — resolves cap from license features (0/1/3/999)
+  - `Brand_Voice_Manager::can_create_more()` line 75 — count vs cap gate
+  - `Brand_Voice_Manager::save()` line 86 — create/update with tier-cap enforcement on create only; sanitizes name/description/tone_directives via `sanitize_text_field`/`sanitize_textarea_field`; sample_text via private `sanitize_sample()` (strips HTML, caps at 8KB); banned_phrases accepts string (newline/comma) or array, dedupes
+  - `Brand_Voice_Manager::delete()` line 146
+  - `Brand_Voice_Manager::get_prompt_fragment()` line 160 — multi-line prompt block: `=== BRAND VOICE: {name} ===` header + style-mimic directive + 1500-char sample excerpt + tone directives + banned-phrases enumerated list + footer
+  - `Brand_Voice_Manager::scrub_banned_phrases()` line 202 — word-boundary case-insensitive multibyte regex strip; collapses double-spaces; returns `[scrubbed_content, count]`
+
+- **System-prompt injection** — `seobetter/includes/Async_Generator.php`
+  - `Async_Generator::get_system_prompt()` signature extended with `string $brand_voice_id = ''` param; calls `Brand_Voice_Manager::get_prompt_fragment( $brand_voice_id )` and interpolates the block into the system prompt before the closing instructions
+  - `Async_Generator::assemble_final()` — post-process scrub: `[ $markdown, $stripped ] = Brand_Voice_Manager::scrub_banned_phrases( $markdown, $brand_voice_id );` with `error_log()` when stripped > 0 so banned-phrase escapes are visible during testing
+  - Call site at line 202 threads `$brand_voice_id` from `$options['brand_voice_id']` through pipeline phases
+
+- **Settings UI** — `seobetter/admin/views/settings.php`
+  - Top-of-file save handler — `seobetter_save_brand_voice` POST + nonce → `Brand_Voice_Manager::save()`; success_msg + error_msg flash via admin_notices pattern
+  - Top-of-file delete handler — `seobetter_delete_brand_voice` POST + nonce → `Brand_Voice_Manager::delete()`
+  - Brand Voice card — placed between GSC card and Branding card. Shows tier badge (PRO/PRO+/AGENCY/locked), voice count vs cap counter, list table of existing voices with Edit/Delete buttons, add/edit form with name (required), description, sample_text textarea (8 rows), tone_directives textarea, banned_phrases textarea (newline-separated). Cap-reached banner when count == cap. Free tier sees locked Pro upsell card
+
+- **Voice picker in content-generator** — `seobetter/admin/views/content-generator.php`
+  - Picker dropdown placed after Tone field (before Category) — `<select name="brand_voice_id">` populated from `Brand_Voice_Manager::all()`. Disabled for Free tier with "🔒 requires Pro" hint linking to Settings; "No voices yet" hint when Pro/Pro+/Agency but no voices created
+  - Generate-button JS payload extended — `brand_voice_id: form.querySelector([name="brand_voice_id"]).value` threaded into REST `/generate/start` body so it lands in `$options['brand_voice_id']` already wired in Async_Generator
+
+### Verify (file:method anchors)
+
+```bash
+# Manager class
+grep -n "public static function get_prompt_fragment\|public static function scrub_banned_phrases\|public static function tier_cap" seobetter/includes/Brand_Voice_Manager.php
+
+# Pipeline injection
+grep -n "Brand_Voice_Manager::get_prompt_fragment\|Brand_Voice_Manager::scrub_banned_phrases\|brand_voice_id" seobetter/includes/Async_Generator.php
+
+# Settings UI
+grep -n "seobetter_save_brand_voice\|seobetter_delete_brand_voice\|Brand Voice" seobetter/admin/views/settings.php
+
+# Content-generator picker
+grep -n "brand_voice_id" seobetter/admin/views/content-generator.php
+```
+
+### How tier gating actually works
+
+- `SEOBETTER_GATE_LIVE = false` (Phase 1 testing) → `License_Manager::can_use()` returns true for all features → `tier_cap()` resolves to 999 (Agency-equivalent), so Ben can create unlimited voices during testing
+- After Phase 1 ships and the flag flips: Free tier sees the picker disabled + upsell hint; existing voices stay readable but `save()` rejects new creates above tier cap
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- pro-features-ideas.md item 6: marked SHIPPED (separately tracked outside this commit since pro-features-ideas.md is user-managed; will update after sign-off)
+
+**Verified by user:** UNTESTED
 
 ---
 

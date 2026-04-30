@@ -199,7 +199,14 @@ class Async_Generator {
         }
 
         $generator = new AI_Content_Generator();
-        $system = self::get_system_prompt( $options['language'] ?? 'en', $options['country'] ?? '' );
+        // v1.5.216.25 — Phase 1 item 6: thread brand_voice_id into the system
+        // prompt so the AI mimics the user's established style + avoids their
+        // banned phrases. Empty voice_id = no injection (default behavior).
+        $system = self::get_system_prompt(
+            $options['language'] ?? 'en',
+            $options['country'] ?? '',
+            (string) ( $options['brand_voice_id'] ?? '' )
+        );
         $result = null;
         $step_label = '';
 
@@ -2357,6 +2364,18 @@ class Async_Generator {
         $options = $job['options'];
         $markdown = self::assemble_markdown( $job );
 
+        // v1.5.216.25 — Phase 1 item 6: Brand Voice banned-phrase scrub.
+        // Belt-and-suspenders defense — the system prompt directs the AI to
+        // avoid the user's banned phrases, but if the LLM ignored it, this
+        // post-process pass strips them word-boundary case-insensitive.
+        $brand_voice_id = (string) ( $options['brand_voice_id'] ?? '' );
+        if ( $brand_voice_id !== '' ) {
+            [ $markdown, $stripped ] = Brand_Voice_Manager::scrub_banned_phrases( $markdown, $brand_voice_id );
+            if ( $stripped > 0 ) {
+                error_log( sprintf( 'SEOBetter Brand_Voice_Manager: scrubbed %d banned phrase(s) from generated content (voice_id=%s)', $stripped, $brand_voice_id ) );
+            }
+        }
+
         // Insert stock images
         // v1.5.213.2 — thread language so alt text is generated in the
         // article's target language, not the English templates.
@@ -2702,7 +2721,7 @@ class Async_Generator {
     /**
      * Get the system prompt.
      */
-    private static function get_system_prompt( string $language = 'en', string $country = '' ): string {
+    private static function get_system_prompt( string $language = 'en', string $country = '', string $brand_voice_id = '' ): string {
         $year = wp_date( 'Y' );
         $month_year = wp_date( 'F Y' );
 
@@ -2740,7 +2759,13 @@ class Async_Generator {
         // vous/Sie for French/German).
         $regional_block = Regional_Context::get_block( $country );
 
-        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).{$lang_rule}{$regional_block}
+        // v1.5.216.25 — Phase 1 item 6: Brand Voice injection. Empty when no
+        // voice_id passed (default behavior preserved); when present, injects
+        // sample text + tone directives + banned-phrase list so the AI mimics
+        // the user's established style.
+        $brand_voice_block = Brand_Voice_Manager::get_prompt_fragment( $brand_voice_id );
+
+        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).{$lang_rule}{$regional_block}{$brand_voice_block}
 
 CURRENT DATE: {$month_year}. The current year is {$year}. ALWAYS use {$year} when writing 'in [year]', 'best X in [year]', or any year reference. NEVER use 2024 or 2025 — those are outdated.
 

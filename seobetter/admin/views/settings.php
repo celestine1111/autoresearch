@@ -154,6 +154,31 @@ if ( isset( $_POST['seobetter_save_branding'] ) && check_admin_referer( 'seobett
     echo '<div class="notice notice-success"><p>' . esc_html__( 'Branding & AI image settings saved.', 'seobetter' ) . '</p></div>';
 }
 
+// v1.5.216.25 — Phase 1 item 6: Brand Voice save/delete handlers
+if ( isset( $_POST['seobetter_save_brand_voice'] ) && check_admin_referer( 'seobetter_brand_voice_nonce' ) ) {
+    $voice_id = sanitize_key( $_POST['voice_id'] ?? '' );
+    $result = SEOBetter\Brand_Voice_Manager::save( $voice_id, [
+        'name'            => $_POST['voice_name']           ?? '',
+        'description'     => $_POST['voice_description']    ?? '',
+        'sample_text'     => $_POST['voice_sample_text']    ?? '',
+        'tone_directives' => $_POST['voice_tone_directives'] ?? '',
+        'banned_phrases'  => $_POST['voice_banned_phrases'] ?? '',
+    ] );
+    if ( ! empty( $result['success'] ) ) {
+        echo '<div class="notice notice-success"><p>' . esc_html__( 'Brand voice saved.', 'seobetter' ) . '</p></div>';
+        // Redirect cleanly so refresh doesn't re-submit
+        echo '<script>history.replaceState(null,"",window.location.pathname+"?page=seobetter-settings#brand-voice")</script>';
+    } else {
+        echo '<div class="notice notice-error"><p>' . esc_html( $result['error'] ?? 'Save failed.' ) . '</p></div>';
+    }
+}
+if ( isset( $_POST['seobetter_delete_brand_voice'] ) && check_admin_referer( 'seobetter_brand_voice_nonce' ) ) {
+    $voice_id = sanitize_key( $_POST['voice_id'] ?? '' );
+    if ( SEOBetter\Brand_Voice_Manager::delete( $voice_id ) ) {
+        echo '<div class="notice notice-info"><p>' . esc_html__( 'Brand voice deleted.', 'seobetter' ) . '</p></div>';
+    }
+}
+
 $settings = get_option( 'seobetter_settings', [] );
 ?>
 <div class="wrap seobetter-dashboard">
@@ -830,6 +855,158 @@ define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
             });
         });
         </script>
+    <?php endif; ?>
+</div>
+
+<?php // v1.5.216.25 — Phase 1 item 6: Brand Voice profiles ?>
+<?php
+$bv_voices    = \SEOBetter\Brand_Voice_Manager::all();
+$bv_count     = count( $bv_voices );
+$bv_cap       = \SEOBetter\Brand_Voice_Manager::tier_cap();
+$bv_can_create = \SEOBetter\Brand_Voice_Manager::can_create_more();
+$bv_edit_id   = sanitize_key( $_GET['edit_voice'] ?? '' );
+$bv_editing   = $bv_edit_id !== '' && isset( $bv_voices[ $bv_edit_id ] ) ? $bv_voices[ $bv_edit_id ] : null;
+$bv_tier_label = $bv_cap === 0 ? 'Pro' : ( $bv_cap === 1 ? 'Pro' : ( $bv_cap === 3 ? 'Pro+' : 'Agency' ) );
+?>
+<div class="seobetter-card" id="brand-voice" style="margin-top:24px;margin-bottom:20px">
+    <h2><?php esc_html_e( 'Brand Voice Profiles', 'seobetter' ); ?>
+        <span class="seobetter-score" style="font-size:10px;margin-left:8px;background:#ede9fe;color:#5b21b6;font-weight:600;letter-spacing:0.05em;text-transform:uppercase"><?php
+            if ( $bv_cap === 0 )      echo esc_html__( 'PRO', 'seobetter' );
+            elseif ( $bv_cap === 1 )  echo esc_html__( 'PRO', 'seobetter' );
+            elseif ( $bv_cap === 3 )  echo esc_html__( 'PRO+', 'seobetter' );
+            else                       echo esc_html__( 'AGENCY', 'seobetter' );
+        ?></span>
+        <?php if ( $bv_cap > 0 ) : ?>
+            <span style="font-size:12px;color:#64748b;margin-left:8px;font-weight:400">
+                <?php
+                if ( $bv_cap === 999 ) {
+                    /* translators: 1: voice count */
+                    printf( esc_html( _n( '%d voice', '%d voices', $bv_count, 'seobetter' ) ), $bv_count );
+                } else {
+                    /* translators: 1: voice count, 2: cap */
+                    printf( esc_html__( '%1$d of %2$d voices used', 'seobetter' ), $bv_count, $bv_cap );
+                }
+                ?>
+            </span>
+        <?php endif; ?>
+    </h2>
+
+    <p class="description" style="margin-bottom:14px">
+        <?php esc_html_e( 'Define your brand\'s writing style by uploading a sample of existing posts and listing banned phrases. The AI mimics your tone + sentence rhythm + vocabulary, and never uses banned phrases. The biggest single fix for the "sounds like AI" complaint.', 'seobetter' ); ?>
+    </p>
+
+    <?php if ( $bv_cap === 0 ) : ?>
+        <!-- Free tier — locked, show upsell -->
+        <div style="padding:24px;background:linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%);border:2px solid #8b5cf6;border-radius:8px;text-align:center">
+            <div style="font-size:32px;margin-bottom:10px">🎙️</div>
+            <h3 style="margin:0 0 8px;color:#5b21b6"><?php esc_html_e( 'Brand Voice — Pro', 'seobetter' ); ?></h3>
+            <p style="font-size:14px;color:#4c1d95;max-width:560px;margin:0 auto 14px">
+                <?php esc_html_e( 'Upload 1-3 of your existing posts as a writing sample. List phrases you NEVER use ("dive in", "in today\'s fast-paced world"). Pro: 1 voice. Pro+: 3 voices. Agency: unlimited + per-language.', 'seobetter' ); ?>
+            </p>
+            <a href="https://seobetter.com/pricing" target="_blank" class="button button-primary" style="height:40px;line-height:24px;padding:8px 22px"><?php esc_html_e( 'See Pro plans →', 'seobetter' ); ?></a>
+        </div>
+    <?php else : ?>
+
+        <?php if ( $bv_count > 0 ) : ?>
+        <!-- Existing voices list -->
+        <table class="widefat striped" style="margin-bottom:18px">
+            <thead>
+                <tr>
+                    <th><?php esc_html_e( 'Name', 'seobetter' ); ?></th>
+                    <th><?php esc_html_e( 'Description', 'seobetter' ); ?></th>
+                    <th style="width:120px"><?php esc_html_e( 'Banned phrases', 'seobetter' ); ?></th>
+                    <th style="width:160px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ( $bv_voices as $v ) : ?>
+                <tr>
+                    <td><strong><?php echo esc_html( $v['name'] ); ?></strong></td>
+                    <td style="font-size:13px;color:#64748b"><?php echo esc_html( wp_trim_words( $v['description'], 18, '…' ) ); ?></td>
+                    <td style="font-size:12px;text-align:center"><?php echo esc_html( count( $v['banned_phrases'] ?? [] ) ); ?></td>
+                    <td>
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings&edit_voice=' . $v['id'] . '#brand-voice' ) ); ?>" class="button button-small"><?php esc_html_e( 'Edit', 'seobetter' ); ?></a>
+                        <form method="post" style="display:inline;margin-left:4px" onsubmit="return confirm('<?php echo esc_js( __( 'Delete this voice?', 'seobetter' ) ); ?>')">
+                            <?php wp_nonce_field( 'seobetter_brand_voice_nonce' ); ?>
+                            <input type="hidden" name="voice_id" value="<?php echo esc_attr( $v['id'] ); ?>" />
+                            <button type="submit" name="seobetter_delete_brand_voice" class="button button-small" style="color:#991b1b"><?php esc_html_e( 'Delete', 'seobetter' ); ?></button>
+                        </form>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+
+        <?php if ( $bv_can_create || $bv_editing ) : ?>
+        <!-- Add / Edit form -->
+        <form method="post" style="background:#f8fafc;padding:18px;border:1px solid #e2e8f0;border-radius:8px">
+            <?php wp_nonce_field( 'seobetter_brand_voice_nonce' ); ?>
+            <input type="hidden" name="voice_id" value="<?php echo esc_attr( $bv_editing['id'] ?? '' ); ?>" />
+            <h3 style="margin:0 0 14px;font-size:15px"><?php
+                echo $bv_editing
+                    ? esc_html__( 'Edit voice', 'seobetter' )
+                    : esc_html__( 'Add new voice', 'seobetter' );
+            ?></h3>
+
+            <table class="form-table" style="margin:0">
+                <tr>
+                    <th><label for="voice_name"><?php esc_html_e( 'Name', 'seobetter' ); ?> <span style="color:#ef4444">*</span></label></th>
+                    <td><input type="text" name="voice_name" id="voice_name" class="regular-text" required value="<?php echo esc_attr( $bv_editing['name'] ?? '' ); ?>" placeholder="e.g. Mindiam Pets — friendly + practical" /></td>
+                </tr>
+                <tr>
+                    <th><label for="voice_description"><?php esc_html_e( 'Description', 'seobetter' ); ?></label></th>
+                    <td>
+                        <input type="text" name="voice_description" id="voice_description" class="regular-text" value="<?php echo esc_attr( $bv_editing['description'] ?? '' ); ?>" placeholder="Conversational, no corporate jargon, second-person address" />
+                        <p class="description"><?php esc_html_e( 'One-line summary so future-you remembers what this voice is for.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="voice_sample_text"><?php esc_html_e( 'Sample text', 'seobetter' ); ?></label></th>
+                    <td>
+                        <textarea name="voice_sample_text" id="voice_sample_text" rows="8" class="large-text" placeholder="Paste 500-1500 words of an existing article that exemplifies the voice. Plain text — no HTML."><?php echo esc_textarea( $bv_editing['sample_text'] ?? '' ); ?></textarea>
+                        <p class="description"><?php esc_html_e( 'The AI mirrors sentence rhythm, vocabulary, and formality from this sample. ~1500 chars used in the prompt; longer is fine but trimmed at the boundary.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="voice_tone_directives"><?php esc_html_e( 'Tone directives', 'seobetter' ); ?></label></th>
+                    <td>
+                        <textarea name="voice_tone_directives" id="voice_tone_directives" rows="4" class="large-text" placeholder="Friendly + direct.&#10;Use second person (you/your).&#10;Avoid passive voice.&#10;Short paragraphs (max 3 sentences).&#10;No corporate jargon.&#10;Australian English spellings."><?php echo esc_textarea( $bv_editing['tone_directives'] ?? '' ); ?></textarea>
+                        <p class="description"><?php esc_html_e( 'Specific rules. The AI follows these throughout the article. Be opinionated — generic guidance gets generic output.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="voice_banned_phrases"><?php esc_html_e( 'Banned phrases', 'seobetter' ); ?></label></th>
+                    <td>
+                        <textarea name="voice_banned_phrases" id="voice_banned_phrases" rows="6" class="large-text" placeholder="dive in&#10;in today's fast-paced world&#10;let's explore&#10;at the end of the day&#10;game-changer&#10;cutting-edge&#10;leverage&#10;synergy"><?php
+                            $bp = $bv_editing['banned_phrases'] ?? [];
+                            echo esc_textarea( is_array( $bp ) ? implode( "\n", $bp ) : (string) $bp );
+                        ?></textarea>
+                        <p class="description"><?php esc_html_e( 'One per line (or comma-separated). Word-boundary matched, case-insensitive. The AI is told to avoid them; a post-process pass strips any that slip through.', 'seobetter' ); ?></p>
+                    </td>
+                </tr>
+            </table>
+
+            <div style="margin-top:14px">
+                <button type="submit" name="seobetter_save_brand_voice" class="button button-primary"><?php
+                    echo $bv_editing ? esc_html__( 'Update voice', 'seobetter' ) : esc_html__( 'Save voice', 'seobetter' );
+                ?></button>
+                <?php if ( $bv_editing ) : ?>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings#brand-voice' ) ); ?>" class="button" style="margin-left:6px"><?php esc_html_e( 'Cancel', 'seobetter' ); ?></a>
+                <?php endif; ?>
+            </div>
+        </form>
+        <?php elseif ( ! $bv_can_create ) : ?>
+            <!-- Cap reached for current tier -->
+            <div style="padding:14px 18px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:13px;color:#92400e">
+                <?php
+                /* translators: 1: cap count */
+                printf( esc_html__( 'You\'ve reached your tier\'s voice limit (%d). Edit existing voices above, or upgrade to add more.', 'seobetter' ), $bv_cap );
+                ?>
+                <a href="https://seobetter.com/pricing" target="_blank" style="margin-left:8px;color:#7c2d12;font-weight:600;text-decoration:underline"><?php esc_html_e( 'Upgrade →', 'seobetter' ); ?></a>
+            </div>
+        <?php endif; ?>
+
     <?php endif; ?>
 </div>
 

@@ -434,6 +434,34 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                                 <option value="journalistic" <?php selected( $_POST['tone'] ?? '', 'journalistic' ); ?>>Journalistic</option>
                             </select>
                         </div>
+                        <?php // v1.5.216.25 — Brand Voice picker (Phase 1 item 6). Tier-gated; Free sees upsell hint. ?>
+                        <div class="sb-field">
+                            <label>Brand Voice
+                                <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
+                                    <span class="seobetter-tooltip-text"><strong>What this does:</strong> Injects a saved sample of your existing writing + tone directives + banned phrases into the AI prompt so the article sounds like you, not like ChatGPT. Manage profiles in Settings → Brand Voice.</span>
+                                </span>
+                            </label>
+                            <?php
+                            $sb_voices    = class_exists( '\\SEOBetter\\Brand_Voice_Manager' ) ? \SEOBetter\Brand_Voice_Manager::all() : [];
+                            $sb_voice_cap = class_exists( '\\SEOBetter\\Brand_Voice_Manager' ) ? \SEOBetter\Brand_Voice_Manager::tier_cap() : 0;
+                            $sb_voice_sel = (string) ( $_POST['brand_voice_id'] ?? '' );
+                            ?>
+                            <select name="brand_voice_id" <?php echo $sb_voice_cap === 0 ? 'disabled' : ''; ?>>
+                                <option value="">— None (default) —</option>
+                                <?php foreach ( $sb_voices as $vid => $voice ) : ?>
+                                    <option value="<?php echo esc_attr( $vid ); ?>" <?php selected( $sb_voice_sel, $vid ); ?>><?php echo esc_html( $voice['name'] ?? $vid ); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <?php if ( $sb_voice_cap === 0 ) : ?>
+                                <div class="sb-help" style="margin-top:4px;font-size:11px;color:#6b7280">
+                                    🔒 Brand Voice profiles require Pro. <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>">Upgrade →</a>
+                                </div>
+                            <?php elseif ( empty( $sb_voices ) ) : ?>
+                                <div class="sb-help" style="margin-top:4px;font-size:11px;color:#6b7280">
+                                    No voices yet. <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>">Create one in Settings →</a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                         <div class="sb-field">
                             <label>Category <span style="color:#ef4444">*</span>
                                 <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
@@ -1968,7 +1996,9 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             audience: (form.querySelector('[name="audience"]')||{}).value||'',
             country: (form.querySelector('[name="country"]')||{}).value||'',
             language: (form.querySelector('[name="language"]')||{}).value||'en',
-            accent_color: (form.querySelector('[name="accent_color"]')||{}).value||'#764ba2'
+            accent_color: (form.querySelector('[name="accent_color"]')||{}).value||'#764ba2',
+            // v1.5.216.25 — Brand Voice picker (Phase 1 item 6). Empty string = no voice (default prose).
+            brand_voice_id: (form.querySelector('[name="brand_voice_id"]')||{}).value||''
         };
 
         btn.disabled = true; btn.textContent = 'Generating...';

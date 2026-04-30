@@ -193,6 +193,23 @@ GEO_Analyzer checks factual density, quote count, and citation count on the rend
 
 Whenever a new content type is added or an existing type's structure is redesigned based on publisher research, update §3.1A in the same commit as the code change. This table is the single source of truth for "which types do NOT follow §3.1". If a type is missing from the table, GEO_Analyzer assumes it follows the default.
 
+### 3.1D Brand Voice prompt fragment (v1.5.216.25 — Phase 1 item 6)
+
+Brand Voice profiles (managed via `Brand_Voice_Manager`) inject an **additive** fragment into the AI system prompt at generate-time. This fragment lives **alongside** the §3.1 default structure and §3.1A genre overrides — it does NOT replace, override, or modify either.
+
+**Order of operations inside `Async_Generator::get_system_prompt()`:**
+
+1. Default structure rules (§3.1) — always present
+2. Genre overrides (§3.1A) — applied for non-default content types
+3. Princeton §1 boosts (§3.1B) — universal across genres
+4. **Brand Voice fragment (§3.1D)** — appended last, sample text + tone directives + banned phrases. Empty when `brand_voice_id == ''` (no voice picked / Free tier)
+
+Tier matrix per `pro-features-ideas.md` §2: Free 0 voices, Pro 1, Pro+ 3, Agency unlimited.
+
+**Why "additive, not overriding":** brand voice influences sentence rhythm / vocabulary / forbidden phrases, but the article still has to follow §3.1 section structure (Key Takeaways → Definition → Context → How / Why → Comparisons → FAQ → Conclusion → References) and the §3.1A genre rules. If a future change ever lets brand voice override structure, document it here AND update §3.1A.
+
+Post-process belt-and-suspenders: `Brand_Voice_Manager::scrub_banned_phrases()` runs in `Async_Generator::assemble_final()` to strip any banned phrase the LLM emitted despite the prompt directive. Word-boundary, case-insensitive, multibyte-safe regex.
+
 ### 3.2 Focus Keyword in First Paragraph (CRITICAL — SEO plugins check this)
 
 SEO plugins scan the **first `<p>` tag** in `post_content` for the focus keyword. In SEOBetter articles, the first content is the Key Takeaways section. Therefore:
