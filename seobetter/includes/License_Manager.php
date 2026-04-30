@@ -302,6 +302,39 @@ class License_Manager {
     }
 
     /**
+     * v1.5.216.30 — Phase 1 item 11: Free-tier country allowlist.
+     *
+     * Free tier supports 6 English-speaking countries where the default AI
+     * prompt already produces good output (no Regional_Context block fires).
+     * Pro+ ($69/mo) and Agency ($179/mo) unlock the full 80+ country list,
+     * which routes through Regional_Context for per-country authority
+     * sources, currency, date format, and editorial register conventions.
+     *
+     * Empty string (Global / no country filter) is always allowed — it's
+     * the absence of a country selection, not a tier-locked one.
+     *
+     * Source of truth — keep in sync with:
+     *   - Regional_Context::WESTERN_DEFAULT_COUNTRIES
+     *   - rest_generate_start() $free_countries inline array
+     *   - admin/views/content-generator.php sbFreeCountries JS array
+     */
+    public const FREE_COUNTRIES = [ 'US', 'GB', 'AU', 'CA', 'NZ', 'IE' ];
+
+    /**
+     * Whether the current license is allowed to use the supplied country.
+     * Free 6 + Global ('') are universally allowed. Anything else requires
+     * the `country_localization_80` Pro+ feature.
+     *
+     * @param string $country_code ISO 2-letter code (or '' for Global)
+     */
+    public static function is_country_allowed( string $country_code ): bool {
+        $code = strtoupper( trim( $country_code ) );
+        if ( $code === '' ) return true;
+        if ( in_array( $code, self::FREE_COUNTRIES, true ) ) return true;
+        return self::can_use( 'country_localization_80' );
+    }
+
+    /**
      * v1.5.216.21 — Get the user's actual paid tier as one of:
      * 'free' / 'pro' / 'pro_plus' / 'agency'.
      *

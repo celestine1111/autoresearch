@@ -7,12 +7,79 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.29)
+> **Last updated:** 2026-04-30 (v1.5.216.30)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.30 — Country allowlist split + UI lock badges (Phase 1 item 11)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+The country localization gate was already enforced at the REST layer via `rest_generate_start` (since item 2), but the UI didn't surface WHICH countries were Free vs Pro+. Free users would pick "Italy" expecting it to work, hit submit, then see a 403 — bad UX. Item 11 closes the gap with three deltas:
+
+1. **Single source of truth** — `License_Manager::FREE_COUNTRIES` constant + `is_country_allowed()` helper. Both REST and pipeline gates now read from the same place
+2. **Visual lock badges** — country picker dropdown shows 🔒 Pro+ on the 75+ non-free countries, dims them, replaces the click handler with an upsell confirm dialog
+3. **Defense-in-depth pipeline gate** — `Async_Generator::start_job()` validates country independently. Bulk_Generator → start_job no longer bypasses the check (was only enforced at REST before)
+
+Free 6: US, GB, AU, CA, NZ, IE (Western-default English markets where the AI's default prompt produces good output without `Regional_Context` injection).
+
+### What shipped
+
+- **`License_Manager::FREE_COUNTRIES` constant + `is_country_allowed()` helper** — `seobetter/includes/License_Manager.php` ~line 305
+  - 6-country allowlist mirroring `Regional_Context::WESTERN_DEFAULT_COUNTRIES`
+  - `is_country_allowed( $code )` returns true for Free 6 + '' (Global) + any code when `country_localization_80` Pro+ feature is unlocked
+  - Documented as the single source of truth — to add/remove a country, change the constant, then update Regional_Context's list + the JS array in content-generator.php
+
+- **REST gate refactor** — `seobetter/seobetter.php::rest_generate_start()` ~line 1463
+  - Replaced inline `$free_countries` array with `License_Manager::is_country_allowed()` call
+  - Tier label corrected from "Pro" → "Pro+" (the `country_localization_80` feature lives in PROPLUS_FEATURES, not PRO_FEATURES)
+  - `upgrade_tier` field also corrected to `'pro_plus'`
+
+- **Pipeline-level gate** — `seobetter/includes/Async_Generator.php::start_job()` ~line 50
+  - Defense-in-depth: REST gate covers `rest_generate_start`; pipeline gate covers Bulk_Generator and any future direct callers
+  - Returns the same Pro+ upgrade error so behaviour is consistent regardless of entry point
+
+- **Country picker UI** — `seobetter/admin/views/content-generator.php` ~line 245
+  - `sbFreeCountries` JS array mirrors PHP constant (must stay in sync — comment notes this)
+  - `sbCountryLocked( c )` + `sbCanUseAllCountries` PHP-rendered flag drive per-row lock state
+  - `sbRenderCountries()` adds 🔒 Pro+ badge + `opacity:0.55` dimming for locked rows
+  - `sbCountryUpsell( name )` confirm dialog opens Settings page (no silent failure)
+  - Picker label gets "6 free · 80+ Pro+" badge for Free users (Pro+/Agency see no badge — full list is unlocked)
+
+### Verify (file:method anchors)
+
+```bash
+# Single source of truth
+grep -n "FREE_COUNTRIES\|public static function is_country_allowed" seobetter/includes/License_Manager.php
+
+# Both gates use the helper
+grep -n "is_country_allowed" seobetter/seobetter.php seobetter/includes/Async_Generator.php
+
+# UI lock badges
+grep -n "sbFreeCountries\|sbCountryLocked\|sbCountryUpsell\|6 free.*80+" seobetter/admin/views/content-generator.php
+```
+
+### Tier gating
+
+- **Free** (any tier without `country_localization_80`): Picker shows full list with 🔒 on non-Free 6. REST + pipeline reject with 403 if Free user bypasses UI (e.g. direct API call). Error message: "Country localization for 'XX' requires SEOBetter Pro+ ($69/mo). Free tier supports US, GB, AU, CA, NZ, IE."
+- **Pro+ ($69/mo) and Agency ($179/mo)**: Full 80+ countries unlocked; no lock badges; no picker label hint
+- **Phase 1 testing path** (`SEOBETTER_GATE_LIVE = false`): All gates return true, full 80+ visible to test the UX with no license
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No structural changes to SEO-GEO-AI-GUIDELINES / structured-data / article_design — this is a tier-gating refactor over existing functionality. Regional_Context's behaviour is unchanged
+- `pro-features-ideas.md §2 Tier Matrix` already lists country localization correctly (no edit needed)
+
+**Verified by user:** UNTESTED
 
 ---
 

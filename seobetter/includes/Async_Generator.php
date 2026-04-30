@@ -47,6 +47,24 @@ class Async_Generator {
             return [ 'success' => false, 'error' => $gen_check['message'] ];
         }
 
+        // v1.5.216.30 — Phase 1 item 11: Country allowlist enforcement at the
+        // pipeline level (was REST-only before). Bulk_Generator calls
+        // start_job() directly without going through rest_generate_start, so
+        // without this gate Free users could bypass via bulk CSV. The bulk
+        // path is Agency-only so this is mostly defence-in-depth, but it also
+        // covers any future direct callers.
+        $country_param = strtoupper( substr( (string) ( $params['country'] ?? '' ), 0, 2 ) );
+        if ( ! License_Manager::is_country_allowed( $country_param ) ) {
+            return [
+                'success' => false,
+                'error'   => sprintf(
+                    /* translators: %s: ISO 2-letter country code */
+                    __( 'Country localization for "%s" requires SEOBetter Pro+ ($69/mo). Free tier supports US, GB, AU, CA, NZ, IE.', 'seobetter' ),
+                    $country_param
+                ),
+            ];
+        }
+
         $job_id = 'j' . bin2hex( random_bytes( 8 ) );
         $keyword = sanitize_text_field( $params['keyword'] ?? '' );
 

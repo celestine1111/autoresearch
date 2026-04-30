@@ -110,6 +110,9 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                     <div class="sb-field-row">
                         <div class="sb-field" style="flex:1">
                             <label><strong>📍 Target Country</strong> <span style="color:#6b7280;font-weight:400;font-size:11px">— where your article&rsquo;s places &amp; data come from</span>
+                                <?php if ( ! SEOBetter\License_Manager::can_use( 'country_localization_80' ) ) : ?>
+                                    <span style="font-size:10px;color:#7c3aed;font-weight:600;margin-left:6px;padding:2px 6px;background:#f5f3ff;border-radius:8px">6 free · 80+ Pro+</span>
+                                <?php endif; ?>
                                 <span class="seobetter-tooltip"><span class="dashicons dashicons-info-outline"></span>
                                     <span class="seobetter-tooltip-text"><strong>What this does:</strong> Tells the plugin WHERE to find real places, businesses, and statistics for your article. Pick Italy if you&rsquo;re writing about gelaterie in Lucignano. Pick Japan if you&rsquo;re writing about ramen shops in Tokyo. This is how the Places waterfall (Perplexity Sonar → OpenStreetMap → Foursquare → HERE → Google Places) knows which country&rsquo;s data to search. <br><br><strong>This does NOT set the article language.</strong> You can pick Italy here and still write the article in English — use the Article Language dropdown next to this for that. Leave as &ldquo;Global&rdquo; only for topics that aren&rsquo;t tied to any specific country (like general how-to guides).</span>
                                 </span>
@@ -239,6 +242,17 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                                 {v:'TN',c:'TN',f:'🇹🇳',n:'Tunisia',l:'ar',ln:'العربية'},
                                 {v:'SN',c:'SN',f:'🇸🇳',n:'Senegal',l:'fr',ln:'Français'},
                             ];
+                            // v1.5.216.30 — Phase 1 item 11: Free-tier country allowlist.
+                            // Mirrors License_Manager::FREE_COUNTRIES — keep in sync.
+                            // Non-free countries get a 🔒 lock badge for Free users with
+                            // an inline upsell on click. Pro+/Agency see all 80+ unlocked.
+                            var sbFreeCountries = ['','US','GB','AU','CA','NZ','IE'];
+                            var sbCanUseAllCountries = <?php echo SEOBetter\License_Manager::can_use( 'country_localization_80' ) ? 'true' : 'false'; ?>;
+
+                            function sbCountryLocked(c) {
+                                if (sbCanUseAllCountries) return false;
+                                return sbFreeCountries.indexOf(c.c) === -1;
+                            }
                             function sbRenderCountries(filter) {
                                 var list = document.getElementById('sb-country-list');
                                 var q = (filter||'').toLowerCase();
@@ -246,9 +260,15 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                                 sbCountries.forEach(function(c) {
                                     var searchStr = (c.n+' '+c.ln+' '+c.l+' '+c.c).toLowerCase();
                                     if (q && searchStr.indexOf(q) === -1) return;
-                                    html += '<div class="sb-country-item" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font-size:13px" onmouseenter="this.style.background=\'#f1f5f9\'" onmouseleave="this.style.background=\'#fff\'" onclick="sbSelectCountry(\''+c.v+'\',\''+c.c+'\',\''+c.f+'\',\''+c.n.replace(/'/g,"\\'")+'\',\''+c.l+'\',\''+c.ln.replace(/'/g,"\\'")+'\')">';
+                                    var locked = sbCountryLocked(c);
+                                    var clickAttr = locked
+                                        ? 'onclick="sbCountryUpsell(\''+c.n.replace(/'/g,"\\'")+'\')"'
+                                        : 'onclick="sbSelectCountry(\''+c.v+'\',\''+c.c+'\',\''+c.f+'\',\''+c.n.replace(/'/g,"\\'")+'\',\''+c.l+'\',\''+c.ln.replace(/'/g,"\\'")+'\')"';
+                                    html += '<div class="sb-country-item" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font-size:13px;'+(locked?'opacity:0.55;':'')+'" onmouseenter="this.style.background=\'#f1f5f9\'" onmouseleave="this.style.background=\'#fff\'" '+clickAttr+'>';
                                     html += '<span style="font-size:20px;width:28px;text-align:center">'+c.f+'</span>';
-                                    html += '<span style="flex:1;color:#1e293b">'+c.n+'</span>';
+                                    html += '<span style="flex:1;color:#1e293b">'+c.n;
+                                    if (locked) html += ' <span style="font-size:11px;color:#7c3aed;font-weight:600;margin-left:4px">🔒 Pro+</span>';
+                                    html += '</span>';
                                     html += '<span style="font-size:11px;color:#64748b;background:#f1f5f9;padding:2px 8px;border-radius:4px">'+c.ln+'</span>';
                                     html += '</div>';
                                 });
@@ -265,6 +285,13 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                                 document.getElementById('sb-country-label').textContent = n + (c === '' ? ' (no country filter)' : '');
                                 document.getElementById('sb-country-dropdown').style.display = 'none';
                                 document.getElementById('sb-country-search').value = '';
+                            }
+                            // v1.5.216.30 — Pro+ upsell when Free user clicks a locked country.
+                            // Doesn't change the picker selection; just tells them what they need.
+                            function sbCountryUpsell(name) {
+                                if (confirm(name + ' requires Pro+ ($69/mo). Free tier supports US, GB, AU, CA, NZ, IE.\n\nClick OK to view pricing.')) {
+                                    window.open('<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>', '_blank');
+                                }
                             }
                             // Init
                             sbRenderCountries('');

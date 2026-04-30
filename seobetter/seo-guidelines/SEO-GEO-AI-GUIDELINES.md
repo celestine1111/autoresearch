@@ -647,6 +647,19 @@ The **SEOBetter Score 0-100** (computed by `Score_Composite::compute()`) re-aggr
 
 Source: [`Score_Composite.php`](../includes/Score_Composite.php) — class constants `LAYER_CHECKS`, `WEIGHTS_DEFAULT`, `WEIGHTS_INTERNATIONAL` are the authoritative mapping.
 
+### 6.2 Country allowlist — tier gating (v1.5.216.30 — Phase 1 item 11)
+
+Layer 6 (international signals) and `Regional_Context` injection are tier-gated per the locked plan. The allowlist split:
+
+| Tier | Country support | Behaviour |
+|---|---|---|
+| **Free** | 6 countries: US / GB / AU / CA / NZ / IE | `Regional_Context::get_block()` returns `''` for all 6 (Western-default — no per-country prompt block fires). Layer 6 scoring stays inactive. International_signals check skipped |
+| **Pro+ ($69/mo) and Agency ($179/mo)** | Full 80+ countries | `country_localization_80` feature unlocks. Non-Western countries get `Regional_Context` prompt blocks (CN/JP/KR/RU/DE/FR/etc.) + Layer 6 scoring activates (+6% weight from `international_signals` check) |
+
+**Source of truth** — `License_Manager::FREE_COUNTRIES` constant (6 entries). `License_Manager::is_country_allowed( $code )` is the canonical gate. Both REST (`rest_generate_start`) and pipeline (`Async_Generator::start_job`) check via this helper for defense-in-depth.
+
+**Sync requirement:** the JS array `sbFreeCountries` in `admin/views/content-generator.php` is a mirror of `License_Manager::FREE_COUNTRIES` for the picker's lock-badge UI. To add or remove a free country, change all three locations atomically (PHP constant + JS mirror + `Regional_Context::WESTERN_DEFAULT_COUNTRIES`).
+
 ---
 
 ## 7. TITLE TAG OPTIMIZATION

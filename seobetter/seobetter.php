@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.29
+ * Version: 1.5.216.30
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.29' );
+define( 'SEOBETTER_VERSION', '1.5.216.30' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1457,17 +1457,20 @@ final class SEOBetter {
             ], 403 );
         }
 
+        // v1.5.216.30 — Phase 1 item 11: country allowlist split. Refactored
+        // from inline array to License_Manager::is_country_allowed() for
+        // single source of truth; tier label corrected to Pro+ (the
+        // country_localization_80 feature lives in PROPLUS_FEATURES).
         $country = strtoupper( substr( (string) ( $params['country'] ?? '' ), 0, 2 ) );
-        $free_countries = [ '', 'US', 'GB', 'AU', 'CA', 'NZ', 'IE' ]; // 6 EN-speaking + Global (no country)
-        if ( $country !== '' && ! in_array( $country, $free_countries, true )
-             && ! SEOBetter\License_Manager::can_use( 'country_localization_80' ) ) {
+        if ( ! SEOBetter\License_Manager::is_country_allowed( $country ) ) {
             return new \WP_REST_Response( [
                 'success'         => false,
                 'error'           => sprintf(
-                    __( 'Country localization for "%s" requires Pro. Free tier supports US/UK/AU/CA/NZ/IE.', 'seobetter' ),
+                    /* translators: %s: ISO 2-letter country code */
+                    __( 'Country localization for "%s" requires SEOBetter Pro+ ($69/mo). Free tier supports US, GB, AU, CA, NZ, IE.', 'seobetter' ),
                     $country
                 ),
-                'upgrade_tier'    => 'pro',
+                'upgrade_tier'    => 'pro_plus',
                 'upgrade_feature' => 'country_localization_80',
             ], 403 );
         }
