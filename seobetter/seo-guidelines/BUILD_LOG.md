@@ -7,12 +7,60 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-29 (v1.5.216.19)
+> **Last updated:** 2026-04-30 (v1.5.216.20)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.20 — Canonical URL sync to all 4 SEO plugins (Phase 1 item 1)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+First task in the locked Phase 1 build queue (`pro-features-ideas.md` §3 item 1). Internal Audit Q3 (2026-04-29) flagged: "Canonical URL: NOT SET in any SEO plugin (gap)." Each SEO plugin was using its own default (WordPress permalink, or user-configured override in that plugin's UI), but SEOBetter never wrote the canonical post-meta key, meaning generated articles had no SEOBetter-side canonical baseline. 15 minute fix.
+
+### Implementation
+
+`seobetter.php::sync_seo_plugin_meta()` line **~2440-2530** now writes the canonical URL (post permalink) to all 4 supported SEO plugins:
+
+| Plugin | Meta key | Anchor |
+|---|---|---|
+| Yoast SEO | `_yoast_wpseo_canonical` | line ~2481 |
+| Rank Math | `rank_math_canonical_url` | line ~2502 |
+| SEOPress | `_seopress_robots_canonical` | line ~2518 |
+| AIOSEO | `_aioseo_canonical_url` (post_meta fallback; primary is `wp_aioseo_posts` table via `populate_aioseo()`) | line ~2530 |
+
+**Critical design decision** — all 4 use `add_post_meta($post_id, $key, $value, true)` with `$unique=true` so the canonical URL is **only written on FIRST save**. This preserves any custom canonical the user later sets (e.g. to redirect duplicate content to a canonical version on another URL). Subsequent SEOBetter saves don't overwrite the user's custom value.
+
+The canonical source is `get_permalink( $post_id )` — the post's own permalink. That's the standard "self-referencing canonical" baseline every well-formed page should have.
+
+### Pre-fix checklist
+
+- ✅ **All keywords** — applies to every article generated
+- ✅ **All 21 content types** — every type goes through `sync_seo_plugin_meta()`
+- ✅ **All AI models** — completely orthogonal to which AI generated the content
+- ✅ **Backward compat** — `add_post_meta` with `$unique=true` never overwrites existing user values; old posts keep whatever canonical they had
+
+### Files touched
+
+1. `seobetter/seobetter.php` — version bump + 4 canonical writes in `sync_seo_plugin_meta()`
+2. `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verify
+
+```
+grep -n "canonical" seobetter/seobetter.php | head
+```
+
+Should show 4 `add_post_meta` calls with `$canonical_url` and `$unique=true` for all 4 plugin meta keys.
+
+**Verified by user:** UNTESTED — Ben to regenerate one article, then in WP admin check that the post has the canonical post_meta set for whichever SEO plugin is installed (e.g. `_yoast_wpseo_canonical` if Yoast is active). Visit the post on the front-end, view source, confirm `<link rel="canonical" href="...">` matches the post URL.
 
 ---
 

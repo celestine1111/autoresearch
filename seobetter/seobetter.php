@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.19
+ * Version: 1.5.216.20
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.19' );
+define( 'SEOBETTER_VERSION', '1.5.216.20' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -2437,6 +2437,14 @@ final class SEOBetter {
         $featured_id  = (int) get_post_thumbnail_id( $post_id );
         $featured_url = $featured_id ? (string) wp_get_attachment_image_url( $featured_id, 'full' ) : '';
 
+        // v1.5.216.20 — Canonical URL: the post's own permalink. Use add_post_meta
+        // with $unique=true so we ONLY write on first save — preserves any custom
+        // canonical the user later sets (e.g. to redirect duplicate content to a
+        // canonical version on another URL). Fixes Phase 1 item 1 from the
+        // pro-features-ideas.md build queue: "Canonical URL not synced to any
+        // SEO plugin (gap from internal audit Q3)".
+        $canonical_url = (string) get_permalink( $post_id );
+
         // Length-enforce every surface at the boundary so we never write over-limit.
         $title_seo = $this->sb_truncate( $meta_title, 60 );
         $desc_seo  = $this->sb_truncate( $meta_desc, 160 );
@@ -2470,6 +2478,7 @@ final class SEOBetter {
                     update_post_meta( $post_id, '_yoast_wpseo_twitter-image', $featured_url );
                 }
             }
+            if ( $canonical_url !== '' ) add_post_meta( $post_id, '_yoast_wpseo_canonical', $canonical_url, true );
         }
 
         // --- RankMath (OG + Twitter now populated)
@@ -2490,6 +2499,7 @@ final class SEOBetter {
                     update_post_meta( $post_id, 'rank_math_twitter_image', $featured_url );
                 }
             }
+            if ( $canonical_url !== '' ) add_post_meta( $post_id, 'rank_math_canonical_url', $canonical_url, true );
         }
 
         // --- SEOPress (OG + Twitter now populated)
@@ -2505,6 +2515,7 @@ final class SEOBetter {
                 update_post_meta( $post_id, '_seopress_social_fb_img', $featured_url );
                 update_post_meta( $post_id, '_seopress_social_twitter_img', $featured_url );
             }
+            if ( $canonical_url !== '' ) add_post_meta( $post_id, '_seopress_robots_canonical', $canonical_url, true );
         }
 
         // --- AIOSEO (full push incl. schema; unchanged from pre-fix19 except title is now length-capped)
@@ -2512,6 +2523,11 @@ final class SEOBetter {
             $ct = $content_type !== '' ? $content_type : ( (string) get_post_meta( $post_id, '_seobetter_content_type', true ) ?: 'blog_post' );
             $post_content = (string) get_post_field( 'post_content', $post_id );
             $this->populate_aioseo( $post_id, $keyword, $title_seo, $desc_seo, $fb_title, $post_content, $ct );
+            // v1.5.216.20 — AIOSEO canonical fallback via post_meta. AIOSEO's primary
+            // storage is the wp_aioseo_posts custom table (handled in populate_aioseo),
+            // but the post_meta key acts as a fallback the plugin reads when its
+            // table row is missing the field.
+            if ( $canonical_url !== '' ) add_post_meta( $post_id, '_aioseo_canonical_url', $canonical_url, true );
         }
     }
 
