@@ -239,6 +239,14 @@ class Cloud_API {
 
     /**
      * Check cloud API status and remaining credits.
+     *
+     * v1.5.216.40 — Phase 1 item 21: monthly_limit no longer hardcoded.
+     * Reads License_Manager::get_cloud_cap() (item 15 internal-only API)
+     * which returns -1 for subscription/unlimited, 0 for Free, or the
+     * AppSumo LTD ladder cap (5/15/30/75/150). The label conversion
+     * happens in `resolve_monthly_limit_label()` so callers see strings
+     * suitable for direct UI display ("unlimited" / "5" / "25") without
+     * reimplementing the same logic in every view.
      */
     public static function check_status(): array {
         $check = License_Manager::can_generate();
@@ -247,8 +255,25 @@ class Cloud_API {
             'source'         => $check['source'] ?? 'cloud',
             'remaining'      => $check['remaining'] ?? 0,
             'monthly_used'   => License_Manager::get_monthly_usage(),
-            'monthly_limit'  => License_Manager::is_pro() ? 'unlimited' : 5,
+            'monthly_limit'  => self::resolve_monthly_limit_label(),
             'has_own_key'    => $check['source'] === 'byok',
         ];
+    }
+
+    /**
+     * Resolve the human-readable monthly Cloud limit label per active tier.
+     *
+     * Returns:
+     *   - 'unlimited' for subscription tiers (Pro / Pro+ / Agency) within
+     *     their published quota — actual quota enforcement at the Cloud
+     *     level ships with Phase 2 Credits backend
+     *   - '0' for Free tier (BYOK-only by design)
+     *   - Numeric LTD ladder cap (5/15/30/75/150) for AppSumo lifetime
+     *     buyers — hard cap per pro-features-ideas.md §5
+     */
+    private static function resolve_monthly_limit_label(): string {
+        $cap = License_Manager::get_cloud_cap();
+        if ( $cap === -1 ) return 'unlimited';
+        return (string) max( 0, $cap );
     }
 }

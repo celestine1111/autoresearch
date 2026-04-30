@@ -404,33 +404,48 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                                     <span class="seobetter-tooltip-text"><strong>What this does:</strong> Tells the AI what shape of article to write. A Listicle produces numbered business/product picks. A How-To produces step-by-step instructions. A Review produces a hands-on evaluation. Each type changes the section structure, tone, and schema markup automatically. Pick the one that matches what you&rsquo;re writing.</span>
                                 </span>
                             </label>
+                            <?php
+                            // v1.5.216.40 — Phase 1 item 21: 🔒 prefix on the
+                            // 18 non-free content types when the user can't
+                            // use them. Free tier sees blog_post, how_to,
+                            // listicle unlocked; everything else gets the
+                            // padlock + " (Pro)" suffix. Prevents the silent-
+                            // fail UX where Free users pick "Recipe", hit
+                            // generate, then see a 403 they don't expect.
+                            $sb_lock = ! SEOBetter\License_Manager::can_use( 'all_21_content_types' );
+                            $sb_lock_prefix = $sb_lock ? '🔒 ' : '';
+                            $sb_lock_suffix = $sb_lock ? ' — Pro' : '';
+                            ?>
                             <select name="content_type" id="sb-content-type" onchange="sbContentTypeChanged(this.value)">
-                                <optgroup label="Common">
+                                <optgroup label="<?php esc_attr_e( 'Common', 'seobetter' ); ?>">
                                     <option value="blog_post" <?php selected( $_POST['content_type'] ?? 'blog_post', 'blog_post' ); ?>>Blog Post</option>
                                     <option value="how_to" <?php selected( $_POST['content_type'] ?? '', 'how_to' ); ?>>How-To Guide</option>
                                     <option value="listicle" <?php selected( $_POST['content_type'] ?? '', 'listicle' ); ?>>Listicle (Top 10...)</option>
-                                    <option value="review" <?php selected( $_POST['content_type'] ?? '', 'review' ); ?>>Product Review</option>
-                                    <option value="comparison" <?php selected( $_POST['content_type'] ?? '', 'comparison' ); ?>>Comparison (X vs Y)</option>
-                                    <option value="buying_guide" <?php selected( $_POST['content_type'] ?? '', 'buying_guide' ); ?>>Buying Guide / Roundup</option>
-                                    <option value="news_article" <?php selected( $_POST['content_type'] ?? '', 'news_article' ); ?>>News Article</option>
-                                    <option value="faq_page" <?php selected( $_POST['content_type'] ?? '', 'faq_page' ); ?>>FAQ Page</option>
-                                    <option value="pillar_guide" <?php selected( $_POST['content_type'] ?? '', 'pillar_guide' ); ?>>Ultimate Guide</option>
+                                    <option value="review" <?php selected( $_POST['content_type'] ?? '', 'review' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Product Review<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="comparison" <?php selected( $_POST['content_type'] ?? '', 'comparison' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Comparison (X vs Y)<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="buying_guide" <?php selected( $_POST['content_type'] ?? '', 'buying_guide' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Buying Guide / Roundup<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="news_article" <?php selected( $_POST['content_type'] ?? '', 'news_article' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>News Article<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="faq_page" <?php selected( $_POST['content_type'] ?? '', 'faq_page' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>FAQ Page<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="pillar_guide" <?php selected( $_POST['content_type'] ?? '', 'pillar_guide' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Ultimate Guide<?php echo esc_html( $sb_lock_suffix ); ?></option>
                                 </optgroup>
-                                <optgroup label="Specialized">
-                                    <option value="recipe" <?php selected( $_POST['content_type'] ?? '', 'recipe' ); ?>>Recipe</option>
-                                    <option value="case_study" <?php selected( $_POST['content_type'] ?? '', 'case_study' ); ?>>Case Study</option>
-                                    <option value="tech_article" <?php selected( $_POST['content_type'] ?? '', 'tech_article' ); ?>>Technical Article</option>
-                                    <option value="interview" <?php selected( $_POST['content_type'] ?? '', 'interview' ); ?>>Interview / Q&A</option>
-                                    <option value="white_paper" <?php selected( $_POST['content_type'] ?? '', 'white_paper' ); ?>>White Paper / Report</option>
-                                    <option value="opinion" <?php selected( $_POST['content_type'] ?? '', 'opinion' ); ?>>Opinion / Op-Ed</option>
-                                    <option value="press_release" <?php selected( $_POST['content_type'] ?? '', 'press_release' ); ?>>Press Release</option>
-                                    <option value="personal_essay" <?php selected( $_POST['content_type'] ?? '', 'personal_essay' ); ?>>Personal Essay</option>
-                                    <option value="glossary_definition" <?php selected( $_POST['content_type'] ?? '', 'glossary_definition' ); ?>>Glossary / Definition</option>
-                                    <option value="scholarly_article" <?php selected( $_POST['content_type'] ?? '', 'scholarly_article' ); ?>>Scholarly Article</option>
-                                    <option value="sponsored" <?php selected( $_POST['content_type'] ?? '', 'sponsored' ); ?>>Sponsored / Advertorial</option>
-                                    <option value="live_blog" <?php selected( $_POST['content_type'] ?? '', 'live_blog' ); ?>>Live Blog</option>
+                                <optgroup label="<?php esc_attr_e( 'Specialized', 'seobetter' ); ?>">
+                                    <option value="recipe" <?php selected( $_POST['content_type'] ?? '', 'recipe' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Recipe<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="case_study" <?php selected( $_POST['content_type'] ?? '', 'case_study' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Case Study<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="tech_article" <?php selected( $_POST['content_type'] ?? '', 'tech_article' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Technical Article<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="interview" <?php selected( $_POST['content_type'] ?? '', 'interview' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Interview / Q&A<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="white_paper" <?php selected( $_POST['content_type'] ?? '', 'white_paper' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>White Paper / Report<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="opinion" <?php selected( $_POST['content_type'] ?? '', 'opinion' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Opinion / Op-Ed<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="press_release" <?php selected( $_POST['content_type'] ?? '', 'press_release' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Press Release<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="personal_essay" <?php selected( $_POST['content_type'] ?? '', 'personal_essay' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Personal Essay<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="glossary_definition" <?php selected( $_POST['content_type'] ?? '', 'glossary_definition' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Glossary / Definition<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="scholarly_article" <?php selected( $_POST['content_type'] ?? '', 'scholarly_article' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Scholarly Article<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="sponsored" <?php selected( $_POST['content_type'] ?? '', 'sponsored' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Sponsored / Advertorial<?php echo esc_html( $sb_lock_suffix ); ?></option>
+                                    <option value="live_blog" <?php selected( $_POST['content_type'] ?? '', 'live_blog' ); ?>><?php echo esc_html( $sb_lock_prefix ); ?>Live Blog<?php echo esc_html( $sb_lock_suffix ); ?></option>
                                 </optgroup>
                             </select>
+                            <?php if ( $sb_lock ) : ?>
+                                <p class="sb-help" style="margin-top:4px;font-size:11px;color:#6b7280">🔒 <?php esc_html_e( '18 specialized content types require Pro ($39/mo) — Free supports Blog Post / How-To / Listicle.', 'seobetter' ); ?> <a href="https://seobetter.com/pricing" target="_blank" style="color:#7c3aed">Upgrade →</a></p>
+                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -610,9 +625,20 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                 <div id="sb-topics-list" style="display:none;margin-top:10px;font-size:12px;line-height:1.8"></div>
             </div>
 
-            <!-- v1.5.214 — Pro upsell card (free tier only). Contextual copy
-                 references real Pro features that compound on top of the free
-                 generation flow, not generic "more features". -->
+            <?php
+            // v1.5.216.40 — Phase 1 item 21: sidebar Pro upsell rewrite.
+            // Locked plan deliverables:
+            //   - REMOVE "Analyze & Improve inject buttons" line
+            //   - FIX "Sonnet-tier LLM" + "5 on Free" misleading copy
+            //     (Sonnet brand → "SEOBetter research stack"; "5 on Free"
+            //     was wrong — Free is BYOK-only, no Cloud at all)
+            //   - ADD wedge features: AI Citation Tracker, Brand Voice,
+            //     Multilingual 60+, Country localization, Brave Search,
+            //     inline citations
+            //   - Keep upsell density LOW (sidebar only, no full-page
+            //     interrupt) — this is an active task flow, intent is to
+            //     generate, not browse pricing
+            ?>
             <?php if ( ! $is_pro ) : ?>
             <div class="sb-upsell-card">
                 <h3 style="display:flex;align-items:center;gap:6px">
@@ -620,14 +646,19 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
                     Push this article further
                 </h3>
                 <ul style="font-size:12px;line-height:1.7;margin:0 0 12px 0;padding:0 0 0 16px;color:var(--sb-text)">
-                    <li><strong>Firecrawl deep research</strong> — 10× citation density vs Jina fallback</li>
-                    <li><strong>All 21 content types</strong> — incl. Comparison, Buying Guide, Case Study, Recipe</li>
-                    <li><strong>AI featured image via Nano Banana</strong> — Pollinations free / OpenRouter / Gemini direct</li>
-                    <li><strong>Analyze &amp; Improve</strong> inject buttons — one-click +5-10 GEO points</li>
-                    <li><strong>5 Schema Blocks</strong> — Product, Event, LocalBusiness, Vacation Rental, Job Posting</li>
-                    <li><strong>50 Cloud articles/mo</strong> on Sonnet-tier LLM (vs 5 on Free)</li>
+                    <li><strong>25 Cloud articles/mo</strong> using SEOBetter research stack — no API keys needed</li>
+                    <li><strong>All 21 content types</strong> — Recipe, Comparison, Buying Guide, Review, Case Study + 13 more</li>
+                    <li><strong>Multilingual 60+ languages</strong> — cross-script keywords + headings + meta</li>
+                    <li><strong>Brand Voice profile</strong> — match your tone; banned-phrase enforcement</li>
+                    <li><strong>AI Citation Tracker</strong> — see when Claude/ChatGPT/Perplexity/Gemini cite you</li>
+                    <li><strong>Tavily expert quotes</strong> + inline citations from real verified sources</li>
+                    <li><strong>AI featured image via Nano Banana</strong> — 7 style presets</li>
+                    <li><strong>Auto-detect schemas</strong> — Recipe / Organization / Person / Product / Event</li>
                 </ul>
                 <a href="https://seobetter.com/pricing" target="_blank" class="button sb-btn-primary" style="font-size:13px;height:38px;line-height:20px;width:100%;text-align:center">$39/mo — See Pro plans →</a>
+                <p style="margin:10px 0 0;font-size:10px;color:#94a3b8;font-style:italic;text-align:center">
+                    Pro+ adds Country localization 80+, Brave Search, 5 manual Schema Blocks
+                </p>
             </div>
             <?php endif; ?>
         </div>
@@ -643,9 +674,16 @@ $pre_keyword = $_GET['keyword'] ?? $_POST['primary_keyword'] ?? '';
         var listEl = document.getElementById('sb-context-hints-list');
         var isPro = hintsRoot.getAttribute('data-is-pro') === '1';
 
-        // Map of content types to schema bundle (matches Schema_Generator::CONTENT_TYPE_MAP)
+        // Map of content types to schema bundle (matches Schema_Generator::CONTENT_TYPE_MAP).
+        // v1.5.216.40 — Phase 1 item 21: Free `blog_post` shows only the
+        // basic schema set (Article + FAQPage + BreadcrumbList) per locked
+        // plan §2 Tier Matrix. Organization + Person + Recipe are Pro+
+        // detection features and shouldn't show in the Free hint. The full
+        // bundle below applies for Pro/Pro+/Agency.
         var schemaMap = {
-            'blog_post':         { primary: 'BlogPosting',          extras: ['BreadcrumbList','Organization','Person','FAQPage (auto)']},
+            'blog_post':         isPro
+                                  ? { primary: 'BlogPosting',          extras: ['BreadcrumbList','Organization','Person','FAQPage (auto)']}
+                                  : { primary: 'Article',              extras: ['BreadcrumbList','FAQPage (auto)']},
             'how_to':            { primary: 'Article',              extras: ['BreadcrumbList','Organization','Person','Speakable','FAQPage (auto)']},
             'listicle':          { primary: 'Article + ItemList',   extras: ['BreadcrumbList','Organization','Person']},
             'review':            { primary: 'Review',               extras: ['itemReviewed (auto)','positiveNotes/negativeNotes','BreadcrumbList','Organization','Person']},

@@ -7,12 +7,83 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-04-30 (v1.5.216.39)
+> **Last updated:** 2026-04-30 (v1.5.216.40)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.40 — Generate Content page sweep (Phase 1 item 21)
+
+**Date:** 2026-04-30
+**Commit:** `[pending]`
+
+### Why this ships
+
+Generate Content page (`?page=seobetter-generate`) had four stale tier-related surfaces from the binary FREE/PRO era — same drift problem that hit the dashboard in item 19. Item 21 brings the active-task generation flow in sync with the locked tier matrix, while explicitly keeping upsell density LOW per the locked plan ("active task flow — sidebar only, no full-page interrupt").
+
+### What shipped
+
+- **🔒 lock prefix on 18 non-Free content types** — `seobetter/admin/views/content-generator.php` ~line 412
+  - Free tier (`! License_Manager::can_use('all_21_content_types')`) sees `🔒 Recipe — Pro`, `🔒 Comparison — Pro`, etc. on all 18 specialised types
+  - Free types (blog_post / how_to / listicle) render unchanged
+  - Below the dropdown: small italic hint when locked: "🔒 18 specialized content types require Pro ($39/mo) — Free supports Blog Post / How-To / Listicle. Upgrade →"
+  - Server-side gate at `Async_Generator::start_job()` already rejects unlicensed types (item 2); this UI surface communicates the gate so users don't pick → submit → 403
+
+- **Schema hint JS — Free `blog_post` emits Article + FAQPage + BreadcrumbList only** — `content-generator.php` ~line 657
+  - Was: `{ primary: 'BlogPosting', extras: ['BreadcrumbList','Organization','Person','FAQPage (auto)'] }` for ALL tiers
+  - Now: ternary on `isPro` flag — Free shows `{ primary: 'Article', extras: ['BreadcrumbList','FAQPage (auto)'] }` per locked plan §2 Tier Matrix. Pro/Pro+/Agency keep the full bundle (Organization + Person via Schema_Generator's content-detected enrichment)
+  - Aligns with item 19's dashboard Free list rewrite — both surfaces now agree that "basic schema = Article + FAQPage + BreadcrumbList only"
+
+- **Sidebar Pro upsell card rewrite** — `content-generator.php` ~line 614
+  - REMOVED "Analyze & Improve inject buttons" line per locked plan
+  - FIXED "Sonnet-tier LLM" → "**SEOBetter research stack**" (the value is the stack + cap, not the LLM brand)
+  - FIXED "(vs 5 on Free)" — was wrong; Free is BYOK-only, no Cloud quota at all. Removed the comparison clause
+  - ADDED 6 wedge features: Multilingual 60+ languages, Brand Voice profile, AI Citation Tracker, Tavily expert quotes, Auto-detect schemas, AI Featured Image
+  - Added small italic line at bottom: "Pro+ adds Country localization 80+, Brave Search, 5 manual Schema Blocks" — single-tier upsell points to the next-tier ladder without bloating the sidebar
+  - Density rule honoured: sidebar card only, no full-page modal
+
+- **Cloud count fix** — `seobetter/includes/Cloud_API.php::check_status()` ~line 250
+  - Was: `'monthly_limit' => License_Manager::is_pro() ? 'unlimited' : 5,` (hardcoded 5)
+  - Now: `'monthly_limit' => self::resolve_monthly_limit_label(),` reading `License_Manager::get_cloud_cap()` (item 15)
+  - New private helper `resolve_monthly_limit_label()` returns: 'unlimited' for subscription / '0' for Free / numeric LTD ladder cap (5/15/30/75/150) for AppSumo lifetime buyers
+  - Status bar at top of generator page now displays accurate per-tier Cloud quota for ALL tier shapes including LTD
+
+- **Country picker hint** — already shipped in item 11 (verified existing): `6 free · 80+ Pro+` badge next to the Country picker label for Free users
+
+### Verify (file:method anchors)
+
+```bash
+# Lock prefix on non-free content types
+grep -n "sb_lock_prefix\|all_21_content_types\|18 specialized content types" seobetter/admin/views/content-generator.php
+
+# Schema hint tier branch
+grep -n "isPro" seobetter/admin/views/content-generator.php | head -5
+
+# Sidebar upsell rewrite (no more banned strings)
+grep -n "Sonnet-tier\|Analyze.*Improve.*inject\|vs 5 on Free" seobetter/admin/views/content-generator.php
+# (returns zero results)
+
+# Cloud count fix
+grep -n "resolve_monthly_limit_label\|monthly_limit" seobetter/includes/Cloud_API.php
+```
+
+### Tier-specific behaviour after this ship
+
+- **Free**: 18 content types padlocked + suffix " — Pro"; Free schema hint shows Article + FAQPage + BreadcrumbList; sidebar Pro upsell renders; status bar shows "Cloud (0/0 used)"
+- **Pro**: all content types unlocked; full schema hint (BlogPosting + Org + Person); no sidebar upsell; status bar shows "Cloud (N/unlimited used)"
+- **Pro+ / Agency**: same as Pro
+- **AppSumo LTD**: full unlock per ladder tier; status bar shows "Cloud (N/{5|15|30|75|150} used)" matching ladder cap
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No structural changes to other guideline files — this is UI alignment over already-shipped server-side gates (Async_Generator content_type, Schema_Generator detection, License_Manager::get_cloud_cap from item 15)
+
+**Verified by user:** UNTESTED
 
 ---
 
