@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.44
+ * Version: 1.5.216.45
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.44' );
+define( 'SEOBETTER_VERSION', '1.5.216.45' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -136,6 +136,14 @@ final class SEOBetter {
     }
 
     public function activate(): void {
+        // v1.5.216.45 — fix #5: wrap activation in output buffer to suppress
+        // any incidental output. WordPress's plugin activator captures stdout
+        // during activate() and surfaces it as a "plugin generated N characters
+        // of unexpected output" warning. The output isn't fatal but unsettles
+        // users. Buffer + discard catches any rogue echo / dbDelta debug /
+        // option-write notices regardless of source.
+        ob_start();
+
         $defaults = [
             'api_provider'      => 'none',
             'api_key'           => '',
@@ -148,12 +156,24 @@ final class SEOBetter {
         if ( false === get_option( 'seobetter_settings' ) ) {
             add_option( 'seobetter_settings', $defaults );
         }
+
+        // v1.5.216.45 — fix #4: register rewrite rules manually BEFORE flushing,
+        // so the activation flush has rules to write into .htaccess immediately.
+        // Pre-fix the rewrite rules were only registered on the `init` hook,
+        // which runs AFTER activation in the request cycle — so flush_rewrite_rules()
+        // here had nothing to write, and /llms.txt + /llms-full.txt + /{lang}/llms.txt
+        // returned 404 until the user manually saved Permalinks.
+        $this->register_llms_txt_rewrite();
         flush_rewrite_rules();
+
         SEOBetter\Decay_Alert_Manager::schedule();
 
         // v1.5.216.22 — Phase 1 item 3: GSC Manager
         SEOBetter\GSC_Manager::install_table();
         SEOBetter\GSC_Manager::schedule_cron();
+
+        // v1.5.216.45 — discard any output buffered during activation (fix #5)
+        ob_end_clean();
     }
 
     public function deactivate(): void {

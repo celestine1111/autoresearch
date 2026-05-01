@@ -7,12 +7,71 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-01 (v1.5.216.44)
+> **Last updated:** 2026-05-02 (v1.5.216.45)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.45 — Activation hardening: rewrite-flush timing + suppress unexpected output
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bugs
+
+Two activation-path bugs found via Browserbase live testing yesterday:
+
+**#4 — `/llms.txt` 404s after fresh install until manual Permalinks save.** The `register_llms_txt_rewrite()` method runs on the `init` hook, which fires AFTER the `activation` hook in the request cycle. So `flush_rewrite_rules()` inside `activate()` had no rules to write — there were no rules registered yet. The first request after activation hits the rewrite cache before init populates it, so `/llms.txt`, `/llms-full.txt`, and `/{lang}/llms.txt` all 404 until the user saves Permalinks (which triggers a fresh flush with rules now registered). The on-init version-check flush in `register_llms_txt_rewrite()` would also fix it on the second request — but the first request is broken.
+
+**#5 — "Plugin generated 300 characters of unexpected output during activation"** WP warning on first activation after upload. Plugin works, but the warning is unprofessional and could prompt user reports about it. Source unidentified — could be `dbDelta()`, an option-write notice, a stray PHP whitespace, or any other function called during activate().
+
+### Fixes
+
+**`seobetter/seobetter.php::activate()`**
+
+```php
+public function activate(): void {
+    ob_start();                              // ← fix #5: catch any incidental output
+    // ... defaults + add_option ...
+    $this->register_llms_txt_rewrite();      // ← fix #4: register rules BEFORE flushing
+    flush_rewrite_rules();                   //     so flush has something to write
+    // ... cron + GSC table install ...
+    ob_end_clean();                          // ← fix #5: discard buffered output
+}
+```
+
+Why this works:
+
+- **Fix #4:** Calling `register_llms_txt_rewrite()` from within `activate()` means the rewrite rules array is populated at the moment we call `flush_rewrite_rules()`. The flush now writes the new rules into the rewrite cache. First request after activation routes correctly. The `init`-time version-check flush in `register_llms_txt_rewrite()` still runs on subsequent requests and correctly skips re-flushing because the version flag matches.
+- **Fix #5:** `ob_start()` / `ob_end_clean()` discards anything echoed during activation. WordPress's activation captor sees zero output → no warning. Doesn't mask a real bug — there's nothing legitimately printed during activation that anyone needs to see. Belt-and-braces against any current or future leak source.
+
+### Verify (file:method anchors)
+
+```bash
+# Fix #4 — register rules then flush, in correct order
+grep -n "register_llms_txt_rewrite\|flush_rewrite_rules\|ob_start\|ob_end_clean" seobetter/seobetter.php | head -15
+
+# Live test:
+# 1. Deactivate + Delete plugin via wp-admin
+# 2. Upload + activate fresh zip
+# 3. Visit /llms.txt directly (no Permalinks save first) → should return 200
+# 4. Activation page shows NO "300 characters of unexpected output" warning
+```
+
+### Tier behaviour
+
+Unchanged. Pure activation-lifecycle plumbing. No tier check, no feature gate, no guideline change.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — activation lifecycle isn't documented in any guideline; the fix is internal infrastructure
+
+**Verified by user:** UNTESTED
 
 ---
 
