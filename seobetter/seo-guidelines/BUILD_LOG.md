@@ -19,7 +19,7 @@
 ## v1.5.216.45 — Activation hardening: rewrite-flush timing + suppress unexpected output
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `68a6cb7`
 
 ### Bugs
 
