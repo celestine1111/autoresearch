@@ -19,7 +19,7 @@
 ## v1.5.216.48 — Brand Voice scrub: also clean title / meta / keyword
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `a048c9e`
 
 ### Bug
 
