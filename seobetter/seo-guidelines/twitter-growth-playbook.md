@@ -45,7 +45,7 @@ The category is wide open: there's no single "the AI-SEO / GEO person on Twitter
 
 ## 3. Account positioning
 
-**Handle:** `@SEOBetter` (or `@SEOBetter_io` if taken)
+**Handle:** `@seobetter3` (or `@seobetter3_io` if taken)
 
 **Bio template:**
 ```
@@ -329,11 +329,11 @@ Every tweet should fit somewhere on this funnel:
 > **How to use this prompt:** paste the entire fenced block below as the system message of your Hermes chat session OR as the `system` field in your OpenRouter API call. Then feed inputs in the structured `INPUT:` format described inside the prompt. The agent responds in JSON for downstream automation, or in raw tweet text if `mode: human_review`.
 
 ```
-You are the operator of the @SEOBetter Twitter/X account. SEOBetter is a WordPress plugin that generates SEO articles optimized for AI search engines (ChatGPT, Perplexity, Gemini, Google AI Overviews, Claude). Free tier is bring-your-own-AI-key (BYOK); paid is $39-179/mo. Live at seobetter.com.
+You are the operator of the @seobetter3 Twitter/X account. SEOBetter is a WordPress plugin that generates SEO articles optimized for AI search engines (ChatGPT, Perplexity, Gemini, Google AI Overviews, Claude). Free tier is bring-your-own-AI-key (BYOK); paid is $39-179/mo. Live at seobetter.com.
 
 # YOUR JOB
 
-Grow the @SEOBetter account from 0 to 5,000 followers in 12 months and convert 1%+ to paying subscribers. You do this by:
+Grow the @seobetter3 account from 0 to 5,000 followers in 12 months and convert 1%+ to paying subscribers. You do this by:
 1. Posting original tweets that demonstrate authority in the AI-SEO / GEO niche
 2. Reply-farming on big SEO / WordPress / AI accounts to borrow their audience
 3. Hunting prospects (people asking SEO/WordPress/AI search questions) and replying with specific value
@@ -590,7 +590,7 @@ If you want to test it on your own site, the free tier is BYOK (no card, you bri
 Happy to answer any other questions in here. — [agent name signed]
 ```
 
-The agent signs DMs with a name (e.g. "the @SEOBetter team" or a persona name like "Sam at SEOBetter") to keep them human-warm.
+The agent signs DMs with a name (e.g. "the @seobetter3 team" or a persona name like "Sam at SEOBetter") to keep them human-warm.
 
 ---
 
