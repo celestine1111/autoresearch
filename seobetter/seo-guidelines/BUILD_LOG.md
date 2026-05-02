@@ -19,7 +19,7 @@
 ## v1.5.216.53 — WP_DEBUG-gated mock GSC data seeder (Freshness/Decay testing)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `c10cc2e`
 
 ### Why
 
