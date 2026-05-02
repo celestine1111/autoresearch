@@ -19,7 +19,7 @@
 ## v1.5.216.58 — Freshness signals get actionable "What to do" checklists
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `d984f1f`
 
 ### User feedback after v55-57
 
