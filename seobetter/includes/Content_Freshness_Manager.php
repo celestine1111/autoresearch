@@ -153,9 +153,35 @@ class Content_Freshness_Manager {
 
     /**
      * Check if content has a freshness signal.
+     *
+     * v1.5.216.56 — multilingual. Was English-only; falsely flagged every
+     * non-English post as missing a Last Updated line even when the article
+     * had a localized one (e.g. Japanese `最終更新日`, Korean `최종 수정일`,
+     * Arabic `آخر تحديث`). Now matches the English regex OR any of the 30+
+     * localized labels from Localized_Strings::get_translations()['last_updated'].
      */
     private function has_freshness_signal( string $content ): bool {
-        return (bool) preg_match( '/last\s*updated|date\s*modified|updated\s*on|reviewed\s*on|published\s*on/i', $content );
+        // English markers — keep all five so "updated on" and "published on"
+        // still trigger even in non-English articles that mix English chrome.
+        if ( preg_match( '/last\s*updated|date\s*modified|updated\s*on|reviewed\s*on|published\s*on/iu', $content ) ) {
+            return true;
+        }
+        // Localized labels from Localized_Strings — case-insensitive,
+        // Unicode-aware. Cached per-request.
+        static $localized_pattern = null;
+        if ( $localized_pattern === null ) {
+            $strings = Localized_Strings::get_translations_for( 'last_updated' );
+            $parts = [];
+            foreach ( $strings as $lang => $label ) {
+                if ( $lang === 'en' || $label === '' ) continue;
+                $parts[] = preg_quote( $label, '/' );
+            }
+            $localized_pattern = $parts ? '/' . implode( '|', $parts ) . '/iu' : '';
+        }
+        if ( $localized_pattern !== '' && preg_match( $localized_pattern, $content ) ) {
+            return true;
+        }
+        return false;
     }
 
     // ── v1.5.216.23 — Phase 1 item 4: sortable inventory + priority scoring ──
@@ -441,7 +467,12 @@ class Content_Freshness_Manager {
 
         // ── Signal 3: missing "Last Updated:" signal ──
         if ( ! $has_signal ) {
-            $copy_payload = sprintf( 'Last Updated: %s', wp_date( 'F j, Y' ) );
+            // v1.5.216.56 — localize the copy payload to the post's language so
+            // pasting "最終更新日: …" into a Japanese post doesn't look like a
+            // bilingual artifact.
+            $post_lang  = strtolower( (string) get_post_meta( $post_id, '_seobetter_language', true ) ?: 'en' );
+            $label      = Localized_Strings::get( 'last_updated', $post_lang );
+            $copy_payload = sprintf( '%s: %s', $label, wp_date( 'F j, Y' ) );
             $signals[] = [
                 'id'           => 'no_freshness_signal',
                 'severity'     => 'warning',

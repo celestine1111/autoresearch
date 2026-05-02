@@ -485,6 +485,11 @@ class Localized_Strings {
      * Keys: last_updated, key_takeaways, references.
      * Language codes follow ISO 639-1 (or BCP-47 for region variants).
      */
+    public static function get_translations_for( string $key ): array {
+        $all = self::get_translations();
+        return $all[ $key ] ?? [];
+    }
+
     private static function get_translations(): array {
         return [
             'last_updated' => [

@@ -7,12 +7,71 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.55)
+> **Last updated:** 2026-05-02 (v1.5.216.56)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.56 — Freshness Diagnostic multilingual fix (false-positive on non-English posts)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+Live test on the staging site:
+- Generated English article (post 387, 1375 words) + Japanese article (post 390, 260 words) for keyword "best seo tools for wordpress 2026"
+- Both articles HAD a "Last Updated" line in their respective languages
+  - EN: `Last Updated: May 2026`
+  - JA: `最終更新日: 2026年5月`
+- Diagnostic correctly suppressed the `no_freshness_signal` card on the English post (priority 0, signals: [])
+- Diagnostic INCORRECTLY fired the `no_freshness_signal` card on the Japanese post (priority 10), even though the Japanese article HAS the localized freshness marker
+
+Root cause: `Content_Freshness_Manager::has_freshness_signal()` regex only matched English phrases:
+
+```php
+preg_match( '/last\s*updated|date\s*modified|updated\s*on|reviewed\s*on|published\s*on/i', $content );
+```
+
+Same bug would hit every one of SEOBetter's 60+ supported languages — the "No Last Updated:" signal would always fire for non-English posts, telling users to add a freshness line that already exists.
+
+Additional issue: even when the signal correctly fired (post genuinely missing the line), the `Copy this line` payload was hardcoded English `Last Updated: …` — pasting that into a Japanese/Chinese/Arabic/Korean post would create a bilingual artifact.
+
+### Fix
+
+**`includes/Content_Freshness_Manager.php::has_freshness_signal()`:**
+- Keep the English regex (covers EN-mixed-into-other-languages chrome)
+- Plus: build a Unicode-aware alternation regex from `Localized_Strings::get_translations_for('last_updated')` covering 30+ languages: ja `最終更新日`, zh `最后更新` / zh-tw `最後更新`, ko `최종 수정일`, ar `آخر تحديث`, ru `Последнее обновление`, de `Zuletzt aktualisiert`, fr `Dernière mise à jour`, es `Última actualización`, it `Ultimo aggiornamento`, pt `Última atualização`, hi `अंतिम अद्यतन`, nl `Laatst bijgewerkt`, pl `Ostatnia aktualizacja`, tr `Son güncelleme`, sv/da/no/fi (Nordic), cs/hu/ro/el/uk (Eastern European), vi/th/id/ms (Southeast Asian), he `עודכן לאחרונה`
+- Pattern cached as static so it builds once per request, not once per signal check
+
+**`includes/Localized_Strings.php`:**
+- New `get_translations_for( string $key ): array` — public accessor over the existing private `get_translations()`. Lets `Content_Freshness_Manager` build its multilingual alternation without duplicating the dataset
+
+**`Content_Freshness_Manager::diagnostic_for_post()`:**
+- Localize the `copy` action payload using `_seobetter_language` post meta + `Localized_Strings::get( 'last_updated', $post_lang )`
+- Result: copying into a Japanese post pastes `最終更新日: 2026年5月2日`, not `Last Updated: May 2, 2026`
+
+### Verify
+
+```bash
+grep -n "has_freshness_signal\|Localized_Strings::get_translations_for" seobetter/includes/Content_Freshness_Manager.php
+grep -n "public static function get_translations_for" seobetter/includes/Localized_Strings.php
+```
+
+End-to-end test (live):
+1. JA post 390 BEFORE this fix: `signals: [{id:'no_freshness_signal',...}]` (false positive)
+2. AFTER fix: `signals: []` (correct — JA post has 最終更新日)
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline edits — the fix preserves existing behavior for English and adds correct behavior for 30+ other languages
+
+**Verified by user:** UNTESTED
 
 ---
 
