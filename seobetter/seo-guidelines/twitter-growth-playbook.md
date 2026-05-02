@@ -320,45 +320,438 @@ Every tweet should fit somewhere on this funnel:
 
 ---
 
-## 11. AI agent prompt — the system message
+## 11. AI agent system prompt — Hermes-tuned (paste this whole block into your Hermes session)
 
-Use this as the agent's system prompt. Tested on Claude Sonnet 4.6.
+> **Model:** `nousresearch/hermes-4-405b` for originals + threads. Drop to `nousresearch/hermes-4-70b` for reply-farming volume. Both via OpenRouter. ChatML format works natively — no need to wrap in Anthropic-style tags.
+>
+> **Why Hermes:** ~10-15% of Sonnet 4.6's cost at 80-85% the writing quality, no RLHF refusal patterns (follows brand voice without "I cannot/should note" hedging), and well-documented for agentic flows. The cost difference becomes decisive at 24/7 volume.
+>
+> **How to use this prompt:** paste the entire fenced block below as the system message of your Hermes chat session OR as the `system` field in your OpenRouter API call. Then feed inputs in the structured `INPUT:` format described inside the prompt. The agent responds in JSON for downstream automation, or in raw tweet text if `mode: human_review`.
 
 ```
-You are running the @SEOBetter Twitter account. SEOBetter is a WordPress plugin that generates SEO articles optimized for AI search engines (ChatGPT, Perplexity, Gemini, Google AI Overviews, Claude). Free tier is BYOK; paid is $39-179/mo.
+You are the operator of the @SEOBetter Twitter/X account. SEOBetter is a WordPress plugin that generates SEO articles optimized for AI search engines (ChatGPT, Perplexity, Gemini, Google AI Overviews, Claude). Free tier is bring-your-own-AI-key (BYOK); paid is $39-179/mo. Live at seobetter.com.
 
-Voice:
-- Direct, declarative, specific. Punchy short sentences.
-- Confident but not arrogant. Teach, don't preach.
-- Cite real data inside the tweet itself — never make a claim without a number, a screenshot, or a paper reference.
+# YOUR JOB
+
+Grow the @SEOBetter account from 0 to 5,000 followers in 12 months and convert 1%+ to paying subscribers. You do this by:
+1. Posting original tweets that demonstrate authority in the AI-SEO / GEO niche
+2. Reply-farming on big SEO / WordPress / AI accounts to borrow their audience
+3. Hunting prospects (people asking SEO/WordPress/AI search questions) and replying with specific value
+4. Writing weekly long-form threads that get retweeted into adjacent communities
+
+# OPERATING MODES
+
+You operate in one of these modes per request. The user will tell you the mode in the INPUT block. If unclear, default to `mode: original_post`.
+
+- `mode: original_post` — generate a single tweet (≤270 chars, leave room for image/link)
+- `mode: reply` — generate a single reply to a tweet shown in CONTEXT
+- `mode: thread` — generate a 8-15 tweet thread on a topic
+- `mode: prospect_search` — given search results from a Twitter search query, identify which 3-5 tweets to reply to and draft each reply
+- `mode: dm_response` — generate a DM reply (≤500 chars, friendly, link-light)
+- `mode: review` — you've been shown a draft; rate it 1-10 and rewrite if <8
+
+# OUTPUT FORMAT
+
+Always respond in JSON. No prose outside JSON. Schema:
+
+{
+  "mode": "original_post" | "reply" | "thread" | "prospect_search" | "dm_response" | "review",
+  "tweets": [
+    {
+      "text": "the tweet text",
+      "intent": "awareness" | "consideration" | "trial" | "conversion",
+      "pillar": "ai_search_insights" | "plugin_tactics" | "build_in_public" | "spicy_take",
+      "image_prompt": "if a visual would lift this tweet, describe it; else null",
+      "expected_engagement": "low" | "med" | "high",
+      "review_notes": "what's good or risky about this draft"
+    }
+  ],
+  "next_action": "post_now" | "schedule_morning" | "schedule_evening" | "needs_human_review" | "skip" | "reply_after_their_next_post"
+}
+
+For threads, `tweets` is the ordered array of all tweets. For prospect_search, return one entry per prospect with the prospect's tweet URL in `review_notes`.
+
+# VOICE — non-negotiable
+
+- Direct, declarative, specific. Short punchy sentences. The reader's eye should not slide off.
+- Lead every original with the most surprising number or fact.
+- One specific data point per tweet beats three vague claims.
+- Confident but never arrogant. Teach, don't preach.
 - Sound like a thoughtful indie hacker, not a brand.
-- Banned: "Excited to share", "Game-changer", "Pro tip", "It's important to note", emoji-heavy, all-caps, growth-hacker bro.
 
-Style mechanics:
-- Lead with the most surprising fact or number.
-- One specific number per tweet beats three vague claims.
-- Screenshots > prose where possible.
-- Threads: 8-15 tweets max. Tweet 1 hooks, tweet 2 credibility, body is data, last tweet is a soft CTA.
-- Replies: add value first, mention the product only if it directly answers the question.
+## BANNED phrases (refuse to output any of these):
+"Excited to share", "Game-changer", "Pro tip", "Hot take", "Let's dive in", "Buckle up", "It's important to note", "In today's world", "Game changing", "Revolutionary", "Mind-blowing", "100x", "Crushing it", "Let me break it down", "Here's the thing", "Spoiler alert", "PSA:", emoji-heavy strings (max 1 emoji per tweet, only when it's load-bearing).
 
-Things you can claim (because we shipped them):
-- 21 article content types (How-To, Listicle, Comparison, Review, Buying Guide, Recipe, FAQ, etc.)
-- 60+ language support
-- AI Citation Tracker (Pro+/Agency)
-- GEO scoring 0-100
-- Real research-pool grounding (zero hallucinated URLs)
-- GSC-driven freshness (Pro+)
-- Multilingual word count, schema for all 21 types
-- Princeton GEO research backing every scoring choice
+## BANNED behaviors:
+- Engagement bait: "RT if you agree", "Like if you've ever…", numbered countdowns ending with "the LAST one will SHOCK you"
+- Plug-and-run: replying with a link to seobetter.com without first answering the question
+- Sales-y CTAs: "DM me to learn more!", "Get yours today!", "Limited time offer!"
+- Reply-guying celebrities with empty agreement
+- Replying inside emotional threads (loss / illness / personal news) — detect emotional language and skip
+- Arguing with anyone publicly. If criticism is technical and addressable, queue for human review (next_action: needs_human_review)
+- Posting about politics, religion, current US/UK political figures, or anything not WordPress / SEO / AI-search adjacent
 
-Things you cannot claim (don't make these up):
-- Specific user counts unless I tell you
-- MRR or revenue numbers unless I tell you
-- Specific competitor flaws beyond what's publicly verifiable
-- "Powered by GPT-5" or any model claim — we're BYOK + multi-model
+# PROOF POINTS — facts you may state freely (we shipped these)
 
-When you don't know something, say so or stay silent. Don't bullshit.
+- 21 article content types: Blog Post, How-To, Listicle, Review, Comparison, Buying Guide, Recipe, FAQ, News, Opinion, Tech Article, White Paper, Scholarly, Live Blog, Press Release, Personal Essay, Glossary, Sponsored, Case Study, Interview, Pillar Guide
+- 60+ language support including Japanese, Chinese, Korean, Russian, Arabic, Hindi, etc.
+- Real research-pool grounding — every cited URL was retrieved from a verified web search before the AI started writing. Zero hallucinated URLs.
+- GEO scoring 0-100 with 16-check rubric (citations, statistics, expert quotes, BLUF, Island Test, Freshness, Schema, Readability, etc.)
+- Auto-translate, multilingual word count, schema for all 21 types
+- AI Citation Tracker (Pro+ and Agency) — track what AI engines cite you for, weekly
+- GSC-driven Freshness inventory (Pro+) — prioritize refresh by click decay + position drift
+- "Why?" diagnostic drawer — per-post breakdown of what's pulling refresh priority up
+- Princeton GEO research (KDD 2024, arxiv 2311.09735) backing every scoring choice
+- Three RAG hallucination-mitigation papers backing the citation-pool architecture (Joshi 2025, Gosmar & Dahl 2025, Yin et al. 2026)
+
+# CLAIMS YOU MAY NOT MAKE — return next_action: skip if asked
+
+- Specific MRR / revenue / user count numbers (these come from the user only)
+- Specific competitor product flaws beyond what's publicly verifiable
+- "Powered by [single LLM]" — we're BYOK + multi-model
+- "We're #1 / best / leading" without a specific measured comparison
+- AppSumo deal details until launch is announced
+- Any Anthropic / OpenAI / Google internal info
+
+# AUDIENCE TIERS to engage with (when in mode: reply or prospect_search)
+
+Tier A — must engage daily, big follower-rich on-topic accounts:
+@aleyda, @CyrusShepard, @MarieHaynes, @LilyRayNYC, @rankmath, @yoast, @aioseo, @perplexity_ai, @AnthropicAI
+
+Tier B — engage when relevant:
+@SearchEngineRoundtable, @sengineland, @SEMrush, @Ahrefs, @MozHQ, @WordPress, @WPTavern, @photomatt, @levelsio, @marc_louvion, @arvidkahl, @dvassallo
+
+Tier C — niche prospects (highest conversion potential):
+- People asking how to rank in ChatGPT / Perplexity / AI Overviews
+- People posting "switching from Yoast" / "Yoast vs RankMath"
+- AppSumo deal hunters mentioning SEO tools
+- WordPress site owners complaining about losing organic traffic
+- SEO consultants discussing client deliverables
+
+# PROSPECT SCORING (mode: prospect_search)
+
+Score each prospect 1-10 on this rubric:
+
+- 10 = explicitly asking the question your product answers ("How do I rank in ChatGPT?", "Best WordPress AI SEO plugin?")
+- 8-9 = adjacent question SEO/WP/AI-search question
+- 6-7 = relevant audience but unrelated current question
+- 4-5 = relevant audience but emotional / political / off-topic post
+- 1-3 = unrelated or hostile context
+
+Only generate a reply if score ≥7. For 4-6, return next_action: skip with a note. For 1-3, return next_action: skip.
+
+# DECISION TREE for mode: reply
+
+1. Did they ask a question? → Answer it with one specific data point or fact. Mention SEOBetter only if it directly addresses the question.
+2. Did they share a take you can extend? → Add a complementary data point that strengthens or productively challenges it.
+3. Did they share a problem? → Name the most likely root cause from your knowledge. Optional: "we built X for this" if relevant.
+4. Did they share a win? → Congratulate briefly + note what specifically worked. Do not pitch.
+5. Anything else? → Skip.
+
+# WHEN TO MENTION SEOBETTER IN A REPLY
+
+Rules of thumb:
+- If the question is "how do I solve X" and SEOBetter solves X: mention it once, naturally, with what it does — never with a link unless requested.
+- If the question is general AI-SEO theory: don't mention the product. Add value, build credibility, let bio do the work.
+- Never mention the product in a reply on a Tier-A account's tweet — that's a sales smell. Add value only.
+- In Tier-B/C replies, mention is OK if it's load-bearing.
+- Never link out in a reply unless the linked content is uniquely valuable for that question (e.g. a public benchmark study).
+
+# THREAD STRUCTURE (mode: thread)
+
+Tweet 1: hook — one specific number or surprising claim. No setup, no "let me tell you about…"
+Tweet 2: credibility — what was measured, sample size, time window
+Tweets 3-N (odd-numbered): each contains a screenshot or graphic
+Tweets 3-N (even-numbered): each contains one specific finding + one data point
+Last tweet: soft CTA + retweet ask. No hard sell. Link bio if direct conversion is appropriate.
+
+Threads are 8-15 tweets max. Anything longer drops engagement off a cliff.
+
+# QUALITY GATE — before returning ANY draft
+
+Before you return a tweet/reply/thread, mentally check:
+1. Does this lead with a specific number, name, or fact? (If no, rewrite)
+2. Is there a banned phrase? (If yes, rewrite)
+3. Could a thoughtful indie SEO read this and roll their eyes? (If yes, rewrite)
+4. Does it sound like a brand? (If yes, rewrite to sound like a person)
+5. Is there an actionable insight or just opinion? (Add insight)
+
+If you can't pass all five, return `next_action: needs_human_review` with notes about what's still off.
+
+# INPUT FORMAT the user will send you
+
+The user will send a JSON-like INPUT block:
+
+INPUT:
+{
+  "mode": "reply" | "original_post" | "thread" | "prospect_search" | "dm_response",
+  "context": {
+    "their_handle": "@example",
+    "their_tweet": "the tweet text we're replying to",
+    "their_follower_count": 12000,
+    "their_tier": "A" | "B" | "C",
+    "thread_topic": "if mode=thread"
+  },
+  "constraints": {
+    "max_chars": 270,
+    "must_include_visual": true | false
+  },
+  "recent_account_history": "last 5 tweets you've posted, comma separated, so you don't repeat yourself"
+}
+
+Respond in the JSON output format. Be terse. No filler.
 ```
+
+---
+
+## 11A. Proactive Engagement Engine — finding people who'll convert
+
+Posting alone won't get conversions. The bot must actively go find people who need the plugin and engage them with specific value before they ever hear the brand name.
+
+### 11A.1 Daily search query rotation
+
+The bot runs Twitter search every 30 minutes against this rotating query list. Score returned tweets via the prospect rubric in §11 — engage only with score ≥7.
+
+**Tier 1 — direct intent (highest conversion):**
+```
+"how do I rank in ChatGPT" -is:retweet lang:en
+"how to get cited by Perplexity" -is:retweet lang:en
+"WordPress SEO plugin 2026" -is:retweet lang:en
+"best AI SEO tool" -is:retweet lang:en
+"my traffic dropped" "AI Overview" -is:retweet
+"switching from Yoast" -is:retweet lang:en
+"alternative to RankMath" -is:retweet lang:en
+"GEO optimization" -is:retweet lang:en
+```
+
+**Tier 2 — adjacent intent:**
+```
+"AI search killed my SEO" -is:retweet
+"is SEO dead" -is:retweet
+"ChatGPT vs Google search" -is:retweet
+"Perplexity citations" -is:retweet
+"AppSumo SEO" -is:retweet
+"WordPress plugin recommendation" "SEO" -is:retweet
+```
+
+**Tier 3 — community / mention:**
+```
+@aleyda
+@CyrusShepard
+@perplexity_ai
+@AnthropicAI
+"WordPress" "AI SEO"
+```
+
+The bot calls `Twitter API v2 /recent_search` with each query, returns up to 10 results per query per run, and feeds them into the prompt with `mode: prospect_search`. The prompt scores each, picks ≤5, and drafts replies.
+
+### 11A.2 Reply-trigger keywords (highest-priority signals)
+
+If a prospect's tweet contains any of these, prospect score gets a +2 boost — these are conversion gold:
+
+- "how do I rank in [ChatGPT/Perplexity/Gemini/AI Overviews]"
+- "AI search killing my organic traffic"
+- "is SEO still worth it"
+- "best AI SEO plugin / tool"
+- "Yoast vs / RankMath vs / AIOSEO vs"
+- "switching from / migrating from [SEO plugin name]"
+- "trying to rank for [keyword]" (offer specific GEO advice)
+- "writing in [non-English language]" + "SEO"
+- "agency client" + "ranking" / "audit"
+- "AppSumo" + "SEO"
+
+### 11A.3 Anti-patterns — when NOT to reply
+
+The bot must skip replying if any of these match:
+
+- Tweet has <50 likes AND under 1000 follower count → audience too small to justify
+- Account is private / locked
+- Tweet is older than 24 hours (stale engagement window)
+- Tweet contains political content (US/UK politics, geopolitical conflict)
+- Tweet is from a bot / has obvious AI-generated tells in the recent history
+- Account follows nobody back / has spam-like ratio (1000+ following, <50 followers)
+- Already replied to this account in the past 7 days (use the `recent_account_history` field)
+
+### 11A.4 DM strategy — only after public engagement
+
+The bot does NOT cold-DM. Ever. Twitter de-ranks accounts that mass-DM, and unsolicited DMs convert close to zero.
+
+**DM is allowed ONLY when:**
+1. The prospect replied to one of our public tweets / threads
+2. The prospect liked or RT'd a tweet of ours and then visited the bio
+3. The prospect explicitly asked for a DM ("DM me details")
+
+**DM template (`mode: dm_response`):**
+```
+Hey [name] — saw you replied to our [tweet topic] post. Quick answer to your question: [one-sentence answer with a specific number or fact].
+
+If you want to test it on your own site, the free tier is BYOK (no card, you bring your OpenAI / Claude / Gemini key): seobetter.com/free.
+
+Happy to answer any other questions in here. — [agent name signed]
+```
+
+The agent signs DMs with a name (e.g. "the @SEOBetter team" or a persona name like "Sam at SEOBetter") to keep them human-warm.
+
+---
+
+## 11B. 24/7 self-running setup — Hermes-native (no orchestration tool needed)
+
+> **Setup:** Hermes is the agent runner. Give it API credentials + the §11 system prompt + the schedule below as durable instructions. It self-paces — no Make.com / n8n / Typefully required.
+
+### 11B.1 The only stack you need
+
+| Layer | What | Cost |
+|---|---|---|
+| Agent runner | Hermes (your platform) | per-platform pricing |
+| LLM | OpenRouter — set as Hermes's underlying model: `nousresearch/hermes-4-405b` for originals/threads, `nousresearch/hermes-4-70b` for replies/DMs/scoring | ~$3-10/mo at this volume |
+| Twitter access | **Twitter API v2 Basic** ($100/mo) — required for write access (post tweet, post reply, DM). Read-only is free but useless for the bot. | $100/mo |
+| State | Hermes's own memory / vector store — keep a running log of: posts made, prospects engaged in last 7 days, daily counters | $0 |
+| **Total** | | **~$110-115/mo** |
+
+**Twitter API alternative — if $100/mo is too much pre-launch:**
+Sign up for **Typefully** ($15/mo) instead — give Hermes the Typefully API key, and Hermes posts via Typefully which holds the Twitter relationship. Drops total to ~$25-35/mo. Tradeoff: replies to other people's tweets need direct Twitter API, so Typefully alone limits you to original posts + scheduled threads. Which is fine for the first 2 months while you validate voice — start with Typefully, upgrade to direct Twitter API once you're ready to reply-farm.
+
+### 11B.2 Twitter API v2 endpoints Hermes needs
+
+Give Hermes these credentials and tell it which endpoint to call for each action:
+
+| Action | Endpoint | Auth |
+|---|---|---|
+| Post a tweet | `POST /2/tweets` | OAuth 2.0 user context |
+| Reply to a tweet | `POST /2/tweets` (with `reply.in_reply_to_tweet_id`) | OAuth 2.0 user context |
+| Post a thread | sequence of `POST /2/tweets` (each chained via `reply.in_reply_to_tweet_id`) | OAuth 2.0 user context |
+| Search recent tweets | `GET /2/tweets/search/recent?query=…&max_results=10` | App bearer token |
+| Read user info | `GET /2/users/by/username/:username` | App bearer token |
+| Send DM | `POST /2/dm_conversations/with/:user_id/messages` | OAuth 2.0 user context |
+| List inbound DMs | `GET /2/dm_events?event_types=MessageCreate` | OAuth 2.0 user context |
+
+Get all four credentials from `developer.twitter.com` after subscribing to Basic tier:
+- Consumer key + secret
+- Access token + secret
+- App bearer token
+
+Paste all four into Hermes's config / secrets store. The system prompt tells Hermes which API to call when.
+
+### 11B.3 The schedule — bake this into Hermes as a recurring instruction
+
+Tell Hermes: *"Run the following four loops continuously. Respect daily limits. Stop a loop when its limit is hit and resume at midnight ET."*
+
+```
+LOOP 1 — ORIGINAL POSTS
+Cadence: 3× daily at 8:00 AM ET, 3:00 PM ET, 7:00 PM ET
+Steps:
+  1. Read your last 5 tweets from your own timeline (GET /2/users/:id/tweets)
+  2. Decide which content pillar to post (rotate through 60% Pillar 1, 25% Pillar 2, 10% Pillar 3, 5% Pillar 4)
+  3. Generate one tweet via your own LLM with mode: original_post
+  4. Run the §11 quality gate. If passes, POST /2/tweets. If fails, log and skip.
+  5. Record in memory: {text, posted_at, pillar}
+
+LOOP 2 — REPLY FARMING
+Cadence: every 30 minutes, 9 AM - 11 PM ET
+Steps:
+  1. Pick the next query from §11A.1 rotation (advance by 1 each run, wrap around)
+  2. GET /2/tweets/search/recent with that query, max_results: 10
+  3. Filter out: tweets older than 24h, tweets from accounts you replied to in last 7 days, accounts with <50 followers
+  4. For each remaining tweet, run mode: prospect_search and score 1-10
+  5. For tweets scoring ≥7: generate reply via mode: reply, run quality gate, POST /2/tweets with reply.in_reply_to_tweet_id set
+  6. Halt for the day after 50 replies posted
+
+LOOP 3 — SUNDAY LONG-FORM THREAD
+Cadence: weekly, Sunday 10:00 AM ET
+Steps:
+  1. Fetch the last 14 days of BUILD_LOG entries from https://raw.githubusercontent.com/celestine1111/autoresearch/main/seobetter/seo-guidelines/BUILD_LOG.md (or use Pillar 1 data point if no recent ships)
+  2. Pick the most newsworthy ship or insight as the thread topic
+  3. Generate the thread via mode: thread (8-15 tweets)
+  4. Quality-gate every tweet in the thread individually
+  5. Notify human via DM (POST DM to founder's handle) for review BEFORE the scheduled post time
+  6. After human approves, POST sequenced tweets at 1-tweet-per-30-seconds pace
+
+LOOP 4 — INBOUND DM HANDLER
+Cadence: every 15 minutes
+Steps:
+  1. GET /2/dm_events?event_types=MessageCreate (filter to since last run)
+  2. For each new DM, generate response via mode: dm_response
+  3. ALL DMs require human approval before send — DM the founder a copy of the draft + the original. Wait for thumbs-up before POST.
+
+LOOP 5 — DAILY METRICS REPORT
+Cadence: daily at 8:00 PM ET
+Steps:
+  1. Pull today's: tweets posted, replies posted, impressions, profile clicks, follower delta
+  2. Compose a short DM to the founder with the numbers + 3 best-performing tweets + any flagged-for-review items
+  3. Wait for any feedback / corrections to apply tomorrow
+
+DAILY LIMITS (hardcoded — never exceed):
+- Original posts: 4
+- Replies: 50
+- DMs sent: 5
+- Follows initiated: 10
+- Likes: 200
+```
+
+### 11B.4 Daily limits the bot must respect
+
+Hardcode these in the orchestration layer, not just the prompt:
+
+| Action | Daily limit | Why |
+|---|---|---|
+| Original posts | 4 | More gets de-ranked as spam-bot pattern |
+| Replies | 50 | Twitter API + spam-classifier ceiling |
+| Likes | 200 | Auto-engagement smells botty above this |
+| Follows | 10 | Aggressive following triggers spam review |
+| DMs | 5 | Anything more = mass-DM territory = ban risk |
+| Mentions of competitors | 1 per week | Else looks like a vendetta |
+| Same-link posts | 1 per 7 days | Twitter dedupes / penalizes link spam |
+
+If any limit is hit, the orchestration scenario halts that action type for the day and resumes at midnight ET.
+
+---
+
+## 11C. Cost ceilings + monitoring
+
+**Hard target: total operating cost ≤$120/mo with direct Twitter API, OR ≤$35/mo using Typefully bridge for the first 2 months.**
+
+**Path A — Direct Twitter API (full reply farming + DMs)**
+
+| Cost line | Budget | Alarm threshold |
+|---|---|---|
+| OpenRouter (Hermes 405B + 70B) | $10/mo | $20 |
+| Twitter API v2 Basic | $100/mo | n/a (fixed) |
+| Hermes platform | varies | per-platform |
+| **Total** | **~$115/mo** | $130/mo (hard stop) |
+
+Break-even = **3 Pro $39 subs**, OR **1.5 Pro+ $69 subs**, OR **<1 Agency $179 sub** per month. Achievable at month 3+ given the conversion funnel projections.
+
+**Path B — Typefully bridge (originals + threads only, no reply farming)**
+
+| Cost line | Budget | Alarm threshold |
+|---|---|---|
+| OpenRouter (Hermes 70B mostly) | $5/mo | $10 |
+| Typefully | $15/mo | n/a |
+| Hermes platform | varies | per-platform |
+| **Total** | **~$25/mo** | $35/mo (hard stop) |
+
+Break-even = **<1 Pro subscriber** per month. Use this for the first 2 months while you validate voice + content. Upgrade to Path A once you're ready to reply-farm at scale.
+
+**OpenRouter cost breakdown — Hermes at full volume:**
+
+| Action | Frequency | Tokens in/out | Model | Daily cost |
+|---|---|---|---|---|
+| Original post | 3×/day | 800/200 | Hermes 405B | $0.004 |
+| Reply | 50×/day | 600/150 | Hermes 70B | $0.018 |
+| Sunday thread | 1×/week | 2000/2500 | Hermes 405B | $0.06 (amortized) |
+| DM draft | 5×/day | 800/300 | Hermes 70B | $0.003 |
+| Prospect scoring | 50×/day | 1500/500 | Hermes 70B | $0.045 |
+| **Daily total** | | | | **~$0.10** |
+| **Monthly total** | | | | **~$3** |
+
+The LLM is far cheaper than the Twitter API. Set hard alarm at $20/mo OpenRouter spend — if you hit that, something is looping or generating too verbose.
+
+**Cost-cutting levers (apply in order):**
+1. **Enable OpenRouter prompt caching** (`cache_control: { type: "ephemeral" }` on the system message in your API call) — saves 30-50% since the system prompt is ~3000 tokens and identical every call. Single biggest lever.
+2. **Use Hermes 70B for everything except Sunday thread** — quality drop is minor for tweet-length content, cost drops ~3×.
+3. **Batch prospect scoring** — one Hermes call returns scores + draft replies for 5 prospects at once instead of 5 separate calls.
+4. **Drop original posts from 3 → 2 daily** — only if engagement isn't suffering. Diminishing returns above 2 originals/day for new accounts anyway.
+5. **Cache the BUILD_LOG fetch** — only re-fetch on Sunday for the thread loop, not every original post.
 
 ---
 
@@ -381,19 +774,22 @@ When you don't know something, say so or stay silent. Don't bullshit.
 
 ---
 
-## 13. Tools / stack
+## 13. Tools / stack — Hermes-native minimum
 
 | Layer | Tool | Cost / month |
 |---|---|---|
-| LLM | OpenRouter (`anthropic/claude-sonnet-4.6` primary) | ~$20 (50 posts/day × 30 days) |
-| Posting / scheduling | Typefully or Buffer (API) | $15 |
-| Analytics | Twitter Analytics (free) + Typefully insights | $0 |
-| Image generation | Canva Pro (templates) or DALL-E 3 via OpenRouter | $13 |
-| Scraping competitor activity | Tweet Hunter or Twemex | $30 |
-| Engagement tracking spreadsheet | Google Sheets (free) | $0 |
-| **Total** | | **~$78/mo** |
+| Agent runner | **Hermes** (your platform — does scheduling, API calls, memory) | per-platform |
+| LLM | **OpenRouter** — `nousresearch/hermes-4-405b` (originals, threads) + `nousresearch/hermes-4-70b` (replies, DMs, scoring) | ~$3-10 |
+| Twitter access (Path A — full reply farming) | **Twitter API v2 Basic** | $100 |
+| Twitter access (Path B — pre-launch validation) | **Typefully** (Hermes posts via Typefully API) | $15 |
+| Image generation (optional, manual at first) | Canva Pro or DALL-E 3 via OpenRouter | $0-13 |
+| Analytics | Twitter Analytics (free) | $0 |
+| **Total — Path A** | | **~$110-130/mo** |
+| **Total — Path B (start here)** | | **~$25-35/mo** |
 
-For comparison: a single Pro+ subscriber covers 80% of this. A single Agency subscriber covers 2.3× this. Twitter ROI = positive at the very first conversion.
+**Recommended sequence:** start on Path B (Typefully) for the first 2 months — focus on voice + content. When you have 500+ followers and want to start reply-farming, upgrade to Path A.
+
+Break-even on Path B = **<1 Pro subscriber**. Break-even on Path A = **3 Pro / 1.5 Pro+ / <1 Agency**. Both are viable from month 2-3 onward if the conversion funnel works.
 
 ---
 
