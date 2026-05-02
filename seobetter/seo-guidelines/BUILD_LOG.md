@@ -19,7 +19,7 @@
 ## v1.5.216.50 — GSC setup guide rewritten for new Google Cloud Console UI
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `99ab55c`
 
 ### Bug
 
