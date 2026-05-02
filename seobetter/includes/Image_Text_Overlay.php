@@ -633,25 +633,55 @@ class Image_Text_Overlay {
     /**
      * Word-wrap on word boundaries using imagettfbbox for precise width
      * measurement. Multibyte-safe (mb_split on whitespace) so French/German/
-     * Russian/Greek headlines wrap correctly. Single-word overflow falls
-     * through (we don't hyphenate; a too-wide word is rendered as-is and
-     * may exceed the canvas — graceful degradation).
+     * Russian/Greek headlines wrap correctly.
+     *
+     * v1.5.216.60 — handle CJK / Thai / no-whitespace languages. Pre-fix:
+     * Japanese / Chinese / Korean / Thai headlines have zero inter-word
+     * spaces, so the original `preg_split('/\s+/')` returned the whole
+     * headline as ONE "word". Then the `$current === ''` fallback at line
+     * 650 accepted that single overflowing token unchanged — and the text
+     * overflowed the canvas (user-visible bug on every JA / ZH / KO post).
+     *
+     * Fix: detect whitespace presence. If the text has spaces, use the
+     * legacy word-based wrap. If not, split into Latin-word-or-single-char
+     * units (`/[A-Za-z0-9]+|./u`) so:
+     *   - CJK characters wrap one-by-one (each char is fine line-fitting unit)
+     *   - Embedded Latin words like "WordPress" stay intact (don't get
+     *     broken into "Wo / rdP / res / s")
+     *   - Mixed JA + EN headlines like "5選！2026年に最適なWordPress用…"
+     *     get clean wrapping at character/word boundaries
      */
     private static function wrap_lines( string $text, string $font, int $size, int $max_w ): array {
-        $words = preg_split( '/\s+/u', trim( $text ) );
-        if ( ! $words ) return [ $text ];
+        $text = trim( $text );
+        if ( $text === '' ) return [];
+
+        $has_whitespace = (bool) preg_match( '/\s/u', $text );
+        if ( $has_whitespace ) {
+            $units     = preg_split( '/\s+/u', $text );
+            $separator = ' ';
+        } else {
+            // No-whitespace languages — split into Latin-word OR single-char units
+            if ( preg_match_all( '/[A-Za-z0-9]+|./u', $text, $m ) ) {
+                $units = $m[0];
+            } else {
+                $units = [ $text ];
+            }
+            $separator = '';
+        }
+        if ( ! $units ) return [ $text ];
 
         $lines = [];
         $current = '';
-        foreach ( $words as $word ) {
-            $candidate = $current === '' ? $word : ( $current . ' ' . $word );
+        foreach ( $units as $unit ) {
+            if ( $unit === '' ) continue;
+            $candidate = $current === '' ? $unit : ( $current . $separator . $unit );
             $bbox = imagettfbbox( $size, 0, $font, $candidate );
             $w = abs( $bbox[2] - $bbox[0] );
             if ( $w <= $max_w || $current === '' ) {
                 $current = $candidate;
             } else {
                 $lines[] = $current;
-                $current = $word;
+                $current = $unit;
             }
         }
         if ( $current !== '' ) {

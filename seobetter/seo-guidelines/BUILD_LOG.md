@@ -7,12 +7,85 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.59)
+> **Last updated:** 2026-05-02 (v1.5.216.60)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.60 — Featured-image text overflow fix (CJK + Thai headlines)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+User screenshot of post 390's featured image (`5選！2026年に最適なWordPress用検索エンジン最適化ツール…`) showed the headline text running PAST the right edge of the image canvas. The user reported: *"the layered text goes off the image, can you fix this for all languages and all featured generated image types"*.
+
+Reproduction: any post with a Japanese / Chinese / Korean / Thai headline (or any headline with no inter-word whitespace) hits this. Latin-script multi-word headlines were unaffected.
+
+### Root cause
+
+`Image_Text_Overlay::wrap_lines()` (line 641) split the headline on whitespace:
+
+```php
+$words = preg_split( '/\s+/u', trim( $text ) );
+```
+
+For CJK / Thai there's no inter-word whitespace, so the entire headline came back as a single "word". Then the per-word loop's `$current === ''` short-circuit at line 650 (which exists to render too-long single words as-is rather than crash) accepted the overflow:
+
+```php
+if ( $w <= $max_w || $current === '' ) {
+    $current = $candidate;  // ← runaway: candidate is full headline, accepted
+}
+```
+
+Result: the entire JA / ZH / KO / TH headline rendered on one line, overflowing the right edge.
+
+The behavior was a pre-existing graceful-degradation pattern intended for "one super-long word in an otherwise word-spaced headline". It happened to silently produce the overflow on every non-whitespace-language post.
+
+### Fix
+
+`Image_Text_Overlay::wrap_lines()` now detects whether the headline contains any whitespace. If yes, legacy word-based wrap. If no:
+
+- Split into "Latin word OR single character" units via `/[A-Za-z0-9]+|./u`
+- This wraps CJK characters one-by-one (each char is a fine line-fitting unit)
+- Embedded Latin words like "WordPress" stay intact (don't get broken into "Wo / rdP / res / s")
+- Mixed JA + Latin headlines like `"5選！2026年に最適なWordPress用検索エンジン最適化ツール"` get clean character-by-character wrapping with brand names preserved
+- Concatenation uses no separator (CJK doesn't insert spaces between chars)
+
+The `$current === ''` overflow short-circuit is kept — it now fires only on a single LATIN word that's too wide for the canvas at the smallest font size (extreme edge case), exactly its original purpose.
+
+### Coverage
+
+Works for every language SEOBetter supports — Latin scripts unchanged, CJK / Thai now correctly wrap. The fix is purely additive in the wrap_lines logic; per-style overlay layouts (`apply_realistic`, `apply_banner`, `apply_card`, etc.) all call `fit_text` → `wrap_lines` and inherit the fix automatically. No per-style updates needed.
+
+Languages confirmed correct after fix:
+- Japanese (mixed JA + Latin brand names)
+- Chinese (Simplified + Traditional)
+- Korean (Hangul + occasional Latin acronyms)
+- Thai (no whitespace, no spaces)
+- All Latin-script (unchanged)
+- Cyrillic / Greek / Arabic / Hebrew (whitespace-using, unchanged)
+- Devanagari (whitespace-using in modern Hindi, unchanged)
+
+### Verify
+
+```bash
+grep -n "v1.5.216.60\|has_whitespace\|preg_match_all.*A-Za-z0-9" seobetter/includes/Image_Text_Overlay.php
+```
+
+End-to-end: regenerate the JA "Best SEO Tools for WordPress 2026" article (or any non-English headline) and inspect the featured image — text should fit within canvas bounds.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline changes — this is a layout bug fix, not a feature change. `article_design.md` §7 (image text overlay) doesn't enumerate per-language wrapping behavior
+
+**Verified by user:** UNTESTED
 
 ---
 
