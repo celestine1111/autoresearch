@@ -19,7 +19,7 @@
 ## v1.5.216.52 — GSC property picker + prerequisite setup step
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `acb4360`
 
 ### Bug
 
