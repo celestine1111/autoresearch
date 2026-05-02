@@ -19,7 +19,7 @@
 ## v1.5.216.62 — Centralized GSC OAuth proxy (Phase-2 launch BLOCKER fix)
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `675f220`
 
 ### Why
 
