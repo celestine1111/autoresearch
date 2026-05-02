@@ -146,6 +146,77 @@ class GSC_Manager {
     }
 
     /**
+     * v1.5.216.52 — list every Google Search Console property the
+     * authorized account can access. Used by the property-picker UI on
+     * the GSC card so users can choose which site to track (instead of
+     * hardcoding home_url() — which fails for agency users, dev/staging
+     * setups, and any account that owns a different domain than the
+     * plugin install URL). Calls Google's /sites endpoint directly.
+     *
+     * Returns an array of arrays:
+     *   [ [ 'site_url' => 'https://example.com/', 'permission' => 'siteOwner' ], ... ]
+     * — or [] if not connected / API failure.
+     */
+    public static function list_sites(): array {
+        $access = self::get_access_token();
+        if ( $access === '' ) return [];
+
+        $response = wp_remote_get( 'https://www.googleapis.com/webmasters/v3/sites', [
+            'timeout' => 10,
+            'headers' => [ 'Authorization' => 'Bearer ' . $access ],
+        ] );
+        if ( is_wp_error( $response ) ) return [];
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( ! is_array( $body ) || empty( $body['siteEntry'] ) ) return [];
+
+        $out = [];
+        foreach ( $body['siteEntry'] as $entry ) {
+            if ( ! is_array( $entry ) ) continue;
+            $url  = (string) ( $entry['siteUrl'] ?? '' );
+            $perm = (string) ( $entry['permissionLevel'] ?? '' );
+            if ( $url === '' ) continue;
+            $out[] = [
+                'site_url'   => $url,
+                'permission' => $perm,
+            ];
+        }
+        // Sort by URL so display is stable
+        usort( $out, fn( $a, $b ) => strcmp( $a['site_url'], $b['site_url'] ) );
+        return $out;
+    }
+
+    /**
+     * v1.5.216.52 — update which GSC property URL syncs target.
+     * Called from the property-picker dropdown. Validates the URL is
+     * actually one the authorized account has access to (via list_sites)
+     * to prevent users saving a property they can't read from.
+     *
+     * @param string $site_url The exact siteUrl from list_sites() result
+     * @return array{success:bool,error?:string}
+     */
+    public static function set_site_url( string $site_url ): array {
+        $site_url = trim( $site_url );
+        if ( $site_url === '' ) {
+            return [ 'success' => false, 'error' => 'site_url is required' ];
+        }
+        $sites = self::list_sites();
+        if ( empty( $sites ) ) {
+            return [ 'success' => false, 'error' => 'No GSC properties accessible by the authorized account.' ];
+        }
+        $owned_urls = array_column( $sites, 'site_url' );
+        if ( ! in_array( $site_url, $owned_urls, true ) ) {
+            return [ 'success' => false, 'error' => 'You do not have access to this property in Google Search Console.' ];
+        }
+        $conn = get_option( self::OPTION_KEY, [] );
+        if ( empty( $conn ) ) {
+            return [ 'success' => false, 'error' => 'GSC not connected.' ];
+        }
+        $conn['site_url'] = $site_url;
+        update_option( self::OPTION_KEY, $conn, false );
+        return [ 'success' => true ];
+    }
+
+    /**
      * Disconnect: revoke the access token at Google and clear local storage.
      */
     public static function disconnect(): void {

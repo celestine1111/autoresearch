@@ -1068,6 +1068,42 @@ $gsc_flash_email = sanitize_email( urldecode( $_GET['email'] ?? '' ) );
             <p style="margin:8px 0 10px;font-size:13px;line-height:1.55">
                 <?php esc_html_e( 'During Phase 1 testing each install registers its own Google Cloud OAuth client. Phase 2 will replace this with a centralized SEOBetter proxy so users never need their own Google credentials.', 'seobetter' ); ?>
             </p>
+
+            <?php // v1.5.216.52 — REQUIRED prerequisite step. Without an actual GSC property registered+verified, even a working OAuth connection fails at sync because the API has nothing to query. ?>
+            <div style="margin:12px 0;padding:12px 14px;background:#fff;border-left:4px solid #f59e0b;border-radius:4px">
+                <strong style="color:#92400e;font-size:13px">🛑 <?php esc_html_e( 'BEFORE you do any of this — register your site in Google Search Console FIRST', 'seobetter' ); ?></strong>
+                <p style="margin:8px 0 8px;font-size:12px;line-height:1.6;color:#78350f">
+                    <?php esc_html_e( 'Without this step the OAuth connect will succeed but Sync will fail with "User does not have sufficient permission for site". This is a Google requirement, not a SEOBetter one — your Google account must own the site you want to track.', 'seobetter' ); ?>
+                </p>
+                <ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:#78350f">
+                    <li><?php
+                        printf(
+                            /* translators: 1: link to Search Console */
+                            esc_html__( 'Open %s in a new tab — log in with the same Google account you\'ll use for the OAuth setup below.', 'seobetter' ),
+                            '<a href="https://search.google.com/search-console" target="_blank" rel="noopener"><strong>Google Search Console</strong></a>'
+                        ); ?></li>
+                    <li><?php esc_html_e( 'Top-left dropdown → Add property → pick "URL prefix".', 'seobetter' ); ?></li>
+                    <li><?php
+                        printf(
+                            /* translators: 1: site URL */
+                            esc_html__( 'Paste your full site URL: %s — must match exactly including https:// and trailing slash.', 'seobetter' ),
+                            '<code style="background:#fef3c7;padding:1px 5px;font-size:11px">' . esc_html( home_url( '/' ) ) . '</code>'
+                        ); ?></li>
+                    <li><?php esc_html_e( 'Click Continue. Google asks how you want to verify ownership.', 'seobetter' ); ?> <strong><?php esc_html_e( 'Easiest method: HTML tag', 'seobetter' ); ?></strong> — <?php esc_html_e( 'Google gives you a small tag like <meta name="google-site-verification" content="abc123" />. Copy it.', 'seobetter' ); ?></li>
+                    <li><?php
+                        printf(
+                            /* translators: 1: link to Yoast/AIOSEO general settings */
+                            esc_html__( 'Paste it into your site\'s %s if you have one (Yoast SEO → General → Webmaster Tools / RankMath → General → Webmaster Tools / AIOSEO → General Settings → Webmaster Tools). If you don\'t have an SEO plugin, paste it inside your theme\'s header.php just before the closing </head> tag.', 'seobetter' ),
+                            '<strong>SEO plugin</strong>'
+                        ); ?></li>
+                    <li><?php esc_html_e( 'Back in Search Console, click Verify. Google checks your site, confirms "Ownership verified". Done.', 'seobetter' ); ?></li>
+                    <li><?php esc_html_e( 'Now proceed with the OAuth setup below — when you authorize, your Search Console property will be available for the plugin to sync.', 'seobetter' ); ?></li>
+                </ol>
+                <p style="margin:8px 0 0;font-size:11px;color:#78350f;font-style:italic">
+                    💡 <?php esc_html_e( 'Already have multiple GSC properties under the same Google account? Pick any of them in the property dropdown that appears after you connect. The plugin lists every property your authorized account can access.', 'seobetter' ); ?>
+                </p>
+            </div>
+            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#92400e"><?php esc_html_e( 'Once your property is verified, complete OAuth setup:', 'seobetter' ); ?></p>
             <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.75">
                 <li><?php
                     printf(
@@ -1138,18 +1174,35 @@ define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
             ?>
         </p>
     <?php else : ?>
-        <!-- Connected — show status + sync + disconnect -->
+        <!-- Connected — show status + property picker + sync + disconnect -->
         <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px;margin-bottom:14px;background:#f8fafc;padding:14px 18px;border-radius:8px">
             <strong><?php esc_html_e( 'Account:', 'seobetter' ); ?></strong>
             <span><?php echo esc_html( $gsc_status['email'] ?: '(unknown)' ); ?></span>
             <strong><?php esc_html_e( 'Property:', 'seobetter' ); ?></strong>
-            <code><?php echo esc_html( $gsc_status['site_url'] ); ?></code>
+            <code id="seobetter-gsc-current-property"><?php echo esc_html( $gsc_status['site_url'] ); ?></code>
             <strong><?php esc_html_e( 'Connected:', 'seobetter' ); ?></strong>
             <span><?php echo $gsc_status['connected_at'] ? esc_html( human_time_diff( $gsc_status['connected_at'] ) . ' ' . __( 'ago', 'seobetter' ) ) : '—'; ?></span>
             <strong><?php esc_html_e( 'Last sync:', 'seobetter' ); ?></strong>
             <span><?php echo $gsc_status['last_sync'] ? esc_html( human_time_diff( $gsc_status['last_sync'] ) . ' ' . __( 'ago', 'seobetter' ) ) : '<span style="color:#94a3b8">' . esc_html__( 'never', 'seobetter' ) . '</span>'; ?></span>
             <strong><?php esc_html_e( 'URLs tracked:', 'seobetter' ); ?></strong>
             <span><?php echo esc_html( $gsc_status['urls_tracked'] ); ?></span>
+        </div>
+
+        <?php // v1.5.216.52 — property picker. Lets agency users + dev/staging pick the right GSC property instead of being locked to home_url(). ?>
+        <div style="margin-bottom:14px;padding:12px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px">
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#1e3a8a">
+                <?php esc_html_e( 'Switch GSC property', 'seobetter' ); ?>
+            </label>
+            <p style="margin:0 0 8px;font-size:11px;color:#3730a3;line-height:1.5">
+                <?php esc_html_e( 'Pick from the GSC properties this Google account can access. Use this if the auto-detected URL above is wrong, or to switch to a different verified site you manage.', 'seobetter' ); ?>
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <select id="seobetter-gsc-property-picker" style="flex:1;min-width:300px;padding:6px 8px;border:1px solid #93c5fd;border-radius:4px;font-size:13px">
+                    <option value=""><?php esc_html_e( 'Loading properties…', 'seobetter' ); ?></option>
+                </select>
+                <button type="button" id="seobetter-gsc-save-property" class="button" disabled><?php esc_html_e( 'Save', 'seobetter' ); ?></button>
+                <span id="seobetter-gsc-picker-msg" style="font-size:12px;color:#3730a3"></span>
+            </div>
         </div>
 
         <button type="button" id="seobetter-gsc-sync" class="button button-primary" style="margin-right:8px"><?php esc_html_e( 'Sync now', 'seobetter' ); ?></button>
@@ -1190,6 +1243,63 @@ define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
                     headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
                 }).done(function() {
                     window.location.reload();
+                });
+            });
+
+            // v1.5.216.52 — GSC property picker. Loads sites/list on render
+            // so the dropdown shows every property the authorized account
+            // can access. User picks → save → /set-site → reload.
+            var currentProp = $('#seobetter-gsc-current-property').text().trim();
+            $.ajax({
+                url: '<?php echo esc_js( rest_url( 'seobetter/v1/gsc/sites' ) ); ?>',
+                method: 'GET',
+                headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
+            }).done(function(res) {
+                var $sel = $('#seobetter-gsc-property-picker');
+                $sel.empty();
+                if (!res || !res.success || !res.sites || !res.sites.length) {
+                    $sel.append($('<option value="">').text('<?php echo esc_js( __( "(no properties found — register your site at search.google.com/search-console first)", 'seobetter' ) ); ?>'));
+                    $sel.prop('disabled', true);
+                    return;
+                }
+                res.sites.forEach(function(site) {
+                    var label = site.site_url + ' (' + site.permission + ')';
+                    var opt = $('<option>').val(site.site_url).text(label);
+                    if (site.site_url === currentProp) opt.prop('selected', true);
+                    $sel.append(opt);
+                });
+                $('#seobetter-gsc-save-property').prop('disabled', false);
+            }).fail(function() {
+                var $sel = $('#seobetter-gsc-property-picker');
+                $sel.empty().append($('<option value="">').text('<?php echo esc_js( __( "Failed to load properties — try Disconnect + reconnect.", 'seobetter' ) ); ?>'));
+                $sel.prop('disabled', true);
+            });
+
+            $('#seobetter-gsc-save-property').on('click', function() {
+                var $btn = $(this);
+                var $msg = $('#seobetter-gsc-picker-msg');
+                var newSite = $('#seobetter-gsc-property-picker').val();
+                if (!newSite) return;
+                $btn.prop('disabled', true).text('<?php echo esc_js( __( 'Saving…', 'seobetter' ) ); ?>');
+                $msg.text('').css('color', '#3730a3');
+                $.ajax({
+                    url: '<?php echo esc_js( rest_url( 'seobetter/v1/gsc/set-site' ) ); ?>',
+                    method: 'POST',
+                    headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>', 'Content-Type': 'application/json' },
+                    data: JSON.stringify({ site_url: newSite }),
+                }).done(function(res) {
+                    if (res && res.success) {
+                        $msg.text('✓ <?php echo esc_js( __( 'Saved. Reloading…', 'seobetter' ) ); ?>').css('color', '#059669');
+                        setTimeout(function() { window.location.reload(); }, 600);
+                    } else {
+                        $msg.text('✗ ' + (res && res.error ? res.error : '<?php echo esc_js( __( 'Save failed', 'seobetter' ) ); ?>')).css('color', '#dc2626');
+                        $btn.prop('disabled', false).text('<?php echo esc_js( __( 'Save', 'seobetter' ) ); ?>');
+                    }
+                }).fail(function(xhr) {
+                    var msg = '<?php echo esc_js( __( 'Save failed', 'seobetter' ) ); ?>';
+                    try { var r = JSON.parse(xhr.responseText); msg = r.error || msg; } catch(e) {}
+                    $msg.text('✗ ' + msg).css('color', '#dc2626');
+                    $btn.prop('disabled', false).text('<?php echo esc_js( __( 'Save', 'seobetter' ) ); ?>');
                 });
             });
         });

@@ -7,12 +7,86 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.51)
+> **Last updated:** 2026-05-02 (v1.5.216.52)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.52 — GSC property picker + prerequisite setup step
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+User completed OAuth successfully (after v51 fixed the state-validation bug), then clicked Sync and got:
+
+> ✗ GSC API: User does not have sufficient permission for site 'https://srv1608940.hstgr.cloud/'.
+
+Two compounding issues:
+
+**A.** Plugin auto-detected the GSC property URL via `home_url('/')` and queried that exact URL. Real-world hits this for:
+- Agency users managing multiple client GSC properties under one Google account
+- Dev/staging environments where the install URL doesn't have a registered GSC property
+- Any setup where the authorized Google account owns a different domain than the WP install
+
+**B.** The setup guide didn't tell users to register + verify their site in Google Search Console FIRST — only mentioned creating an OAuth app. So users (correctly) followed every documented step, completed OAuth, then hit a Google API error that wasn't documented or explained.
+
+The `GSC_Manager::detect_gsc_site_url()` method even has a comment from the original author: *"Future enhancement: list user's verified properties via the sites/list endpoint and let them pick."* This is now that enhancement.
+
+### Fix
+
+**Backend (GSC_Manager.php):**
+
+- New `list_sites()` — calls Google's `webmasters/v3/sites` endpoint, returns array of `[ site_url, permission ]` for every property the authorized account can access. Sorted alphabetically for stable display
+- New `set_site_url( $url )` — updates the connection's `site_url`. Validates the URL is in the user's owned-list (defense against tampering / wrong selection)
+
+**REST routes (seobetter.php):**
+
+- `GET /seobetter/v1/gsc/sites` — returns property list for picker dropdown
+- `POST /seobetter/v1/gsc/set-site` — saves selected property
+
+**UI (settings.php):**
+
+- New property-picker block on the connected-state GSC card. Loads `/sites` on page render, populates dropdown with `siteUrl (permission)` labels, pre-selects current property. Save button disabled until list loads. AJAX save → reload to show new property
+- Failure modes: "no properties found" (helpful message + link to GSC), "failed to load" (suggests reconnect)
+
+**Setup guide (settings.php OAuth credentials block):**
+
+- Added a prominent yellow-bordered prerequisite block at the TOP of the setup instructions: **"BEFORE you do any of this — register your site in Google Search Console FIRST"**
+- 7 steps in basic non-technical language: open GSC, Add property, paste URL exactly, pick HTML tag verification, paste tag into SEO plugin (Yoast/RankMath/AIOSEO have a Webmaster Tools section), click Verify, then proceed with OAuth
+- Footer hint: "if you already have multiple GSC properties, you can switch via the picker after connecting"
+
+### Verify (file:method anchors)
+
+```bash
+# Backend
+grep -n "public static function list_sites\|public static function set_site_url" seobetter/includes/GSC_Manager.php
+
+# REST routes
+grep -n "rest_gsc_list_sites\|rest_gsc_set_site\|/gsc/sites\|/gsc/set-site" seobetter/seobetter.php
+
+# UI + JS
+grep -n "seobetter-gsc-property-picker\|seobetter-gsc-save-property" seobetter/admin/views/settings.php
+
+# Setup guide prerequisite step
+grep -n "BEFORE you do any of this\|register your site in Google Search Console FIRST" seobetter/admin/views/settings.php
+```
+
+### Tier behaviour
+
+Unchanged — GSC connect + sync is Free per locked plan.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — this is feature enhancement on already-shipped GSC integration
+
+**Verified by user:** UNTESTED
 
 ---
 
