@@ -115,19 +115,48 @@ class Citation_Pool {
         // and a Wikipedia Veganism entry in references for a raw-dog-food
         // article. Fix: require the source title to contain at least one
         // content token from the keyword. No HTTP calls. Milliseconds.
+        // v1.5.216.61 — Unicode-aware topical filter. Pre-fix: \w in PCRE
+        // without the u flag is ASCII-only, so Japanese / Chinese / Korean /
+        // Thai / Arabic tokens were stripped from the keyword and the pool
+        // came back empty for every non-Latin generation (live confirmed on
+        // post 403 JA gen — pool empty, 0 inline citations). Now \p{L}\p{N}_
+        // with u flag preserves Unicode word characters; mb_strlen counts
+        // chars not bytes; mb_strtolower respects Unicode case folding.
         $stopwords = [
+            // English
             'the','and','for','how','what','why','when','where','which','who',
             'with','from','that','this','these','those','have','has','had',
-            'your','their','best','top','safely','guide','tips','2024','2025','2026','2027',
+            'your','their','best','top','safely','guide','tips',
+            // Numbers / years
+            '2024','2025','2026','2027',
         ];
-        $raw_terms = preg_split( '/\s+/', strtolower( $keyword ) );
+        // Split on Unicode whitespace AND full-width space (U+3000, common in JA / ZH)
+        $raw_terms = preg_split( '/[\s\x{3000}]+/u', mb_strtolower( $keyword ) );
         $key_tokens = [];
         foreach ( $raw_terms as $t ) {
-            $t = preg_replace( '/[^\w]/', '', $t );
-            if ( strlen( $t ) >= 4 && ! in_array( $t, $stopwords, true ) ) {
+            // Strip non-word characters using Unicode-aware char classes
+            $t = preg_replace( '/[^\p{L}\p{N}_]/u', '', $t );
+            if ( $t === '' || in_array( $t, $stopwords, true ) ) continue;
+            $char_count = mb_strlen( $t );
+            // Latin tokens need 3+ chars (catches SEO/API/AI but skips junk).
+            // Non-Latin tokens (CJK / Cyrillic / Arabic / etc.) can be 2+ chars
+            // since each char carries more semantic weight.
+            $is_latin = (bool) preg_match( '/^[a-z0-9_]+$/', $t );
+            $min_len = $is_latin ? 3 : 2;
+            if ( $char_count >= $min_len ) {
                 $key_tokens[] = $t;
             }
         }
+        // v1.5.216.61 — fallback for languages without inter-word spaces
+        // (Japanese / Chinese / Korean / Thai). When the keyword has zero
+        // whitespace AND contains non-Latin chars, tokenization produces
+        // 0-1 mega-tokens that can't usefully match source titles. In that
+        // case, bypass the topical filter — hygiene check + keyword-targeted
+        // search (Sonar / Serper / Brave already searched for this exact
+        // keyword) are the relevance guards. Better to ship a slightly
+        // looser pool than an empty one.
+        $has_non_latin = (bool) preg_match( '/[^\x{0000}-\x{007F}]/u', $keyword );
+        $skip_topical_filter = $has_non_latin && count( $key_tokens ) < 2;
 
         $pool = [];
         $seen_urls = [];
@@ -155,9 +184,12 @@ class Citation_Pool {
             // keywords like "why ai wont replace teachers" where the tokens
             // (wont, replace, teachers) don't appear in citation titles.
             $bypass = ! empty( $c['_serper_bypass'] );
-            if ( ! $bypass && ! empty( $key_tokens ) ) {
-                $title_lower = strtolower( $c['title'] ?? '' );
-                $slug_lower  = strtolower( wp_parse_url( $url, PHP_URL_PATH ) ?? '' );
+            if ( ! $bypass && ! $skip_topical_filter && ! empty( $key_tokens ) ) {
+                // v1.5.216.61 — mb_strtolower respects Unicode case folding
+                // (matters for Greek / Turkish / German ß / etc. where plain
+                // strtolower is locale-dependent and produces wrong results).
+                $title_lower = mb_strtolower( $c['title'] ?? '' );
+                $slug_lower  = mb_strtolower( wp_parse_url( $url, PHP_URL_PATH ) ?? '' );
                 $haystack    = $title_lower . ' ' . $slug_lower;
                 $has_match   = false;
                 foreach ( $key_tokens as $t ) {

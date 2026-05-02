@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.60
+ * Version: 1.5.216.61
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.60' );
+define( 'SEOBETTER_VERSION', '1.5.216.61' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -715,7 +715,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.60 — GSC property picker endpoints
+        // v1.5.216.61 — GSC property picker endpoints
         register_rest_route( 'seobetter/v1', '/gsc/sites', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_gsc_list_sites' ],
@@ -730,7 +730,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.60 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
+        // v1.5.216.61 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
         register_rest_route( 'seobetter/v1', '/freshness/diagnostic/(?P<post_id>\d+)', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_freshness_diagnostic' ],
@@ -738,7 +738,7 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
-        // v1.5.216.60 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
+        // v1.5.216.61 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
         // method level (registration is unconditional but seed/clear calls
         // return error JSON without WP_DEBUG).
         register_rest_route( 'seobetter/v1', '/gsc/seed-test-data', [
@@ -1678,7 +1678,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.60 — list every GSC property the authorized account can access.
+     * v1.5.216.61 — list every GSC property the authorized account can access.
      * Used by the property-picker dropdown on the GSC Settings card.
      */
     public function rest_gsc_list_sites( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1689,7 +1689,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.60 — set which GSC property the plugin syncs.
+     * v1.5.216.61 — set which GSC property the plugin syncs.
      * POST body: { site_url: 'https://example.com/' }
      */
     public function rest_gsc_set_site( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1699,7 +1699,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.60 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
+     * v1.5.216.61 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
      * Striking-distance features can be exercised before real GSC traffic
      * exists. GSC_Manager::seed_test_snapshots() returns error JSON when
      * WP_DEBUG is not enabled, so the gate lives at the data layer.
@@ -1715,7 +1715,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.60 — return per-post Freshness diagnostic for the "Why?" drawer
+     * v1.5.216.61 — return per-post Freshness diagnostic for the "Why?" drawer
      * + metabox tab + Gutenberg sidebar. Tier-gated inside the manager.
      */
     public function rest_freshness_diagnostic( \WP_REST_Request $request ): \WP_REST_Response {
@@ -2491,7 +2491,7 @@ final class SEOBetter {
             'content'    => $html,
             'geo_score'  => $score['geo_score'],
             'grade'      => $score['grade'],
-            // v1.5.216.60 — language-aware word count
+            // v1.5.216.61 — language-aware word count
             'word_count' => SEOBetter\GEO_Analyzer::count_words_lang( wp_strip_all_tags( $html ), $rescore_lang ),
             'checks'     => $score['checks'],
         ] );
@@ -3445,7 +3445,7 @@ final class SEOBetter {
         // "(Python API Tutorial (Beginner's Guide) | Moesif Blog)".
         // Strategy: find outermost ( ... ) that contain 10+ chars and look like
         // a source reference, not code/math. Allow nested () inside.
-        // v1.5.216.60 — also match full-width parens （ … ） + Japanese sentence
+        // v1.5.216.61 — also match full-width parens （ … ） + Japanese sentence
         // punctuation 。！？、 — was leaving non-English citations unlinkified
         // because the AI correctly writes (Hostinger, 2025) in Japanese as
         // （Hostinger, 2025）with full-width parens. Now both shapes are
@@ -3493,7 +3493,7 @@ final class SEOBetter {
         // "(Python API Tutorial (Beginner's Guide) | Moesif Blog)".
         // The first pass regex [^)] stops at the inner ) and skips these.
         // This pass finds the outermost balanced parens by scanning the string.
-        // v1.5.216.60 — walks both half-width () and full-width （） so JA
+        // v1.5.216.61 — walks both half-width () and full-width （） so JA
         // articles get the same nested-paren handling. Each opener is matched
         // to the same width closer; mixed pairs are skipped (likely typo).
         $lines = explode( "\n", $markdown );
@@ -6240,7 +6240,7 @@ final class SEOBetter {
                 <?php endif; ?>
             </div>
 
-            <!-- v1.5.216.60 — Freshness panel. Lazy-loads diagnostic from REST
+            <!-- v1.5.216.61 — Freshness panel. Lazy-loads diagnostic from REST
                  on first open (avoids paying the GSC API call cost for every
                  post-edit screen). Free/Pro users without diagnostic access
                  see an upsell card; Pro users get age/year/missing-signal;

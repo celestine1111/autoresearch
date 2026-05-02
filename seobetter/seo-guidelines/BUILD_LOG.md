@@ -7,12 +7,68 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.60)
+> **Last updated:** 2026-05-02 (v1.5.216.61)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.61 — Citation_Pool topical filter Unicode awareness (Bug #1 next-layer fix)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+v59 fixed `linkify_bracketed_references()` to handle full-width JA parens. But the JA citation pool was still intermittently EMPTY because `Citation_Pool::build()`'s topical relevance filter (line ~118-130) was non-Unicode-aware:
+
+- `preg_split('/\s+/', ...)` — `\s+` without `u` flag misses full-width space (U+3000), common in Japanese
+- `preg_replace('/[^\w]/', '', $t)` — `\w` in PCRE without `u` flag is `[A-Za-z0-9_]` only, so EVERY Japanese / Chinese / Korean / Thai / Arabic / Hebrew / Cyrillic / Greek / Devanagari character got stripped from keyword tokens
+- `strlen($t)` — counts BYTES not chars in UTF-8. A 3-char Japanese word is 9 bytes, breaking the `>= 4` length filter
+- `strtolower($title)` — locale-dependent, unreliable for non-ASCII text
+
+Result: for any non-Latin keyword, `key_tokens` came back as `[]` after stripping. The topical filter then either bypassed (`empty($key_tokens)` short-circuit) and returned the candidate pool unfiltered, OR — worse — reduced to a single useless mega-token for no-whitespace keywords like `"2026年版WordPressに最適なSEOツール"` and rejected every candidate.
+
+Live evidence: post 403 (JA) had pool empty + 0 inline citations. Post 408 (JA, same keyword) had 15 inline citations only because cache hit a stale EN-keyword pool. Pool population was non-deterministic across non-Latin generations.
+
+### Fix
+
+`Citation_Pool::build()` (lines ~118-172):
+
+- **Tokenization:** `preg_split('/[\s\x{3000}]+/u', mb_strtolower($keyword))` — Unicode flag + explicit full-width-space matching + Unicode-aware lowercasing
+- **Word-char extraction:** `preg_replace('/[^\p{L}\p{N}_]/u', '', $t)` — Unicode word chars (any letter, any number, underscore)
+- **Length check:** `mb_strlen($t)` — counts characters not bytes. Threshold split: 3+ chars for Latin tokens (catches SEO / API / AI but skips one-letter junk), 2+ chars for non-Latin tokens (CJK chars carry more semantic weight per char so 2+ is meaningful)
+- **Title matching:** `mb_strtolower($title)` — Unicode-aware case folding (matters for Greek σ→ς, Turkish I→ı, German ß, etc.)
+
+**Architectural fallback for no-whitespace languages:** Added `$skip_topical_filter` flag — when keyword contains non-Latin chars AND tokenization produces fewer than 2 useful tokens (the exact failure mode for Japanese / Chinese / Korean / Thai keywords without spaces), the topical filter bypasses entirely. Relies on hygiene check + keyword-targeted Sonar / Serper / Brave search results as relevance guards. Better to ship a slightly looser pool than an empty one.
+
+### Coverage
+
+This fix repairs citation pool population for every SEOBetter-supported language with non-ASCII script:
+
+- **No-space languages** (Japanese, Chinese Simplified + Traditional, Korean, Thai) → fallback bypass kicks in, pool populates from keyword-targeted search results
+- **Space-using non-Latin languages** (Arabic, Hebrew, Devanagari Hindi, Greek, Cyrillic Russian, etc.) → tokenization now extracts useful tokens, filter operates correctly
+- **Mixed-script keywords** (Latin keywords with non-Latin language tag) → English tokens tokenize correctly, filter works as before
+
+English / Spanish / Portuguese / German / French / Italian / Polish / Turkish / Vietnamese / Indonesian / Dutch / Swedish — unchanged behavior (whitespace-using Latin scripts that already worked).
+
+### Verify
+
+```bash
+grep -n "skip_topical_filter\|p{L}\\\\p{N}\\|mb_strtolower\\|x{3000}" seobetter/includes/Citation_Pool.php
+```
+
+End-to-end: regenerate the JA "Best SEO Tools" article on a fresh cache (clear transients first if needed). Pool should populate every time, not intermittently. Linkifier from v59 then turns those into clickable citations.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No `external-links-policy.md` update — the policy was correct, the implementation just wasn't multilingual-aware. Now it matches policy intent.
+
+**Verified by user:** UNTESTED
 
 ---
 
