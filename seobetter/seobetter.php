@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.58
+ * Version: 1.5.216.59
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.58' );
+define( 'SEOBETTER_VERSION', '1.5.216.59' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -715,7 +715,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.58 — GSC property picker endpoints
+        // v1.5.216.59 — GSC property picker endpoints
         register_rest_route( 'seobetter/v1', '/gsc/sites', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_gsc_list_sites' ],
@@ -730,7 +730,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.58 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
+        // v1.5.216.59 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
         register_rest_route( 'seobetter/v1', '/freshness/diagnostic/(?P<post_id>\d+)', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_freshness_diagnostic' ],
@@ -738,7 +738,7 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
-        // v1.5.216.58 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
+        // v1.5.216.59 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
         // method level (registration is unconditional but seed/clear calls
         // return error JSON without WP_DEBUG).
         register_rest_route( 'seobetter/v1', '/gsc/seed-test-data', [
@@ -1678,7 +1678,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.58 — list every GSC property the authorized account can access.
+     * v1.5.216.59 — list every GSC property the authorized account can access.
      * Used by the property-picker dropdown on the GSC Settings card.
      */
     public function rest_gsc_list_sites( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1689,7 +1689,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.58 — set which GSC property the plugin syncs.
+     * v1.5.216.59 — set which GSC property the plugin syncs.
      * POST body: { site_url: 'https://example.com/' }
      */
     public function rest_gsc_set_site( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1699,7 +1699,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.58 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
+     * v1.5.216.59 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
      * Striking-distance features can be exercised before real GSC traffic
      * exists. GSC_Manager::seed_test_snapshots() returns error JSON when
      * WP_DEBUG is not enabled, so the gate lives at the data layer.
@@ -1715,7 +1715,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.58 — return per-post Freshness diagnostic for the "Why?" drawer
+     * v1.5.216.59 — return per-post Freshness diagnostic for the "Why?" drawer
      * + metabox tab + Gutenberg sidebar. Tier-gated inside the manager.
      */
     public function rest_freshness_diagnostic( \WP_REST_Request $request ): \WP_REST_Response {
@@ -2491,7 +2491,7 @@ final class SEOBetter {
             'content'    => $html,
             'geo_score'  => $score['geo_score'],
             'grade'      => $score['grade'],
-            // v1.5.216.58 — language-aware word count
+            // v1.5.216.59 — language-aware word count
             'word_count' => SEOBetter\GEO_Analyzer::count_words_lang( wp_strip_all_tags( $html ), $rescore_lang ),
             'checks'     => $score['checks'],
         ] );
@@ -3445,19 +3445,26 @@ final class SEOBetter {
         // "(Python API Tutorial (Beginner's Guide) | Moesif Blog)".
         // Strategy: find outermost ( ... ) that contain 10+ chars and look like
         // a source reference, not code/math. Allow nested () inside.
+        // v1.5.216.59 — also match full-width parens （ … ） + Japanese sentence
+        // punctuation 。！？、 — was leaving non-English citations unlinkified
+        // because the AI correctly writes (Hostinger, 2025) in Japanese as
+        // （Hostinger, 2025）with full-width parens. Now both shapes are
+        // recognized; the wrapper is rebuilt in the same paren width as the
+        // input so the surrounding prose stays visually consistent.
         $markdown = preg_replace_callback(
-            '/\(([^)]{4,150})\)(?=[.\s,;!?\n]|$)/m',
+            '/([\(（])([^)）]{4,150})([\)）])(?=[.\s,;!?\n。！？、]|$)/mu',
             function ( $match ) use ( $lookup, $norm ) {
-                $text = $match[1];
+                $open  = $match[1];
+                $text  = $match[2];
+                $close = $match[3];
 
-                // If text contains unmatched inner parens, try to grab more
-                // e.g. "(Python API Tutorial (Beginner's Guide) | Moesif Blog)"
-                // The regex captured "Python API Tutorial (Beginner's Guide"
-                // because [^)] stops at first ). Check if parens are balanced:
-                $open = substr_count( $text, '(' );
-                $close = substr_count( $text, ')' );
-                if ( $open > $close ) {
-                    // Unbalanced — not a clean capture, skip
+                // If text contains unmatched inner parens (either width), skip —
+                // the line-by-line balance walker below will pick those up.
+                $half_open  = substr_count( $text, '(' );
+                $half_close = substr_count( $text, ')' );
+                $full_open  = substr_count( $text, '（' );
+                $full_close = substr_count( $text, '）' );
+                if ( $half_open > $half_close || $full_open > $full_close ) {
                     return $match[0];
                 }
 
@@ -3472,7 +3479,8 @@ final class SEOBetter {
 
                 foreach ( $lookup as $key => $entry ) {
                     if ( strlen( $key ) > 5 && ( str_contains( $text_n, $key ) || str_contains( $key, $text_n ) ) ) {
-                        return '([' . $text . '](' . $entry['url'] . '))';
+                        // Preserve original paren width — don't mix full / half in JA prose
+                        return $open . '[' . $text . '](' . $entry['url'] . ')' . $close;
                     }
                 }
 
@@ -3485,47 +3493,64 @@ final class SEOBetter {
         // "(Python API Tutorial (Beginner's Guide) | Moesif Blog)".
         // The first pass regex [^)] stops at the inner ) and skips these.
         // This pass finds the outermost balanced parens by scanning the string.
+        // v1.5.216.59 — walks both half-width () and full-width （） so JA
+        // articles get the same nested-paren handling. Each opener is matched
+        // to the same width closer; mixed pairs are skipped (likely typo).
         $lines = explode( "\n", $markdown );
         foreach ( $lines as $li => $line ) {
             // Skip headings, tables, code blocks, blockquotes
             if ( preg_match( '/^\s*[#|>`\-*]/', $line ) ) continue;
-            // v1.5.190b — REMOVED the old "skip if line has ](http and balanced parens" check.
-            // That skipped ENTIRE LINES where any reference was already linked, preventing
-            // nested-paren references on the same line from being processed. Each paren
-            // group is individually checked for 'http' and '](', so line-level skip is unnecessary.
 
-            // Find parenthetical groups with nested parens
-            $offset = 0;
-            while ( ( $start = strpos( $line, '(', $offset ) ) !== false ) {
-                // Walk to find matching close paren
-                $depth = 1;
-                $pos = $start + 1;
-                $len = strlen( $line );
-                while ( $pos < $len && $depth > 0 ) {
-                    if ( $line[ $pos ] === '(' ) $depth++;
-                    if ( $line[ $pos ] === ')' ) $depth--;
-                    $pos++;
-                }
-                if ( $depth !== 0 ) { $offset = $start + 1; continue; }
+            // Find parenthetical groups with nested parens — try both widths
+            foreach ( [ [ '(', ')' ], [ '（', '）' ] ] as $pair ) {
+                $open_ch  = $pair[0];
+                $close_ch = $pair[1];
+                $offset = 0;
+                while ( ( $start = strpos( $line, $open_ch, $offset ) ) !== false ) {
+                    // Walk to find matching close paren of the same width.
+                    // For full-width chars we step by mb_strlen (3 bytes UTF-8).
+                    $open_len  = strlen( $open_ch );
+                    $close_len = strlen( $close_ch );
+                    $depth = 1;
+                    $pos   = $start + $open_len;
+                    $len   = strlen( $line );
+                    while ( $pos < $len && $depth > 0 ) {
+                        if ( substr( $line, $pos, $open_len ) === $open_ch ) {
+                            $depth++;
+                            $pos += $open_len;
+                            continue;
+                        }
+                        if ( substr( $line, $pos, $close_len ) === $close_ch ) {
+                            $depth--;
+                            $pos += $close_len;
+                            continue;
+                        }
+                        $pos++;
+                    }
+                    if ( $depth !== 0 ) { $offset = $start + $open_len; continue; }
 
-                $inner = substr( $line, $start + 1, $pos - $start - 2 );
-                $offset = $pos;
+                    $inner_start = $start + $open_len;
+                    $inner_len   = $pos - $inner_start - $close_len;
+                    $inner       = substr( $line, $inner_start, $inner_len );
+                    $offset      = $pos;
 
-                // Must have inner parens (otherwise first pass handled it)
-                if ( ! str_contains( $inner, '(' ) ) continue;
-                // Length check
-                if ( strlen( $inner ) < 10 || strlen( $inner ) > 150 ) continue;
-                // Skip if already linked
-                if ( str_contains( $inner, 'http' ) ) continue;
-                if ( str_contains( $inner, '](') ) continue;
+                    // Must have inner parens (otherwise first pass handled it)
+                    if ( ! str_contains( $inner, $open_ch ) ) continue;
+                    // Length check
+                    if ( strlen( $inner ) < 10 || strlen( $inner ) > 150 ) continue;
+                    // Skip if already linked
+                    if ( str_contains( $inner, 'http' ) ) continue;
+                    if ( str_contains( $inner, '](' ) ) continue;
 
-                $inner_n = $norm( $inner );
-                foreach ( $lookup as $key => $entry ) {
-                    if ( strlen( $key ) > 5 && ( str_contains( $inner_n, $key ) || str_contains( $key, $inner_n ) ) ) {
-                        $replacement = '([' . $inner . '](' . $entry['url'] . '))';
-                        $line = substr( $line, 0, $start ) . $replacement . substr( $line, $pos );
-                        $offset = $start + strlen( $replacement );
-                        break;
+                    $inner_n = $norm( $inner );
+                    foreach ( $lookup as $key => $entry ) {
+                        if ( strlen( $key ) > 5 && ( str_contains( $inner_n, $key ) || str_contains( $key, $inner_n ) ) ) {
+                            // Preserve the same paren width as the original text
+                            $replacement = $open_ch . '[' . $inner . '](' . $entry['url'] . ')' . $close_ch;
+                            $line = substr( $line, 0, $start ) . $replacement . substr( $line, $pos );
+                            $offset = $start + strlen( $replacement );
+                            break;
+                        }
                     }
                 }
             }
@@ -6215,7 +6240,7 @@ final class SEOBetter {
                 <?php endif; ?>
             </div>
 
-            <!-- v1.5.216.58 — Freshness panel. Lazy-loads diagnostic from REST
+            <!-- v1.5.216.59 — Freshness panel. Lazy-loads diagnostic from REST
                  on first open (avoids paying the GSC API call cost for every
                  post-edit screen). Free/Pro users without diagnostic access
                  see an upsell card; Pro users get age/year/missing-signal;

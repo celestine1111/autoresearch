@@ -7,12 +7,94 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.58)
+> **Last updated:** 2026-05-02 (v1.5.216.59)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.59 — Linkify Japanese / full-width-paren citations (Bug #1 from external-links audit)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+Live audit of generated articles against `external-links-policy.md` §1 + `SEO-GEO-AI-GUIDELINES.md` §1:
+
+- Post 387 (EN, "Best SEO Tools for WordPress 2026"): 22 inline research-pool citations ✅
+- Post 390 (JA, "5選！2026年に最適なWordPress用検索エンジン最適化ツール…"): **0 inline research-pool citations** ❌
+
+The JA article had a critical compliance failure — every Pro+ Japanese (and Korean / Chinese / Cantonese) article was shipping with zero clickable citations, hurting Princeton §1 "Cite sources +30%" boost AND breaking the policy's core promise.
+
+### Root cause
+
+Inspecting the AI's actual JA output found **8+ correctly-formatted citations** the AI wrote in proper Japanese citation style:
+
+```
+（Hostinger, 2025）
+（AIOSEO調査、2025年）
+（aioseo.com, 2025）
+（junia.ai, 2025）
+（AIOSEO、2025年）
+（Hostinger、2025年）
+（Jasper、Surfer、WordLiftなど）
+```
+
+All wrapped in **full-width parens `（）`** (U+FF08, U+FF09) as is correct Japanese typographic convention.
+
+`linkify_bracketed_references()` (seobetter.php line ~3449) only matched **half-width parens `()`**:
+
+```php
+'/\(([^)]{4,150})\)(?=[.\s,;!?\n]|$)/m'
+```
+
+Same problem in the second-pass nested-paren walker (line ~3488) — only scanned for `(` and `)`, never `（` and `）`. The AI did its job perfectly; the linkifier was blind to Japanese punctuation.
+
+Same blind spot affects all 12 SEOBetter languages with full-width parens conventions: Japanese, Chinese (zh / zh-cn / zh-tw), Korean, sometimes Vietnamese. Roughly 20% of supported languages.
+
+### Fix
+
+**`seobetter.php::linkify_bracketed_references()`:**
+
+- Pass-1 regex extended: `[\(（]([^)）]{4,150})[\)）](?=[.\s,;!?\n。！？、]|$)` — matches both half-width `()` and full-width `（）` parens. Sentence-end lookahead also includes Japanese punctuation `。！？、` (period, exclamation, question, comma)
+- Replacement preserves the original paren width — JA articles get `（[Hostinger, 2025](url)）` (full-width), EN articles still get `([Hostinger, 2025](url))` (half-width). Mixed-width pairs in the same prose would look amateur
+- Balance check now considers both widths separately — a half-width-open / full-width-close mismatch is treated as malformed and skipped, lets pass 2 retry
+
+**`seobetter.php` second-pass nested-paren walker (line ~3488):**
+
+- Replaced single `strpos($line, '(', $offset)` walk with a loop over `[ ['(', ')'], ['（', '）'] ]` pair list
+- Each pair scanned independently — preserves width, skips mixed-width pairs
+- Multi-byte stride handled correctly: full-width parens are 3 UTF-8 bytes each, so `$open_len = strlen($open_ch)` and the depth walker steps by the right amount per character
+- Replacement string preserves the same paren width
+
+### Not changed (analyzed and intentionally deferred)
+
+- `Content_Injector::inject_named_source_links()` — its sentence-detection regex IS English-only, BUT this function's `## References` split bails before it ever inspects sentences for non-English content (the markdown has no References section yet at this point in the pipeline). Already a no-op for both EN and JA. Logged for v1.5.216.60 if we want non-AI fallback citation injection
+- `Citation_Pool::format_for_prompt()` — produces English citation instructions even for non-English articles. The AI follows them anyway (writes citations in localized format), so no fix needed for this bug. Could be improved later for prompt clarity
+
+### Verify
+
+```bash
+grep -n "（" seobetter/seobetter.php | head -5
+grep -n "[\\\\(（]\|[\\\\)）]" seobetter/seobetter.php | head -10
+```
+
+End-to-end live verification:
+1. Re-generate the JA article (or manually trigger linkify on post 390's existing content)
+2. Audit: should now show non-zero inline anchors with `data-href` matching pool URLs
+3. EN article (post 387) should still have its 22 inline citations — fix is purely additive
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No `external-links-policy.md` change — the policy was correct, the implementation was incomplete
+- No `SEO-GEO-AI-GUIDELINES.md` change — Princeton §1 boost requirements unchanged
+
+**Verified by user:** UNTESTED
 
 ---
 
