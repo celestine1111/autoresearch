@@ -7,12 +7,58 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.49)
+> **Last updated:** 2026-05-02 (v1.5.216.50)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.50 — GSC setup guide rewritten for new Google Cloud Console UI
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+User attempted GSC OAuth setup, hit Google's "app is being tested, can only be accessed by developer-approved testers" error. Old setup guide on the GSC card had outdated steps from the legacy GCP UI:
+- Said "APIs & Services → Credentials → Create Credentials" without mentioning the consent screen prerequisite
+- Didn't mention the Test users requirement at all
+- Didn't explain the "unverified app" warning users will see when authorizing
+
+User correctly observed: "these steps should be added to setup guide".
+
+### Fix
+
+Rewrote the OAuth setup checklist on the GSC card to match the current GCP UI flow + cover the Test users gotcha + the unverified-app warning. New steps now include:
+
+1. Direct deep-link to enable Search Console API
+2. **NEW:** Configure OAuth consent screen FIRST (App name + emails) — the test-user list won't save until this is done
+3. **NEW:** Add yourself as a test user via `console.cloud.google.com/auth/audience` (the new GCP UI's URL — old `/apis/credentials/consent` still works but the layout's been split into multiple tabs)
+4. Create the OAuth Client ID with the redirect URI
+5. Paste credentials into wp-config.php
+6. **NEW:** Footer note explaining the "Google hasn't verified this app" warning is normal for testing-mode apps + how to proceed (Advanced → Go to site → unsafe is expected, click through)
+
+Each step now has a direct deep-link to the exact GCP page the user needs (Library, Audience, Credentials, OAuth consent screen) — no hunting through menus.
+
+### Verify (file:method anchors)
+
+```bash
+grep -n "Audience\|Test users\|Google hasn.*verified" seobetter/admin/views/settings.php | head -8
+```
+
+### Tier behaviour
+
+Unchanged — GSC connect is Free per locked plan. Pro+ adds the GSC-driven Freshness driver.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — pure UX copy refresh on already-shipped feature
+
+**Verified by user:** UNTESTED
 
 ---
 

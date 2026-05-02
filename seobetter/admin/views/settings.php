@@ -1068,22 +1068,56 @@ $gsc_flash_email = sanitize_email( urldecode( $_GET['email'] ?? '' ) );
             <p style="margin:8px 0 10px;font-size:13px;line-height:1.55">
                 <?php esc_html_e( 'During Phase 1 testing each install registers its own Google Cloud OAuth client. Phase 2 will replace this with a centralized SEOBetter proxy so users never need their own Google credentials.', 'seobetter' ); ?>
             </p>
-            <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.7">
+            <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.75">
                 <li><?php
                     printf(
                         /* translators: 1: link to Google Cloud Console */
-                        esc_html__( 'Go to %s and create or select a project.', 'seobetter' ),
+                        esc_html__( 'Go to %s and create or select a project (top-left dropdown).', 'seobetter' ),
                         '<a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>'
                     ); ?></li>
-                <li><?php esc_html_e( 'APIs & Services → Library → enable "Google Search Console API".', 'seobetter' ); ?></li>
-                <li><?php esc_html_e( 'Credentials → Create Credentials → OAuth 2.0 Client ID → Web application.', 'seobetter' ); ?></li>
-                <li><?php esc_html_e( 'Authorized redirect URI:', 'seobetter' ); ?> <code style="background:#fff;padding:2px 6px;font-size:11px;border:1px solid #fcd34d;word-break:break-all"><?php echo esc_html( \SEOBetter\GSC_Manager::get_redirect_uri() ); ?></code></li>
-                <li><?php esc_html_e( 'Add the Client ID and Client Secret to your wp-config.php:', 'seobetter' ); ?>
+                <li><?php
+                    printf(
+                        /* translators: 1: link to Search Console API in console */
+                        esc_html__( 'Enable the Search Console API: open %s and click Enable.', 'seobetter' ),
+                        '<a href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener">APIs & Services → Library → Google Search Console API</a>'
+                    ); ?></li>
+                <li>
+                    <strong><?php esc_html_e( 'Configure the OAuth consent screen FIRST', 'seobetter' ); ?></strong> —
+                    <?php
+                    printf(
+                        /* translators: 1: link to OAuth consent screen */
+                        esc_html__( 'open %s. Pick External user type if asked. Fill in App name (anything), User support email, Developer contact email → Save and Continue through Scopes (skip) → Save.', 'seobetter' ),
+                        '<a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">APIs & Services → OAuth consent screen</a>'
+                    ); ?>
+                </li>
+                <li>
+                    <strong><?php esc_html_e( 'Add yourself as a test user', 'seobetter' ); ?></strong> —
+                    <?php
+                    printf(
+                        /* translators: 1: link to Audience tab in new GCP UI */
+                        esc_html__( 'open %s (new GCP UI) — scroll to Test users → + Add users → enter the Google email you\'ll authorize with → Save. Without this Google blocks the OAuth with "app is being tested" error.', 'seobetter' ),
+                        '<a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener">APIs & Services → Audience</a>'
+                    ); ?>
+                </li>
+                <li>
+                    <?php
+                    printf(
+                        /* translators: 1: link to Credentials page */
+                        esc_html__( 'Create the OAuth client: open %s → Create Credentials → OAuth 2.0 Client ID → Web application. Name it (e.g. "SEOBetter").', 'seobetter' ),
+                        '<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">APIs & Services → Credentials</a>'
+                    ); ?>
+                </li>
+                <li><?php esc_html_e( 'Authorized redirect URI:', 'seobetter' ); ?> <code style="background:#fff;padding:2px 6px;font-size:11px;border:1px solid #fcd34d;word-break:break-all;display:inline-block;margin-top:2px"><?php echo esc_html( \SEOBetter\GSC_Manager::get_redirect_uri() ); ?></code> <?php esc_html_e( '(paste exactly — must match including trailing slash)', 'seobetter' ); ?></li>
+                <li><?php esc_html_e( 'Click Create. Copy the Client ID + Client Secret. Add them to your wp-config.php (above the "That\'s all, stop editing!" line):', 'seobetter' ); ?>
                     <pre style="background:#fff;padding:8px 10px;font-size:11px;border:1px solid #fcd34d;overflow-x:auto;margin:6px 0">define( 'SEOBETTER_GSC_CLIENT_ID',     'YOUR_CLIENT_ID.apps.googleusercontent.com' );
 define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
                 </li>
-                <li><?php esc_html_e( 'Reload this page — the Connect button will appear.', 'seobetter' ); ?></li>
+                <li><?php esc_html_e( 'Reload this page — the Connect button replaces this setup guide.', 'seobetter' ); ?></li>
             </ol>
+            <p style="margin:12px 0 0;font-size:12px;color:#92400e;line-height:1.55;padding-top:10px;border-top:1px solid #fcd34d">
+                <strong>💡 <?php esc_html_e( 'When authorizing, expect "Google hasn\'t verified this app"', 'seobetter' ); ?></strong> —
+                <?php esc_html_e( 'this is normal for testing-mode OAuth apps. Click Advanced → "Go to (your-site) (unsafe)" to proceed. Not actually unsafe — Google\'s standard prompt for unpublished apps.', 'seobetter' ); ?>
+            </p>
         </div>
     <?php elseif ( ! $gsc_status['connected'] ) : ?>
         <!-- Configured but not connected — show Connect button -->
