@@ -19,7 +19,7 @@
 ## v1.5.216.60 — Featured-image text overflow fix (CJK + Thai headlines)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `74b5674`
 
 ### Bug
 
