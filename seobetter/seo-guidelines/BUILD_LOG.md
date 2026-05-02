@@ -19,7 +19,7 @@
 ## Build-process fix — Last30Days Python script missing from zip
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `ba1d8f9`
 **Affects:** every prior zip build, not a code change
 
 ### Bug
