@@ -7,12 +7,70 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.46)
+> **Last updated:** 2026-05-02 (v1.5.216.47)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.47 — Brand Voice scrub: late-pass over image alt + citations + references
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+Stress-tested v1.5.216.46 with keyword `"how to track seo data month over month in 2026"` + brand voice "SEO Website" with banned_phrases `[data, month]`. Generated article still contained:
+- 6× `month`
+- 3× `data`
+
+All hits located inside **image alt-text strings** like `"how to track seo data month over month in 2026 visual guide"` — text generated AFTER the scrub had run. The scrub fired correctly (article title was scrubbed: `"How To Track Seo Over In 2026"` — note missing "data" and "month"), but the order of operations in `assemble_final()` was:
+
+1. Build `$markdown`
+2. **Brand Voice scrub** ← ran here (early)
+3. Stock_Image_Inserter::insert_images() — creates alt text from ORIGINAL keyword
+4. Inject named source links
+5. Linkify bracketed references
+6. Append References section
+7. Format $markdown → $html
+8. Recipe filter
+9. Places link injection on $html
+10. Score / quality gate
+11. Return
+
+Steps 3-9 each emit new text using upstream sources (keyword, citation pool, place names) that may contain user-banned phrases. None of those went through the scrub.
+
+### Fix
+
+Added a **late-stage authoritative scrub pass** at the very end of `assemble_final()` (just before the return). Runs on both `$markdown` AND `$html` (callers use both — preview shows markdown, save uses html). Logs `'(late pass): scrubbed N markdown + M html banned-phrase instance(s)'` so we can monitor effectiveness.
+
+The early-stage scrub (step 2) stays as belt-and-braces — reduces work for the late pass when AI-generated headings get baked into alt-text seeds. The late pass is the authoritative one.
+
+### Verify (file:method anchors)
+
+```bash
+grep -n "Brand_Voice_Manager::scrub_banned_phrases" seobetter/includes/Async_Generator.php
+# Should show 2 calls inside assemble_final — early pass at ~line 2398, late pass at ~line 2660
+```
+
+### Live test plan
+
+Re-run yesterday's stress test:
+1. Keyword: `how to track seo data month over month in 2026`
+2. Voice: SEO Website (banned: data, month)
+3. Generate
+4. Search article body for `\bdata\b` + `\bmonth\b` → both should be **0**
+5. debug.log should show: `(late pass): scrubbed N markdown + M html banned-phrase instance(s)` where N+M ≥ 9 (the previously-leaked instances)
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — fixing post-process ordering bug in already-shipped feature. The §3.1D spec (item 6) doesn't specify ordering, so no spec update needed
+
+**Verified by user:** UNTESTED
 
 ---
 

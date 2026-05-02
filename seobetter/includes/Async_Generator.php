@@ -2393,6 +2393,18 @@ class Async_Generator {
         // Belt-and-suspenders defense — the system prompt directs the AI to
         // avoid the user's banned phrases, but if the LLM ignored it, this
         // post-process pass strips them word-boundary case-insensitive.
+        //
+        // v1.5.216.47 — fix: scrub used to run HERE (before image alt text,
+        // citations, references, place links) so anything those steps
+        // re-introduced from the original keyword leaked through. The user
+        // hit this with keyword "how to track seo data month over month
+        // in 2026" + banned phrases [data, month] — image alt strings still
+        // contained 6× "month" + 3× "data". Scrub now runs at the END of
+        // assemble_final, after every post-process step has emitted its
+        // text. The early scrub call below stays as belt-and-braces (the
+        // AI sometimes emits banned phrases in headings that get baked into
+        // alt-text seeds, so an early pass reduces the chance the late pass
+        // has work to do — but the LATE pass is the authoritative one).
         $brand_voice_id = (string) ( $options['brand_voice_id'] ?? '' );
         if ( $brand_voice_id !== '' ) {
             [ $markdown, $stripped ] = Brand_Voice_Manager::scrub_banned_phrases( $markdown, $brand_voice_id );
@@ -2643,6 +2655,25 @@ class Async_Generator {
                     $loc
                 ),
             ] );
+        }
+
+        // v1.5.216.47 — Brand Voice late-stage scrub. Authoritative pass:
+        // runs after image insertion, citation injection, references
+        // append, places link injection, and HTML formatting. This is
+        // where banned phrases REALLY get killed. Operates on both
+        // $markdown and $html since callers use both (preview shows
+        // markdown, save uses html).
+        if ( $brand_voice_id !== '' ) {
+            [ $markdown, $stripped_md ] = Brand_Voice_Manager::scrub_banned_phrases( $markdown, $brand_voice_id );
+            [ $html, $stripped_html ]   = Brand_Voice_Manager::scrub_banned_phrases( $html, $brand_voice_id );
+            if ( $stripped_md > 0 || $stripped_html > 0 ) {
+                error_log( sprintf(
+                    'SEOBetter Brand_Voice_Manager (late pass): scrubbed %d markdown + %d html banned-phrase instance(s) (voice_id=%s)',
+                    $stripped_md,
+                    $stripped_html,
+                    $brand_voice_id
+                ) );
+            }
         }
 
         return [
