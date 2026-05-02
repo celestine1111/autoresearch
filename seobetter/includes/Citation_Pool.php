@@ -25,7 +25,7 @@ class Citation_Pool {
 
     private const CACHE_TTL = 21600; // 6 hours
     // v1.5.137 — bump to force fresh pool build with Serper bypass flag.
-    private const CACHE_VERSION = 'v4';
+    private const CACHE_VERSION = 'v5'; // bumped v1.5.216.61 — invalidates stale empty pools from non-Latin keywords cached under the pre-Unicode-fix logic
 
     /**
      * Build a citation pool for a keyword. Returns an array of pool entries:
