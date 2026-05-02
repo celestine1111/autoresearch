@@ -219,9 +219,16 @@ $avg_priority = $rows ? (int) round( $priority_total / count( $rows ) ) : 0;
 .seobetter-why-signal--warning  { background:#fef3c7;border-color:#fcd34d; }
 .seobetter-why-signal--info     { background:#eff6ff;border-color:#bfdbfe; }
 .seobetter-why-signal__head { display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:600;font-size:13px;color:#0f172a;margin-bottom:6px; }
-.seobetter-why-signal__contrib { font-size:11px;font-weight:500;color:#64748b;background:#fff;padding:2px 7px;border-radius:10px;border:1px solid #e2e8f0;white-space:nowrap; }
+.seobetter-why-signal__contrib { font-size:10px;font-weight:700;letter-spacing:0.05em;padding:2px 7px;border-radius:4px;white-space:nowrap; }
+.seobetter-why-signal__contrib--critical { background:#fee2e2;color:#991b1b; }
+.seobetter-why-signal__contrib--warning  { background:#fef3c7;color:#92400e; }
+.seobetter-why-signal__contrib--info     { background:#dbeafe;color:#1e40af; }
 .seobetter-why-signal__detail { font-size:12px;color:#475569;line-height:1.5;margin-bottom:8px; }
-.seobetter-why-signal__action { font-size:12px; }
+.seobetter-why-signal__action { font-size:12px;margin-top:6px; }
+.seobetter-why-snippets { background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;margin-bottom:8px; }
+.seobetter-why-snippet { font-size:12px;color:#334155;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;line-height:1.5;padding:4px 0;border-bottom:1px solid #f1f5f9;word-break:break-word; }
+.seobetter-why-snippet:last-child { border-bottom:none; }
+.seobetter-why-preview { background:#f8fafc;border:1px dashed #94a3b8;border-radius:4px;padding:6px 10px;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:12px;color:#0f172a;margin-bottom:6px; }
 .seobetter-why-toast { position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;z-index:10000;opacity:0;transition:opacity .2s; }
 .seobetter-why-toast.show { opacity:1; }
 .seobetter-why-q { font-size:12px;padding:8px 10px;border-bottom:1px solid #f1f5f9;display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center; }
@@ -280,22 +287,47 @@ $avg_priority = $rows ? (int) round( $priority_total / count( $rows ) ) : 0;
             '</div>';
     }
 
+    function severityLabel(sev) {
+        if (sev === 'critical') return 'HIGH';
+        if (sev === 'warning')  return 'MEDIUM';
+        return 'LOW';
+    }
+
     function renderSignals(data) {
         var html = '';
+
+        // Primary CTA at the top — clear next-action for the user
+        if (data.edit_url) {
+            html += '<a href="' + esc(data.edit_url) + '" target="_blank" class="button button-primary" style="display:block;text-align:center;margin-bottom:14px;padding:8px"><?php echo esc_js( __( 'Edit this post →', 'seobetter' ) ); ?></a>';
+        }
+
         if (data.signals && data.signals.length) {
             data.signals.forEach(function(s) {
                 var sev = s.severity || 'info';
                 html += '<div class="seobetter-why-signal seobetter-why-signal--' + esc(sev) + '">';
                 html += '<div class="seobetter-why-signal__head"><div>' + esc(s.label) + '</div>';
-                html += '<div class="seobetter-why-signal__contrib">+' + esc(s.contributes || 0) + '</div></div>';
+                html += '<div class="seobetter-why-signal__contrib seobetter-why-signal__contrib--' + esc(sev) + '">' + esc(severityLabel(sev)) + '</div></div>';
                 if (s.detail) html += '<div class="seobetter-why-signal__detail">' + esc(s.detail) + '</div>';
-                if (s.action) {
-                    if (s.action.type === 'copy') {
-                        html += '<div class="seobetter-why-signal__action"><button type="button" class="button button-small seobetter-why-copy" data-payload="' + esc(s.action.payload) + '">' + esc(s.action.label) + '</button></div>';
-                    } else if (s.action.type === 'find_in_post') {
-                        var years = (s.action.years || []).join(', ');
-                        html += '<div class="seobetter-why-signal__action"><button type="button" class="button button-small seobetter-why-copy" data-payload="' + esc(years) + '" title="<?php echo esc_attr_x( 'Copy year list, then use Edit → Find in your post editor', 'tooltip', 'seobetter' ); ?>">' + esc(s.action.label) + '</button></div>';
-                    }
+
+                // Inline snippets (year mentions) — show user where they appear in the post
+                if (s.snippets && s.snippets.length) {
+                    html += '<div class="seobetter-why-snippets">';
+                    html += '<div style="font-size:11px;color:#64748b;margin-bottom:4px"><?php echo esc_js( __( 'Where they appear in your post:', 'seobetter' ) ); ?></div>';
+                    s.snippets.forEach(function(snip) {
+                        // Highlight the year inside the snippet
+                        var safe = esc(snip).replace(/\b(20[12]\d)\b/g, '<mark style="background:#fef08a;padding:0 2px;border-radius:2px;font-weight:600">$1</mark>');
+                        html += '<div class="seobetter-why-snippet">' + safe + '</div>';
+                    });
+                    html += '</div>';
+                }
+
+                // Inline preview line (e.g. "Last Updated: …") + Copy button
+                if (s.preview_line) {
+                    html += '<div class="seobetter-why-preview">' + esc(s.preview_line) + '</div>';
+                }
+
+                if (s.action && s.action.type === 'copy') {
+                    html += '<div class="seobetter-why-signal__action"><button type="button" class="button button-small seobetter-why-copy" data-payload="' + esc(s.action.payload) + '">' + esc(s.action.label) + '</button></div>';
                 }
                 html += '</div>';
             });

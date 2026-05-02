@@ -439,15 +439,38 @@
                 var sev = s.severity || 'info';
                 var bg = sev === 'critical' ? '#fef2f2' : (sev === 'warning' ? '#fef3c7' : '#eff6ff');
                 var bd = sev === 'critical' ? '#fecaca' : (sev === 'warning' ? '#fcd34d' : '#bfdbfe');
+                var pillBg = sev === 'critical' ? '#fee2e2' : (sev === 'warning' ? '#fef3c7' : '#dbeafe');
+                var pillFg = sev === 'critical' ? '#991b1b' : (sev === 'warning' ? '#92400e' : '#1e40af');
+                var sevWord = sev === 'critical' ? 'HIGH' : (sev === 'warning' ? 'MEDIUM' : 'LOW');
                 var sChildren = [];
                 sChildren.push(el('div', { key: 'h', style: { display: 'flex', justifyContent: 'space-between', gap: 8, fontWeight: 600, fontSize: 12, color: '#0f172a', marginBottom: 4 } },
                     el('div', null, s.label),
-                    el('div', { style: { fontSize: 10, color: '#64748b', background: '#fff', padding: '1px 6px', borderRadius: 10, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' } }, '+' + (s.contributes || 0))
+                    el('div', { style: { fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', background: pillBg, color: pillFg, padding: '2px 7px', borderRadius: 4 } }, sevWord)
                 ));
                 if (s.detail) sChildren.push(el('div', { key: 'd', style: { fontSize: 11, color: '#475569', lineHeight: 1.5, marginBottom: 6 } }, s.detail));
-                if (s.action && (s.action.type === 'copy' || s.action.type === 'find_in_post')) {
-                    var payload = s.action.type === 'find_in_post' ? (s.action.years || []).join(', ') : s.action.payload;
-                    sChildren.push(el('button', { key: 'b', type: 'button', className: 'button button-small', onClick: function() { copy(payload); } }, s.action.label));
+
+                // Inline snippets — show user the exact context where year mentions appear
+                if (s.snippets && s.snippets.length) {
+                    var snipChildren = [el('div', { key: 'lbl', style: { fontSize: 10, color: '#64748b', marginBottom: 3 } }, 'Where they appear in your post:')];
+                    s.snippets.forEach(function(snip, i) {
+                        // Split snippet on years to React-render the highlight
+                        var parts = String(snip).split(/(\b20[12]\d\b)/g);
+                        var inline = parts.map(function(p, j) {
+                            if (/^20[12]\d$/.test(p)) return el('mark', { key: j, style: { background: '#fef08a', padding: '0 2px', borderRadius: 2, fontWeight: 600 } }, p);
+                            return p;
+                        });
+                        snipChildren.push(el('div', { key: i, style: { fontSize: 11, color: '#334155', fontFamily: 'ui-monospace,Menlo,Consolas,monospace', lineHeight: 1.5, padding: '3px 0', borderBottom: i < s.snippets.length - 1 ? '1px solid #f1f5f9' : 'none', wordBreak: 'break-word' } }, inline));
+                    });
+                    sChildren.push(el('div', { key: 'sn', style: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', marginBottom: 6 } }, snipChildren));
+                }
+
+                // Preview line (e.g. "Last Updated: …") — readable code-style block
+                if (s.preview_line) {
+                    sChildren.push(el('div', { key: 'pv', style: { background: '#f8fafc', border: '1px dashed #94a3b8', borderRadius: 4, padding: '5px 8px', fontFamily: 'ui-monospace,Menlo,Consolas,monospace', fontSize: 11, color: '#0f172a', marginBottom: 6 } }, s.preview_line));
+                }
+
+                if (s.action && s.action.type === 'copy') {
+                    sChildren.push(el('button', { key: 'b', type: 'button', className: 'button button-small', onClick: function() { copy(s.action.payload); } }, s.action.label));
                 }
                 children.push(el('div', { key: 's' + idx, style: { padding: '10px 12px', borderRadius: 8, marginTop: 6, border: '1px solid ' + bd, background: bg } }, sChildren));
             });

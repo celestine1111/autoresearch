@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.54
+ * Version: 1.5.216.55
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.54' );
+define( 'SEOBETTER_VERSION', '1.5.216.55' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -715,7 +715,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.54 — GSC property picker endpoints
+        // v1.5.216.55 — GSC property picker endpoints
         register_rest_route( 'seobetter/v1', '/gsc/sites', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_gsc_list_sites' ],
@@ -730,7 +730,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.54 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
+        // v1.5.216.55 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
         register_rest_route( 'seobetter/v1', '/freshness/diagnostic/(?P<post_id>\d+)', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_freshness_diagnostic' ],
@@ -738,7 +738,7 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
-        // v1.5.216.54 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
+        // v1.5.216.55 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
         // method level (registration is unconditional but seed/clear calls
         // return error JSON without WP_DEBUG).
         register_rest_route( 'seobetter/v1', '/gsc/seed-test-data', [
@@ -1678,7 +1678,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.54 — list every GSC property the authorized account can access.
+     * v1.5.216.55 — list every GSC property the authorized account can access.
      * Used by the property-picker dropdown on the GSC Settings card.
      */
     public function rest_gsc_list_sites( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1689,7 +1689,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.54 — set which GSC property the plugin syncs.
+     * v1.5.216.55 — set which GSC property the plugin syncs.
      * POST body: { site_url: 'https://example.com/' }
      */
     public function rest_gsc_set_site( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1699,7 +1699,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.54 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
+     * v1.5.216.55 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
      * Striking-distance features can be exercised before real GSC traffic
      * exists. GSC_Manager::seed_test_snapshots() returns error JSON when
      * WP_DEBUG is not enabled, so the gate lives at the data layer.
@@ -1715,7 +1715,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.54 — return per-post Freshness diagnostic for the "Why?" drawer
+     * v1.5.216.55 — return per-post Freshness diagnostic for the "Why?" drawer
      * + metabox tab + Gutenberg sidebar. Tier-gated inside the manager.
      */
     public function rest_freshness_diagnostic( \WP_REST_Request $request ): \WP_REST_Response {
@@ -6214,7 +6214,7 @@ final class SEOBetter {
                 <?php endif; ?>
             </div>
 
-            <!-- v1.5.216.54 — Freshness panel. Lazy-loads diagnostic from REST
+            <!-- v1.5.216.55 — Freshness panel. Lazy-loads diagnostic from REST
                  on first open (avoids paying the GSC API call cost for every
                  post-edit screen). Free/Pro users without diagnostic access
                  see an upsell card; Pro users get age/year/missing-signal;
@@ -6289,13 +6289,26 @@ final class SEOBetter {
                                 var sev = s.severity || 'info';
                                 var bg = sev === 'critical' ? '#fef2f2' : (sev === 'warning' ? '#fef3c7' : '#eff6ff');
                                 var bd = sev === 'critical' ? '#fecaca' : (sev === 'warning' ? '#fcd34d' : '#bfdbfe');
+                                var pillBg = sev === 'critical' ? '#fee2e2' : (sev === 'warning' ? '#fef3c7' : '#dbeafe');
+                                var pillFg = sev === 'critical' ? '#991b1b' : (sev === 'warning' ? '#92400e' : '#1e40af');
+                                var sevWord = sev === 'critical' ? 'HIGH' : (sev === 'warning' ? 'MEDIUM' : 'LOW');
                                 html += '<div style="padding:12px 14px;border-radius:8px;margin-bottom:8px;border:1px solid ' + bd + ';background:' + bg + '">';
                                 html += '<div style="display:flex;justify-content:space-between;gap:10px;font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px"><div>' + esc(s.label) + '</div>';
-                                html += '<div style="font-size:11px;font-weight:500;color:#64748b;background:#fff;padding:2px 7px;border-radius:10px;border:1px solid #e2e8f0">+' + esc(s.contributes || 0) + '</div></div>';
+                                html += '<div style="font-size:10px;font-weight:700;letter-spacing:.05em;background:' + pillBg + ';color:' + pillFg + ';padding:2px 7px;border-radius:4px">' + sevWord + '</div></div>';
                                 if (s.detail) html += '<div style="font-size:11px;color:#475569;line-height:1.5;margin-bottom:6px">' + esc(s.detail) + '</div>';
-                                if (s.action && (s.action.type === 'copy' || s.action.type === 'find_in_post')) {
-                                    var payload = s.action.type === 'find_in_post' ? (s.action.years || []).join(', ') : s.action.payload;
-                                    html += '<button type="button" class="button button-small sb-fresh-copy" data-payload="' + esc(payload) + '">' + esc(s.action.label) + '</button>';
+                                if (s.snippets && s.snippets.length) {
+                                    html += '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:6px 8px;margin-bottom:6px"><div style="font-size:10px;color:#64748b;margin-bottom:3px"><?php echo esc_js( __( 'Where they appear in your post:', 'seobetter' ) ); ?></div>';
+                                    s.snippets.forEach(function(snip) {
+                                        var safe = esc(snip).replace(/\b(20[12]\d)\b/g, '<mark style="background:#fef08a;padding:0 2px;border-radius:2px;font-weight:600">$1</mark>');
+                                        html += '<div style="font-size:11px;color:#334155;font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.5;padding:3px 0;border-bottom:1px solid #f1f5f9;word-break:break-word">' + safe + '</div>';
+                                    });
+                                    html += '</div>';
+                                }
+                                if (s.preview_line) {
+                                    html += '<div style="background:#f8fafc;border:1px dashed #94a3b8;border-radius:4px;padding:5px 8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#0f172a;margin-bottom:6px">' + esc(s.preview_line) + '</div>';
+                                }
+                                if (s.action && s.action.type === 'copy') {
+                                    html += '<button type="button" class="button button-small sb-fresh-copy" data-payload="' + esc(s.action.payload) + '">' + esc(s.action.label) + '</button>';
                                 }
                                 html += '</div>';
                             });

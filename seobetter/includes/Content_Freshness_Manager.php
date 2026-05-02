@@ -362,12 +362,19 @@ class Content_Freshness_Manager {
         $word_count    = str_word_count( $text );
         $has_signal    = $this->has_freshness_signal( $post->post_content );
 
-        // Year mention scan
-        preg_match_all( '/\b(20[12]\d)\b/', $text, $year_matches );
-        $year_counts = [];
-        foreach ( ( $year_matches[1] ?? [] ) as $y ) {
+        // Year mention scan + per-occurrence snippets (~80 chars context window)
+        preg_match_all( '/(.{0,40})\b(20[12]\d)\b(.{0,40})/u', $text, $year_ctx, PREG_SET_ORDER );
+        $year_counts   = [];
+        $year_snippets = [];
+        foreach ( $year_ctx as $m ) {
+            $y = $m[2];
             if ( (int) $y < $current_year - 1 ) {
                 $year_counts[ $y ] = ( $year_counts[ $y ] ?? 0 ) + 1;
+                if ( count( $year_snippets ) < 3 ) {
+                    $before = trim( preg_replace( '/\s+/', ' ', $m[1] ) );
+                    $after  = trim( preg_replace( '/\s+/', ' ', $m[3] ) );
+                    $year_snippets[] = ( $before !== '' ? '…' . $before . ' ' : '' ) . $y . ( $after !== '' ? ' ' . $after . '…' : '' );
+                }
             }
         }
         $outdated_years_total = array_sum( $year_counts );
@@ -420,16 +427,15 @@ class Content_Freshness_Manager {
                 'severity'     => $outdated_years_total >= 4 ? 'critical' : 'warning',
                 'label'        => sprintf(
                     /* translators: 1: comma list of "YYYY (N×)" */
-                    __( 'Year mentions older than last year: %s', 'seobetter' ),
+                    __( 'Outdated year mentions: %s', 'seobetter' ),
                     implode( ', ', $year_summary )
                 ),
-                'detail'       => __( 'Each old year reference is a stale signal to readers and search engines. Update to current-year stats and dates.', 'seobetter' ),
+                'detail'       => __( 'Old year references signal stale content to readers and search engines. Find them below and update to current-year data.', 'seobetter' ),
                 'contributes'  => $outdated_years_total * 15,
-                'action'       => [
-                    'type'   => 'find_in_post',
-                    'years'  => array_keys( $year_counts ),
-                    'label'  => __( 'Find these in the post', 'seobetter' ),
-                ],
+                // Inline context snippets — user can SEE where these appear in the post
+                // without needing to do a copy/paste/find dance themselves.
+                'snippets'     => $year_snippets,
+                'action'       => null,
             ];
         }
 
@@ -439,13 +445,16 @@ class Content_Freshness_Manager {
             $signals[] = [
                 'id'           => 'no_freshness_signal',
                 'severity'     => 'warning',
-                'label'        => __( 'No "Last Updated:" line in the post body', 'seobetter' ),
-                'detail'       => __( 'AI engines and readers use this as a freshness tiebreaker. Add it near the top of the post.', 'seobetter' ),
+                'label'        => __( 'No "Last Updated:" line in the post', 'seobetter' ),
+                'detail'       => __( "Add a freshness signal at the top of the post body — AI engines and readers use it as a tiebreaker. We'll generate the line for you; copy and paste it into your post.", 'seobetter' ),
                 'contributes'  => 10,
+                // Show the actual line as a code-style preview the user can read,
+                // plus a Copy button so they can paste it into the post.
+                'preview_line' => $copy_payload,
                 'action'       => [
                     'type'    => 'copy',
                     'payload' => $copy_payload,
-                    'label'   => sprintf( __( 'Copy "%s"', 'seobetter' ), $copy_payload ),
+                    'label'   => __( 'Copy this line', 'seobetter' ),
                 ],
             ];
         }

@@ -7,12 +7,56 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.54)
+> **Last updated:** 2026-05-02 (v1.5.216.55)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.55 — Freshness Diagnostic UX fixes (severity words + inline snippets + primary CTA)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### User feedback after v54
+
+> "+30 means nothing, when i click the button it just copies to clipboard and does nothing as a new user i would not know what to do"
+
+Two real UX bugs in the v54 drawer:
+
+1. The numeric `+30` contribution badge was meaningless to a new user. Adding to what? Out of what? The colored card already conveys severity; the number was noise.
+2. The "Find these in the post" button copied `2020` to clipboard with a 1.8s toast, then nothing. User had no idea to open editor → Cmd+F → paste → search. Felt broken.
+
+### Fix
+
+**Backend (`includes/Content_Freshness_Manager.php`):**
+- For `outdated_years` signal: extract per-occurrence **inline snippets** (~80 chars context window) showing exactly where each year appears in the post body. Up to 3 snippets returned in `signals[].snippets[]`. Action removed (no more cryptic copy button)
+- For `no_freshness_signal` signal: added `signals[].preview_line` with the full "Last Updated: …" string so the user can read it before copying. Copy button label changed from `Copy "Last Updated: …"` to `Copy this line`. Detail text rewritten to explicitly say "we'll generate the line for you; copy and paste it into your post"
+
+**UI surfaces (Freshness page drawer + metabox tab + Gutenberg sidebar):**
+- **Replaced numeric `+N` badge with severity word** — `HIGH` / `MEDIUM` / `LOW` colored to match card. The contribution math was internal scoring detail; users only need severity
+- **Added primary "Edit this post →" CTA** at the top of the drawer — clear next-action
+- **Inline snippets render** for outdated_years signal: monospace block listing actual context excerpts with the year highlighted in `<mark>`. Header: "Where they appear in your post:"
+- **Preview line renders** for no_freshness_signal: dashed-border code block showing the actual "Last Updated: …" text the user is about to copy
+- All three surfaces (drawer, metabox tab, Gutenberg sidebar) updated identically
+
+### Verify
+
+```bash
+grep -n "snippets\|preview_line\|severity_label" seobetter/includes/Content_Freshness_Manager.php
+grep -n "severityLabel\|sevLabel\|sevWord\|HIGH\|MEDIUM" seobetter/admin/views/freshness.php seobetter/seobetter.php seobetter/assets/js/editor-sidebar.js | head -10
+```
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No tier matrix change
+- No `plugin_UX.md` change required — drawer/metabox tab were already documented at the surface level; this is implementation detail
+
+**Verified by user:** UNTESTED
 
 ---
 
