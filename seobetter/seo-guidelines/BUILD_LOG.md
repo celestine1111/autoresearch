@@ -19,7 +19,7 @@
 ## v1.5.216.47 — Brand Voice scrub: late-pass over image alt + citations + references
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `4e496e0`
 
 ### Bug
 
