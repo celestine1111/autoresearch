@@ -19,7 +19,7 @@
 ## v1.5.216.46 — CRITICAL: Brand Voice never enforced + Edit voice link wrong tab
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `123d9a1`
 
 ### Bug #1 — Brand Voice banned phrases never enforced (CRITICAL)
 
