@@ -19,7 +19,7 @@
 ## v1.5.216.62.2 — Cloud_API default URL → api.seobetter.com
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `5159732`
 
 ### Why
 
