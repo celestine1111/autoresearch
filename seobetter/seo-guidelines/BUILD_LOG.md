@@ -19,7 +19,7 @@
 ## v1.5.216.59 — Linkify Japanese / full-width-paren citations (Bug #1 from external-links audit)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `25cfc0b`
 
 ### Bug
 
