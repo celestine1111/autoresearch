@@ -20,7 +20,11 @@ namespace SEOBetter;
  */
 class Cloud_API {
 
-    private const DEFAULT_CLOUD_URL = 'https://seobetter.vercel.app';
+    // v1.5.216.62.2 — switched default from seobetter.vercel.app to api.seobetter.com
+    // so every install hits the brand-coherent custom domain by default. Vercel
+    // serves the same project on both URLs; api.seobetter.com survives Vercel
+    // project renames + future hosting migrations.
+    private const DEFAULT_CLOUD_URL = 'https://api.seobetter.com';
 
     /**
      * v1.5.211 — HMAC signing secret for cloud-api requests.

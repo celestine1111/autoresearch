@@ -7,12 +7,52 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.1)
+> **Last updated:** 2026-05-03 (v1.5.216.62.2)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.2 — Cloud_API default URL → api.seobetter.com
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+The `Cloud_API::get_cloud_url()` default was `https://seobetter.vercel.app` — the Vercel-default domain. User has set up `api.seobetter.com` as the custom domain on the same Vercel project, which is brand-coherent and survives future hosting migrations. With the default unchanged, every install would call the .vercel.app URL until the user manually sets `SEOBETTER_CLOUD_URL` in wp-config.php (and there's no Settings UI for it).
+
+### Fix
+
+`includes/Cloud_API.php::DEFAULT_CLOUD_URL` constant changed from `https://seobetter.vercel.app` to `https://api.seobetter.com`.
+
+Override paths still work (in priority order): `SEOBETTER_CLOUD_URL` constant in wp-config.php, `seobetter_settings['cloud_url']` option, then default.
+
+### Coverage
+
+- All cloud-api calls (research, generate, scrape, pexels, content-brief, topic-research, translate-headings, validate, gsc-oauth) now hit `api.seobetter.com` by default
+- Existing installs that have `SEOBETTER_CLOUD_URL` set or `cloud_url` saved in settings are unaffected — explicit overrides take priority
+- The Vercel project serves the same code on both `api.seobetter.com` and `seobetter.vercel.app` — same signing secrets, same Upstash, same env vars — so this is purely a URL-cosmetics change with no functional impact
+
+### Verify
+
+```bash
+grep -n "DEFAULT_CLOUD_URL" seobetter/includes/Cloud_API.php
+# Expected: 'https://api.seobetter.com'
+```
+
+End-to-end: on a fresh install with no overrides, `Cloud_API::get_cloud_url()` returns `https://api.seobetter.com`. Test Sources should still pass (cloud-api responds the same way on both domains).
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No `external-links-policy.md` change
+- No `pro-features-ideas.md` change
+
+**Verified by user:** UNTESTED
 
 ---
 
