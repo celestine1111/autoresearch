@@ -7,12 +7,69 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.53)
+> **Last updated:** 2026-05-02 (v1.5.216.53 — also: zip-build fix re: last30days)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## Build-process fix — Last30Days Python script missing from zip
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+**Affects:** every prior zip build, not a code change
+
+### Bug
+
+User reported on Test Sources page:
+
+> ⚪ Available: NO. Python3 found: YES. Script file found: NO.
+> Last30Days Python script missing at .agents/skills/last30days/scripts/last30days.py. Re-upload the plugin zip.
+
+The diagnostic at `seobetter.php::rest_test_research_sources()` line ~1413 was correct — `file_exists($script_abs)` returned false because the script genuinely wasn't in the installed plugin tree. The script DOES exist in the source tree at `.agents/skills/last30days/scripts/last30days.py`, but the zip-build command excluded `seobetter/.agents/*`, so it never made it into the deployed zip.
+
+`Trend_Researcher::run_last30days()` (`includes/Trend_Researcher.php` line ~380) calls `python3 .agents/skills/last30days/scripts/last30days.py` via shell_exec as a research-fallback. Without the script, the fallback silently degrades to AI-only generation (cloud-api still works as primary source, so customers haven't seen breakage — but the diagnostic flagged it).
+
+### Fix
+
+Updated zip-build command (in `~/.claude/skills/seobetter/SKILL.md`) to add a second pass that selectively re-includes ONLY `last30days/scripts/` and the SKILL.md descriptor, while still excluding the other 130+ skills under `.agents/` (41MB total — most are dev-time skills, not runtime).
+
+Old (stripped runtime script):
+```bash
+zip -rq seobetter.zip seobetter -x "seobetter/.agents/*" ...
+```
+
+New (two-pass; keeps zip lean at 2.0M):
+```bash
+zip -rq seobetter.zip seobetter -x "seobetter/.git/*" "seobetter/node_modules/*" \
+  "seobetter/.claude/*" "seobetter/.agents/*" "*/__pycache__/*"
+zip -rq seobetter.zip seobetter/.agents/skills/last30days/scripts \
+  seobetter/.agents/skills/last30days/SKILL.md \
+  -x "*/__pycache__/*" "*/tests/*"
+```
+
+### Verify
+
+```bash
+unzip -l /Users/ben/Desktop/seobetter.zip | grep "last30days/scripts/last30days.py"
+# expected: one matching line, ~82815 bytes
+```
+
+After uploading the new zip + activating, Test Sources page should report:
+> ⚪ Available: YES. Python3 found: YES. Script file found: YES.
+> Last30Days is available locally. It runs only when the cloud-api research call fails or times out.
+
+(Or "available: NO" if the host blocks shell_exec — the script is still installed; only the runtime-execution gate would fail there.)
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- `~/.claude/skills/seobetter/SKILL.md` "Quick reference — Rebuild zip" updated
+
+**Verified by user:** UNTESTED
 
 ---
 
