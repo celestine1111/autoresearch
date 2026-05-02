@@ -210,7 +210,7 @@ if ( isset( $_POST['seobetter_save_brand_voice'] ) && check_admin_referer( 'seob
     if ( ! empty( $result['success'] ) ) {
         echo '<div class="notice notice-success"><p>' . esc_html__( 'Brand voice saved.', 'seobetter' ) . '</p></div>';
         // Redirect cleanly so refresh doesn't re-submit
-        echo '<script>history.replaceState(null,"",window.location.pathname+"?page=seobetter-settings#brand-voice")</script>';
+        echo '<script>history.replaceState(null,"",window.location.pathname+"?page=seobetter-settings&tab=branding#brand-voice")</script>';
     } else {
         echo '<div class="notice notice-error"><p>' . esc_html( $result['error'] ?? 'Save failed.' ) . '</p></div>';
     }
@@ -1366,7 +1366,8 @@ $bv_tier_label = $bv_cap === 0 ? 'Pro' : ( $bv_cap === 1 ? 'Pro' : ( $bv_cap ===
                     <td style="font-size:13px;color:#64748b"><?php echo esc_html( wp_trim_words( $v['description'], 18, '…' ) ); ?></td>
                     <td style="font-size:12px;text-align:center"><?php echo esc_html( count( $v['banned_phrases'] ?? [] ) ); ?></td>
                     <td>
-                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings&edit_voice=' . $v['id'] . '#brand-voice' ) ); ?>" class="button button-small"><?php esc_html_e( 'Edit', 'seobetter' ); ?></a>
+                        <?php // v1.5.216.46 — fix: include &tab=branding so Edit lands on the Branding tab where the Brand Voice card actually lives. Pre-fix the link landed on the default License & Account tab and the brand-voice card was hidden by the tab system. ?>
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings&tab=branding&edit_voice=' . $v['id'] . '#brand-voice' ) ); ?>" class="button button-small"><?php esc_html_e( 'Edit', 'seobetter' ); ?></a>
                         <form method="post" style="display:inline;margin-left:4px" onsubmit="return confirm('<?php echo esc_js( __( 'Delete this voice?', 'seobetter' ) ); ?>')">
                             <?php wp_nonce_field( 'seobetter_brand_voice_nonce' ); ?>
                             <input type="hidden" name="voice_id" value="<?php echo esc_attr( $v['id'] ); ?>" />
@@ -1567,7 +1568,7 @@ $bv_tier_label = $bv_cap === 0 ? 'Pro' : ( $bv_cap === 1 ? 'Pro' : ( $bv_cap ===
                     echo $bv_editing ? esc_html__( 'Update voice', 'seobetter' ) : esc_html__( 'Save voice', 'seobetter' );
                 ?></button>
                 <?php if ( $bv_editing ) : ?>
-                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings#brand-voice' ) ); ?>" class="button" style="margin-left:6px"><?php esc_html_e( 'Cancel', 'seobetter' ); ?></a>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings&tab=branding#brand-voice' ) ); ?>" class="button" style="margin-left:6px"><?php esc_html_e( 'Cancel', 'seobetter' ); ?></a>
                 <?php endif; ?>
             </div>
         </form>

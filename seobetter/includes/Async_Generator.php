@@ -122,6 +122,13 @@ class Async_Generator {
                 'country'            => sanitize_text_field( $params['country'] ?? '' ),
                 'language'           => sanitize_text_field( $params['language'] ?? 'en' ),
                 'content_type'       => sanitize_text_field( $params['content_type'] ?? 'blog_post' ),
+                // v1.5.216.46 — fix: brand_voice_id was missing from this whitelist
+                // since item 6, so the JS-supplied value got stripped here. The
+                // pipeline read $options['brand_voice_id'] elsewhere but always
+                // got empty string → no prompt injection, no banned-phrase scrub.
+                // User reported: banned phrase "month" appeared 3× in generated
+                // article despite "SEO Website" voice being selected. Bug.
+                'brand_voice_id'     => sanitize_key( $params['brand_voice_id'] ?? '' ),
             ],
             'steps'       => $steps,
             'current'     => 0,

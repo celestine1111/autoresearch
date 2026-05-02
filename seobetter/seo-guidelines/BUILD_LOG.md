@@ -7,12 +7,70 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.45)
+> **Last updated:** 2026-05-02 (v1.5.216.46)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.46 — CRITICAL: Brand Voice never enforced + Edit voice link wrong tab
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug #1 — Brand Voice banned phrases never enforced (CRITICAL)
+
+User reported: created a Brand Voice "SEO Website" with banned phrases `data` + `month`, generated an article, "month" appeared 3 times. Voice was saved correctly (verified — `banned_phrases` field had both entries persisted to `seobetter_brand_voices` option). But the post-process scrub never fired and the prompt-fragment never injected.
+
+Traced via grep + code inspection:
+
+- JS at `content-generator.php:2086` correctly sends `brand_voice_id` in the `/generate/start` payload
+- Server-side `Async_Generator::start_job()` line ~110-125 builds the `$job['options']` array — **but did NOT whitelist `brand_voice_id`**. The field got stripped at this gate
+- Downstream code (`get_system_prompt()` line 226 + `assemble_final()` line 2389) reads `$options['brand_voice_id']` and gets empty string → `Brand_Voice_Manager::get_prompt_fragment('')` returns empty → no prompt injection. `Brand_Voice_Manager::scrub_banned_phrases('content', '')` early-returns when voice not found → no scrub
+
+Net effect: **Brand Voice has been silently broken since item 6 shipped** (v1.5.216.25). The voice picker showed the voice, the form-save persisted the data, the metabox stat counted "1 voice" — but the actual generation pipeline never used any of it. Phantom feature.
+
+**Fix:** added `'brand_voice_id' => sanitize_key( $params['brand_voice_id'] ?? '' )` to the options whitelist in `Async_Generator::start_job()` ~line 125.
+
+### Bug #2 — Edit Brand Voice link lands on wrong tab
+
+After item 13's tab restructure (v1.5.216.32), the Brand Voice card moved from default-page-position into the Branding tab. The Edit-voice button on each row pointed to `?page=seobetter-settings&edit_voice=...#brand-voice`. Without `&tab=branding`, the link landed on the default License & Account tab and the Brand Voice card was hidden by the tab system. User saw no edit form load.
+
+Same bug pattern in two more places: the Cancel-edit button + the post-save redirect script. All 3 locations now include `&tab=branding`.
+
+**Fixes:**
+- `settings.php:1370` — Edit voice link href: added `&tab=branding`
+- `settings.php:1571` — Cancel-edit href: added `&tab=branding`
+- `settings.php:213` — Post-save `history.replaceState` URL: added `&tab=branding`
+
+### Verify (file:method anchors)
+
+```bash
+# Bug #1 — brand_voice_id is in the options whitelist
+grep -n "'brand_voice_id'" seobetter/includes/Async_Generator.php
+# Should show line in start_job's options array
+
+# Bug #2 — three instances of tab=branding for brand voice navigation
+grep -n "tab=branding" seobetter/admin/views/settings.php
+# Should show 3+ matches near brand-voice anchors
+```
+
+### Live test plan (when re-uploaded to staging)
+
+1. Edit "SEO Website" voice → verify URL has `&tab=branding` and form loads
+2. Generate any article with that voice picked
+3. Search article body for `month` and `data` (the user's actual banned phrases) → should be **0 hits**
+4. Check `wp-content/debug.log` (if WP_DEBUG_LOG enabled) for line: *"SEOBetter Brand_Voice_Manager: scrubbed N banned phrase(s) from generated content (voice_id=v_6ec1bb4a)"* — proves the scrub fired
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — this is fixing a regression in already-shipped features. The behaviour matches what `SEO-GEO-AI-GUIDELINES.md §3.1D` (item 6's spec) already says it should do; the spec was right, the code path was broken.
+
+**Verified by user:** UNTESTED
 
 ---
 
