@@ -7,12 +7,82 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.50)
+> **Last updated:** 2026-05-02 (v1.5.216.51)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.51 — GSC OAuth callback: state via transient (fixes "Invalid state" error)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+User completed GSC OAuth flow successfully (granted permission in Google), but the callback rejected with:
+
+> ✗ Connect failed: Invalid state — please retry the connect flow.
+
+Retry didn't help. State validation was failing every time.
+
+### Root cause
+
+`build_auth_url()` was generating the OAuth state with `wp_create_nonce('seobetter_gsc_oauth')` and `handle_oauth_callback()` was validating with `wp_verify_nonce()`. WP nonces are user-session-scoped — they include the current user's ID + session token in the hash.
+
+When Google redirects the user back to the REST callback `/wp-json/seobetter/v1/gsc/oauth-callback?code=...&state=...`, that's a regular GET request without the X-WP-Nonce header. The REST API's user-resolution path differs from wp-admin's: even though the user's auth cookie is present, `wp_get_current_user()` inside the REST callback context can return 0 (logged-out) under some configurations. `wp_verify_nonce()` then fails because the nonce was generated for user_id=N but verifying as user_id=0.
+
+This affects every install — GSC OAuth was effectively broken at the callback step for everyone with the per-install OAuth setup.
+
+### Fix
+
+Replaced the user-session-scoped nonce with a transient-stored CSRF token:
+
+```php
+// build_auth_url() — generate token + store with initiating user_id
+$token = bin2hex( random_bytes( 16 ) );
+set_transient( 'seobetter_gsc_oauth_state_' . $token, get_current_user_id(), 10 * MINUTE_IN_SECONDS );
+$params['state'] = $token;
+
+// handle_oauth_callback() — verify by transient existence
+$transient_key = 'seobetter_gsc_oauth_state_' . sanitize_key( $state );
+$stored_user_id = get_transient( $transient_key );
+if ( $stored_user_id === false ) {
+    return [ 'success' => false, 'error' => 'Invalid or expired state — please retry the connect flow (10-minute window).' ];
+}
+delete_transient( $transient_key ); // single-use
+```
+
+Why this works:
+- **Independent of user session:** the transient lives in `wp_options` (or object cache), accessible regardless of REST API user-resolution
+- **Self-cleanup:** 10-minute TTL expires unused tokens; explicit delete after verification prevents replay
+- **Stores the initiating user_id:** so the callback can bind tokens to the correct user even if their session changed mid-flow
+- **Single-use:** verifying deletes the transient; subsequent requests with the same state fail (CSRF protection)
+
+### Verify (file:method anchors)
+
+```bash
+grep -n "seobetter_gsc_oauth_state_\|set_transient\|get_transient" seobetter/includes/GSC_Manager.php | head
+```
+
+### Live test plan
+
+After re-uploading + retrying the OAuth flow:
+1. Click Connect on GSC card → land on Google
+2. Authorize (click through unverified warning per v50 footer note)
+3. Google redirects back → expect "✓ Connected" success notice (NOT the "Invalid state" error)
+4. GSC card status flips to CONNECTED
+5. Optional: trigger a GSC sync, verify dashboard pulls last-28-day data
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- pro-features-ideas.md Phase 2 section: added BLOCKER entry for centralized GSC OAuth proxy (must ship before public launch — see new Phase 2 row mentioning verified-app requirement). User-explicit edit per their request
+
+**Verified by user:** UNTESTED
 
 ---
 

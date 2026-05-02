@@ -59,8 +59,23 @@ class GSC_Manager {
 
     /**
      * Build the URL the user is redirected to in order to authorize SEOBetter.
+     *
+     * v1.5.216.51 — switched state from wp_create_nonce() to a transient-stored
+     * CSRF token. WP nonces are user-session-scoped: when Google redirects the
+     * user back to the REST callback endpoint via a regular GET (no
+     * X-WP-Nonce header, no AJAX context), wp_get_current_user() can return
+     * 0 because the REST API auth resolution differs from wp-admin's. That
+     * caused wp_verify_nonce() to fail and surface "Invalid state — please
+     * retry the connect flow." even when the user was clearly still logged
+     * in. The transient approach is independent of user session, has an
+     * explicit 10-minute TTL (sensible OAuth window), and stores the
+     * initiating user_id so the callback knows who to bind tokens to.
      */
     public static function build_auth_url(): string {
+        $token = bin2hex( random_bytes( 16 ) );
+        // Store the initiating user_id alongside the token so the callback
+        // can bind tokens to the right user even if their session changed.
+        set_transient( 'seobetter_gsc_oauth_state_' . $token, get_current_user_id(), 10 * MINUTE_IN_SECONDS );
         $params = [
             'client_id'     => self::get_client_id(),
             'redirect_uri'  => self::get_redirect_uri(),
@@ -68,7 +83,7 @@ class GSC_Manager {
             'scope'         => 'https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/userinfo.email',
             'access_type'   => 'offline',
             'prompt'        => 'consent',
-            'state'         => wp_create_nonce( 'seobetter_gsc_oauth' ),
+            'state'         => $token,
         ];
         return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query( $params );
     }
@@ -78,9 +93,15 @@ class GSC_Manager {
      * refresh token. Returns ['success' => bool, 'error' => string, 'email' => string].
      */
     public static function handle_oauth_callback( string $code, string $state ): array {
-        if ( ! wp_verify_nonce( $state, 'seobetter_gsc_oauth' ) ) {
-            return [ 'success' => false, 'error' => 'Invalid state — please retry the connect flow.' ];
+        // v1.5.216.51 — verify state against transient (set in build_auth_url).
+        // Transient existence proves the request originated from this site
+        // within the 10-minute OAuth window. Single-use: deleted on first verify.
+        $transient_key = 'seobetter_gsc_oauth_state_' . sanitize_key( $state );
+        $stored_user_id = get_transient( $transient_key );
+        if ( $stored_user_id === false ) {
+            return [ 'success' => false, 'error' => 'Invalid or expired state — please retry the connect flow (10-minute window).' ];
         }
+        delete_transient( $transient_key );
         if ( ! self::is_oauth_configured() ) {
             return [ 'success' => false, 'error' => 'OAuth not configured. Set SEOBETTER_GSC_CLIENT_ID and SEOBETTER_GSC_CLIENT_SECRET in wp-config.php.' ];
         }
