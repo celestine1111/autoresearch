@@ -19,7 +19,7 @@
 ## v1.5.216.62.3 — GSC OAuth callback redirects to the right tab + scrolls to GSC card
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `db55128`
 
 ### Bug
 
