@@ -19,7 +19,7 @@
 ## v1.5.216.62.1 — cloud-api function consolidation (Vercel Hobby tier fit)
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `c835f36`
 
 ### Why
 
