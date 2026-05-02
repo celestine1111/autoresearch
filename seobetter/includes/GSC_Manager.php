@@ -437,6 +437,147 @@ class GSC_Manager {
     }
 
     /**
+     * v1.5.216.53 — DEBUG-only test data seeder.
+     *
+     * Pre-launch, staging sites have no real GSC traffic, so the downstream
+     * features (Freshness GSC-driven priority, Decay alerts, Striking-distance
+     * detection, per-post performance widget) have nothing to render. This
+     * seeder injects realistic 14-day snapshots for the 10 most-recent posts
+     * so the downstream UIs can be visually verified end-to-end.
+     *
+     * Patterns seeded:
+     *   - Post #1 (index 0): "decaying" — week 1 high clicks, week 2 collapse
+     *     (triggers Decay Alert Manager warning)
+     *   - Post #2 (index 1): "striking distance" — position 14, high impressions,
+     *     low clicks (triggers Striking-distance high-priority refresh flag)
+     *   - Post #3 (index 2): "low CTR" — high impressions, low CTR
+     *     (suggests title/meta refresh — quick-win flag)
+     *   - Posts #4-#10: realistic baseline (random clicks 5-500, position 5-50)
+     *
+     * Gated by WP_DEBUG to keep this out of production builds. Use
+     * clear_test_snapshots() to wipe.
+     *
+     * Returns ['success' => bool, 'rows_inserted' => int, 'posts_seeded' => int]
+     */
+    public static function seed_test_snapshots(): array {
+        if ( ! defined( 'WP_DEBUG' ) || ! WP_DEBUG ) {
+            return [ 'success' => false, 'error' => 'Test data seeder requires WP_DEBUG=true.' ];
+        }
+
+        // Make sure the table exists (in case install_table never ran)
+        self::install_table();
+
+        global $wpdb;
+        $table = $wpdb->prefix . self::TABLE_NAME;
+
+        // Pull 10 most-recent published posts
+        $posts = get_posts( [
+            'post_type'      => [ 'post', 'page' ],
+            'post_status'    => 'publish',
+            'posts_per_page' => 10,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'fields'         => 'ids',
+        ] );
+        if ( empty( $posts ) ) {
+            return [ 'success' => false, 'error' => 'No published posts found to seed against.' ];
+        }
+
+        $rows_inserted = 0;
+        foreach ( $posts as $i => $post_id ) {
+            // Pick a pattern based on the post index (deterministic so re-seeding
+            // produces a stable mix of decay/striking/low-CTR/normal)
+            $pattern = 'normal';
+            if ( $i === 0 ) $pattern = 'decay';
+            elseif ( $i === 1 ) $pattern = 'striking';
+            elseif ( $i === 2 ) $pattern = 'low_ctr';
+
+            // Generate 14 daily snapshots — captured_at = today, today-1, ..., today-13
+            for ( $days_ago = 0; $days_ago < 14; $days_ago++ ) {
+                $captured = gmdate( 'Y-m-d', strtotime( "-$days_ago days" ) );
+                [ $clicks, $impressions, $ctr, $position ] = self::pattern_to_metrics( $pattern, $days_ago );
+
+                // REPLACE so re-seeding overwrites cleanly (UNIQUE KEY on post_id+captured_at)
+                $wpdb->replace(
+                    $table,
+                    [
+                        'post_id'         => (int) $post_id,
+                        'captured_at'     => $captured,
+                        'clicks_28d'      => $clicks,
+                        'impressions_28d' => $impressions,
+                        'ctr_28d'         => $ctr,
+                        'position_28d'    => $position,
+                    ],
+                    [ '%d', '%s', '%d', '%d', '%f', '%f' ]
+                );
+                $rows_inserted++;
+            }
+        }
+
+        // Mark the connection's last_sync so Freshness page knows GSC is "active"
+        $conn = get_option( self::OPTION_KEY, [] );
+        update_option( self::LAST_SYNC_OPT_KEY, time(), false );
+
+        return [
+            'success'       => true,
+            'rows_inserted' => $rows_inserted,
+            'posts_seeded'  => count( $posts ),
+        ];
+    }
+
+    /**
+     * v1.5.216.53 — wipe all GSC snapshot data. WP_DEBUG-gated counterpart
+     * to seed_test_snapshots() — undo the seed without touching the
+     * connection itself.
+     */
+    public static function clear_test_snapshots(): array {
+        if ( ! defined( 'WP_DEBUG' ) || ! WP_DEBUG ) {
+            return [ 'success' => false, 'error' => 'Test data clear requires WP_DEBUG=true.' ];
+        }
+        global $wpdb;
+        $table = $wpdb->prefix . self::TABLE_NAME;
+        $deleted = $wpdb->query( "DELETE FROM `$table`" );
+        delete_option( self::LAST_SYNC_OPT_KEY );
+        return [ 'success' => true, 'rows_deleted' => (int) $deleted ];
+    }
+
+    /**
+     * Pattern generator for seed_test_snapshots(). Returns realistic
+     * [clicks, impressions, ctr, position] for the given pattern + day index.
+     *
+     * @param string $pattern  'decay' | 'striking' | 'low_ctr' | 'normal'
+     * @param int    $days_ago 0-13 (today = 0)
+     */
+    private static function pattern_to_metrics( string $pattern, int $days_ago ): array {
+        switch ( $pattern ) {
+            case 'decay':
+                // Week 1 (days 7-13): healthy ~50 clicks/day. Week 2 (days 0-6): drops to ~10
+                $clicks      = $days_ago >= 7 ? rand( 40, 60 ) : rand( 5, 15 );
+                $impressions = $days_ago >= 7 ? rand( 800, 1200 ) : rand( 600, 900 );
+                $position    = $days_ago >= 7 ? round( rand( 50, 80 ) / 10, 1 ) : round( rand( 90, 130 ) / 10, 1 );
+                break;
+            case 'striking':
+                // Position 11-15 ("striking distance" — just off page 1), high impressions, few clicks
+                $clicks      = rand( 8, 20 );
+                $impressions = rand( 1500, 2500 );
+                $position    = round( rand( 110, 150 ) / 10, 1 );
+                break;
+            case 'low_ctr':
+                // High impressions, low CTR — title/meta likely needs refresh
+                $clicks      = rand( 10, 25 );
+                $impressions = rand( 3000, 5000 );
+                $position    = round( rand( 40, 80 ) / 10, 1 );
+                break;
+            default: // normal
+                $clicks      = rand( 20, 200 );
+                $impressions = rand( 500, 3000 );
+                $position    = round( rand( 30, 200 ) / 10, 1 );
+        }
+        $ctr = $impressions > 0 ? round( $clicks / $impressions, 6 ) : 0.0;
+        return [ $clicks, $impressions, $ctr, $position ];
+    }
+
+    /**
      * Public API used by Freshness inventory (Phase 1 item 4) and the
      * post-edit sidebar widget. Returns the most recent snapshot for a post.
      */

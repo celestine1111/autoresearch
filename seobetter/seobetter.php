@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.52
+ * Version: 1.5.216.53
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.52' );
+define( 'SEOBETTER_VERSION', '1.5.216.53' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -715,7 +715,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.52 — GSC property picker endpoints
+        // v1.5.216.53 — GSC property picker endpoints
         register_rest_route( 'seobetter/v1', '/gsc/sites', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_gsc_list_sites' ],
@@ -726,6 +726,23 @@ final class SEOBetter {
         register_rest_route( 'seobetter/v1', '/gsc/set-site', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_gsc_set_site' ],
+            'permission_callback' => function () {
+                return current_user_can( 'manage_options' );
+            },
+        ]);
+        // v1.5.216.53 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
+        // method level (registration is unconditional but seed/clear calls
+        // return error JSON without WP_DEBUG).
+        register_rest_route( 'seobetter/v1', '/gsc/seed-test-data', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_gsc_seed_test_data' ],
+            'permission_callback' => function () {
+                return current_user_can( 'manage_options' );
+            },
+        ]);
+        register_rest_route( 'seobetter/v1', '/gsc/clear-test-data', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_gsc_clear_test_data' ],
             'permission_callback' => function () {
                 return current_user_can( 'manage_options' );
             },
@@ -1653,7 +1670,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.52 — list every GSC property the authorized account can access.
+     * v1.5.216.53 — list every GSC property the authorized account can access.
      * Used by the property-picker dropdown on the GSC Settings card.
      */
     public function rest_gsc_list_sites( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1664,12 +1681,28 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.52 — set which GSC property the plugin syncs.
+     * v1.5.216.53 — set which GSC property the plugin syncs.
      * POST body: { site_url: 'https://example.com/' }
      */
     public function rest_gsc_set_site( \WP_REST_Request $request ): \WP_REST_Response {
         $site_url = (string) $request->get_param( 'site_url' );
         $result = SEOBetter\GSC_Manager::set_site_url( $site_url );
+        return new \WP_REST_Response( $result, ! empty( $result['success'] ) ? 200 : 400 );
+    }
+
+    /**
+     * v1.5.216.53 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
+     * Striking-distance features can be exercised before real GSC traffic
+     * exists. GSC_Manager::seed_test_snapshots() returns error JSON when
+     * WP_DEBUG is not enabled, so the gate lives at the data layer.
+     */
+    public function rest_gsc_seed_test_data( \WP_REST_Request $request ): \WP_REST_Response {
+        $result = SEOBetter\GSC_Manager::seed_test_snapshots();
+        return new \WP_REST_Response( $result, ! empty( $result['success'] ) ? 200 : 400 );
+    }
+
+    public function rest_gsc_clear_test_data( \WP_REST_Request $request ): \WP_REST_Response {
+        $result = SEOBetter\GSC_Manager::clear_test_snapshots();
         return new \WP_REST_Response( $result, ! empty( $result['success'] ) ? 200 : 400 );
     }
 

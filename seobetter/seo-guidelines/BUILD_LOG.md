@@ -7,12 +7,79 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.52)
+> **Last updated:** 2026-05-02 (v1.5.216.53)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.53 — WP_DEBUG-gated mock GSC data seeder (Freshness/Decay testing)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Why
+
+User finished GSC connect + property picker (v52), but the install has zero indexed pages — no clicks, no impressions, no positions. So Content Freshness, Decay Alert Manager, and Striking-distance flags have nothing to render against, even though the code paths shipped weeks ago.
+
+Two ways to test these features without waiting for real GSC traffic to accumulate:
+1. Run on a high-traffic site and wait days
+2. Inject realistic mock snapshots into `{prefix}_seobetter_gsc_snapshots` so the read-side queries return data
+
+User picked Option 2.
+
+### Fix
+
+**Backend (`includes/GSC_Manager.php`):**
+
+- `seed_test_snapshots()` (line ~462) — picks 10 most-recent published posts, generates 14 daily snapshots each (today...today-13) using one of 4 patterns:
+  - **decay** (post #1) — week 1 ~50 clicks/day, week 2 drops to ~10. Trips Decay Alert Manager
+  - **striking** (post #2) — position 11-15, high impressions, few clicks. Trips Striking-distance flag
+  - **low_ctr** (post #3) — high impressions, low CTR
+  - **normal** (posts #4-#10) — random baseline
+  - Uses `$wpdb->replace` (UNIQUE KEY post_id+captured_at) so re-seeding overwrites cleanly. Also stamps `last_sync_opt_key` so Freshness page sees GSC as "active"
+- `clear_test_snapshots()` (line ~533) — `DELETE FROM {table}` + `delete_option(LAST_SYNC_OPT_KEY)`. Wipes all snapshots, real or seeded
+- `pattern_to_metrics()` (line ~551) — private helper, returns `[clicks, impressions, ctr, position]` for a given pattern + day index
+- **Both methods early-exit with `success:false, error:"requires WP_DEBUG=true"` if WP_DEBUG is unset.** The data-layer gate is the authoritative one — UI gate just hides the buttons cosmetically
+
+**REST routes (`seobetter.php`):**
+
+- `POST /seobetter/v1/gsc/seed-test-data` → `rest_gsc_seed_test_data()` (line ~1700)
+- `POST /seobetter/v1/gsc/clear-test-data` → `rest_gsc_clear_test_data()` (line ~1707)
+- Both `current_user_can('manage_options')` permission
+
+**UI (`admin/views/settings.php`):**
+
+- Yellow-bordered "⚠️ Developer testing — WP_DEBUG only" block on the connected-state GSC card. Hidden via `if ( defined('WP_DEBUG') && WP_DEBUG )` so production installs (where WP_DEBUG=false) never see the buttons
+- Two buttons: "Seed sample GSC data" + "Clear test data" (red text, has confirm() prompt)
+- AJAX handlers report `rows_inserted`/`posts_seeded` on success, `rows_deleted` on clear
+
+### Verify (file:method anchors)
+
+```bash
+# Backend methods
+grep -n "public static function seed_test_snapshots\|public static function clear_test_snapshots\|private static function pattern_to_metrics" seobetter/includes/GSC_Manager.php
+
+# REST routes + handlers
+grep -n "rest_gsc_seed_test_data\|rest_gsc_clear_test_data\|/gsc/seed-test-data\|/gsc/clear-test-data" seobetter/seobetter.php
+
+# UI block (must be inside `if ( WP_DEBUG )` gate)
+grep -n "seobetter-gsc-seed\|seobetter-gsc-clear-test\|Developer testing — WP_DEBUG only" seobetter/admin/views/settings.php
+```
+
+### Tier behaviour
+
+Unchanged — pure dev-tool, never visible on customer installs.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — this is a developer-testing affordance, not a feature
+
+**Verified by user:** UNTESTED
 
 ---
 
