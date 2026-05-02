@@ -7,12 +7,150 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.61)
+> **Last updated:** 2026-05-03 (v1.5.216.62)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62 — Centralized GSC OAuth proxy (Phase-2 launch BLOCKER fix)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+Per `pro-features-ideas.md` (line 489 + AppSumo prelaunch BLOCKER list), every paying customer would see a Google "this app is unverified" warning on the OAuth consent screen — because each install was registering its own un-verified Google Cloud OAuth client. Verification per-install is impossible at scale and the warning kills Pro+ conversion rates. The locked plan called this out as a 2-3 week pre-launch BLOCKER that had to ship first.
+
+### Architecture
+
+Centralized OAuth proxy on the existing Cloud API (Vercel). The plugin redirects users to our proxy, which holds the verified app credentials, completes the Google flow, and bounces tokens back to the install via a single-use 5-minute pickup-token mechanism (Upstash Redis). Refresh requests hit the proxy too — refresh_token never reaches Google directly from the install.
+
+```
+[Plugin]                  [Cloud Proxy]                [Google]
+   │                           │                          │
+   ├── GET /start ─────────────▶                          │
+   │   ?return_url=&pstate=    │                          │
+   │                           ├── 302 Redirect ────────▶│
+   │                           │   client_id, signed state│
+   │                           │                          │
+   │                           ◀── 302 ?code=&state= ─────┤
+   │                           │                          │
+   │                           ├── POST /token ─────────▶│
+   │                           │   code + client_secret   │
+   │                           ◀── access + refresh ──────┤
+   │                           │                          │
+   ◀── 302 ?pickup=&state= ────┤                          │
+   │                           │                          │
+   ├── POST /exchange ─────────▶                          │
+   │   ?pickup=                │                          │
+   ◀── access + refresh ───────┤                          │
+   │                           │                          │
+   ... 1 hour later, access expires ...                   │
+   │                           │                          │
+   ├── POST /refresh ──────────▶                          │
+   │   ?refresh_token=         │                          │
+   │                           ├── POST /token ─────────▶│
+   │                           │   refresh + secret       │
+   │                           ◀── new access ────────────┤
+   ◀── new access ─────────────┤                          │
+```
+
+### What shipped
+
+**Cloud API endpoints (`cloud-api/api/gsc-oauth/`):**
+- `_helpers.js` — HMAC state signing (binds return_url + plugin CSRF + timestamp), return_url allowlist (only `/wp-json/seobetter/v1/gsc/oauth-callback`), Upstash GETDEL helpers for atomic single-use pickup
+- `start.js` — `GET /api/gsc-oauth/start?return_url=&pstate=` → signs state, redirects to Google with our verified `client_id`
+- `callback.js` — `GET /api/gsc-oauth/callback?code=&state=` → verifies state, exchanges code for tokens, stores in Redis with 5-min TTL, redirects user back to plugin's REST callback with `pickup` + `pstate`
+- `exchange.js` — `POST /api/gsc-oauth/exchange { pickup }` → atomic GETDEL the stored tokens, returns to plugin
+- `refresh.js` — `POST /api/gsc-oauth/refresh { refresh_token }` → exchanges with Google using central client_secret, returns fresh access_token. 401-passthrough for revoked refresh tokens so plugin can clear connection.
+
+**Privacy + Terms pages (`cloud-api/api/`):**
+- `privacy.js` — Google API Services User Data Policy compliant Privacy Policy. Required for verification submission. Covers data scope (webmasters.readonly + userinfo.email), token storage (encrypted in user's DB, never logged on proxy), retention, user rights, contact email
+- `terms.js` — Terms of Service page covering acceptable use, BYOK responsibilities, GSC integration scope, disclaimers
+
+**Plugin code (`includes/GSC_Manager.php` + `seobetter.php` + `admin/views/settings.php`):**
+- `GSC_Manager::use_proxy()` — defaults to true. Override via `define( 'SEOBETTER_GSC_USE_PROXY', false )` in wp-config.php for BYO mode
+- `GSC_Manager::is_oauth_configured()` — returns true unconditionally in proxy mode (no per-install config needed)
+- `GSC_Manager::build_auth_url()` — proxy mode redirects to `<cloud-api>/api/gsc-oauth/start?return_url=&pstate=` instead of Google directly
+- `GSC_Manager::handle_oauth_callback()` — accepts pickup token (proxy mode) or auth code (BYO mode). Dispatches via `use_proxy()`
+- `GSC_Manager::redeem_proxy_pickup()` — POSTs pickup to `/exchange` to retrieve tokens
+- `GSC_Manager::refresh_access_token()` — proxy path POSTs to `/refresh` (refresh_token round-trips through proxy + central client_secret); BYO path unchanged
+- `seobetter.php::rest_gsc_oauth_callback` — accepts both `pickup` (proxy) and `code` (BYO) query params
+- `admin/views/settings.php` — proxy-mode UI is now: prerequisite (verify site in GSC) + single Connect button. Full BYO setup instructions hidden behind a `<details>` toggle for advanced users
+
+### Security model
+
+- **State HMAC** binds (return_url + plugin's CSRF token + timestamp). 10-minute window. Rejects forged or replayed callbacks
+- **Return-URL allowlist:** proxy only accepts return_urls matching `/wp-json/seobetter/v1/gsc/oauth-callback` over HTTPS. Prevents the proxy from being abused as an open redirect
+- **Pickup tokens:** 24-byte cryptographic random, single-use, 5-minute TTL via Upstash Redis GETDEL (atomic). Tokens never re-readable after first redemption
+- **Refresh tokens:** never logged on proxy. The proxy receives refresh_token → forwards to Google → returns new access_token to install. Roundtrip only
+- **No persistence on proxy:** tokens live in Redis for at most 5 minutes (pickup) or for the duration of one HTTP request (refresh). No long-term server-side state
+
+### Required deployment steps
+
+**On the Cloud API (Vercel) — set these env vars:**
+
+```
+SEOBETTER_GSC_CLIENT_ID=<from your verified Google Cloud project>
+SEOBETTER_GSC_CLIENT_SECRET=<from your verified Google Cloud project>
+SEOBETTER_GSC_REDIRECT_URI=https://<your-cloud-api-domain>/api/gsc-oauth/callback
+GSC_OAUTH_HMAC_SECRET=<random 32+ char secret, use openssl rand -base64 32>
+UPSTASH_REDIS_REST_URL=<existing>
+UPSTASH_REDIS_REST_TOKEN=<existing>
+```
+
+**On Google Cloud Console (one-time setup, owned by SEOBetter):**
+
+1. Create or use existing project for SEOBetter
+2. Enable Google Search Console API
+3. Configure OAuth consent screen:
+   - App name: SEOBetter
+   - User support email: your email
+   - App logo: SEOBetter logo (250x250 png)
+   - **Application home page:** the seobetter.com domain (or holding page until launch)
+   - **Application privacy policy link:** `https://<cloud-api>/api/privacy`
+   - **Application terms of service link:** `https://<cloud-api>/api/terms`
+   - Authorized domains: cloud-api domain + seobetter.com
+   - Developer contact email: your email
+4. Add scopes: `webmasters.readonly` + `userinfo.email`
+5. **Submit for verification** — this is the multi-week wait (typically 7-30 days for non-sensitive scopes)
+6. Add redirect URI: `https://<cloud-api>/api/gsc-oauth/callback` (must match `SEOBETTER_GSC_REDIRECT_URI` exactly)
+
+**During verification wait period:** users will still see the "unverified app" warning. Add yourself + beta users as Test users in OAuth consent screen → Audience tab to bypass the warning during testing.
+
+### Verify (after deployment)
+
+```bash
+# Cloud API endpoints respond
+curl -i "https://<cloud-api>/api/privacy" | head -5
+curl -i "https://<cloud-api>/api/terms" | head -5
+curl -i "https://<cloud-api>/api/gsc-oauth/start?return_url=https://example.com/wp-json/seobetter/v1/gsc/oauth-callback&pstate=test12345"
+# (should return 400 if env vars unset, 302 to Google if configured)
+
+# Plugin code anchors
+grep -n "use_proxy\|redeem_proxy_pickup\|build_auth_url" seobetter/includes/GSC_Manager.php
+grep -n "pickup\|GSC OAuth proxy" seobetter/seobetter.php
+grep -n "use_proxy\|SEOBETTER_GSC_USE_PROXY" seobetter/admin/views/settings.php
+```
+
+End-to-end: install plugin on a fresh WordPress site without any `SEOBETTER_GSC_*` defines in wp-config.php. Settings page should show simple "verify in GSC + Connect" UI without any GCP console setup steps. Connect → Google OAuth → consent → returns to plugin connected as user.
+
+### Tier behaviour
+
+Unchanged. Proxy is purely an infrastructure shift — same OAuth scopes, same data access, same per-tier feature gates apply downstream. Free tier still includes GSC connect + view; Pro+ still includes the GSC-driven Freshness driver.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- `pro-features-ideas.md` 🚨 BLOCKER entry should be updated to "shipped" status — plugin code is in, Cloud API is in, only the wall-clock Google verification submission remains (manual founder task)
+- No `external-links-policy.md` change — different subsystem
+- No `SEO-GEO-AI-GUIDELINES.md` change
+
+**Verified by user:** UNTESTED (cannot be fully tested until Google verification is submitted + approved + Cloud API env vars are set; the plugin code paths can be unit-tested against a stub proxy)
 
 ---
 

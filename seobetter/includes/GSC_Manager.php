@@ -39,6 +39,29 @@ class GSC_Manager {
 
     // ── Configuration ────────────────────────────────────────────────────
 
+    /**
+     * v1.5.216.62 — Centralized OAuth proxy. Default true so end users don't
+     * have to create a Google Cloud project / configure OAuth themselves.
+     * The proxy at cloud-api.seobetter.com holds the verified app credentials
+     * and forwards tokens to each install.
+     *
+     * Set `SEOBETTER_GSC_USE_PROXY` to `false` in wp-config.php only if you
+     * want to BYO Google Cloud credentials (advanced — see SEOBETTER_GSC_CLIENT_ID
+     * + SEOBETTER_GSC_CLIENT_SECRET below).
+     */
+    public static function use_proxy(): bool {
+        if ( defined( 'SEOBETTER_GSC_USE_PROXY' ) ) {
+            return (bool) SEOBETTER_GSC_USE_PROXY;
+        }
+        return true; // default ON
+    }
+
+    private static function get_proxy_base_url(): string {
+        // Proxy lives on the same Cloud API endpoint as research/scrape/etc.
+        // Single source of truth via Cloud_API::get_cloud_url().
+        return Cloud_API::get_cloud_url();
+    }
+
     private static function get_client_id(): string {
         return defined( 'SEOBETTER_GSC_CLIENT_ID' ) ? (string) SEOBETTER_GSC_CLIENT_ID : '';
     }
@@ -52,6 +75,9 @@ class GSC_Manager {
     }
 
     public static function is_oauth_configured(): bool {
+        // Proxy mode = always configured (zero per-install setup needed)
+        if ( self::use_proxy() ) return true;
+        // BYO mode = both client_id and client_secret required
         return self::get_client_id() !== '' && self::get_client_secret() !== '';
     }
 
@@ -76,6 +102,21 @@ class GSC_Manager {
         // Store the initiating user_id alongside the token so the callback
         // can bind tokens to the right user even if their session changed.
         set_transient( 'seobetter_gsc_oauth_state_' . $token, get_current_user_id(), 10 * MINUTE_IN_SECONDS );
+
+        // v1.5.216.62 — proxy path: send user to Cloud OAuth proxy with our
+        // plugin's pstate (CSRF token) + return_url. Proxy holds the
+        // verified app credentials and bounces the user back through Google
+        // → proxy → here. Plugin never holds the client_secret.
+        if ( self::use_proxy() ) {
+            $proxy_base = self::get_proxy_base_url();
+            $params = [
+                'return_url' => self::get_redirect_uri(),
+                'pstate'     => $token,
+            ];
+            return rtrim( $proxy_base, '/' ) . '/api/gsc-oauth/start?' . http_build_query( $params );
+        }
+
+        // Legacy BYO-credentials path (advanced users with their own GCP project)
         $params = [
             'client_id'     => self::get_client_id(),
             'redirect_uri'  => self::get_redirect_uri(),
@@ -92,7 +133,7 @@ class GSC_Manager {
      * Handle the OAuth callback — exchange the auth code for an access +
      * refresh token. Returns ['success' => bool, 'error' => string, 'email' => string].
      */
-    public static function handle_oauth_callback( string $code, string $state ): array {
+    public static function handle_oauth_callback( string $code_or_pickup, string $state ): array {
         // v1.5.216.51 — verify state against transient (set in build_auth_url).
         // Transient existence proves the request originated from this site
         // within the 10-minute OAuth window. Single-use: deleted on first verify.
@@ -102,28 +143,39 @@ class GSC_Manager {
             return [ 'success' => false, 'error' => 'Invalid or expired state — please retry the connect flow (10-minute window).' ];
         }
         delete_transient( $transient_key );
-        if ( ! self::is_oauth_configured() ) {
-            return [ 'success' => false, 'error' => 'OAuth not configured. Set SEOBETTER_GSC_CLIENT_ID and SEOBETTER_GSC_CLIENT_SECRET in wp-config.php.' ];
-        }
 
-        $response = wp_remote_post( 'https://oauth2.googleapis.com/token', [
-            'timeout' => 15,
-            'body'    => [
-                'code'          => $code,
-                'client_id'     => self::get_client_id(),
-                'client_secret' => self::get_client_secret(),
-                'redirect_uri'  => self::get_redirect_uri(),
-                'grant_type'    => 'authorization_code',
-            ],
-        ] );
-
-        if ( is_wp_error( $response ) ) {
-            return [ 'success' => false, 'error' => 'Network error: ' . $response->get_error_message() ];
-        }
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-        if ( ! is_array( $body ) || empty( $body['access_token'] ) ) {
-            $err = $body['error_description'] ?? $body['error'] ?? 'token exchange failed';
-            return [ 'success' => false, 'error' => 'Google rejected the auth code: ' . $err ];
+        // v1.5.216.62 — Two paths depending on whether we used the proxy or BYO.
+        // Proxy: $code_or_pickup is a Cloud-OAuth pickup token, redeemed via POST.
+        // BYO:   $code_or_pickup is Google's auth code, exchanged directly.
+        if ( self::use_proxy() ) {
+            $tokens = self::redeem_proxy_pickup( $code_or_pickup );
+            if ( ! is_array( $tokens ) || empty( $tokens['access_token'] ) ) {
+                return [ 'success' => false, 'error' => is_string( $tokens ) ? $tokens : 'Cloud OAuth proxy returned no tokens — try reconnecting.' ];
+            }
+            $body = $tokens;
+        } else {
+            // Legacy BYO path
+            if ( ! self::is_oauth_configured() ) {
+                return [ 'success' => false, 'error' => 'OAuth not configured. Either set SEOBETTER_GSC_USE_PROXY=true (default) or set SEOBETTER_GSC_CLIENT_ID and SEOBETTER_GSC_CLIENT_SECRET in wp-config.php for BYO mode.' ];
+            }
+            $response = wp_remote_post( 'https://oauth2.googleapis.com/token', [
+                'timeout' => 15,
+                'body'    => [
+                    'code'          => $code_or_pickup,
+                    'client_id'     => self::get_client_id(),
+                    'client_secret' => self::get_client_secret(),
+                    'redirect_uri'  => self::get_redirect_uri(),
+                    'grant_type'    => 'authorization_code',
+                ],
+            ] );
+            if ( is_wp_error( $response ) ) {
+                return [ 'success' => false, 'error' => 'Network error: ' . $response->get_error_message() ];
+            }
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( ! is_array( $body ) || empty( $body['access_token'] ) ) {
+                $err = $body['error_description'] ?? $body['error'] ?? 'token exchange failed';
+                return [ 'success' => false, 'error' => 'Google rejected the auth code: ' . $err ];
+            }
         }
 
         // Get user email so the Settings UI can display "Connected as user@gmail.com"
@@ -143,6 +195,30 @@ class GSC_Manager {
         self::schedule_cron();
 
         return [ 'success' => true, 'email' => $email ];
+    }
+
+    /**
+     * v1.5.216.62 — Redeem a single-use pickup token issued by the Cloud
+     * OAuth proxy. Returns the tokens array on success, or an error string.
+     */
+    private static function redeem_proxy_pickup( string $pickup ) {
+        if ( $pickup === '' ) return 'Empty pickup token';
+        $url = rtrim( self::get_proxy_base_url(), '/' ) . '/api/gsc-oauth/exchange';
+        $response = wp_remote_post( $url, [
+            'timeout' => 15,
+            'headers' => [ 'Content-Type' => 'application/json' ],
+            'body'    => wp_json_encode( [ 'pickup' => $pickup ] ),
+        ] );
+        if ( is_wp_error( $response ) ) {
+            return 'Cloud proxy network error: ' . $response->get_error_message();
+        }
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( $code !== 200 || ! is_array( $body ) || empty( $body['access_token'] ) ) {
+            $err = is_array( $body ) ? ( $body['error'] ?? 'unknown' ) : 'HTTP ' . $code;
+            return 'Cloud proxy rejected pickup token: ' . $err;
+        }
+        return $body;
     }
 
     /**
@@ -252,8 +328,36 @@ class GSC_Manager {
         $conn = get_option( self::OPTION_KEY, [] );
         $refresh = self::decrypt( $conn['refresh_token'] ?? '' );
         if ( $refresh === '' ) return false;
-        if ( ! self::is_oauth_configured() ) return false;
 
+        // v1.5.216.62 — proxy path. Plugin POSTs the refresh_token to the
+        // Cloud proxy, which combines it with our central client_secret and
+        // exchanges with Google. Returns just access_token + expires_in.
+        // refresh_token never leaves the install except for this call.
+        if ( self::use_proxy() ) {
+            $url = rtrim( self::get_proxy_base_url(), '/' ) . '/api/gsc-oauth/refresh';
+            $response = wp_remote_post( $url, [
+                'timeout' => 15,
+                'headers' => [ 'Content-Type' => 'application/json' ],
+                'body'    => wp_json_encode( [ 'refresh_token' => $refresh ] ),
+            ] );
+            if ( is_wp_error( $response ) ) return false;
+            $code = wp_remote_retrieve_response_code( $response );
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( $code === 401 ) {
+                // Refresh token revoked at Google — clear connection so user re-authenticates
+                error_log( 'SEOBetter GSC_Manager::refresh_access_token — refresh_token rejected by Google, clearing connection' );
+                delete_option( self::OPTION_KEY );
+                return false;
+            }
+            if ( $code !== 200 || ! is_array( $body ) || empty( $body['access_token'] ) ) return false;
+            $conn['access_token'] = self::encrypt( (string) $body['access_token'] );
+            $conn['expires_at']   = time() + (int) ( $body['expires_in'] ?? 3600 );
+            update_option( self::OPTION_KEY, $conn, false );
+            return true;
+        }
+
+        // Legacy BYO path — direct to Google with install's own client_secret
+        if ( ! self::get_client_id() || ! self::get_client_secret() ) return false;
         $response = wp_remote_post( 'https://oauth2.googleapis.com/token', [
             'timeout' => 15,
             'body'    => [
@@ -263,11 +367,9 @@ class GSC_Manager {
                 'grant_type'    => 'refresh_token',
             ],
         ] );
-
         if ( is_wp_error( $response ) ) return false;
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
         if ( ! is_array( $body ) || empty( $body['access_token'] ) ) return false;
-
         $conn['access_token'] = self::encrypt( (string) $body['access_token'] );
         $conn['expires_at']   = time() + (int) ( $body['expires_in'] ?? 3600 );
         update_option( self::OPTION_KEY, $conn, false );

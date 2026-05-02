@@ -1061,12 +1061,73 @@ $gsc_flash_email = sanitize_email( urldecode( $_GET['email'] ?? '' ) );
         </div>
     <?php endif; ?>
 
-    <?php if ( ! $gsc_status['configured'] ) : ?>
-        <!-- OAuth credentials not set in wp-config.php — show setup instructions -->
+    <?php
+    // v1.5.216.62 — Centralized OAuth proxy is the default. Most users never
+    // see the BYO Google Cloud Console setup. The complex setup block below
+    // only renders when proxy mode is explicitly disabled OR (legacy fallback)
+    // BYO credentials are still configured in wp-config.php.
+    $use_proxy = \SEOBetter\GSC_Manager::use_proxy();
+    ?>
+
+    <?php if ( $use_proxy && ! $gsc_status['connected'] ) : ?>
+        <!-- v1.5.216.62 — Proxy-mode connect flow. Single prerequisite (verify GSC property) + Connect button. -->
+        <div style="padding:14px 18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:14px">
+            <strong style="color:#1e40af;font-size:14px">🛑 <?php esc_html_e( 'Before connecting — verify your site in Google Search Console first', 'seobetter' ); ?></strong>
+            <p style="margin:8px 0 10px;font-size:13px;line-height:1.55;color:#1e3a8a">
+                <?php esc_html_e( 'Without a verified GSC property, the OAuth connect will succeed but Sync will fail with "User does not have sufficient permission for site". Your Google account must own the site you want to track. This is a Google requirement, not ours.', 'seobetter' ); ?>
+            </p>
+            <ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:#1e3a8a">
+                <li><?php
+                    printf(
+                        /* translators: 1: link to Search Console */
+                        esc_html__( 'Open %s in a new tab — log in with the same Google account you\'ll use to authorize SEOBetter.', 'seobetter' ),
+                        '<a href="https://search.google.com/search-console" target="_blank" rel="noopener"><strong>Google Search Console</strong></a>'
+                    ); ?></li>
+                <li><?php esc_html_e( 'Top-left dropdown → Add property → pick "URL prefix".', 'seobetter' ); ?></li>
+                <li><?php
+                    printf(
+                        /* translators: 1: site URL */
+                        esc_html__( 'Paste your full site URL: %s — must match exactly including https:// and trailing slash.', 'seobetter' ),
+                        '<code style="background:#fff;padding:1px 5px;font-size:11px;border:1px solid #bfdbfe">' . esc_html( home_url( '/' ) ) . '</code>'
+                    ); ?></li>
+                <li><?php esc_html_e( 'Click Continue → choose HTML tag verification → copy the meta tag → paste into your SEO plugin (Yoast / RankMath / AIOSEO Webmaster Tools section) or theme header.php → click Verify.', 'seobetter' ); ?></li>
+                <li><?php esc_html_e( 'Once Google confirms ownership, click the Connect button below.', 'seobetter' ); ?></li>
+            </ol>
+        </div>
+        <a href="<?php echo esc_url( \SEOBetter\GSC_Manager::build_auth_url() ); ?>" class="button button-primary" style="height:40px;padding:8px 18px;font-size:14px;line-height:22px">
+            <span style="display:inline-block;width:14px;height:14px;background:#fff;border-radius:2px;margin-right:8px;vertical-align:middle;text-align:center;color:#4285f4;font-weight:700">G</span>
+            <?php esc_html_e( 'Connect Google Search Console', 'seobetter' ); ?>
+        </a>
+        <p class="description" style="margin-top:8px;font-size:11px">
+            <?php esc_html_e( 'Read-only access — we never write to your GSC account. Click Disconnect at any time to revoke.', 'seobetter' ); ?>
+        </p>
+
+        <details style="margin-top:18px;font-size:11px;color:#64748b">
+            <summary style="cursor:pointer;user-select:none"><?php esc_html_e( 'Advanced: use my own Google Cloud credentials (BYO mode)', 'seobetter' ); ?></summary>
+            <div style="margin-top:10px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+                <p style="margin:0 0 8px;font-size:11px;line-height:1.6">
+                    <?php esc_html_e( 'By default SEOBetter uses a centralized OAuth proxy so you don\'t have to set up Google Cloud Console. To use your own GCP project instead (advanced), add this to wp-config.php:', 'seobetter' ); ?>
+                </p>
+                <pre style="margin:0;background:#fff;padding:6px 10px;font-size:10px;border:1px solid #e2e8f0;border-radius:3px;overflow-x:auto">define( 'SEOBETTER_GSC_USE_PROXY',     false );
+define( 'SEOBETTER_GSC_CLIENT_ID',     'YOUR_CLIENT_ID.apps.googleusercontent.com' );
+define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
+                <p style="margin:8px 0 0;font-size:11px;line-height:1.6">
+                    <?php
+                    printf(
+                        /* translators: 1: redirect URI to use */
+                        esc_html__( 'Then create OAuth credentials at console.cloud.google.com/apis/credentials, enable the Search Console API, configure the consent screen with you as a test user, and use this redirect URI: %s', 'seobetter' ),
+                        '<code style="background:#fff;padding:1px 4px;font-size:10px;border:1px solid #cbd5e1">' . esc_html( \SEOBetter\GSC_Manager::get_redirect_uri() ) . '</code>'
+                    ); ?>
+                </p>
+            </div>
+        </details>
+
+    <?php elseif ( ! $use_proxy && ! $gsc_status['configured'] ) : ?>
+        <!-- LEGACY BYO MODE: OAuth credentials not set in wp-config.php — show full GCP setup instructions -->
         <div style="padding:14px 18px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px">
-            <strong style="color:#92400e;font-size:14px">⚠️ <?php esc_html_e( 'OAuth credentials required', 'seobetter' ); ?></strong>
+            <strong style="color:#92400e;font-size:14px">⚠️ <?php esc_html_e( 'OAuth credentials required (BYO mode)', 'seobetter' ); ?></strong>
             <p style="margin:8px 0 10px;font-size:13px;line-height:1.55">
-                <?php esc_html_e( 'During Phase 1 testing each install registers its own Google Cloud OAuth client. Phase 2 will replace this with a centralized SEOBetter proxy so users never need their own Google credentials.', 'seobetter' ); ?>
+                <?php esc_html_e( 'You\'ve set SEOBETTER_GSC_USE_PROXY=false. That means you must register your own Google Cloud OAuth client. To use the centralized proxy instead, remove that constant from wp-config.php.', 'seobetter' ); ?>
             </p>
 
             <?php // v1.5.216.52 — REQUIRED prerequisite step. Without an actual GSC property registered+verified, even a working OAuth connection fails at sync because the API has nothing to query. ?>
