@@ -435,6 +435,12 @@ class Content_Freshness_Manager {
                 'label'        => sprintf( '%dy old (last modified %s)', max( 1, (int) round( $age_days / 365 ) ), wp_date( 'M j, Y', $modified_ts ) ),
                 'detail'       => __( 'Posts older than 1 year drift in rankings as the topic evolves and competitors publish fresher takes.', 'seobetter' ),
                 'contributes'  => 20 + (int) round( $age_days / 3 ),
+                'checklist'    => [
+                    __( 'Add the current year to the post title', 'seobetter' ),
+                    __( 'Replace any statistics older than 12 months with 2025-2026 data', 'seobetter' ),
+                    __( 'Verify any companies / products / regulations mentioned still exist or have been rebranded', 'seobetter' ),
+                    __( 'Add a new "Recent updates" or "What changed in 2026" section near the top', 'seobetter' ),
+                ],
                 'action'       => null,
             ];
         } elseif ( $age_days >= 180 ) {
@@ -444,6 +450,10 @@ class Content_Freshness_Manager {
                 'label'        => sprintf( '%dmo old (last modified %s)', (int) round( $age_days / 30 ), wp_date( 'M j, Y', $modified_ts ) ),
                 'detail'       => __( 'Aging content — review whether facts, stats, or recommendations are still current.', 'seobetter' ),
                 'contributes'  => (int) round( $age_days / 3 ),
+                'checklist'    => [
+                    __( 'Skim the post and flag anything that says "this year" or names a recent event — verify it still makes sense', 'seobetter' ),
+                    __( 'Update the "Last Updated" line if you make changes', 'seobetter' ),
+                ],
                 'action'       => null,
             ];
         }
@@ -462,11 +472,16 @@ class Content_Freshness_Manager {
                     __( 'Outdated year mentions: %s', 'seobetter' ),
                     implode( ', ', $year_summary )
                 ),
-                'detail'       => __( 'Old year references signal stale content to readers and search engines. Find them below and update to current-year data.', 'seobetter' ),
+                'detail'       => __( 'Old year references signal stale content to readers and search engines. The exact instances are listed below.', 'seobetter' ),
                 'contributes'  => $outdated_years_total * 15,
                 // Inline context snippets — user can SEE where these appear in the post
                 // without needing to do a copy/paste/find dance themselves.
                 'snippets'     => $year_snippets,
+                'checklist'    => [
+                    __( 'Click "Edit this post" above and use Ctrl+F (Cmd+F on Mac) to find each year shown below', 'seobetter' ),
+                    __( 'For each old year: replace with the current year ONLY if the underlying claim still holds. If a 2020 study is cited, find a more recent one or keep + add "(originally published 2020, still relevant)"', 'seobetter' ),
+                    __( 'Update the "Last Updated" line at the top of the post to today\'s date', 'seobetter' ),
+                ],
                 'action'       => null,
             ];
         }
@@ -509,8 +524,15 @@ class Content_Freshness_Manager {
                     'id'           => 'striking_distance',
                     'severity'     => 'critical',
                     'label'        => sprintf( __( 'Striking distance: position %.1f (just off page 1)', 'seobetter' ), $position ),
-                    'detail'       => __( 'A modest content lift here can push to top 10. Refresh sections, expand thin areas, add fresh stats.', 'seobetter' ),
+                    'detail'       => __( 'You rank just off page 1 — a modest content lift can push you to top 10.', 'seobetter' ),
                     'contributes'  => 50,
+                    'checklist'    => [
+                        __( 'Find your thinnest H2 section (under 100 words) and expand it to 200-300 words with concrete examples', 'seobetter' ),
+                        __( 'Add 1-2 fresh statistics from a 2025-2026 source — include the source URL inline', 'seobetter' ),
+                        __( 'Add an FAQ section: scroll down to the SEOBetter metabox → Schema Blocks tab → enable FAQ Page block', 'seobetter' ),
+                        __( 'Open the SERP for your keyword in another tab — what content type / sections do the page-1 results have that you don\'t?', 'seobetter' ),
+                        __( 'Add a comparison table if there are multiple options to compare', 'seobetter' ),
+                    ],
                     'action'       => null,
                 ];
             } elseif ( $position > 30 ) {
@@ -518,8 +540,14 @@ class Content_Freshness_Manager {
                     'id'           => 'deep_ranking',
                     'severity'     => 'warning',
                     'label'        => sprintf( __( 'Ranking deep: average position %.1f', 'seobetter' ), $position ),
-                    'detail'       => __( 'Position >30 usually means content/intent gap rather than freshness. Refresh alone may not be enough — consider an outline rebuild.', 'seobetter' ),
+                    'detail'       => __( 'Position >30 usually means a content / intent gap, not just freshness. Refreshing alone may not move the needle.', 'seobetter' ),
                     'contributes'  => 30,
+                    'checklist'    => [
+                        __( 'Open the SERP for your target keyword in another tab — note what content TYPES rank (listicle? how-to? product page?)', 'seobetter' ),
+                        __( 'Compare your post\'s structure against the top 3 results — what major sections are you missing?', 'seobetter' ),
+                        __( 'Verify search intent: is this informational, commercial, or transactional? Does your post match?', 'seobetter' ),
+                        __( 'Consider a full outline rebuild rather than a refresh — this might need new H2s, not new sentences', 'seobetter' ),
+                    ],
                     'action'       => null,
                 ];
             }
@@ -530,8 +558,15 @@ class Content_Freshness_Manager {
                     'id'           => 'snippet_problem',
                     'severity'     => 'warning',
                     'label'        => sprintf( __( '%s impressions, 0 clicks (28d)', 'seobetter' ), number_format_i18n( $impressions ) ),
-                    'detail'       => __( "Title or meta description likely doesn't match user intent. Review SERP preview and rewrite the title — content may be fine.", 'seobetter' ),
+                    'detail'       => __( "Google is showing your post but nobody clicks — that's a title or meta-description problem, not a content problem.", 'seobetter' ),
                     'contributes'  => 25,
+                    'checklist'    => [
+                        __( 'Scroll to the SEOBetter metabox → General tab → review the SERP Preview', 'seobetter' ),
+                        __( 'Rewrite the SEO Title to lead with the user\'s search intent (e.g. "Best X for Y in 2026")', 'seobetter' ),
+                        __( 'Tighten the meta description to 150 chars — lead with the direct answer, end with a benefit', 'seobetter' ),
+                        __( 'Run the Page Analysis tab — confirm "Focus keyword in title" is green', 'seobetter' ),
+                        __( 'Add power words (Ultimate / Complete / Free / Updated 2026) if appropriate to your brand', 'seobetter' ),
+                    ],
                     'action'       => null,
                 ];
             }
@@ -542,8 +577,15 @@ class Content_Freshness_Manager {
                     'id'           => 'no_visibility',
                     'severity'     => 'warning',
                     'label'        => __( 'Effectively invisible in search (under 10 impressions / 28d)', 'seobetter' ),
-                    'detail'       => __( 'Either too new to rank, or the keyword targeting needs a rethink. Refresh probably needs to include keyword research.', 'seobetter' ),
+                    'detail'       => __( 'Either too new to rank, or the keyword targeting needs a rethink. A refresh alone won\'t fix this.', 'seobetter' ),
                     'contributes'  => 15,
+                    'checklist'    => [
+                        __( 'Verify the focus keyword has actual search volume (use Google Trends or a keyword tool)', 'seobetter' ),
+                        __( 'If the post is less than 8 weeks old, give it more time before refreshing', 'seobetter' ),
+                        __( 'Add internal links from your higher-traffic posts to this one', 'seobetter' ),
+                        __( 'Re-run keyword research — pick a longer-tail variant with less competition', 'seobetter' ),
+                        __( 'Submit the URL to GSC URL Inspection → Request Indexing', 'seobetter' ),
+                    ],
                     'action'       => null,
                 ];
             }

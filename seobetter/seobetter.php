@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.57
+ * Version: 1.5.216.58
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.57' );
+define( 'SEOBETTER_VERSION', '1.5.216.58' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -715,7 +715,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.57 — GSC property picker endpoints
+        // v1.5.216.58 — GSC property picker endpoints
         register_rest_route( 'seobetter/v1', '/gsc/sites', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_gsc_list_sites' ],
@@ -730,7 +730,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.57 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
+        // v1.5.216.58 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
         register_rest_route( 'seobetter/v1', '/freshness/diagnostic/(?P<post_id>\d+)', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_freshness_diagnostic' ],
@@ -738,7 +738,7 @@ final class SEOBetter {
                 return current_user_can( 'edit_posts' );
             },
         ]);
-        // v1.5.216.57 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
+        // v1.5.216.58 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
         // method level (registration is unconditional but seed/clear calls
         // return error JSON without WP_DEBUG).
         register_rest_route( 'seobetter/v1', '/gsc/seed-test-data', [
@@ -1678,7 +1678,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.57 — list every GSC property the authorized account can access.
+     * v1.5.216.58 — list every GSC property the authorized account can access.
      * Used by the property-picker dropdown on the GSC Settings card.
      */
     public function rest_gsc_list_sites( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1689,7 +1689,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.57 — set which GSC property the plugin syncs.
+     * v1.5.216.58 — set which GSC property the plugin syncs.
      * POST body: { site_url: 'https://example.com/' }
      */
     public function rest_gsc_set_site( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1699,7 +1699,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.57 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
+     * v1.5.216.58 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
      * Striking-distance features can be exercised before real GSC traffic
      * exists. GSC_Manager::seed_test_snapshots() returns error JSON when
      * WP_DEBUG is not enabled, so the gate lives at the data layer.
@@ -1715,7 +1715,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.57 — return per-post Freshness diagnostic for the "Why?" drawer
+     * v1.5.216.58 — return per-post Freshness diagnostic for the "Why?" drawer
      * + metabox tab + Gutenberg sidebar. Tier-gated inside the manager.
      */
     public function rest_freshness_diagnostic( \WP_REST_Request $request ): \WP_REST_Response {
@@ -2491,7 +2491,7 @@ final class SEOBetter {
             'content'    => $html,
             'geo_score'  => $score['geo_score'],
             'grade'      => $score['grade'],
-            // v1.5.216.57 — language-aware word count
+            // v1.5.216.58 — language-aware word count
             'word_count' => SEOBetter\GEO_Analyzer::count_words_lang( wp_strip_all_tags( $html ), $rescore_lang ),
             'checks'     => $score['checks'],
         ] );
@@ -6215,7 +6215,7 @@ final class SEOBetter {
                 <?php endif; ?>
             </div>
 
-            <!-- v1.5.216.57 — Freshness panel. Lazy-loads diagnostic from REST
+            <!-- v1.5.216.58 — Freshness panel. Lazy-loads diagnostic from REST
                  on first open (avoids paying the GSC API call cost for every
                  post-edit screen). Free/Pro users without diagnostic access
                  see an upsell card; Pro users get age/year/missing-signal;
@@ -6307,6 +6307,13 @@ final class SEOBetter {
                                 }
                                 if (s.preview_line) {
                                     html += '<div style="background:#f8fafc;border:1px dashed #94a3b8;border-radius:4px;padding:5px 8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#0f172a;margin-bottom:6px">' + esc(s.preview_line) + '</div>';
+                                }
+                                if (s.checklist && s.checklist.length) {
+                                    html += '<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:600;color:#0f172a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px"><?php echo esc_js( __( 'What to do:', 'seobetter' ) ); ?></div><ul style="list-style:none;padding:0;margin:0">';
+                                    s.checklist.forEach(function(step) {
+                                        html += '<li style="font-size:11px;color:#334155;line-height:1.5;padding:4px 0 4px 18px;border-bottom:1px solid rgba(0,0,0,0.04);position:relative"><span style="position:absolute;left:0;top:4px;color:#64748b;font-size:13px;line-height:1">☐</span>' + esc(step) + '</li>';
+                                    });
+                                    html += '</ul></div>';
                                 }
                                 if (s.action && s.action.type === 'copy') {
                                     html += '<button type="button" class="button button-small sb-fresh-copy" data-payload="' + esc(s.action.payload) + '">' + esc(s.action.label) + '</button>';

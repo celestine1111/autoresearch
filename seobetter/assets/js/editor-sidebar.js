@@ -469,6 +469,21 @@
                     sChildren.push(el('div', { key: 'pv', style: { background: '#f8fafc', border: '1px dashed #94a3b8', borderRadius: 4, padding: '5px 8px', fontFamily: 'ui-monospace,Menlo,Consolas,monospace', fontSize: 11, color: '#0f172a', marginBottom: 6 } }, s.preview_line));
                 }
 
+                // Action checklist — concrete next-steps the user can take
+                if (s.checklist && s.checklist.length) {
+                    var clChildren = [
+                        el('div', { key: 'lbl', style: { fontSize: 10, fontWeight: 600, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 } }, 'What to do:')
+                    ];
+                    var ulChildren = s.checklist.map(function(step, i) {
+                        return el('li', { key: i, style: { fontSize: 11, color: '#334155', lineHeight: 1.5, padding: '4px 0 4px 18px', borderBottom: i < s.checklist.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none', position: 'relative' } },
+                            el('span', { style: { position: 'absolute', left: 0, top: 4, color: '#64748b', fontSize: 13, lineHeight: 1 } }, '☐'),
+                            step
+                        );
+                    });
+                    clChildren.push(el('ul', { key: 'ul', style: { listStyle: 'none', padding: 0, margin: 0 } }, ulChildren));
+                    sChildren.push(el('div', { key: 'cl', style: { marginBottom: 6 } }, clChildren));
+                }
+
                 if (s.action && s.action.type === 'copy') {
                     sChildren.push(el('button', { key: 'b', type: 'button', className: 'button button-small', onClick: function() { copy(s.action.payload); } }, s.action.label));
                 }

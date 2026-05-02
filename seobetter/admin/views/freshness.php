@@ -229,6 +229,12 @@ $avg_priority = $rows ? (int) round( $priority_total / count( $rows ) ) : 0;
 .seobetter-why-snippet { font-size:12px;color:#334155;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;line-height:1.5;padding:4px 0;border-bottom:1px solid #f1f5f9;word-break:break-word; }
 .seobetter-why-snippet:last-child { border-bottom:none; }
 .seobetter-why-preview { background:#f8fafc;border:1px dashed #94a3b8;border-radius:4px;padding:6px 10px;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:12px;color:#0f172a;margin-bottom:6px; }
+.seobetter-why-checklist { margin-bottom:8px; }
+.seobetter-why-checklist__title { font-size:11px;font-weight:600;color:#0f172a;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em; }
+.seobetter-why-checklist ul { list-style:none;padding:0;margin:0; }
+.seobetter-why-checklist li { font-size:12px;color:#334155;line-height:1.5;padding:5px 0 5px 22px;border-bottom:1px solid rgba(0,0,0,0.04);position:relative; }
+.seobetter-why-checklist li:last-child { border-bottom:none; }
+.seobetter-why-checklist li::before { content:"☐";position:absolute;left:0;top:5px;color:#64748b;font-size:14px;line-height:1; }
 .seobetter-why-toast { position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;z-index:10000;opacity:0;transition:opacity .2s; }
 .seobetter-why-toast.show { opacity:1; }
 .seobetter-why-q { font-size:12px;padding:8px 10px;border-bottom:1px solid #f1f5f9;display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center; }
@@ -324,6 +330,15 @@ $avg_priority = $rows ? (int) round( $priority_total / count( $rows ) ) : 0;
                 // Inline preview line (e.g. "Last Updated: …") + Copy button
                 if (s.preview_line) {
                     html += '<div class="seobetter-why-preview">' + esc(s.preview_line) + '</div>';
+                }
+
+                // Action checklist — concrete next-steps the user can take
+                if (s.checklist && s.checklist.length) {
+                    html += '<div class="seobetter-why-checklist"><div class="seobetter-why-checklist__title"><?php echo esc_js( __( 'What to do:', 'seobetter' ) ); ?></div><ul>';
+                    s.checklist.forEach(function(step) {
+                        html += '<li>' + esc(step) + '</li>';
+                    });
+                    html += '</ul></div>';
                 }
 
                 if (s.action && s.action.type === 'copy') {

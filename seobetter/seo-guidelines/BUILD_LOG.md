@@ -7,12 +7,78 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.57)
+> **Last updated:** 2026-05-02 (v1.5.216.58)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.58 — Freshness signals get actionable "What to do" checklists
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### User feedback after v55-57
+
+> "theres no instructions or what to do to update freshness, i cant see gutenberg blocks to use nothing."
+
+Looking at the staging Gutenberg editor, the user opened a "Best ramen shops in vancouver" post showing:
+
+> Striking distance: position 20.0 (just off page 1) [HIGH]
+> A modest content lift here can push to top 10. Refresh sections, expand thin areas, add fresh stats.
+
+That detail line was the entire instruction. Vague, abstract, no concrete next-step. User saw the diagnostic, understood there was a problem, but had no idea what to actually DO. And no pointer to which Gutenberg / SEOBetter blocks they could insert.
+
+### Fix
+
+**`includes/Content_Freshness_Manager.php::diagnostic_for_post()`:**
+- Added `checklist` array to every signal type that previously only had a `detail` paragraph
+- Each item is one concrete action the user can complete in 30 seconds to a few minutes
+- Where appropriate, items reference specific SEOBetter UI surfaces ("Schema Blocks tab → enable FAQ Page block", "scroll to General tab → review SERP Preview", "Page Analysis tab → confirm 'Focus keyword in title' is green")
+
+Per-signal checklists shipped:
+
+- **`age` (1y+)** — 4 items: add current year to title, replace stats with 2025-2026 data, verify entities still exist, add "Recent updates" section
+- **`age` (6mo+)** — 2 items: skim for time-relative phrases, update Last Updated line
+- **`outdated_years`** — 3 items: use Ctrl+F to find each year, replace conditionally, update Last Updated
+- **`striking_distance`** — 5 items: expand thinnest H2 to 200-300 words, add 2025-2026 stats with citation URL, **enable FAQ block via Schema Blocks tab**, compare against page-1 SERP, add comparison table
+- **`deep_ranking`** — 4 items: review SERP for content-type match, compare structure, verify intent alignment, consider full outline rebuild over refresh
+- **`snippet_problem`** — 5 items: review SERP Preview, rewrite SEO Title, tighten meta description, run Page Analysis, add power words
+- **`no_visibility`** — 5 items: verify keyword has search volume, wait if <8 weeks, add internal links, longer-tail variant, GSC URL inspection
+
+**UI rendering — all three surfaces (drawer / metabox tab / Gutenberg sidebar):**
+- New "WHAT TO DO:" section under each signal card
+- Bulleted list with `☐` checkbox glyph per item
+- Items don't auto-toggle (no state) — purely visual checkboxes the user mentally ticks off as they work
+- Compact: 11px font, 4px row padding, light border separator
+
+### Why no actual interactive Gutenberg block insertion?
+
+Considered adding "Insert FAQ block" buttons that programmatically insert blocks via `wp.data.dispatch('core/block-editor').insertBlock`. Rejected because:
+- Doesn't work in Classic Editor / Elementor / Divi / page builders (your "what if Gutenberg disabled" point from earlier this session)
+- The metabox tab can't reliably reach into Gutenberg's React tree from outside
+- Mutating the editor state crosses the destructive-edit line you've drawn
+
+The checklist solves the discoverability problem (user knows WHICH block to use) without crossing into auto-mutation territory.
+
+### Verify
+
+```bash
+grep -n "'checklist'" seobetter/includes/Content_Freshness_Manager.php
+grep -n "seobetter-why-checklist\|What to do:" seobetter/admin/views/freshness.php seobetter/seobetter.php seobetter/assets/js/editor-sidebar.js
+```
+
+End-to-end test: open a post in the Why? drawer / metabox / sidebar and confirm each signal card has a `WHAT TO DO:` section with concrete bulleted steps below the detail text.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline edits — UX layer addition, no scoring or schema changes
+
+**Verified by user:** UNTESTED
 
 ---
 
