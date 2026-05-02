@@ -19,7 +19,7 @@
 ## v1.5.216.57 — Multilingual word count: stop showing "260 Words" for 4000-char Japanese articles
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `f9f72e6`
 
 ### Bug
 
