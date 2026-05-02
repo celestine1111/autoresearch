@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SEOBetter — Terms of Service</title>
+  <meta name="description" content="SEOBetter Terms of Service. Acceptable use, BYOK responsibilities, GSC integration scope, disclaimers.">
+  <meta name="robots" content="index, follow">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+      color: #1F2937;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+    .breadcrumb { font-size: 13px; color: #6B7280; margin-bottom: 24px; }
+    .breadcrumb a { color: #6366F1; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    h1 { font-size: 32px; margin: 0 0 8px; color: #0F172A; letter-spacing: -0.01em; }
+    .meta { color: #64748B; font-size: 13px; margin-bottom: 36px; }
+    h2 { font-size: 22px; margin-top: 40px; padding-top: 12px; border-top: 1px solid #E5E7EB; color: #0F172A; }
+    p, li { font-size: 15px; }
+    a { color: #6366F1; }
+    footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid #E5E7EB; font-size: 13px; color: #6B7280; text-align: center; }
+    footer a { margin: 0 10px; color: #6B7280; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<p class="breadcrumb"><a href="/">← Back to SEOBetter</a></p>
+
+<h1>SEOBetter Terms of Service</h1>
+<p class="meta">Last updated: 2026-05-03 · Effective: 2026-05-03</p>
+
+<p>These Terms govern your use of the SEOBetter WordPress plugin and the SEOBetter Cloud API (together, the "Service"). By installing the plugin or making API requests against our endpoints, you agree to these Terms.</p>
+
+<h2>1. The Service</h2>
+<p>SEOBetter is a WordPress plugin that helps you generate and refresh content optimized for AI search engines. The plugin runs on your own WordPress server. Some features (research aggregation, AI content generation via Bring-Your-Own-Key, OAuth proxy for Google Search Console) call our Cloud API.</p>
+
+<h2>2. Pricing tiers</h2>
+<p>SEOBetter offers a Free tier (BYOK — bring your own AI provider key) and paid tiers (Pro, Pro+, Agency) with cloud generation and additional features. Pricing is published on the seobetter.com website. Paid subscriptions auto-renew unless canceled.</p>
+
+<h2>3. Acceptable use</h2>
+<p>You agree not to:</p>
+<ul>
+  <li>Generate content that violates the law in your jurisdiction or the jurisdiction of your readers</li>
+  <li>Generate spam, harassment, or content designed to manipulate search results in ways that violate Google or other search-engine policies</li>
+  <li>Reverse-engineer, decompile, or attempt to extract the source code of the Cloud API beyond what is publicly readable in the plugin source</li>
+  <li>Resell access to the Cloud API or use it on behalf of multiple unrelated sites without an Agency license</li>
+  <li>Abuse the OAuth proxy by exceeding reasonable refresh-token rates (we rate-limit at 100 refreshes per hour per refresh token; sustained abuse will revoke access)</li>
+</ul>
+
+<h2>4. Bring Your Own Key (BYOK)</h2>
+<p>The Free tier requires you to provide your own API key from an AI provider (OpenAI, Anthropic, Google, OpenRouter, Groq, etc.). You are responsible for paying that provider for usage and for keeping your keys secure. SEOBetter never logs or transmits your BYOK keys outside your WordPress install.</p>
+
+<h2>5. Google Search Console integration</h2>
+<p>The GSC integration uses Google's OAuth 2.0 to read performance data from properties you've verified at <a href="https://search.google.com/search-console" target="_blank" rel="noopener">search.google.com/search-console</a>. By connecting GSC, you authorize SEOBetter to read clicks, impressions, position, and queries for your verified properties. SEOBetter does not request write access. See the <a href="/privacy">Privacy Policy</a> for details on data handling.</p>
+
+<h2>6. Disclaimers and limitations</h2>
+<p>The Service is provided "as is". We do not guarantee that AI-generated content will rank in any particular search engine, be cited by any AI engine, or be free of factual errors. You are responsible for reviewing all generated content before publishing.</p>
+<p>To the maximum extent permitted by law, SEOBetter's total liability for any claim arising from your use of the Service is limited to the amount you paid us in the 12 months preceding the claim, or USD $100, whichever is greater.</p>
+
+<h2>7. Termination</h2>
+<p>You can stop using the Service at any time by deactivating the plugin and (if applicable) canceling your subscription. We may suspend access for violations of section 3, with notice where reasonable.</p>
+
+<h2>8. Changes to these Terms</h2>
+<p>We may update these Terms when the Service changes materially. The "Last updated" date reflects the most recent change. Continued use after changes constitutes acceptance.</p>
+
+<h2>9. Contact</h2>
+<p>Email: <a href="mailto:hello@seobetter.com">hello@seobetter.com</a></p>
+
+<footer>
+  © 2026 SEOBetter ·
+  <a href="/">Home</a>
+  <a href="/privacy">Privacy Policy</a>
+  <a href="mailto:hello@seobetter.com">Contact</a>
+</footer>
+
+</body>
+</html>

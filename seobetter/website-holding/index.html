@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SEOBetter — WordPress plugin for AI search citations</title>
+  <meta name="description" content="WordPress plugin shipping soon. Generates articles that ChatGPT, Perplexity, Google AI Overviews, and Gemini actually cite. Built around the Princeton GEO research.">
+  <meta name="robots" content="index, follow">
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:title" content="SEOBetter — articles AI engines actually cite">
+  <meta property="og:description" content="WordPress plugin shipping in 2026. Built around the Princeton GEO research showing citations / stats / quotes drive +30-40% AI visibility.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://seobetter.com">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@SEOBetter">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      background: #0F172A;
+      background-image:
+        radial-gradient(circle at 15% 20%, rgba(139, 92, 246, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 85% 80%, rgba(6, 182, 212, 0.12) 0%, transparent 50%);
+      color: #E5E7EB;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 24px;
+    }
+    .container {
+      max-width: 720px;
+      width: 100%;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      color: #C4B5FD;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-radius: 999px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 700;
+      line-height: 1.1;
+      margin: 0 0 18px;
+      color: #FFFFFF;
+      letter-spacing: -0.02em;
+    }
+    .tagline {
+      font-size: clamp(17px, 2.4vw, 21px);
+      color: #CBD5E1;
+      max-width: 640px;
+      margin: 0 0 36px;
+    }
+    .data-strip {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin: 36px 0 44px;
+      padding: 24px 28px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+    }
+    .data-strip strong { color: #A78BFA; font-weight: 600; }
+    .data-strip p { margin: 0; font-size: 15px; color: #CBD5E1; }
+    .data-strip .small {
+      font-size: 12px;
+      color: #94A3B8;
+      margin-top: 6px;
+      font-style: italic;
+    }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%);
+      color: #FFFFFF;
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 8px;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 8px 24px -8px rgba(139, 92, 246, 0.5);
+    }
+    .cta:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -8px rgba(139, 92, 246, 0.7); }
+    .cta::after { content: "→"; font-size: 18px; }
+    .cta-note {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #94A3B8;
+    }
+    .secondary {
+      margin-top: 36px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px 28px;
+      align-items: center;
+      font-size: 14px;
+      color: #94A3B8;
+    }
+    .secondary a {
+      color: #A78BFA;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(167, 139, 250, 0.3);
+      transition: border-color 0.15s;
+    }
+    .secondary a:hover { border-bottom-color: #A78BFA; }
+    footer {
+      padding: 32px 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 13px;
+      color: #64748B;
+      text-align: center;
+    }
+    footer a {
+      color: #94A3B8;
+      text-decoration: none;
+      margin: 0 12px;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.15s;
+    }
+    footer a:hover { border-bottom-color: #94A3B8; }
+    @media (max-width: 600px) {
+      main { padding: 40px 20px; }
+      .data-strip { padding: 18px 20px; }
+      .cta { padding: 12px 22px; font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+
+<main>
+  <div class="container">
+    <span class="badge">Coming 2026</span>
+
+    <h1>Articles AI&nbsp;engines actually&nbsp;cite.</h1>
+
+    <p class="tagline">
+      A WordPress plugin built for the post-blue-link search era.
+      Optimized for ChatGPT, Perplexity, Google AI Overviews, Gemini, and Claude — not just Google's blue links.
+    </p>
+
+    <div class="data-strip">
+      <p><strong>ChatGPT cites Wikipedia 47.9% of the time.</strong> Perplexity cites Reddit 46.7%. Google AI Overviews cite YouTube 23.3%.</p>
+      <p>Most WordPress sites don't get cited at all — because most SEO plugins are still optimizing for blue links.</p>
+      <p class="small">Source: 5W AI Platform Citation Source Index 2026</p>
+    </div>
+
+    <a href="https://forms.gle/iG5EUnGicc7HLLdB9" class="cta" target="_blank" rel="noopener">
+      Join the early access list
+    </a>
+    <p class="cta-note">No spam. We'll email you the moment early access opens. Unsubscribe anytime.</p>
+
+    <div class="secondary">
+      <a href="https://x.com/SEOBetter" target="_blank" rel="noopener">Follow @SEOBetter on X</a>
+      <span>·</span>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  © 2026 SEOBetter ·
+  <a href="/privacy">Privacy Policy</a> ·
+  <a href="/terms">Terms of Service</a> ·
+  <a href="mailto:hello@seobetter.com">hello@seobetter.com</a>
+</footer>
+
+</body>
+</html>
