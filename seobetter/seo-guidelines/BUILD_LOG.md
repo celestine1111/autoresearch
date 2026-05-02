@@ -19,7 +19,7 @@
 ## v1.5.216.51 — GSC OAuth callback: state via transient (fixes "Invalid state" error)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `ada0c43`
 
 ### Bug
 
