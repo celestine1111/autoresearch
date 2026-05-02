@@ -7,12 +7,94 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.53 — also: zip-build fix re: last30days)
+> **Last updated:** 2026-05-02 (v1.5.216.54)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.54 — Freshness Diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar mirror)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Why
+
+Freshness page was a static report — priority badge + Edit button. Users looked at "priority 75" with no way to know *why* and "what now" beyond clicking Edit and dumping into the post editor. Per Ben: *"as a user i look at this and think ok.. so what i have to edit a page? or what do i do"*.
+
+Original gut-fix would be a "Refresh with AI" button, but Ben rightly flagged that as destructive — could wipe manual edits, custom blocks, hand-placed images. The locked plan agrees: `pro-features-ideas.md` line 489 places "Automatic content updater (autonomous rewrite + publish)" on the Don't-Build list as a "reputational landmine."
+
+### Fix — non-destructive diagnostic + clipboard-only micro-actions
+
+**Backend (`includes/Content_Freshness_Manager.php`):**
+- New `diagnostic_for_post( int $post_id ): array` — explains the priority signal-by-signal. Returns ordered signals (most→least urgent), each with `id`, `severity` (critical/warning/info), `label`, `detail`, `contributes` (the score delta), and optional `action` (`copy` payload or `find_in_post` years list — both clipboard-only)
+- Tier-gated inside the method:
+  - **Free** → returns `{locked:true, tier_required:'pro'}` — UI shows upsell card
+  - **Pro** → age + outdated_years + missing_signal sections only
+  - **Pro+** → all of the above PLUS striking-distance, deep-ranking, snippet-problem (impressions w/ no clicks), no-visibility, and top queries from GSC
+
+**Backend (`includes/GSC_Manager.php`):**
+- New `get_post_top_queries( int $post_id ): array` — real-time `searchanalytics/query` call with `dimensions=['query']` + page filter, last 28 days, top 10. Cached in transient `seobetter_gsc_q_{post_id}` for 1 hour (avoids burning Google quota on Why? spam clicks). Each row gets `striking_distance` flag if position is 11-20
+
+**Backend (`includes/License_Manager.php`):**
+- New `freshness_diagnostic` (Pro+) — base diagnostic gate
+- New `freshness_editor_panel` (Pro+) — mirrors `internal_links_suggester` Pro+ pattern
+
+**REST (`seobetter.php`):**
+- `GET /seobetter/v1/freshness/diagnostic/(?P<post_id>\d+)` → `rest_freshness_diagnostic()`. Permission: `current_user_can('edit_post', $post_id)`. Returns the diagnostic array
+
+**UI surface 1 — Freshness page drawer (`admin/views/freshness.php`):**
+- New "Why?" button next to each post's priority badge
+- Slide-in right-side overlay (480px) with signal cards, GSC top-queries table, "STRIKING" badge for striking-distance queries
+- Locked-tier upsell card when user can't access diagnostic
+- Esc to close + click X button
+
+**UI surface 2 — Post-edit metabox tab (`seobetter.php::render_metabox`):**
+- New "Freshness" tab added to existing tab strip (right after Schema Blocks). Shows 🔒 for users who can't access
+- Lazy-loads diagnostic on first tab click (avoids paying GSC API call on every post-edit screen open)
+- Same signal cards + top queries layout as the drawer
+- **Works in BOTH Gutenberg AND Classic Editor + page builders** — metabox renders in `wp-admin/post.php` regardless of editor
+
+**UI surface 3 — Gutenberg sidebar mirror (`assets/js/editor-sidebar.js`):**
+- New `FreshnessPanel` registered as separate plugin `seobetter-freshness` so the fetch is independent of the GEO analysis cache
+- Same content as the metabox tab — convenience for Gutenberg users who like sidebar panels
+
+**Non-destructive guarantees (matches `pro-features-ideas.md` §477 line 489):**
+- Zero AI calls in this feature
+- Zero `wp_update_post()` calls — the plugin never mutates post content
+- Year-list and "Last Updated:" copy actions are **clipboard-only** — toast confirms what was copied, user pastes into post manually
+- "Find these in the post" copies the year list so user can paste into their editor's Find function
+
+### Verify (file:method anchors)
+
+```bash
+grep -n "public function diagnostic_for_post" seobetter/includes/Content_Freshness_Manager.php
+grep -n "public static function get_post_top_queries" seobetter/includes/GSC_Manager.php
+grep -n "freshness_diagnostic\|freshness_editor_panel" seobetter/includes/License_Manager.php
+grep -n "rest_freshness_diagnostic\|/freshness/diagnostic/" seobetter/seobetter.php
+grep -n "seobetter-why-btn\|seobetter-why-overlay\|sb-fresh-copy" seobetter/admin/views/freshness.php
+grep -n "data-tab=\"freshness\"\|seobetter-fresh-panel" seobetter/seobetter.php
+grep -n "FreshnessPanel\|seobetter-freshness" seobetter/assets/js/editor-sidebar.js
+```
+
+### Tier behaviour
+
+- Free: Why? button + Freshness tab visible but show upsell card (per pricing matrix)
+- Pro ($39/mo): full diagnostic minus GSC sections
+- Pro+ ($69/mo): full diagnostic incl. GSC click decay, position drift, top queries
+- Agency: same as Pro+ (existing pattern)
+
+### Co-doc updates
+
+- `pro-features-ideas.md` §128 Search performance / Freshness — added 2 new rows (Why? drawer + Editor Freshness panel)
+- `plugin_UX.md` — documented Why? drawer, new metabox tab, Gutenberg sidebar panel
+- BUILD_LOG: this entry
+- No `SEO-GEO-AI-GUIDELINES.md §6` change — scoring weights unchanged, this just exposes the existing breakdown
+
+**Verified by user:** UNTESTED
 
 ---
 

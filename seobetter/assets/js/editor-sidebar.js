@@ -365,4 +365,125 @@
         icon: 'chart-line'
     });
 
+    // ============================================================
+    // v1.5.216.54 — Freshness Diagnostic panel (separate plugin so the
+    // fetch is independent of the GEO analysis cache). Tier-gated inside
+    // /seobetter/v1/freshness/diagnostic/{post_id} — Free/Pro-without-
+    // freshness_diagnostic see an upsell card.
+    // ============================================================
+    function FreshnessPanel() {
+        var s1 = useState(null); var data = s1[0]; var setData = s1[1];
+        var s2 = useState(true); var loading = s2[0]; var setLoading = s2[1];
+
+        useEffect(function() {
+            try {
+                var postId = wp.data.select('core/editor').getCurrentPostId();
+                if (!postId) { setLoading(false); return; }
+                wp.apiFetch({ path: '/seobetter/v1/freshness/diagnostic/' + postId })
+                    .then(function(r) { setData(r); setLoading(false); })
+                    .catch(function() { setLoading(false); });
+            } catch(e) { setLoading(false); }
+        }, []);
+
+        function copy(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() { showToast('Copied: ' + text); });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); showToast('Copied: ' + text); } catch(e) {}
+                ta.remove();
+            }
+        }
+
+        function showToast(msg) {
+            var t = document.createElement('div');
+            t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;z-index:99999;opacity:0;transition:opacity .2s';
+            t.textContent = msg; document.body.appendChild(t);
+            requestAnimationFrame(function() { t.style.opacity = '1'; });
+            setTimeout(function() { t.style.opacity = '0'; setTimeout(function(){ t.remove(); }, 250); }, 1800);
+        }
+
+        if (loading) return el(DocPanel, { name: 'seobetter-freshness', title: 'Freshness Diagnostic', initialOpen: false },
+            el('p', { style: { textAlign: 'center', fontSize: 13, color: '#666' } }, 'Loading…'));
+
+        if (!data) return el(DocPanel, { name: 'seobetter-freshness', title: 'Freshness Diagnostic', initialOpen: false },
+            el('p', { style: { fontSize: 13, color: '#666', margin: 0 } }, 'Save the post to see freshness diagnostic.'));
+
+        if (data.locked) {
+            var tier = data.tier_required === 'pro_plus' ? 'Pro+' : 'Pro';
+            return el(DocPanel, { name: 'seobetter-freshness', title: 'Freshness Diagnostic 🔒', initialOpen: false },
+                el('div', { style: { padding: '16px', background: 'linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%)', border: '1px solid #ddd6fe', borderRadius: '8px', textAlign: 'center' } },
+                    el('div', { style: { fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', background: '#8b5cf6', color: '#fff', padding: '3px 8px', borderRadius: '4px', display: 'inline-block' } }, tier.toUpperCase() + ' FEATURE'),
+                    el('h3', { style: { margin: '12px 0 6px', fontSize: 14, color: '#5b21b6' } }, 'Freshness diagnostic is a Pro feature'),
+                    el('p', { style: { margin: 0, fontSize: 12, color: '#4c1d95', lineHeight: 1.5 } }, 'See exactly why this post needs refreshing — outdated year mentions, missing freshness signal, GSC click decay, top queries to target.'),
+                    el('a', { href: 'https://seobetter.com/pricing', target: '_blank', className: 'button button-primary', style: { marginTop: 10, display: 'inline-block' } }, 'See Pro pricing →')
+                )
+            );
+        }
+
+        var pri = data.priority || 0;
+        var pcolor = pri >= 60 ? '#dc2626' : (pri >= 30 ? '#f59e0b' : '#10b981');
+        var children = [];
+
+        children.push(el('div', { key: 'head', style: { display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0 10px', borderBottom: '1px solid #f3f4f6' } },
+            el('div', { style: { fontSize: 11, textTransform: 'uppercase', color: '#64748b' } }, 'Priority'),
+            el('div', { style: { padding: '3px 10px', borderRadius: 12, background: pcolor + '1a', color: pcolor, fontWeight: 700, fontSize: 13 } }, pri),
+            el('div', { style: { fontSize: 11, color: '#64748b', marginLeft: 'auto' } }, (data.word_count || 0) + ' words · ' + (data.age_days || 0) + 'd')
+        ));
+
+        var signals = data.signals || [];
+        if (signals.length) {
+            signals.forEach(function(s, idx) {
+                var sev = s.severity || 'info';
+                var bg = sev === 'critical' ? '#fef2f2' : (sev === 'warning' ? '#fef3c7' : '#eff6ff');
+                var bd = sev === 'critical' ? '#fecaca' : (sev === 'warning' ? '#fcd34d' : '#bfdbfe');
+                var sChildren = [];
+                sChildren.push(el('div', { key: 'h', style: { display: 'flex', justifyContent: 'space-between', gap: 8, fontWeight: 600, fontSize: 12, color: '#0f172a', marginBottom: 4 } },
+                    el('div', null, s.label),
+                    el('div', { style: { fontSize: 10, color: '#64748b', background: '#fff', padding: '1px 6px', borderRadius: 10, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' } }, '+' + (s.contributes || 0))
+                ));
+                if (s.detail) sChildren.push(el('div', { key: 'd', style: { fontSize: 11, color: '#475569', lineHeight: 1.5, marginBottom: 6 } }, s.detail));
+                if (s.action && (s.action.type === 'copy' || s.action.type === 'find_in_post')) {
+                    var payload = s.action.type === 'find_in_post' ? (s.action.years || []).join(', ') : s.action.payload;
+                    sChildren.push(el('button', { key: 'b', type: 'button', className: 'button button-small', onClick: function() { copy(payload); } }, s.action.label));
+                }
+                children.push(el('div', { key: 's' + idx, style: { padding: '10px 12px', borderRadius: 8, marginTop: 6, border: '1px solid ' + bd, background: bg } }, sChildren));
+            });
+        } else {
+            children.push(el('p', { key: 'ok', style: { color: '#64748b', textAlign: 'center', fontSize: 12, padding: '14px 0', margin: 0 } }, 'No urgent signals — this post is in good shape.'));
+        }
+
+        if (data.has_gsc && data.top_queries && data.top_queries.length) {
+            children.push(el('h4', { key: 'qh', style: { margin: '14px 0 6px', fontSize: 12, color: '#0f172a' } }, 'Top queries — last 28 days'));
+            var qRows = data.top_queries.map(function(q, i) {
+                var qChildren = [
+                    el('div', { key: 'q', style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: q.query },
+                        q.query,
+                        q.striking_distance ? el('span', { style: { background: '#dcfce7', color: '#166534', fontSize: 9, padding: '1px 5px', borderRadius: 6, fontWeight: 600, marginLeft: 4 } }, 'STRIKING') : null
+                    ),
+                    el('div', { key: 'p', style: { color: '#475569' } }, 'pos ' + q.position.toFixed(1)),
+                    el('div', { key: 'c', style: { color: '#475569' } }, q.clicks)
+                ];
+                return el('div', { key: i, style: { padding: '6px 8px', borderBottom: '1px solid #f1f5f9', display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, fontSize: 11 } }, qChildren);
+            });
+            children.push(el('div', { key: 'qb', style: { border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' } }, qRows));
+        } else if (!data.gsc_connected) {
+            children.push(el('div', { key: 'gsc-off', style: { marginTop: 12, padding: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, color: '#475569' } }, 'Connect Google Search Console (Pro+) to see top queries.'));
+        } else if (!data.can_use_gsc) {
+            children.push(el('div', { key: 'pro-up', style: { marginTop: 12, padding: 10, background: 'linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%)', border: '1px solid #ddd6fe', borderRadius: 6, fontSize: 11, color: '#5b21b6' } },
+                el('span', { style: { background: '#8b5cf6', color: '#fff', fontSize: 9, padding: '1px 5px', borderRadius: 3, letterSpacing: '0.05em', fontWeight: 600 } }, 'PRO+'),
+                ' Upgrade to see top queries + click decay.'
+            ));
+        }
+
+        return el(DocPanel, { name: 'seobetter-freshness', title: 'Freshness: ' + pri, initialOpen: false }, children);
+    }
+
+    registerPlugin('seobetter-freshness', {
+        render: FreshnessPanel,
+        icon: 'update'
+    });
+
 })();

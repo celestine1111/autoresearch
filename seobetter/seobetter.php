@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.53
+ * Version: 1.5.216.54
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.53' );
+define( 'SEOBETTER_VERSION', '1.5.216.54' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -715,7 +715,7 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.53 — GSC property picker endpoints
+        // v1.5.216.54 — GSC property picker endpoints
         register_rest_route( 'seobetter/v1', '/gsc/sites', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_gsc_list_sites' ],
@@ -730,7 +730,15 @@ final class SEOBetter {
                 return current_user_can( 'manage_options' );
             },
         ]);
-        // v1.5.216.53 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
+        // v1.5.216.54 — Per-post Freshness diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar).
+        register_rest_route( 'seobetter/v1', '/freshness/diagnostic/(?P<post_id>\d+)', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_freshness_diagnostic' ],
+            'permission_callback' => function () {
+                return current_user_can( 'edit_posts' );
+            },
+        ]);
+        // v1.5.216.54 — DEBUG-only test data seeders. Gated by WP_DEBUG at the
         // method level (registration is unconditional but seed/clear calls
         // return error JSON without WP_DEBUG).
         register_rest_route( 'seobetter/v1', '/gsc/seed-test-data', [
@@ -1670,7 +1678,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.53 — list every GSC property the authorized account can access.
+     * v1.5.216.54 — list every GSC property the authorized account can access.
      * Used by the property-picker dropdown on the GSC Settings card.
      */
     public function rest_gsc_list_sites( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1681,7 +1689,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.53 — set which GSC property the plugin syncs.
+     * v1.5.216.54 — set which GSC property the plugin syncs.
      * POST body: { site_url: 'https://example.com/' }
      */
     public function rest_gsc_set_site( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1691,7 +1699,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.53 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
+     * v1.5.216.54 — DEBUG-only: insert mock GSC snapshots so Freshness/Decay/
      * Striking-distance features can be exercised before real GSC traffic
      * exists. GSC_Manager::seed_test_snapshots() returns error JSON when
      * WP_DEBUG is not enabled, so the gate lives at the data layer.
@@ -1704,6 +1712,22 @@ final class SEOBetter {
     public function rest_gsc_clear_test_data( \WP_REST_Request $request ): \WP_REST_Response {
         $result = SEOBetter\GSC_Manager::clear_test_snapshots();
         return new \WP_REST_Response( $result, ! empty( $result['success'] ) ? 200 : 400 );
+    }
+
+    /**
+     * v1.5.216.54 — return per-post Freshness diagnostic for the "Why?" drawer
+     * + metabox tab + Gutenberg sidebar. Tier-gated inside the manager.
+     */
+    public function rest_freshness_diagnostic( \WP_REST_Request $request ): \WP_REST_Response {
+        $post_id = (int) $request->get_param( 'post_id' );
+        if ( $post_id <= 0 ) {
+            return new \WP_REST_Response( [ 'error' => 'invalid_post_id' ], 400 );
+        }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            return new \WP_REST_Response( [ 'error' => 'forbidden' ], 403 );
+        }
+        $manager = new SEOBetter\Content_Freshness_Manager();
+        return new \WP_REST_Response( $manager->diagnostic_for_post( $post_id ) );
     }
 
     public function rest_topic_research_proxy( \WP_REST_Request $request ): \WP_REST_Response {
@@ -5103,6 +5127,7 @@ final class SEOBetter {
                 <button type="button" class="sb-meta-tab" data-tab="readability" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Readability</button>
                 <button type="button" class="sb-meta-tab" data-tab="richresults" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Rich Results</button>
                 <button type="button" class="sb-meta-tab" data-tab="schemablocks" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Schema Blocks<?php echo SEOBetter\License_Manager::can_use( 'schema_blocks_5' ) ? '' : ' 🔒'; ?></button>
+                <button type="button" class="sb-meta-tab" data-tab="freshness" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280"><?php esc_html_e( 'Freshness', 'seobetter' ); ?><?php echo SEOBetter\License_Manager::can_use( 'freshness_diagnostic' ) ? '' : ' 🔒'; ?></button>
                 <div style="margin-left:auto;display:flex;align-items:center;padding-right:16px;gap:8px">
                     <span style="font-size:13px;font-weight:700;color:<?php echo esc_attr( $score_color ); ?>"><?php echo esc_html( $score ); ?>/100</span>
                     <span style="font-size:11px;padding:2px 8px;background:<?php echo esc_attr( $score_color ); ?>20;color:<?php echo esc_attr( $score_color ); ?>;border-radius:4px;font-weight:600"><?php echo esc_html( $grade ); ?></span>
@@ -6187,6 +6212,121 @@ final class SEOBetter {
                 })();
                 </script>
                 <?php endif; ?>
+            </div>
+
+            <!-- v1.5.216.54 — Freshness panel. Lazy-loads diagnostic from REST
+                 on first open (avoids paying the GSC API call cost for every
+                 post-edit screen). Free/Pro users without diagnostic access
+                 see an upsell card; Pro users get age/year/missing-signal;
+                 Pro+ adds GSC click decay + position drift + top queries. -->
+            <div class="sb-meta-panel" data-panel="freshness" style="padding:20px;display:none">
+                <div id="seobetter-fresh-panel" data-post-id="<?php echo (int) $post->ID; ?>" style="font-size:13px">
+                    <p style="color:#94a3b8;text-align:center;padding:30px 0;margin:0"><?php esc_html_e( 'Click this tab to load diagnostic…', 'seobetter' ); ?></p>
+                </div>
+                <script>
+                (function() {
+                    var loaded = false;
+                    function load() {
+                        if (loaded) return; loaded = true;
+                        var $panel = document.getElementById('seobetter-fresh-panel');
+                        if (!$panel) return;
+                        var postId = $panel.getAttribute('data-post-id');
+                        $panel.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:30px 0;margin:0"><?php echo esc_js( __( 'Loading…', 'seobetter' ) ); ?></p>';
+                        fetch('<?php echo esc_js( rest_url( 'seobetter/v1/freshness/diagnostic/' ) ); ?>' + postId, {
+                            headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
+                            credentials: 'same-origin'
+                        }).then(function(r) { return r.json(); }).then(function(data) {
+                            $panel.innerHTML = renderDiag(data);
+                            bindCopy($panel);
+                        }).catch(function() {
+                            $panel.innerHTML = '<p style="color:#dc2626;text-align:center;padding:20px 0;margin:0"><?php echo esc_js( __( 'Failed to load.', 'seobetter' ) ); ?></p>';
+                        });
+                    }
+                    function esc(s) { var d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+                    function toast(msg) {
+                        var t = document.createElement('div');
+                        t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;z-index:99999;opacity:0;transition:opacity .2s';
+                        t.textContent = msg; document.body.appendChild(t);
+                        requestAnimationFrame(function() { t.style.opacity = '1'; });
+                        setTimeout(function() { t.style.opacity = '0'; setTimeout(function(){ t.remove(); }, 250); }, 1800);
+                    }
+                    function copy(text) {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(text).then(function() { toast('Copied: ' + text); });
+                        } else {
+                            var ta = document.createElement('textarea');
+                            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                            document.body.appendChild(ta); ta.select();
+                            try { document.execCommand('copy'); toast('Copied: ' + text); } catch (e) {}
+                            ta.remove();
+                        }
+                    }
+                    function bindCopy(scope) {
+                        scope.querySelectorAll('.sb-fresh-copy').forEach(function(b) {
+                            b.addEventListener('click', function() { copy(b.getAttribute('data-payload') || ''); });
+                        });
+                    }
+                    function renderDiag(data) {
+                        if (!data) return '<p style="color:#dc2626"><?php echo esc_js( __( 'No data.', 'seobetter' ) ); ?></p>';
+                        if (data.locked) {
+                            var tier = data.tier_required === 'pro_plus' ? 'Pro+' : 'Pro';
+                            return '<div style="padding:20px;background:linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%);border:1px solid #ddd6fe;border-radius:8px;text-align:center">' +
+                                '<div style="font-size:11px;font-weight:600;letter-spacing:.05em;background:#8b5cf6;color:#fff;padding:3px 8px;border-radius:4px;display:inline-block">' + esc(tier.toUpperCase()) + ' FEATURE</div>' +
+                                '<h3 style="margin:14px 0 8px;font-size:14px;color:#5b21b6"><?php echo esc_js( __( 'Freshness diagnostic is a Pro feature', 'seobetter' ) ); ?></h3>' +
+                                '<p style="margin:0 0 12px;font-size:12px;color:#4c1d95;line-height:1.5"><?php echo esc_js( __( 'See why this post needs refreshing — outdated year mentions, missing freshness signal, GSC click decay, and top queries to target.', 'seobetter' ) ); ?></p>' +
+                                '<a href="https://seobetter.com/pricing" target="_blank" class="button button-primary"><?php echo esc_js( __( 'See Pro pricing →', 'seobetter' ) ); ?></a></div>';
+                        }
+                        if (data.error) return '<p style="color:#dc2626;font-size:12px">' + esc(data.error) + '</p>';
+                        var html = '<div style="display:flex;gap:14px;align-items:center;padding-bottom:12px;border-bottom:1px solid #e2e8f0;margin-bottom:14px">';
+                        var pri = data.priority || 0;
+                        var pcolor = pri >= 60 ? '#dc2626' : (pri >= 30 ? '#f59e0b' : '#10b981');
+                        html += '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b">' + '<?php echo esc_js( __( 'Refresh priority', 'seobetter' ) ); ?>' + '</div>';
+                        html += '<div style="padding:4px 12px;border-radius:12px;background:' + pcolor + '1a;color:' + pcolor + ';font-weight:700;font-size:14px">' + esc(pri) + '</div>';
+                        html += '<div style="font-size:11px;color:#64748b;margin-left:auto">' + esc(data.word_count || 0) + ' <?php echo esc_js( __( 'words', 'seobetter' ) ); ?> · ' + esc(data.age_days || 0) + 'd</div>';
+                        html += '</div>';
+                        if (data.signals && data.signals.length) {
+                            data.signals.forEach(function(s) {
+                                var sev = s.severity || 'info';
+                                var bg = sev === 'critical' ? '#fef2f2' : (sev === 'warning' ? '#fef3c7' : '#eff6ff');
+                                var bd = sev === 'critical' ? '#fecaca' : (sev === 'warning' ? '#fcd34d' : '#bfdbfe');
+                                html += '<div style="padding:12px 14px;border-radius:8px;margin-bottom:8px;border:1px solid ' + bd + ';background:' + bg + '">';
+                                html += '<div style="display:flex;justify-content:space-between;gap:10px;font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px"><div>' + esc(s.label) + '</div>';
+                                html += '<div style="font-size:11px;font-weight:500;color:#64748b;background:#fff;padding:2px 7px;border-radius:10px;border:1px solid #e2e8f0">+' + esc(s.contributes || 0) + '</div></div>';
+                                if (s.detail) html += '<div style="font-size:11px;color:#475569;line-height:1.5;margin-bottom:6px">' + esc(s.detail) + '</div>';
+                                if (s.action && (s.action.type === 'copy' || s.action.type === 'find_in_post')) {
+                                    var payload = s.action.type === 'find_in_post' ? (s.action.years || []).join(', ') : s.action.payload;
+                                    html += '<button type="button" class="button button-small sb-fresh-copy" data-payload="' + esc(payload) + '">' + esc(s.action.label) + '</button>';
+                                }
+                                html += '</div>';
+                            });
+                        } else {
+                            html += '<p style="color:#64748b;text-align:center;font-size:12px;padding:14px 0;margin:0"><?php echo esc_js( __( 'No urgent signals — this post is in good shape.', 'seobetter' ) ); ?></p>';
+                        }
+                        if (data.has_gsc && data.top_queries && data.top_queries.length) {
+                            html += '<h4 style="margin:16px 0 6px;font-size:12px;color:#0f172a"><?php echo esc_js( __( 'Top queries — last 28 days', 'seobetter' ) ); ?></h4>';
+                            html += '<div style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden">';
+                            data.top_queries.forEach(function(q) {
+                                html += '<div style="padding:7px 10px;border-bottom:1px solid #f1f5f9;display:grid;grid-template-columns:1fr auto auto;gap:8px;font-size:11px">';
+                                html += '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(q.query) + '">' + esc(q.query);
+                                if (q.striking_distance) html += ' <span style="background:#dcfce7;color:#166534;font-size:9px;padding:1px 5px;border-radius:6px;font-weight:600">STRIKING</span>';
+                                html += '</div>';
+                                html += '<div style="color:#475569">pos ' + esc(q.position.toFixed(1)) + '</div>';
+                                html += '<div style="color:#475569">' + esc(q.clicks) + '</div>';
+                                html += '</div>';
+                            });
+                            html += '</div>';
+                        } else if (!data.gsc_connected) {
+                            html += '<div style="margin-top:12px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;color:#475569"><?php echo esc_js( __( 'Connect Google Search Console (Pro+) to see top queries here.', 'seobetter' ) ); ?></div>';
+                        } else if (!data.can_use_gsc) {
+                            html += '<div style="margin-top:12px;padding:10px;background:linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%);border:1px solid #ddd6fe;border-radius:6px;font-size:11px;color:#5b21b6"><span style="background:#8b5cf6;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;letter-spacing:.05em;font-weight:600">PRO+</span> <?php echo esc_js( __( 'Upgrade to see top queries + click decay.', 'seobetter' ) ); ?></div>';
+                        }
+                        return html;
+                    }
+                    // Lazy-load when the user clicks the Freshness tab
+                    var tabBtn = document.querySelector('.sb-meta-tab[data-tab="freshness"]');
+                    if (tabBtn) tabBtn.addEventListener('click', load);
+                })();
+                </script>
             </div>
         </div>
 

@@ -108,6 +108,8 @@ class License_Manager {
     private const PRO_FEATURES = [
         // Cloud generation
         'cloud_generation',               // 50 articles/mo via SEOBetter Cloud
+        // Freshness — v1.5.216.54
+        'freshness_diagnostic',           // "Why?" drawer + metabox tab (age/year/missing-signal sections only). GSC sections gated separately by gsc_freshness_driver.
         // Generation features
         'all_21_content_types',           // unlocks the other 18 types
         'multilingual_60_languages',
@@ -158,6 +160,7 @@ class License_Manager {
         'brand_voice_3',                   // 3 voices
         // GSC + Freshness
         'gsc_freshness_driver',            // GSC-driven Freshness inventory prioritization
+        'freshness_editor_panel',          // v1.5.216.54 — in-editor Freshness panel (metabox tab + Gutenberg sidebar mirror). Shows full diagnostic incl. GSC signals.
         // Internal Links
         'internal_links_suggester',        // editor sidebar suggester (5/post)
         // AI Citation Tracker scaled

@@ -132,8 +132,10 @@ Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badg
 | GSC connect + view (clicks/impressions/queries/position) | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 1 (1 week) |
 | GSC-driven Freshness inventory (ranks decay-priority by GSC click + position) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 1 (1 week, builds on age-based) |
 | Freshness report (age-based only) | ✅ | ✅ | ✅ | ✅ | ✅ Shipped (Content_Freshness_Manager) |
-| Content Refresher (one-click stale-article refresh) | ❌ | ❌ | ✅ | ✅ | ✅ Shipped |
-| Refresh-brief generator (side-by-side diff suggestions) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
+| Content Refresher (one-click stale-article refresh) | ❌ | ❌ | ✅ | ✅ | ✅ Shipped (no UI button — locked decision: destructive AI rewrite never gets a one-click trigger; users approve diffs via Refresh-brief generator instead) |
+| **"Why?" diagnostic drawer on Freshness page** (signal-by-signal breakdown of priority score; clipboard-only micro-actions; non-destructive) | ❌ | ✅ age/year/missing-signal | ✅ + GSC click decay, position drift, top queries, striking-distance | ✅ + same | ✅ Shipped v1.5.216.54 |
+| **Editor Freshness panel** (post-edit metabox tab + Gutenberg sidebar mirror; lazy-loads diagnostic; works in all editors via metabox) | ❌ | ❌ | ✅ | ✅ | ✅ Shipped v1.5.216.54 |
+| Refresh-brief generator (side-by-side diff suggestions, humans approve, no auto-rewrite) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
 | GSC Indexing API (request indexing on save) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
 
 #### Internal Links (override the 2026-04-15 removal decision)

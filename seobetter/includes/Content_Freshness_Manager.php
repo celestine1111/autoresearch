@@ -308,4 +308,222 @@ class Content_Freshness_Manager {
 
         return max( 0, min( 100, $score ) );
     }
+
+    // ── v1.5.216.54 — Freshness Diagnostic (Why? drawer + editor panel) ──
+
+    /**
+     * Per-post diagnostic that explains the priority score signal-by-signal.
+     * Powers the "Why?" drawer on the Freshness page and the Freshness tab in
+     * the post-edit metabox + Gutenberg sidebar mirror.
+     *
+     * Tier behaviour:
+     *   - Free: returns ['locked' => true, 'tier_required' => 'pro'] — UI shows
+     *     a single upsell card.
+     *   - Pro: age + outdated_years + missing_signal sections.
+     *   - Pro+: same + GSC click decay, position drift, top queries (28d),
+     *     striking-distance flag.
+     *
+     * Non-destructive — every action this returns is informational or
+     * clipboard-style. Mutating actions are explicitly out of scope per
+     * pro-features-ideas.md §477 "Don't Build" line 489.
+     *
+     * @return array shape:
+     *   [
+     *     'locked'         => bool,             // true → show upsell only
+     *     'tier_required'  => 'pro'|'pro_plus', // when locked
+     *     'post_id'        => int,
+     *     'priority'       => int 0-100,
+     *     'has_gsc'        => bool,
+     *     'signals'        => [ {...}, ... ],   // ordered most→least urgent
+     *     'top_queries'    => [ {...}, ... ],   // Pro+ only, may be empty
+     *     'last_updated_string' => 'May 2026',  // pre-formatted clipboard payload
+     *   ]
+     */
+    public function diagnostic_for_post( int $post_id ): array {
+        $post = get_post( $post_id );
+        if ( ! $post || $post->post_status !== 'publish' ) {
+            return [ 'locked' => false, 'error' => 'post_not_found_or_unpublished', 'post_id' => $post_id ];
+        }
+
+        // Base tier gate — Pro at minimum
+        if ( ! License_Manager::can_use( 'freshness_diagnostic' ) ) {
+            return [
+                'locked'        => true,
+                'tier_required' => 'pro',
+                'post_id'       => $post_id,
+            ];
+        }
+
+        $now           = time();
+        $current_year  = (int) date( 'Y' );
+        $modified_ts   = strtotime( $post->post_modified );
+        $age_days      = max( 0, (int) round( ( $now - $modified_ts ) / DAY_IN_SECONDS ) );
+        $text          = wp_strip_all_tags( $post->post_content );
+        $word_count    = str_word_count( $text );
+        $has_signal    = $this->has_freshness_signal( $post->post_content );
+
+        // Year mention scan
+        preg_match_all( '/\b(20[12]\d)\b/', $text, $year_matches );
+        $year_counts = [];
+        foreach ( ( $year_matches[1] ?? [] ) as $y ) {
+            if ( (int) $y < $current_year - 1 ) {
+                $year_counts[ $y ] = ( $year_counts[ $y ] ?? 0 ) + 1;
+            }
+        }
+        $outdated_years_total = array_sum( $year_counts );
+
+        // GSC signals — Pro+ only, requires connection + active sync
+        $can_use_gsc = License_Manager::can_use( 'gsc_freshness_driver' );
+        $gsc_active  = $can_use_gsc && GSC_Manager::is_connected();
+        $gsc_stats   = $gsc_active ? GSC_Manager::get_post_stats( $post_id ) : [];
+
+        $base_priority = self::compute_base_priority( $age_days, $outdated_years_total, $has_signal );
+        if ( $gsc_active && ! empty( $gsc_stats ) ) {
+            $gsc_priority = self::compute_gsc_priority( $gsc_stats );
+            $priority     = (int) round( ( $base_priority * 0.5 ) + ( $gsc_priority * 0.5 ) );
+        } else {
+            $priority = $base_priority;
+        }
+        $priority = max( 0, min( 100, $priority ) );
+
+        $signals = [];
+
+        // ── Signal 1: age ──
+        if ( $age_days >= 365 ) {
+            $signals[] = [
+                'id'           => 'age',
+                'severity'     => 'critical',
+                'label'        => sprintf( '%dy old (last modified %s)', max( 1, (int) round( $age_days / 365 ) ), wp_date( 'M j, Y', $modified_ts ) ),
+                'detail'       => __( 'Posts older than 1 year drift in rankings as the topic evolves and competitors publish fresher takes.', 'seobetter' ),
+                'contributes'  => 20 + (int) round( $age_days / 3 ),
+                'action'       => null,
+            ];
+        } elseif ( $age_days >= 180 ) {
+            $signals[] = [
+                'id'           => 'age',
+                'severity'     => 'warning',
+                'label'        => sprintf( '%dmo old (last modified %s)', (int) round( $age_days / 30 ), wp_date( 'M j, Y', $modified_ts ) ),
+                'detail'       => __( 'Aging content — review whether facts, stats, or recommendations are still current.', 'seobetter' ),
+                'contributes'  => (int) round( $age_days / 3 ),
+                'action'       => null,
+            ];
+        }
+
+        // ── Signal 2: outdated year mentions ──
+        if ( $outdated_years_total > 0 ) {
+            $year_summary = [];
+            foreach ( $year_counts as $y => $count ) {
+                $year_summary[] = sprintf( '%s (%d×)', $y, $count );
+            }
+            $signals[] = [
+                'id'           => 'outdated_years',
+                'severity'     => $outdated_years_total >= 4 ? 'critical' : 'warning',
+                'label'        => sprintf(
+                    /* translators: 1: comma list of "YYYY (N×)" */
+                    __( 'Year mentions older than last year: %s', 'seobetter' ),
+                    implode( ', ', $year_summary )
+                ),
+                'detail'       => __( 'Each old year reference is a stale signal to readers and search engines. Update to current-year stats and dates.', 'seobetter' ),
+                'contributes'  => $outdated_years_total * 15,
+                'action'       => [
+                    'type'   => 'find_in_post',
+                    'years'  => array_keys( $year_counts ),
+                    'label'  => __( 'Find these in the post', 'seobetter' ),
+                ],
+            ];
+        }
+
+        // ── Signal 3: missing "Last Updated:" signal ──
+        if ( ! $has_signal ) {
+            $copy_payload = sprintf( 'Last Updated: %s', wp_date( 'F j, Y' ) );
+            $signals[] = [
+                'id'           => 'no_freshness_signal',
+                'severity'     => 'warning',
+                'label'        => __( 'No "Last Updated:" line in the post body', 'seobetter' ),
+                'detail'       => __( 'AI engines and readers use this as a freshness tiebreaker. Add it near the top of the post.', 'seobetter' ),
+                'contributes'  => 10,
+                'action'       => [
+                    'type'    => 'copy',
+                    'payload' => $copy_payload,
+                    'label'   => sprintf( __( 'Copy "%s"', 'seobetter' ), $copy_payload ),
+                ],
+            ];
+        }
+
+        // ── Signal 4-6: GSC-driven (Pro+ only) ──
+        $top_queries = [];
+        if ( $gsc_active && ! empty( $gsc_stats ) ) {
+            $position    = (float) ( $gsc_stats['position_28d'] ?? 0 );
+            $clicks      = (int) ( $gsc_stats['clicks_28d'] ?? 0 );
+            $impressions = (int) ( $gsc_stats['impressions_28d'] ?? 0 );
+
+            // Striking distance — biggest signal
+            if ( $position >= 11 && $position <= 30 ) {
+                $signals[] = [
+                    'id'           => 'striking_distance',
+                    'severity'     => 'critical',
+                    'label'        => sprintf( __( 'Striking distance: position %.1f (just off page 1)', 'seobetter' ), $position ),
+                    'detail'       => __( 'A modest content lift here can push to top 10. Refresh sections, expand thin areas, add fresh stats.', 'seobetter' ),
+                    'contributes'  => 50,
+                    'action'       => null,
+                ];
+            } elseif ( $position > 30 ) {
+                $signals[] = [
+                    'id'           => 'deep_ranking',
+                    'severity'     => 'warning',
+                    'label'        => sprintf( __( 'Ranking deep: average position %.1f', 'seobetter' ), $position ),
+                    'detail'       => __( 'Position >30 usually means content/intent gap rather than freshness. Refresh alone may not be enough — consider an outline rebuild.', 'seobetter' ),
+                    'contributes'  => 30,
+                    'action'       => null,
+                ];
+            }
+
+            // Impressions but no clicks = title/snippet problem, not content
+            if ( $impressions >= 100 && $clicks === 0 ) {
+                $signals[] = [
+                    'id'           => 'snippet_problem',
+                    'severity'     => 'warning',
+                    'label'        => sprintf( __( '%s impressions, 0 clicks (28d)', 'seobetter' ), number_format_i18n( $impressions ) ),
+                    'detail'       => __( "Title or meta description likely doesn't match user intent. Review SERP preview and rewrite the title — content may be fine.", 'seobetter' ),
+                    'contributes'  => 25,
+                    'action'       => null,
+                ];
+            }
+
+            // No GSC visibility at all
+            if ( $impressions < 10 ) {
+                $signals[] = [
+                    'id'           => 'no_visibility',
+                    'severity'     => 'warning',
+                    'label'        => __( 'Effectively invisible in search (under 10 impressions / 28d)', 'seobetter' ),
+                    'detail'       => __( 'Either too new to rank, or the keyword targeting needs a rethink. Refresh probably needs to include keyword research.', 'seobetter' ),
+                    'contributes'  => 15,
+                    'action'       => null,
+                ];
+            }
+
+            // Pull top queries (cached real-time call)
+            $top_queries = GSC_Manager::get_post_top_queries( $post_id );
+        }
+
+        // Sort signals by contribution descending
+        usort( $signals, fn( $a, $b ) => ( $b['contributes'] ?? 0 ) - ( $a['contributes'] ?? 0 ) );
+
+        return [
+            'locked'              => false,
+            'post_id'             => $post_id,
+            'post_title'          => $post->post_title,
+            'edit_url'            => get_edit_post_link( $post_id, 'raw' ),
+            'priority'            => $priority,
+            'has_gsc'             => $gsc_active,
+            'gsc_connected'       => GSC_Manager::is_connected(),
+            'can_use_gsc'         => $can_use_gsc,
+            'word_count'          => $word_count,
+            'age_days'            => $age_days,
+            'modified'            => $post->post_modified,
+            'signals'             => $signals,
+            'top_queries'         => $top_queries,
+            'last_updated_string' => sprintf( 'Last Updated: %s', wp_date( 'F j, Y' ) ),
+        ];
+    }
 }

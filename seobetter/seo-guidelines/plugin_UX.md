@@ -451,6 +451,16 @@ All editor integration is in a single PluginDocumentSettingPanel (PluginSidebar 
 - [ ] **Re-analyze button** — clears cache and re-runs analysis
 - [ ] Auto-loads analysis on post open
 
+### Freshness Diagnostic Panel — registerPlugin('seobetter-freshness') — v1.5.216.54
+Second `registerPlugin` registration in editor-sidebar.js, separate plugin so the diagnostic fetch is independent of the GEO analysis cache.
+
+- [ ] Title: "Freshness: XX" (priority score), `initialOpen: false` (collapsed by default)
+- [ ] Locked-tier shows upsell card; unlocked shows priority badge + ordered signal cards
+- [ ] Signals (Pro): age / outdated_years (with copy-list action) / missing freshness signal (copy "Last Updated: …" action)
+- [ ] Signals (Pro+ adds): striking-distance / deep-ranking / snippet-problem / no-visibility + GSC top queries last 28d (with STRIKING badge for position 11-20)
+- [ ] **All micro-actions are clipboard-only** — toast confirms paste payload. No `wp_update_post` calls
+- [ ] This is a sidebar mirror — the metabox tab is the canonical surface (works in all editors)
+
 ### Toolbar Score Badge (DOM injection, not React)
 - [ ] Colored pill badge in editor header settings area (next to Save button)
 - [ ] Shows 📊 icon + score/100
@@ -472,11 +482,17 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 - [ ] Registered via `add_meta_box()` on `add_meta_boxes` hook
 - [ ] Title: "SEOBetter Settings" (normal context, low priority)
 - [ ] Renders on both `post` and `page` screens
-- [ ] **4 Tabs in header:**
+- [ ] **5 Tabs in header (v1.5.216.54 added Freshness):**
   - General (default active)
   - Page Analysis
   - Readability
   - Rich Results
+  - Schema Blocks (🔒 if not Pro+)
+  - **Freshness** (🔒 if not Pro / Pro+) — v1.5.216.54
+    - Lazy-loads `/seobetter/v1/freshness/diagnostic/{post_id}` on first tab click (avoids paying GSC API call when the user never opens the tab)
+    - Locked tier shows upsell card; unlocked shows priority badge + signal cards (age / outdated_years / missing freshness signal / GSC click decay / striking-distance / top queries)
+    - **Clipboard-only micro-actions** — "Copy 'Last Updated: Month Day, Year'" + "Find these in the post" (year list). Never mutates post content. Per `pro-features-ideas.md` line 489 (Don't Build: autonomous content updater)
+    - Renders identically in Gutenberg, Classic Editor, and page builders that fall back to wp-admin/post.php metaboxes
 - [ ] **Score badge** in top-right of header — XX/100 + grade letter, color-coded
 - [ ] **General Tab (v1.5.206d-fix19 — editable SERP preview):**
   - **SERP Preview card** with:

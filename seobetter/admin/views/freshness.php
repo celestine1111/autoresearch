@@ -179,13 +179,32 @@ $avg_priority = $rows ? (int) round( $priority_total / count( $rows ) ) : 0;
                             <?php echo esc_html( $pri ); ?>
                         </span>
                     </td>
-                    <td>
+                    <td style="white-space:nowrap">
+                        <button type="button" class="button button-small seobetter-why-btn" data-post-id="<?php echo (int) $row['id']; ?>" style="margin-right:4px"><?php esc_html_e( 'Why?', 'seobetter' ); ?></button>
                         <a href="<?php echo esc_url( $row['edit_url'] ); ?>" class="button button-small"><?php esc_html_e( 'Edit', 'seobetter' ); ?></a>
                     </td>
                 </tr>
                 <?php endforeach; endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <?php // v1.5.216.54 — "Why?" diagnostic drawer. Slides in from the right.
+          // Loaded async via REST when a Why button is clicked. Tier-gated
+          // inside Content_Freshness_Manager::diagnostic_for_post — Free shows
+          // an upsell card, Pro shows age/year/missing-signal sections,
+          // Pro+ adds GSC click decay + position drift + top queries. ?>
+    <div id="seobetter-why-overlay" style="display:none;position:fixed;top:32px;right:0;bottom:0;width:480px;max-width:100vw;background:#fff;border-left:1px solid #e2e8f0;box-shadow:-4px 0 20px rgba(0,0,0,0.08);z-index:9999;overflow-y:auto">
+        <div style="padding:18px 20px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;position:sticky;top:0;z-index:10">
+            <div>
+                <div id="seobetter-why-title" style="font-weight:700;font-size:14px;color:#0f172a"><?php esc_html_e( 'Why this priority?', 'seobetter' ); ?></div>
+                <div id="seobetter-why-subtitle" style="font-size:11px;color:#64748b;margin-top:2px"></div>
+            </div>
+            <button type="button" id="seobetter-why-close" class="button button-small">×</button>
+        </div>
+        <div id="seobetter-why-body" style="padding:18px 20px">
+            <p style="color:#94a3b8;text-align:center;padding:30px 0"><?php esc_html_e( 'Loading…', 'seobetter' ); ?></p>
+        </div>
     </div>
 
 </div>
@@ -195,7 +214,158 @@ $avg_priority = $rows ? (int) round( $priority_total / count( $rows ) ) : 0;
 #seobetter-freshness-inventory th[data-sort]:hover { background: #f1f5f9; }
 #seobetter-freshness-inventory .sort-arrow { font-size: 10px; color: #cbd5e1; margin-left: 2px; }
 #seobetter-freshness-inventory .sort-arrow.active { color: #475569; }
+.seobetter-why-signal { padding:14px 16px;border-radius:8px;margin-bottom:10px;border:1px solid #e2e8f0; }
+.seobetter-why-signal--critical { background:#fef2f2;border-color:#fecaca; }
+.seobetter-why-signal--warning  { background:#fef3c7;border-color:#fcd34d; }
+.seobetter-why-signal--info     { background:#eff6ff;border-color:#bfdbfe; }
+.seobetter-why-signal__head { display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:600;font-size:13px;color:#0f172a;margin-bottom:6px; }
+.seobetter-why-signal__contrib { font-size:11px;font-weight:500;color:#64748b;background:#fff;padding:2px 7px;border-radius:10px;border:1px solid #e2e8f0;white-space:nowrap; }
+.seobetter-why-signal__detail { font-size:12px;color:#475569;line-height:1.5;margin-bottom:8px; }
+.seobetter-why-signal__action { font-size:12px; }
+.seobetter-why-toast { position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;z-index:10000;opacity:0;transition:opacity .2s; }
+.seobetter-why-toast.show { opacity:1; }
+.seobetter-why-q { font-size:12px;padding:8px 10px;border-bottom:1px solid #f1f5f9;display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center; }
+.seobetter-why-q:last-child { border-bottom:none; }
+.seobetter-why-q__sd { background:#dcfce7;color:#166534;font-size:10px;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:.04em; }
 </style>
+
+<script>
+(function() {
+    var $btns = document.querySelectorAll('.seobetter-why-btn');
+    var $overlay = document.getElementById('seobetter-why-overlay');
+    var $body = document.getElementById('seobetter-why-body');
+    var $title = document.getElementById('seobetter-why-title');
+    var $subtitle = document.getElementById('seobetter-why-subtitle');
+    var $close = document.getElementById('seobetter-why-close');
+    if (!$btns.length || !$overlay) return;
+
+    var nonce = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
+    var restBase = '<?php echo esc_js( rest_url( 'seobetter/v1/freshness/diagnostic/' ) ); ?>';
+    var pricingUrl = 'https://seobetter.com/pricing';
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+    function close() { $overlay.style.display = 'none'; }
+    $close.addEventListener('click', close);
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close(); });
+
+    function toast(msg) {
+        var t = document.createElement('div');
+        t.className = 'seobetter-why-toast';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        requestAnimationFrame(function() { t.classList.add('show'); });
+        setTimeout(function() { t.classList.remove('show'); setTimeout(function(){ t.remove(); }, 250); }, 1800);
+    }
+
+    function copyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() { toast('Copied: ' + text); });
+        } else {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); toast('Copied: ' + text); } catch (e) { toast('Copy failed — select and copy manually'); }
+            ta.remove();
+        }
+    }
+
+    function renderLocked(data, postId) {
+        var tier = data.tier_required === 'pro_plus' ? 'Pro+' : 'Pro';
+        return '<div style="padding:24px;background:linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%);border:1px solid #ddd6fe;border-radius:8px;text-align:center">' +
+            '<div style="font-size:11px;font-weight:600;letter-spacing:.05em;background:#8b5cf6;color:#fff;padding:3px 8px;border-radius:4px;display:inline-block">' + esc(tier.toUpperCase()) + ' FEATURE</div>' +
+            '<h3 style="margin:14px 0 8px;font-size:15px;color:#5b21b6"><?php echo esc_js( __( 'Why? diagnostic is a Pro feature', 'seobetter' ) ); ?></h3>' +
+            '<p style="margin:0 0 14px;font-size:13px;color:#4c1d95;line-height:1.5"><?php echo esc_js( __( 'Get a per-post breakdown of every signal pulling priority up — outdated year mentions, missing freshness signal, GSC click decay, position drift, and top queries that need attention.', 'seobetter' ) ); ?></p>' +
+            '<a href="' + esc(pricingUrl) + '" target="_blank" class="button button-primary"><?php echo esc_js( __( 'See Pro pricing →', 'seobetter' ) ); ?></a>' +
+            '</div>';
+    }
+
+    function renderSignals(data) {
+        var html = '';
+        if (data.signals && data.signals.length) {
+            data.signals.forEach(function(s) {
+                var sev = s.severity || 'info';
+                html += '<div class="seobetter-why-signal seobetter-why-signal--' + esc(sev) + '">';
+                html += '<div class="seobetter-why-signal__head"><div>' + esc(s.label) + '</div>';
+                html += '<div class="seobetter-why-signal__contrib">+' + esc(s.contributes || 0) + '</div></div>';
+                if (s.detail) html += '<div class="seobetter-why-signal__detail">' + esc(s.detail) + '</div>';
+                if (s.action) {
+                    if (s.action.type === 'copy') {
+                        html += '<div class="seobetter-why-signal__action"><button type="button" class="button button-small seobetter-why-copy" data-payload="' + esc(s.action.payload) + '">' + esc(s.action.label) + '</button></div>';
+                    } else if (s.action.type === 'find_in_post') {
+                        var years = (s.action.years || []).join(', ');
+                        html += '<div class="seobetter-why-signal__action"><button type="button" class="button button-small seobetter-why-copy" data-payload="' + esc(years) + '" title="<?php echo esc_attr_x( 'Copy year list, then use Edit → Find in your post editor', 'tooltip', 'seobetter' ); ?>">' + esc(s.action.label) + '</button></div>';
+                    }
+                }
+                html += '</div>';
+            });
+        } else {
+            html += '<p style="color:#64748b;font-size:13px;text-align:center;padding:20px 0"><?php echo esc_js( __( 'No urgent signals — this post is in good shape.', 'seobetter' ) ); ?></p>';
+        }
+
+        // GSC top queries (Pro+ only)
+        if (data.has_gsc && data.top_queries && data.top_queries.length) {
+            html += '<h4 style="margin:18px 0 8px;font-size:13px;color:#0f172a"><?php echo esc_js( __( 'Top queries — last 28 days', 'seobetter' ) ); ?></h4>';
+            html += '<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">';
+            data.top_queries.forEach(function(q) {
+                html += '<div class="seobetter-why-q">';
+                html += '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(q.query) + '">' + esc(q.query);
+                if (q.striking_distance) html += ' <span class="seobetter-why-q__sd">STRIKING</span>';
+                html += '</div>';
+                html += '<div style="color:#475569">pos ' + esc(q.position.toFixed(1)) + '</div>';
+                html += '<div style="color:#475569">' + esc(q.clicks) + ' clicks</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+        } else if (data.has_gsc && (!data.top_queries || !data.top_queries.length)) {
+            html += '<p style="color:#94a3b8;font-size:11px;text-align:center;padding:10px 0;margin:0"><?php echo esc_js( __( 'No GSC query data for this URL in the last 28 days.', 'seobetter' ) ); ?></p>';
+        } else if (!data.gsc_connected) {
+            html += '<div style="margin-top:18px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#475569"><?php echo esc_js( __( 'Connect Google Search Console (Pro+) to also see click decay, position drift, and top queries here.', 'seobetter' ) ); ?></div>';
+        } else if (!data.can_use_gsc) {
+            html += '<div style="margin-top:18px;padding:12px;background:linear-gradient(135deg,#faf5ff 0%,#ede9fe 100%);border:1px solid #ddd6fe;border-radius:6px;font-size:12px;color:#5b21b6"><span style="background:#8b5cf6;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;letter-spacing:.05em;font-weight:600">PRO+</span> <?php echo esc_js( __( 'Upgrade to see GSC click decay, position drift, and top queries for this post.', 'seobetter' ) ); ?></div>';
+        }
+        return html;
+    }
+
+    function bindCopyButtons(scope) {
+        scope.querySelectorAll('.seobetter-why-copy').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                copyToClipboard(btn.getAttribute('data-payload') || '');
+            });
+        });
+    }
+
+    Array.prototype.forEach.call($btns, function(btn) {
+        btn.addEventListener('click', function() {
+            var postId = btn.getAttribute('data-post-id');
+            $body.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:30px 0"><?php echo esc_js( __( 'Loading…', 'seobetter' ) ); ?></p>';
+            $title.textContent = '<?php echo esc_js( __( 'Why this priority?', 'seobetter' ) ); ?>';
+            $subtitle.textContent = '';
+            $overlay.style.display = 'block';
+
+            fetch(restBase + postId, {
+                headers: { 'X-WP-Nonce': nonce },
+                credentials: 'same-origin'
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data && data.locked) {
+                    $body.innerHTML = renderLocked(data, postId);
+                    return;
+                }
+                if (data && data.error) {
+                    $body.innerHTML = '<p style="color:#dc2626;text-align:center;padding:20px 0">' + esc(data.error) + '</p>';
+                    return;
+                }
+                $title.textContent = data.post_title || '(post)';
+                $subtitle.textContent = '<?php echo esc_js( __( 'Priority', 'seobetter' ) ); ?> ' + (data.priority || 0) + ' · ' + (data.word_count || 0) + ' <?php echo esc_js( __( 'words', 'seobetter' ) ); ?> · ' + (data.age_days || 0) + 'd';
+                $body.innerHTML = renderSignals(data);
+                bindCopyButtons($body);
+            }).catch(function() {
+                $body.innerHTML = '<p style="color:#dc2626;text-align:center;padding:20px 0"><?php echo esc_js( __( 'Failed to load diagnostic.', 'seobetter' ) ); ?></p>';
+            });
+        });
+    });
+})();
+</script>
 
 <script>
 (function() {

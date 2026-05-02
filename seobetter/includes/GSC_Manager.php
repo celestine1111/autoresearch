@@ -605,6 +605,82 @@ class GSC_Manager {
         ];
     }
 
+    /**
+     * v1.5.216.54 — Top queries for a single page over the last 28 days.
+     *
+     * Real-time call to searchAnalytics/query with dimensions=['query'] and a
+     * page-equals filter. Cached in a transient for 1 hour so a Pro+ user
+     * spamming the "Why?" drawer doesn't burn quota.
+     *
+     * Returns up to 10 rows: [ {query, clicks, impressions, ctr, position}, ... ].
+     * Returns [] silently on any failure (no GSC connection, API error, no data
+     * for this URL, etc.) — the diagnostic UI degrades gracefully.
+     */
+    public static function get_post_top_queries( int $post_id ): array {
+        if ( ! self::is_connected() ) return [];
+
+        $cache_key = 'seobetter_gsc_q_' . $post_id;
+        $cached    = get_transient( $cache_key );
+        if ( is_array( $cached ) ) return $cached;
+
+        $access = self::get_access_token();
+        if ( $access === '' ) return [];
+
+        $conn      = get_option( self::OPTION_KEY, [] );
+        $site_url  = (string) ( $conn['site_url'] ?? home_url( '/' ) );
+        $page_url  = get_permalink( $post_id );
+        if ( ! $page_url ) return [];
+
+        $end   = date( 'Y-m-d', strtotime( 'yesterday' ) );
+        $start = date( 'Y-m-d', strtotime( '-28 days', strtotime( 'yesterday' ) ) );
+
+        $endpoint = 'https://www.googleapis.com/webmasters/v3/sites/' . rawurlencode( $site_url ) . '/searchAnalytics/query';
+        $response = wp_remote_post( $endpoint, [
+            'timeout' => 15,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access,
+                'Content-Type'  => 'application/json',
+            ],
+            'body'    => wp_json_encode( [
+                'startDate'        => $start,
+                'endDate'          => $end,
+                'dimensions'       => [ 'query' ],
+                'dimensionFilterGroups' => [ [
+                    'filters' => [ [
+                        'dimension'  => 'page',
+                        'operator'   => 'equals',
+                        'expression' => $page_url,
+                    ] ],
+                ] ],
+                'rowLimit' => 10,
+            ] ),
+        ] );
+
+        if ( is_wp_error( $response ) ) return [];
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( ! is_array( $body ) || empty( $body['rows'] ) ) {
+            // Cache empty result too — avoid hammering the API for posts with no GSC data
+            set_transient( $cache_key, [], HOUR_IN_SECONDS );
+            return [];
+        }
+
+        $queries = [];
+        foreach ( $body['rows'] as $row ) {
+            $position = (float) ( $row['position'] ?? 0 );
+            $queries[] = [
+                'query'             => (string) ( $row['keys'][0] ?? '' ),
+                'clicks'            => (int) ( $row['clicks'] ?? 0 ),
+                'impressions'       => (int) ( $row['impressions'] ?? 0 ),
+                'ctr'               => (float) ( $row['ctr'] ?? 0 ),
+                'position'          => $position,
+                'striking_distance' => $position >= 11 && $position <= 20,
+            ];
+        }
+
+        set_transient( $cache_key, $queries, HOUR_IN_SECONDS );
+        return $queries;
+    }
+
     // ── Cron ─────────────────────────────────────────────────────────────
 
     public static function cron_daily_sync(): void {
