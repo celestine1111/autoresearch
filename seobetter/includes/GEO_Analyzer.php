@@ -323,12 +323,18 @@ class GEO_Analyzer {
      * ~2 chars per word is the standard CJK approximation used by WP's
      * own wp_word_count (via WP_Multibyte_Patch) and major CJK editors.
      */
-    private static function count_words_lang( string $text, string $language = 'en' ): int {
+    public static function count_words_lang( string $text, string $language = 'en' ): int {
         $base = strtolower( substr( $language, 0, 2 ) );
         if ( in_array( $base, [ 'ja', 'zh', 'ko', 'th' ], true ) ) {
             $stripped = preg_replace( '/\s+/u', '', $text );
             $chars    = mb_strlen( $stripped ?? '' );
             return (int) round( $chars / 2 );
+        }
+        // v1.5.216.57 — language-agnostic Unicode counter for non-CJK scripts.
+        // Without this, str_word_count() — which is locale-dependent and ASCII-
+        // first — undercounts Cyrillic/Arabic/Hebrew/Greek/Devanagari posts.
+        if ( preg_match_all( '/[\p{L}\p{N}]+/u', $text, $m ) ) {
+            return count( $m[0] );
         }
         return str_word_count( $text );
     }

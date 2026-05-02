@@ -2721,7 +2721,10 @@ class Async_Generator {
             'keyword'       => $keyword,
             'geo_score'     => $score['geo_score'],
             'grade'         => $score['grade'],
-            'word_count'    => str_word_count( wp_strip_all_tags( $html ) ),
+            // v1.5.216.57 — language-aware so JA/ZH/KO/TH posts don't display 0
+            // (or a tiny number that just counts the embedded English brand
+            // names). GEO_Analyzer::count_words_lang() handles CJK via char-÷-2.
+            'word_count'    => GEO_Analyzer::count_words_lang( wp_strip_all_tags( $html ), $options['language'] ?? 'en' ),
             'model_used'    => 'async-chained',
             'suggestions'   => $suggestions,
             'checks'        => $score['checks'],

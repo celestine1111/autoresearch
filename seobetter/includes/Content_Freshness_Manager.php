@@ -219,7 +219,11 @@ class Content_Freshness_Manager {
             $modified_ts   = strtotime( $post->post_modified );
             $age_days      = max( 0, (int) round( ( $now - $modified_ts ) / DAY_IN_SECONDS ) );
             $text          = wp_strip_all_tags( $post->post_content );
-            $word_count    = str_word_count( $text );
+            // v1.5.216.57 — language-aware word count (was str_word_count, which
+            // returns ~0 for Japanese / Chinese / Korean / Thai because they
+            // have no inter-word spaces).
+            $post_lang     = (string) get_post_meta( $post->ID, '_seobetter_language', true ) ?: 'en';
+            $word_count    = GEO_Analyzer::count_words_lang( $text, $post_lang );
             $has_signal    = $this->has_freshness_signal( $post->post_content );
 
             // Outdated year mentions in the body — flag any year < (current - 1)
@@ -385,7 +389,9 @@ class Content_Freshness_Manager {
         $modified_ts   = strtotime( $post->post_modified );
         $age_days      = max( 0, (int) round( ( $now - $modified_ts ) / DAY_IN_SECONDS ) );
         $text          = wp_strip_all_tags( $post->post_content );
-        $word_count    = str_word_count( $text );
+        // v1.5.216.57 — language-aware word count for the diagnostic header.
+        $post_lang     = (string) get_post_meta( $post_id, '_seobetter_language', true ) ?: 'en';
+        $word_count    = GEO_Analyzer::count_words_lang( $text, $post_lang );
         $has_signal    = $this->has_freshness_signal( $post->post_content );
 
         // Year mention scan + per-occurrence snippets (~80 chars context window)

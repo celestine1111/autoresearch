@@ -7,12 +7,70 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.56)
+> **Last updated:** 2026-05-02 (v1.5.216.57)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.57 — Multilingual word count: stop showing "260 Words" for 4000-char Japanese articles
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+Live test on staging:
+- Generated EN article "Best SEO Tools for WordPress 2026" → result panel reports **1375 Words** ✓
+- Generated JA article "5選！2026年に最適なWordPress用…" → result panel reports **260 Words** ❌
+
+The JA article actually contains 4078 Japanese characters + 259 English brand names. By the typical CJK heuristic (1 char ≈ 0.5 English words), that's ~2300 word-equivalents — legitimately a 2000-word article. But the plugin showed "260 Words" because `str_word_count()` only counts ASCII whitespace-separated tokens. So users see a giant red flag ("CONTENT TOO SHORT") on perfectly good multilingual articles.
+
+Same false signal lurks in:
+- Content Freshness inventory `word_count` column
+- Why? drawer / Freshness metabox tab header (`1953 words · 10d`)
+
+`GEO_Analyzer::count_words_lang()` already exists (private static, added v1.5.206d) and correctly handles JA/ZH/KO/TH via char-÷-2 heuristic. But it was only used inside `analyze()` — every other site still called `str_word_count()`.
+
+### Fix
+
+**`includes/GEO_Analyzer.php::count_words_lang()`:**
+- Promoted from `private` → `public static` (was an internal helper; now a shared utility)
+- Added Unicode-aware fallback for Latin-script non-English (Cyrillic, Greek, Arabic, Hebrew, Devanagari): `preg_match_all('/[\p{L}\p{N}]+/u', ...)`. Without this, `str_word_count()` undercounts non-ASCII Latin-script posts because it's locale-dependent
+
+**Replaced `str_word_count()` with `GEO_Analyzer::count_words_lang()` in user-facing surfaces:**
+- `Async_Generator::assemble_final()` line ~2724 — the "X Words" stat in the result panel after generation
+- `Content_Freshness_Manager::get_inventory()` line ~225 — the Words column on the Freshness page table
+- `Content_Freshness_Manager::diagnostic_for_post()` line ~393 — the `1953 words · 10d` header in the Why? drawer / metabox tab / sidebar
+- `seobetter.php::rest_re_analyze` line ~2494 — re-analyze endpoint after Inject/Rewrite
+
+All sites pass `_seobetter_language` post meta (or `$options['language']` in fresh generation) so the heuristic picks the right path.
+
+### NOT changed (deliberately)
+
+- `CORE_EEAT_Auditor` thresholds (E09 ≥1000 words, Ept07 ≥800 words, R02 citations-per-500). These run inside the analyzer pipeline where language is harder to thread; they're scoring rubric internals, not user-displayed counts. Filed as v1.5.216.58+ follow-up if scoring drift is observed on JA/ZH posts
+- `Content_Refresher`'s prompt string ("article is X words") — only used by the unwired Pro+ Refresher flow
+- Internal `keyword` length checks in Async_Generator line 511 — hits 2-12 word range, English-keyword-specific by design
+
+### Verify
+
+```bash
+grep -n "GEO_Analyzer::count_words_lang\|count_words_lang" seobetter/includes/Async_Generator.php seobetter/includes/Content_Freshness_Manager.php seobetter/includes/GEO_Analyzer.php seobetter/seobetter.php
+```
+
+End-to-end test (live):
+1. JA post 390 BEFORE: `word_count: 260` (str_word_count output)
+2. AFTER: should be ~2000+ (CJK char-÷-2)
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline edits — same scoring formulae, just measured correctly now
+
+**Verified by user:** UNTESTED
 
 ---
 
