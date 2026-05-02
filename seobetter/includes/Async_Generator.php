@@ -2663,14 +2663,52 @@ class Async_Generator {
         // where banned phrases REALLY get killed. Operates on both
         // $markdown and $html since callers use both (preview shows
         // markdown, save uses html).
+        //
+        // v1.5.216.48 — extended: scrub also covers headlines, meta
+        // (title/description/og_title), and the keyword field returned
+        // to the client. Pre-fix the body was clean but the title (which
+        // becomes the WP post_title at save time) leaked banned phrases
+        // when the user's keyword itself contained them. Now every
+        // user-facing string in the response goes through the scrub.
+        $stripped_md = $stripped_html = $stripped_extra = 0;
         if ( $brand_voice_id !== '' ) {
             [ $markdown, $stripped_md ] = Brand_Voice_Manager::scrub_banned_phrases( $markdown, $brand_voice_id );
             [ $html, $stripped_html ]   = Brand_Voice_Manager::scrub_banned_phrases( $html, $brand_voice_id );
-            if ( $stripped_md > 0 || $stripped_html > 0 ) {
+
+            // Scrub headlines array (each entry is a candidate post title)
+            $headlines_in = is_array( $job['results']['headlines'] ?? null ) ? $job['results']['headlines'] : [];
+            $headlines_out = [];
+            foreach ( $headlines_in as $h ) {
+                if ( ! is_string( $h ) ) { $headlines_out[] = $h; continue; }
+                [ $hh, $hs ] = Brand_Voice_Manager::scrub_banned_phrases( $h, $brand_voice_id );
+                $stripped_extra += $hs;
+                // Trim collapsed double-spaces left after word removal
+                $headlines_out[] = trim( preg_replace( '/\s+/', ' ', $hh ) ?? $hh );
+            }
+            $job['results']['headlines'] = $headlines_out;
+
+            // Scrub meta (title / description / og_title — used by SEO plugins on save)
+            $meta_in = is_array( $job['results']['meta'] ?? null ) ? $job['results']['meta'] : [];
+            foreach ( [ 'title', 'description', 'og_title', 'og_description', 'twitter_title', 'twitter_description' ] as $field ) {
+                if ( ! empty( $meta_in[ $field ] ) && is_string( $meta_in[ $field ] ) ) {
+                    [ $cleaned, $ms ] = Brand_Voice_Manager::scrub_banned_phrases( $meta_in[ $field ], $brand_voice_id );
+                    $stripped_extra += $ms;
+                    $meta_in[ $field ] = trim( preg_replace( '/\s+/', ' ', $cleaned ) ?? $cleaned );
+                }
+            }
+            $job['results']['meta'] = $meta_in;
+
+            // Scrub keyword too (some downstream paths use it for alt text + page title fallbacks)
+            [ $keyword_clean, $kw_stripped ] = Brand_Voice_Manager::scrub_banned_phrases( $keyword, $brand_voice_id );
+            $stripped_extra += $kw_stripped;
+            $keyword = trim( preg_replace( '/\s+/', ' ', $keyword_clean ) ?? $keyword_clean );
+
+            if ( $stripped_md > 0 || $stripped_html > 0 || $stripped_extra > 0 ) {
                 error_log( sprintf(
-                    'SEOBetter Brand_Voice_Manager (late pass): scrubbed %d markdown + %d html banned-phrase instance(s) (voice_id=%s)',
+                    'SEOBetter Brand_Voice_Manager (late pass): scrubbed %d markdown + %d html + %d title/meta/keyword instance(s) (voice_id=%s)',
                     $stripped_md,
                     $stripped_html,
+                    $stripped_extra,
                     $brand_voice_id
                 ) );
             }

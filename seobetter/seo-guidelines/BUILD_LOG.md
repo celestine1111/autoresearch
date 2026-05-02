@@ -7,12 +7,61 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.47)
+> **Last updated:** 2026-05-02 (v1.5.216.48)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.48 — Brand Voice scrub: also clean title / meta / keyword
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+v47 stress test confirmed body scrub works (0 hits in 14KB markdown + 39KB html). But the result panel showed:
+
+> Title: "How-to guide: how to track seo data month over month in 2026"
+
+The title contains both banned phrases. Source: `_seobetterDraft.title` is computed client-side from `res.headlines[0]` (or fallback to `res.keyword`). These fields come back from the server unscrubbed — the late-pass scrub in v47 only operated on `$markdown` and `$html`. On save, this title becomes the WP `post_title` → leak persists into the published article's `<title>` tag, breadcrumbs, RSS feed, social shares, etc.
+
+### Fix
+
+Extended the v47 late-pass scrub to also clean:
+
+- `headlines` array — every candidate post-title string. Frontend uses `res.headlines[0]` as the default save title
+- `meta.title`, `meta.description`, `meta.og_title`, `meta.og_description`, `meta.twitter_title`, `meta.twitter_description` — all SEO/social plugin fields populated via `_seobetterDraft` on save
+- `keyword` — used as alt-text seed in some fallback paths and surfaces in the result panel
+
+Each cleaned field also runs through `preg_replace('/\s+/', ' ', $x)` + `trim()` to collapse the double-spaces left where banned words got stripped (so titles don't end up looking like `"how to track seo  over  in 2026"`).
+
+Log line extended: `(late pass): scrubbed N markdown + M html + K title/meta/keyword instance(s)`.
+
+### Verify (file:method anchors)
+
+```bash
+grep -n "scrub_banned_phrases\|stripped_extra" seobetter/includes/Async_Generator.php
+# Should show 5 calls in the late-pass block: html + markdown + headlines (loop) + meta (loop) + keyword
+```
+
+### Live test plan
+
+Re-run the v47 stress test (same keyword "how to track seo data month over month in 2026" + SEO Website voice with banned [data, month]):
+1. Generate
+2. Check the result panel title — should not contain "data" or "month"
+3. Click Save Draft — verify the saved post's title in WP admin doesn't contain banned phrases
+4. debug.log shows `K=4+ title/meta/keyword instance(s)` (1 keyword + 3 headlines + likely 0-1 meta titles all containing banned words)
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — this extends the fix from v47, same code path, same bug class
+
+**Verified by user:** UNTESTED
 
 ---
 
