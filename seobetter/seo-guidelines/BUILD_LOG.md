@@ -19,7 +19,7 @@
 ## v1.5.216.61 — Citation_Pool topical filter Unicode awareness (Bug #1 next-layer fix)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `7723117`
 
 ### Bug
 
