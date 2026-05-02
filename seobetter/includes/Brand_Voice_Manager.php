@@ -206,8 +206,23 @@ class Brand_Voice_Manager {
         $count = 0;
         foreach ( $voice['banned_phrases'] as $phrase ) {
             if ( $phrase === '' ) continue;
-            // Word-boundary regex, case-insensitive, multibyte-safe
-            $pattern = '/\b' . preg_quote( $phrase, '/' ) . '\b/iu';
+            // v1.5.216.49 — Unicode-aware word boundaries.
+            //
+            // Before: '/\b' . preg_quote(...) . '\b/iu' — PHP's PCRE treats
+            // \b as ASCII-only even with the u flag. Non-ASCII letters are
+            // classified as non-word, so \b never triggered around Cyrillic /
+            // Greek / Arabic / Hebrew / CJK / Devanagari / Thai etc. Result:
+            // banned phrases in those scripts silently went unscrubbed.
+            // Plugin advertises 60+ languages; this affected ~half of them.
+            //
+            // After: lookaround on \p{L}\p{N}_ — Unicode letter / digit /
+            // underscore. Works for every alphabetic script. CJK still has
+            // the inherent limitation that words run together without
+            // separators, so this matches when the banned phrase is on a
+            // punctuation/whitespace boundary; can miss when embedded
+            // inside continuous CJK text (rare for user-defined banned
+            // phrases — they're typically set as standalone words).
+            $pattern = '/(?<![\p{L}\p{N}_])' . preg_quote( $phrase, '/' ) . '(?![\p{L}\p{N}_])/iu';
             $content = preg_replace_callback(
                 $pattern,
                 function ( $m ) use ( &$count ) {

@@ -7,12 +7,77 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-02 (v1.5.216.48)
+> **Last updated:** 2026-05-02 (v1.5.216.49)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.49 — Brand Voice scrub: Unicode-aware word boundaries (60+ language fix)
+
+**Date:** 2026-05-02
+**Commit:** `[pending]`
+
+### Bug
+
+`Brand_Voice_Manager::scrub_banned_phrases()` regex was `/\b{phrase}\b/iu`. PHP's PCRE treats `\b` as ASCII-only even with the `u` flag — non-ASCII letters are classified as non-word characters, so `\b` never triggers around them. Result: banned phrases in non-Latin scripts silently went unscrubbed.
+
+Affected scripts (~half the supported languages):
+- Cyrillic (Russian, Ukrainian, Bulgarian, Serbian)
+- Greek
+- Arabic, Hebrew (RTL)
+- Chinese, Japanese, Korean (CJK)
+- Thai
+- Devanagari (Hindi)
+- Many other non-Latin scripts
+
+The plugin advertises 60+ languages and the AI prompt fragment (`get_prompt_fragment()`) tells the AI to avoid the phrases regardless of language. So the prompt-injection layer worked fine. The post-process safety-net layer (this scrub) silently no-op'd for non-Latin users.
+
+### Fix
+
+Replaced `\b...\b` with Unicode-aware lookarounds:
+
+```php
+// Before
+$pattern = '/\b' . preg_quote( $phrase, '/' ) . '\b/iu';
+
+// After
+$pattern = '/(?<![\p{L}\p{N}_])' . preg_quote( $phrase, '/' ) . '(?![\p{L}\p{N}_])/iu';
+```
+
+`\p{L}` matches any Unicode letter (any script), `\p{N}` any Unicode digit. The lookbehind/lookahead asserts neither side is a letter / digit / underscore — a true Unicode word boundary. Works for every alphabetic script.
+
+### CJK limitation (documented, not a regression)
+
+CJK text typically runs together without inter-word separators. The lookaround fix matches when the banned phrase appears on a punctuation or whitespace boundary; it can miss when the phrase is embedded inside continuous CJK text. This matches typical usage — users define banned phrases as standalone words, and AI generation places them with surrounding punctuation/whitespace per natural sentence structure. The early-pass + late-pass scrub double-protection in v47/v48 + the prompt-fragment instruction collectively cover this case. A "substring mode" toggle for CJK is a Phase 2 consideration if any user reports leakage.
+
+### Verify (file:method anchors)
+
+```bash
+grep -n "p{L}\\\\p{N}_" seobetter/includes/Brand_Voice_Manager.php
+# Should show the new pattern in scrub_banned_phrases()
+```
+
+### Live test plan
+
+User added foreign-language banned phrases to "SEO Website" voice:
+- `данные`, `месяц` (Russian)
+- `データ`, `月` (Japanese)
+- `数据` (Chinese)
+- `바이트` (Korean)
+- `بيانات` (Arabic)
+
+Test by generating articles in Russian + Japanese with that voice → none of those words should appear in title, meta, body, or alt text. debug.log should show non-zero scrub count.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No other guideline updates — this is a regex correctness fix in already-shipped feature
+
+**Verified by user:** UNTESTED
 
 ---
 
