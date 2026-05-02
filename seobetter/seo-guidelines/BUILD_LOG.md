@@ -19,7 +19,7 @@
 ## v1.5.216.49 — Brand Voice scrub: Unicode-aware word boundaries (60+ language fix)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `533c2ff`
 
 ### Bug
 
