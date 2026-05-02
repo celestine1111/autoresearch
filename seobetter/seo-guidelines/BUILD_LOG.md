@@ -19,7 +19,7 @@
 ## v1.5.216.56 — Freshness Diagnostic multilingual fix (false-positive on non-English posts)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `de2b6c0`
 
 ### Bug
 
