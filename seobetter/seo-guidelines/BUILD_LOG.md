@@ -7,12 +7,84 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62)
+> **Last updated:** 2026-05-03 (v1.5.216.62.1)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.1 — cloud-api function consolidation (Vercel Hobby tier fit)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+v62 added 6 new cloud-api endpoints (`privacy.js`, `terms.js`, `gsc-oauth/{start,callback,exchange,refresh}.js`), pushing public-function count to 14. Vercel Hobby plan caps a Deployment at 12 serverless functions — cloud-api could no longer redeploy. User hit this immediately on first push: *"No more than 12 Serverless Functions can be added to a Deployment on the Hobby plan."*
+
+### Fix
+
+Two architectural cleanups dropping cloud-api to **9 public functions**:
+
+**Consolidate gsc-oauth into single dynamic route**
+- Before: `gsc-oauth/{start.js, callback.js, exchange.js, refresh.js}` (4 separate functions)
+- After: `gsc-oauth/[action].js` — Vercel dynamic route maps `/api/gsc-oauth/<path>` to this single file with the path segment available as `req.query.action`. Internal switch dispatches to `handleStart` / `handleCallback` / `handleExchange` / `handleRefresh`
+- External URLs unchanged: `/api/gsc-oauth/start`, `/api/gsc-oauth/callback`, etc. continue to work — plugin code didn't need updates
+- Saves 3 function slots
+
+**Delete redundant Cloud-API privacy + terms endpoints**
+- `cloud-api/api/privacy.js` and `cloud-api/api/terms.js` were a stopgap added in v62 because seobetter.com wasn't live. Now that seobetter.com hosts the static pages at `/privacy` and `/terms` (deployed via website-holding/), the cloud-api versions are duplicates
+- Saves 2 function slots
+- Google OAuth Console should now point at `seobetter.com/privacy` + `seobetter.com/terms` (which is the right canonical anyway — brand-coherent vs proxy-domain URLs)
+
+### Cloud-api public function inventory (post-fix)
+
+```
+cloud-api/api/content-brief.js
+cloud-api/api/generate.js
+cloud-api/api/pexels.js
+cloud-api/api/research.js
+cloud-api/api/scrape.js
+cloud-api/api/topic-research.js
+cloud-api/api/translate-headings.js
+cloud-api/api/validate.js
+cloud-api/api/gsc-oauth/[action].js
+```
+
+= **9 functions.** Three slots of headroom under the 12-function limit for future endpoints.
+
+`_auth.js`, `_bm25_util.js`, `_upstash.js`, and `gsc-oauth/_helpers.js` are private (underscore-prefixed) and don't count toward the function limit.
+
+### Verify
+
+```bash
+# File inventory should show 9 public + private helpers
+find seobetter/cloud-api/api -name "*.js" ! -name "_*" | sort | wc -l
+# Expected: 9
+
+# Dynamic route handler exists
+grep -n "switch (action)\|handleStart\|handleCallback\|handleExchange\|handleRefresh" seobetter/cloud-api/api/gsc-oauth/[action].js
+
+# Old per-route files removed
+ls seobetter/cloud-api/api/gsc-oauth/start.js 2>/dev/null && echo BAD || echo OK
+ls seobetter/cloud-api/api/privacy.js 2>/dev/null && echo BAD || echo OK
+```
+
+After Vercel auto-redeploys cloud-api on this push, all four URLs (`/api/gsc-oauth/start`, `/callback`, `/exchange`, `/refresh`) should respond identically to before — verified by hitting `/start?return_url=…&pstate=…` and confirming a 302 redirect to `accounts.google.com/o/oauth2/v2/auth`.
+
+### No plugin changes needed
+
+The plugin already calls these URLs via `Cloud_API::get_cloud_url() . '/api/gsc-oauth/start'` etc. — Vercel routing translates that into the single `[action].js` handler transparently. Zero plugin code changes.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No `pro-features-ideas.md` change — this is an infrastructure consolidation under the v62 entry; the v62 BLOCKER is still "shipped — verification pending"
+
+**Verified by user:** UNTESTED (cannot fully verify until Vercel auto-redeploys after this push lands)
 
 ---
 
