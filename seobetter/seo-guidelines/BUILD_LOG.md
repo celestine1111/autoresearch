@@ -19,7 +19,7 @@
 ## v1.5.216.54 — Freshness Diagnostic ("Why?" drawer + metabox tab + Gutenberg sidebar mirror)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `335e183`
 
 ### Why
 
