@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.2
+ * Version: 1.5.216.62.3
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.2' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.3' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -1642,26 +1642,38 @@ final class SEOBetter {
         $state  = sanitize_text_field( (string) $request->get_param( 'state' ) );
         $err    = sanitize_text_field( (string) $request->get_param( 'error' ) );
 
-        $settings_url = admin_url( 'admin.php?page=seobetter-settings' );
+        // v1.5.216.62.3 — land on the Research & Integrations tab where the
+        // GSC card lives, with a #gsc anchor so the browser scrolls to it.
+        // Pre-fix the redirect went to the default License & Account tab and
+        // the user had to hunt for the Connected status.
+        $settings_url = admin_url( 'admin.php?page=seobetter-settings&tab=research_integrations' );
+
+        // v1.5.216.62.3 — Helper that appends our flash params AND the #gsc
+        // fragment so the browser scrolls to the GSC card on the Research &
+        // Integrations tab. add_query_arg strips fragments, so we append
+        // manually after.
+        $build_redirect = function ( array $args ) use ( $settings_url ) {
+            return add_query_arg( $args, $settings_url ) . '#gsc';
+        };
 
         // User clicked "Cancel" or denied access on Google's consent screen
         if ( $err !== '' ) {
-            wp_safe_redirect( add_query_arg( [ 'gsc' => 'error', 'msg' => rawurlencode( $err ) ], $settings_url ) );
+            wp_safe_redirect( $build_redirect( [ 'gsc' => 'error', 'msg' => rawurlencode( $err ) ] ) );
             exit;
         }
 
         // Pickup (proxy mode) takes precedence; fall back to code (BYO mode)
         $token_param = $pickup !== '' ? $pickup : $code;
         if ( $token_param === '' || $state === '' ) {
-            wp_safe_redirect( add_query_arg( [ 'gsc' => 'error', 'msg' => rawurlencode( 'missing pickup/code or state' ) ], $settings_url ) );
+            wp_safe_redirect( $build_redirect( [ 'gsc' => 'error', 'msg' => rawurlencode( 'missing pickup/code or state' ) ] ) );
             exit;
         }
 
         $result = SEOBetter\GSC_Manager::handle_oauth_callback( $token_param, $state );
         if ( ! empty( $result['success'] ) ) {
-            wp_safe_redirect( add_query_arg( [ 'gsc' => 'connected', 'email' => rawurlencode( (string) ( $result['email'] ?? '' ) ) ], $settings_url ) );
+            wp_safe_redirect( $build_redirect( [ 'gsc' => 'connected', 'email' => rawurlencode( (string) ( $result['email'] ?? '' ) ) ] ) );
         } else {
-            wp_safe_redirect( add_query_arg( [ 'gsc' => 'error', 'msg' => rawurlencode( (string) ( $result['error'] ?? 'unknown' ) ) ], $settings_url ) );
+            wp_safe_redirect( $build_redirect( [ 'gsc' => 'error', 'msg' => rawurlencode( (string) ( $result['error'] ?? 'unknown' ) ) ] ) );
         }
         exit;
     }

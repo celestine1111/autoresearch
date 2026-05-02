@@ -1030,7 +1030,7 @@ $gsc_flash = sanitize_text_field( $_GET['gsc'] ?? '' );
 $gsc_flash_msg = sanitize_text_field( $_GET['msg'] ?? '' );
 $gsc_flash_email = sanitize_email( urldecode( $_GET['email'] ?? '' ) );
 ?>
-<div class="seobetter-card" style="margin-top:24px;margin-bottom:20px">
+<div id="gsc" class="seobetter-card" style="margin-top:24px;margin-bottom:20px">
     <h2><?php esc_html_e( 'Google Search Console', 'seobetter' ); ?>
         <span class="seobetter-score seobetter-score-<?php echo $gsc_status['connected'] ? 'good' : 'ok'; ?>" style="font-size:11px;margin-left:8px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase">
             <?php

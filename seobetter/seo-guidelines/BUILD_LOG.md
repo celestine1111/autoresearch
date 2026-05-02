@@ -7,12 +7,58 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.2)
+> **Last updated:** 2026-05-03 (v1.5.216.62.3)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.3 — GSC OAuth callback redirects to the right tab + scrolls to GSC card
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Bug
+
+User reported: after completing the GSC OAuth flow, the post-callback redirect lands on the default **License & Account** tab of the Settings page, not on the **Research & Integrations** tab where the GSC card actually lives. The user has to manually click the right tab + scroll down to find the "Connected as your-email" confirmation. Hidden success.
+
+### Fix
+
+`seobetter.php::rest_gsc_oauth_callback`:
+
+- Settings URL changed from `admin.php?page=seobetter-settings` to `admin.php?page=seobetter-settings&tab=research_integrations` so the redirect lands on the right tab
+- Added `#gsc` fragment to the redirect so the browser scrolls to the GSC card. `add_query_arg()` strips fragments, so a small `$build_redirect` closure was added to append `#gsc` after `add_query_arg()` runs
+- All four redirect paths (Cancel, missing-params, success, error) use the same helper
+
+`admin/views/settings.php`:
+
+- Added `id="gsc"` to the GSC card's outer `<div>` so the browser has a target for the `#gsc` fragment to scroll to
+
+### Coverage
+
+- Connect success → lands on Research & Integrations tab, scrolled to GSC card showing "✓ Connected as user@gmail.com"
+- Connect cancelled at Google → same tab, error notice on the GSC card
+- Pickup-token failure → same tab, error notice
+- Generic OAuth error → same tab, error notice
+
+### Verify
+
+```bash
+grep -n "tab=research_integrations\|build_redirect\|#gsc" seobetter/seobetter.php
+grep -n 'id="gsc"' seobetter/admin/views/settings.php
+```
+
+End-to-end: complete OAuth flow on staging — should land directly on the GSC card with the connected status highlighted, no manual tab clicking.
+
+### Co-doc updates
+
+- BUILD_LOG: this entry
+- No `plugin_UX.md` change — the redirect target is internal behavior, not a documented UI surface
+
+**Verified by user:** UNTESTED (will be verified on next OAuth round-trip)
 
 ---
 
