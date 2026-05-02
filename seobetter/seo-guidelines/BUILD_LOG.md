@@ -19,7 +19,7 @@
 ## v1.5.216.55 — Freshness Diagnostic UX fixes (severity words + inline snippets + primary CTA)
 
 **Date:** 2026-05-02
-**Commit:** `[pending]`
+**Commit:** `4b76ad7`
 
 ### User feedback after v54
 
