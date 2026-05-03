@@ -19,7 +19,7 @@
 ## v1.5.216.62.25 — Rich Results metabox tile cleanup pass 2 (drop 11 will-never-fire tiles, 24 → 13)
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `f95e55b`
 
 ### Why
 
