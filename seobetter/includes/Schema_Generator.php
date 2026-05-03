@@ -367,6 +367,11 @@ class Schema_Generator {
         'blog_post', 'how_to', 'listicle', 'review', 'comparison', 'buying_guide',
         'recipe', 'news_article', 'opinion', 'tech_article', 'white_paper',
         'scholarly_article', 'glossary_definition', 'case_study', 'interview', 'pillar_guide',
+        // v1.5.216.62.19 — added per schema-audit Bug 3. Press release prose template
+        // (v1.5.195) explicitly tells the AI to write "FAQ (2-3 Q&A)"; without
+        // press_release in FAQ_TYPES, those Q&A pairs were never wrapped in FAQPage
+        // schema, losing the secondary rich-result lane.
+        'press_release',
     ];
     // Content types that get ItemList
     private const ITEMLIST_TYPES = [ 'listicle', 'buying_guide', 'pillar_guide' ];
@@ -701,7 +706,8 @@ class Schema_Generator {
         ];
 
         if ( $thumbnail ) {
-            $schema['image'] = $thumbnail;
+            // v1.5.216.62.19 — schema-audit Bug 6: 3-array image for richer carousel + Discover surfaces
+            $schema['image'] = [ $thumbnail, $thumbnail, $thumbnail ];
         }
 
         // v1.5.118 — Speakable for voice assistants (US English, news/blog content)
@@ -1000,7 +1006,8 @@ class Schema_Generator {
         ];
 
         if ( $thumbnail ) {
-            $schema['image'] = $thumbnail;
+            // v1.5.216.62.19 — schema-audit Bug 6: 3-array image for richer carousel + Discover surfaces
+            $schema['image'] = [ $thumbnail, $thumbnail, $thumbnail ];
         }
 
         return $schema;
@@ -2276,7 +2283,12 @@ class Schema_Generator {
      * Single best-answer format (different from FAQPage which has multiple Q&As).
      */
     private function detect_qa_schema( \WP_Post $post, string $content, string $content_type ): ?array {
-        if ( ! in_array( $content_type, [ 'interview', 'faq_page' ], true ) ) {
+        // v1.5.216.62.19 — schema-audit Bug 4: removed 'faq_page' from this list.
+        // faq_page's primary @type is already FAQPage; emitting QAPage as a secondary
+        // node creates duplicate Q&A signal that confuses Google Rich Results.
+        // structured-data.md §5 line 380 + SEO-GEO-AI-GUIDELINES.md §10.3 line 781
+        // both list FAQPage's secondaries as BreadcrumbList + Speakable only.
+        if ( $content_type !== 'interview' ) {
             return null;
         }
         // Find the first Q&A pair (question heading + answer paragraph)

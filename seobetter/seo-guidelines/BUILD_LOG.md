@@ -7,12 +7,81 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.18)
+> **Last updated:** 2026-05-03 (v1.5.216.62.19)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.19 — Schema audit quick fixes (Bug 3 / 4 / 6)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+Schema audit agent ran a comprehensive sweep of `Schema_Generator.php` against `structured-data.md` + `SEO-GEO-AI-GUIDELINES.md` §10. Found 11 bugs/drifts across 21 content types. Ranked by impact: 2 CRITICAL (Bug 1 live_blog liveBlogUpdate[] missing, Bug 2 recipe ItemList carousel for ≥3 recipes), 4 HIGH, 5 MEDIUM/LOW.
+
+This commit ships the 3 quick-win 1-3 line fixes from the HIGH category. Remaining 8 items staged for v62.20+ (live_blog needs a new builder; recipe-carousel needs detection logic; rest are polish).
+
+### Fixes
+
+**Bug 3 — press_release missing FAQPage secondary** ([Schema_Generator.php:366-370](../includes/Schema_Generator.php))
+- v1.5.195 prose template explicitly tells AI to write "FAQ (2-3 Q&A)" for press releases
+- But `press_release` was NOT in `FAQ_TYPES` constant, so any FAQ section emitted got no FAQPage schema wrapper
+- **Fix:** added `'press_release'` to FAQ_TYPES array
+
+**Bug 4 — faq_page incorrectly emits QAPage as secondary** ([Schema_Generator.php::detect_qa_schema()](../includes/Schema_Generator.php) ~line 2283)
+- `detect_qa_schema()` fired for both `interview` AND `faq_page`
+- But faq_page's primary @type is already `FAQPage` — adding QAPage as secondary creates duplicate Q&A signal
+- structured-data.md §5 + SEO-GEO-AI-GUIDELINES.md §10.3 both say faq_page secondaries = `BreadcrumbList, Speakable` only
+- **Fix:** changed condition from `in_array($content_type, ['interview', 'faq_page'])` to `$content_type !== 'interview'`
+
+**Bug 6 — Article-family schemas emit single-string image while Recipe/Review emit 3-array** ([Schema_Generator.php:708](../includes/Schema_Generator.php))
+- structured-data.md line 102 says Google prefers multiple ratios (16:9 / 4:3 / 1:1)
+- build_article (line 708), build_recipe wrapper (line 1007), and one build_review variant (line 1317) emitted `$schema['image'] = $thumbnail` — single string
+- build_review main path (line 1513) already correctly emits `[$thumbnail, $thumbnail, $thumbnail]`
+- **Fix:** all 3 single-string sites now emit 3-element array (parity)
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — schema generation is content-agnostic |
+| ALL 21 content types? | ✅ Bug 3 fixes press_release; Bug 4 fixes faq_page; Bug 6 fixes blog_post/news/opinion/how_to/listicle/comparison/buying_guide/recipe wrapper/review/tech_article/white_paper/scholarly/case_study/interview/pillar_guide/personal_essay/sponsored (every type that uses build_article path) |
+| ALL AI models? | ✅ Schema is post-AI rendering |
+| ALL languages? | ✅ Image arrays + FAQPage are language-agnostic |
+
+### Verify
+
+```bash
+grep -nA 6 "FAQ_TYPES = \[" seobetter/includes/Schema_Generator.php | head -10
+# Should show 'press_release' in the array
+
+grep -nA 5 "function detect_qa_schema" seobetter/includes/Schema_Generator.php | head -10
+# Should show $content_type !== 'interview' guard, NOT in_array(...) check
+
+grep -n "\[ \$thumbnail, \$thumbnail, \$thumbnail \]" seobetter/includes/Schema_Generator.php
+# Should return 4 hits (was 1, now 4 — all 4 builders use 3-array)
+```
+
+**Test by user:** generate a press_release with a FAQ section + run Google Rich Results Test → confirms FAQPage is emitted alongside NewsArticle. Generate any default-profile article + confirm `image` field in JSON-LD is a 3-element array.
+
+### Remaining schema work staged for v62.20+
+
+- Bug 1 (CRITICAL): live_blog → build dedicated `build_live_blog()` with `liveBlogUpdate[]` + `coverageStartTime`/`coverageEndTime` extraction
+- Bug 2 (CRITICAL): recipe → emit ItemList carousel when 3+ recipes detected
+- Bug 5 (HIGH): SPEAKABLE_TYPES @type whitelist brittleness
+- Bug 9 (MEDIUM): detect_factcheck_schema over-broad firing on news_article/blog_post
+- Bug 10 (MEDIUM): detect_image_schemas author photo class-hint gaps
+- Bug 11 (MEDIUM): detect_product_schema requires currency-only signal — needs product-name AND
+- Drifts 12-17: doc-only sync between structured-data.md / SEO-GEO-AI-GUIDELINES.md / article_design.md
+- Bugs 7, 8 (parked, optional): scholarly_article enrichment + interview ProfilePage entity grounding
+
+**Verified by user:** UNTESTED
 
 ---
 
