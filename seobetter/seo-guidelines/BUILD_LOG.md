@@ -7,12 +7,105 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.30)
+> **Last updated:** 2026-05-04 (v1.5.216.62.31)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.31 — Schema Blocks UX overhaul (media picker · readable enum labels · save hint · required-field fix)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User started testing the v62.28 Gutenberg Schema Blocks and reported a stack of UX problems:
+
+1. **Image fields were plain URL text inputs** — no upload button, no Media Library picker. Forced users to host images elsewhere and paste URLs.
+2. **Select dropdowns showed Schema.org tokens** — "InStock" / "NewCondition" / "EventScheduled" / "OfflineEventAttendanceMode" / "FULL_TIME". Functional but cryptic to non-technical users.
+3. **No visible save button** — "i did product, then it showed in the editor, then when i refreshed the preview was lost". Users expected a per-block save button (the retired metabox panel had one). Gutenberg saves block attrs when the post is updated, but nothing in the block UI told users that.
+4. **Event block didn't preview** — placeholder stuck on "Fill in required fields: Start" even when start date was filled in. Root cause: JS was over-requiring fields beyond what PHP needed.
+5. **All fields were free text** — no input-type hints (currency dropdown, country picker, native date inputs, etc.).
+
+### Fix
+
+**1. Media Library picker for image fields** — `assets/js/schema-blocks.js`
+
+New `image` field type uses `wp.blockEditor.MediaUpload` + `MediaUploadCheck`. Renders a thumbnail preview of the current image plus "Upload / select image" / "Replace image" / "Remove" buttons. Falls back to a plain URL text input when MediaUpload is unavailable (extreme edge case — gated by MediaUploadCheck which respects user permissions). Applied to: Product · Event · Local Business · Vacation Rental image fields.
+
+The picker stores the selected image's URL in the block attribute (same string format as before — keeps PHP `build_*_jsonld()` and `render_*_card()` methods unchanged). No backend migration needed.
+
+**2. Schema.org tokens → plain English labels in selects** — `DEFS` object
+
+| Block | Field | Before (raw token) | After (label users see) |
+|---|---|---|---|
+| Product | availability | InStock / OutOfStock / PreOrder / BackOrder / Discontinued | In stock / Out of stock / Pre-order / Back-order / Discontinued |
+| Product | condition | NewCondition / UsedCondition / RefurbishedCondition | New / Used / Refurbished |
+| Product | currency | text | dropdown of 16 common currencies (USD / EUR / GBP / AUD / CAD / NZD / JPY / CNY / KRW / INR / BRL / MXN / CHF / SEK / NOK / DKK) |
+| Event | event_status | EventScheduled / EventPostponed / etc. | Scheduled / Postponed / Cancelled / Moved online / Rescheduled |
+| Event | attendance_mode | OfflineEventAttendanceMode / OnlineEventAttendanceMode / MixedEventAttendanceMode | In-person / Virtual / Hybrid (in-person + virtual) |
+| Local Business | business_type | LocalBusiness / Restaurant / BarOrPub / etc. | Local Business (generic) / Restaurant / Bar / Pub / etc. (40+ options with friendly labels) |
+| Job Posting | employment_type | FULL_TIME / PART_TIME / CONTRACTOR / TEMPORARY / INTERN / VOLUNTEER / PER_DIEM / OTHER | Full-time / Part-time / Contractor / Temporary / Internship / Volunteer / Per-diem / Other |
+| Job Posting | salary_unit | HOUR / DAY / WEEK / MONTH / YEAR | Per hour / Per day / Per week / Per month / Per year |
+
+The stored value is still the Schema.org token (e.g. selecting "In stock" stores `InStock`) so the JSON-LD validates against Schema.org / Google Rich Results Test. Only the user-visible label changes.
+
+The DEFS field-spec now accepts both the legacy plain-string options array AND the new `[{ value, label }, ...]` shape — backward compatible with anything else that consumed the schema.
+
+**3. Sticky "save" hint at the top of every block panel** — InspectorControls
+
+```
+ⓘ Block settings save when you click Update on the post (top right).
+   There is no per-block save button — that is normal Gutenberg behavior.
+```
+
+Rendered as a `wp.components.Notice` with `status='info'`. Resolves the recurring "where's the save button" complaint without inventing an unnatural button.
+
+**4. Required-fields warning banner** — InspectorControls
+
+When the block has missing required fields, a yellow `Notice` shows at the top of the panel listing them. Mirrors the existing placeholder text, but visible directly in the form so users see it while typing.
+
+**5. JS over-required-fields bug fixed** — DEFS
+
+The Event block's preview was stuck because JS required `location_name`, but the PHP `render_event_card()` only checks for `name` + `start_date`. JS placeholder logic was hiding the preview waiting for a field PHP didn't actually need. Same issue on LocalBusiness and VacationRental, where JS required `street_address` but PHP accepts `street_address` OR `locality`.
+
+Removed the JS-side `required: true` on `location_name` (event), `street_address` (localbusiness, vacationrental). PHP-side validation is now the single source of truth — if the PHP renderer can build a valid card from the supplied fields, the editor preview shows it.
+
+### What was NOT changed
+
+- Country field stays as text input (195 ISO countries × pure typing speed makes a select slow).
+- Latitude / longitude stay as text (specialized inputs are non-trivial; users with geo data have it).
+- PHP `Schema_Blocks_Manager` field defs and `build_*_jsonld()` methods unchanged — values stored are the same Schema.org tokens that pass validation.
+
+### Files
+
+- `assets/js/schema-blocks.js` — full rewrite with image field type, normalized options, save-hint Notice, required-warning Notice, JS over-required fixes.
+- `seobetter.php` version bump.
+
+### Verify
+
+```bash
+node --check /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js
+grep -n "case 'image'" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # new field type
+grep -n "MediaUpload" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js   # media picker wired
+grep -n "InStock\|NewCondition\|EventScheduled\|FULL_TIME" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # Schema.org tokens still stored as values
+```
+
+### Test plan
+
+For the user, after upload:
+1. Open any post → block inserter → SEOBetter → Product
+2. The "Image" field should show "Upload / select image" button (not a URL text input)
+3. The Currency dropdown should show "USD — US Dollar" etc. (not plain "USD")
+4. Availability dropdown should show "In stock" not "InStock"
+5. Insert Event block → fill in name + start_date → preview should now render (location_name no longer blocking)
+6. The InspectorControls panel should have a blue info Notice at the top: "Block settings save when you click Update on the post."
+
+**Verified by user:** UNTESTED
 
 ---
 
