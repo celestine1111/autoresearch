@@ -30,11 +30,18 @@ const MG_REGION   = (process.env.MAILGUN_REGION || 'us').toLowerCase();  // 'us'
 const EMAIL_TO    = process.env.EMAIL_TO   || 'mindiamaiweb@gmail.com';
 const EMAIL_FROM  = process.env.EMAIL_FROM || `SEOBetter Bot <bot@${MG_DOMAIN || 'mailgun.org'}>`;
 const OR_KEY        = process.env.OPENROUTER_API_KEY;
-const MODEL         = process.env.MODEL          || 'google/gemini-3-flash-lite-preview';
+const MODEL         = process.env.MODEL          || 'google/gemini-3.1-flash-lite-preview';
 // Hybrid routing — mentions / Loop 6 is the highest-leverage action (algo +75
 // signal + 150× distribution per playbook §0). Worth using a smarter model for
 // just those ~10% of runs. Falls back to MODEL if not set.
 const MODEL_MENTIONS = process.env.MODEL_MENTIONS || MODEL;
+
+// Optional residential proxy — recommended for VPS deployments since data-center
+// IPs sometimes get search results suppressed. Format: full URL incl scheme.
+// Example: PROXY_URL=http://proxy.iproyal.com:12321
+const PROXY_URL  = process.env.PROXY_URL || '';
+const PROXY_USER = process.env.PROXY_USER || '';
+const PROXY_PASS = process.env.PROXY_PASS || '';
 
 // Daily caps — per twitter-agent-prompt.md §9 daily limits
 const CAPS = {
@@ -168,67 +175,75 @@ function getDailyCount(action) {
 // =============================================================================
 // QUERY ROTATION (Loop 2 English + Loop 7 multilingual from §12.1, §12.3)
 // =============================================================================
+// Loosened in v1.0.1 — exact-phrase quotes had near-zero hit rate. X uses
+// space as AND, so multi-word queries still narrow the topic without forcing
+// verbatim phrasing. Dropped min_faves entirely; LLM scoring filters quality.
 const ENGLISH_QUERIES = [
-  '"how do I rank in ChatGPT" -is:retweet lang:en min_faves:1',
-  '"how to get cited by Perplexity" -is:retweet lang:en min_faves:1',
-  '"WordPress SEO plugin" "2026" -is:retweet lang:en',
-  '"best AI SEO tool" -is:retweet lang:en min_faves:1',
-  '"my traffic dropped" "AI Overview" -is:retweet lang:en',
-  '"switching from Yoast" -is:retweet lang:en',
-  '"alternative to RankMath" -is:retweet lang:en',
-  '"GEO optimization" -is:retweet lang:en min_faves:2',
-  '"generative engine optimization" -is:retweet lang:en',
-  '"rank in AI search" -is:retweet lang:en',
-  '"AI Overviews killed" -is:retweet lang:en min_faves:1',
-  '"Yoast vs RankMath" -is:retweet lang:en',
-  '"is SEO dead" -is:retweet lang:en',
-  '"Perplexity citations" -is:retweet lang:en',
-  '"schema markup WordPress" -is:retweet lang:en',
-  '"AI search optimization" -is:retweet lang:en',
-  '"AppSumo SEO" -is:retweet lang:en',
+  'rank ChatGPT WordPress -is:retweet lang:en',
+  'cited Perplexity SEO -is:retweet lang:en',
+  'WordPress SEO plugin -is:retweet lang:en',
+  'best AI SEO -is:retweet lang:en',
+  'AI Overview traffic dropped -is:retweet lang:en',
+  'switching Yoast -is:retweet lang:en',
+  'RankMath alternative -is:retweet lang:en',
+  'GEO optimization -is:retweet lang:en',
+  'generative engine optimization -is:retweet lang:en',
+  'rank AI search -is:retweet lang:en',
+  'AI Overviews killed -is:retweet lang:en',
+  'Yoast RankMath -is:retweet lang:en',
+  'is SEO dead -is:retweet lang:en',
+  'Perplexity citation -is:retweet lang:en',
+  'schema markup WordPress -is:retweet lang:en',
+  'AI search optimization -is:retweet lang:en',
+  'AppSumo SEO -is:retweet lang:en',
+  'ChatGPT search ranking -is:retweet lang:en',
+  'AI Overview SEO -is:retweet lang:en',
+  'WordPress AI plugin -is:retweet lang:en',
 ];
 
+// Loosened in v1.0.1 — same reasoning as ENGLISH_QUERIES. Multi-word AND
+// queries narrow the topic without forcing exact phrasing.
 const MULTILINGUAL_QUERIES = [
   // Japanese
-  { q: '"WordPress SEO" "プラグイン" -is:retweet lang:ja', lang: 'ja' },
-  { q: '"AI検索" "対策" -is:retweet lang:ja',              lang: 'ja' },
-  { q: '"Yoast" "代替" -is:retweet lang:ja',                lang: 'ja' },
+  { q: 'WordPress SEO プラグイン -is:retweet lang:ja', lang: 'ja' },
+  { q: 'AI検索 対策 -is:retweet lang:ja',               lang: 'ja' },
+  { q: 'Yoast 代替 -is:retweet lang:ja',                 lang: 'ja' },
   // Spanish
-  { q: '"mejor plugin SEO" "WordPress" -is:retweet lang:es', lang: 'es' },
-  { q: '"cómo aparecer" "ChatGPT" -is:retweet lang:es',      lang: 'es' },
-  { q: '"alternativa a Yoast" -is:retweet lang:es',          lang: 'es' },
+  { q: 'plugin SEO WordPress -is:retweet lang:es', lang: 'es' },
+  { q: 'ChatGPT aparecer SEO -is:retweet lang:es',  lang: 'es' },
+  { q: 'alternativa Yoast -is:retweet lang:es',     lang: 'es' },
   // Portuguese
-  { q: '"melhor plugin SEO" "WordPress" -is:retweet lang:pt', lang: 'pt' },
-  { q: '"como aparecer" "ChatGPT" -is:retweet lang:pt',       lang: 'pt' },
+  { q: 'plugin SEO WordPress -is:retweet lang:pt', lang: 'pt' },
+  { q: 'ChatGPT aparecer SEO -is:retweet lang:pt',  lang: 'pt' },
   // German
-  { q: '"WordPress SEO Plugin" "Empfehlung" -is:retweet lang:de', lang: 'de' },
-  { q: '"in ChatGPT erscheinen" -is:retweet lang:de',             lang: 'de' },
+  { q: 'WordPress SEO Plugin -is:retweet lang:de',   lang: 'de' },
+  { q: 'ChatGPT erscheinen SEO -is:retweet lang:de', lang: 'de' },
   // French
-  { q: '"meilleur plugin SEO" "WordPress" -is:retweet lang:fr', lang: 'fr' },
-  { q: '"apparaître dans ChatGPT" -is:retweet lang:fr',         lang: 'fr' },
+  { q: 'plugin SEO WordPress -is:retweet lang:fr',     lang: 'fr' },
+  { q: 'apparaître ChatGPT SEO -is:retweet lang:fr',   lang: 'fr' },
   // Chinese
-  { q: '"WordPress SEO 插件" -is:retweet lang:zh', lang: 'zh' },
-  { q: '"AI 搜索优化" -is:retweet lang:zh',         lang: 'zh' },
+  { q: 'WordPress SEO 插件 -is:retweet lang:zh', lang: 'zh' },
+  { q: 'AI 搜索 优化 -is:retweet lang:zh',        lang: 'zh' },
   // Korean
-  { q: '"워드프레스 SEO 플러그인" -is:retweet lang:ko', lang: 'ko' },
-  { q: '"AI 검색 최적화" -is:retweet lang:ko',           lang: 'ko' },
+  { q: '워드프레스 SEO 플러그인 -is:retweet lang:ko', lang: 'ko' },
+  { q: 'AI 검색 최적화 -is:retweet lang:ko',          lang: 'ko' },
   // Italian
-  { q: '"miglior plugin SEO" "WordPress" -is:retweet lang:it', lang: 'it' },
-  { q: '"alternativa a Yoast" -is:retweet lang:it',            lang: 'it' },
+  { q: 'plugin SEO WordPress -is:retweet lang:it', lang: 'it' },
+  { q: 'alternativa Yoast -is:retweet lang:it',     lang: 'it' },
   // Russian
-  { q: '"плагин SEO WordPress" -is:retweet lang:ru',  lang: 'ru' },
-  { q: '"оптимизация для ChatGPT" -is:retweet lang:ru', lang: 'ru' },
+  { q: 'плагин SEO WordPress -is:retweet lang:ru',  lang: 'ru' },
+  { q: 'оптимизация ChatGPT -is:retweet lang:ru',   lang: 'ru' },
   // Dutch / Polish / Turkish
-  { q: '"beste WordPress SEO plugin" -is:retweet lang:nl', lang: 'nl' },
-  { q: '"najlepsza wtyczka SEO WordPress" -is:retweet lang:pl', lang: 'pl' },
-  { q: '"en iyi WordPress SEO eklentisi" -is:retweet lang:tr', lang: 'tr' },
+  { q: 'WordPress SEO plugin -is:retweet lang:nl',   lang: 'nl' },
+  { q: 'wtyczka SEO WordPress -is:retweet lang:pl',  lang: 'pl' },
+  { q: 'WordPress SEO eklentisi -is:retweet lang:tr', lang: 'tr' },
   // Indonesian / Vietnamese / Thai
-  { q: '"plugin SEO WordPress terbaik" -is:retweet lang:id', lang: 'id' },
-  { q: '"plugin SEO WordPress tốt nhất" -is:retweet lang:vi', lang: 'vi' },
-  { q: '"ปลั๊กอิน SEO WordPress" -is:retweet lang:th', lang: 'th' },
+  { q: 'plugin SEO WordPress -is:retweet lang:id', lang: 'id' },
+  { q: 'plugin SEO WordPress -is:retweet lang:vi',  lang: 'vi' },
+  { q: 'ปลั๊กอิน SEO WordPress -is:retweet lang:th', lang: 'th' },
   // Arabic / Hindi
-  { q: '"إضافة سيو ووردبريس" -is:retweet lang:ar', lang: 'ar' },
-  { q: '"WordPress SEO प्लगइन" -is:retweet lang:hi', lang: 'hi' },
+  { q: 'ووردبريس SEO إضافة -is:retweet lang:ar', lang: 'ar' },
+  { q: 'WordPress SEO प्लगइन -is:retweet lang:hi', lang: 'hi' },
 ];
 
 function nextQuery(useLang) {
@@ -255,14 +270,22 @@ async function launch() {
   if (!fs.existsSync(STATE_FILE)) {
     throw new Error(`Missing ${STATE_FILE} — build it from your Firefox auth_token + ct0 cookies.`);
   }
-  const browser = await chromium.launch({
+  const launchOpts = {
     headless: true,
     args: [
       '--disable-blink-features=AutomationControlled',
       '--no-sandbox',
       '--disable-dev-shm-usage',
     ],
-  });
+  };
+  if (PROXY_URL) {
+    launchOpts.proxy = {
+      server: PROXY_URL,
+      ...(PROXY_USER ? { username: PROXY_USER } : {}),
+      ...(PROXY_PASS ? { password: PROXY_PASS } : {}),
+    };
+  }
+  const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({
     storageState: STATE_FILE,
     viewport: { width: 1280, height: 800 },
@@ -475,8 +498,9 @@ async function actionLikes(page) {
   if (getDailyCount('like') >= CAPS.like) return 'skipped: like cap reached';
 
   const queries = [
-    '"GEO optimization"', '"WordPress SEO"', '"AI Overviews"',
-    '"ChatGPT citation"', '"Perplexity ranking"', '"AI search"',
+    'GEO optimization', 'WordPress SEO', 'AI Overviews',
+    'ChatGPT citation', 'Perplexity ranking', 'AI search SEO',
+    'WordPress AI plugin', 'schema markup',
   ];
   const q = queries[Math.floor(Math.random() * queries.length)];
   await page.goto(`https://x.com/search?q=${encodeURIComponent(q)}&src=typed_query&f=live`, {

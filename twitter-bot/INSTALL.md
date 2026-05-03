@@ -177,8 +177,14 @@ OPENROUTER_API_KEY=sk-or-v1-...
 # Hybrid model routing — cheap model for the 90% of runs that are
 # search-and-reply, smart model for the 10% that are Loop 6 mentions
 # (highest-leverage action: algo +75, 150× distribution multiplier)
-MODEL=google/gemini-3-flash-lite-preview
-MODEL_MENTIONS=google/gemini-3-pro-preview
+MODEL=google/gemini-3.1-flash-lite-preview
+MODEL_MENTIONS=google/gemini-3.1-pro-preview
+
+# Optional residential proxy — recommended for VPS deployments. Comment
+# out to disable. Works with IPRoyal / BrightData / Soax / Smartproxy.
+# PROXY_URL=http://proxy.iproyal.com:12321
+# PROXY_USER=your_username
+# PROXY_PASS=your_password_country-us
 ```
 
 **Estimated monthly cost** at the default cron cadence (`*/8 * * * *`):
