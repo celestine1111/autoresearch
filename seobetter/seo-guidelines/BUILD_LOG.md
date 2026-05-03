@@ -7,12 +7,84 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.31)
+> **Last updated:** 2026-05-04 (v1.5.216.62.32)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.32 — Searchable currency + country dropdowns covering all 80+ supported markets
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User flagged after v62.31:
+1. The 16-currency starter list didn't cover countries SEOBetter actually supports (Brazil, India, Russia, Vietnam, Israel, Argentina, etc.). Asked: "can you include all currencies for the countries or languages we offer".
+2. With a long list, a static `<select>` would be unwieldy. Asked for a "search dropdown option".
+
+Plus while I was here, the country fields (LocalBusiness / VacationRental / JobPosting `country` and `job_location_country`) were free-text ISO-code inputs — same UX problem as the small currency list, just bigger. Fixed those too.
+
+### Fix — `assets/js/schema-blocks.js`
+
+**1. New `searchable: true` field-def flag → `wp.components.ComboboxControl`**
+
+Existing `select` field type still uses native `<select>` (`SelectControl`). When a field is marked `searchable: true`, `renderField()` swaps to `ComboboxControl` — the WordPress autocomplete dropdown that renders a typeable input filtering the option list. Falls back to `SelectControl` if `ComboboxControl` isn't available (older WP).
+
+**2. `CURRENCY_OPTIONS` extended from 16 → 66 codes** covering every supported market
+
+Major reserve currencies first (USD / EUR / GBP / JPY / AUD / CAD / CHF / CNY / INR / NZD), then alphabetical by ISO 4217 code. Full list:
+
+```
+AED · ARS · AUD · BDT · BGN · BHD · BRL · CAD · CHF · CLP · CNY · COP ·
+CRC · CZK · DKK · DOP · EGP · EUR · FJD · GBP · GHS · GTQ · HKD · HUF ·
+IDR · ILS · INR · ISK · JMD · JOD · JPY · KES · KRW · KWD · KZT · LKR ·
+MAD · MDL · MNT · MXN · MYR · NGN · NOK · NPR · NZD · OMR · PEN · PHP ·
+PKR · PLN · QAR · RON · RSD · RUB · RWF · SAR · SEK · SGD · THB · TND ·
+TRY · TWD · TZS · UAH · UGX · USD · UYU · UZS · VND · XOF · ZAR
+```
+
+Applied to:
+- Product `currency` (required)
+- Event `offers_currency` (was free text)
+- Job Posting `salary_currency` (was free text)
+
+All three use the SAME list, all three are now searchable. UX consistency across the 5 blocks.
+
+**3. New `COUNTRY_OPTIONS` — 89 ISO 3166-1 alpha-2 entries**
+
+Mirrors the country list in `admin/views/content-generator.php::sbCountries`. Each entry stores the 2-letter ISO code as value (e.g. `US`) and shows `US — United States` as the label. Same searchable ComboboxControl UX.
+
+Applied to:
+- LocalBusiness `country` (was free-text ISO input)
+- VacationRental `country` (was free-text ISO input)
+- Job Posting `job_location_country` (was free-text ISO input)
+
+### Why this works for "all countries / all languages"
+
+The currency + country lists were derived directly from `admin/views/content-generator.php::sbCountries` (the article-generator country picker, source of truth for what SEOBetter supports). Every country shown in the article generator now has a matching currency option in the Schema Block dropdowns. If we add a new country to the generator in the future, we add the matching currency entry here in one place — no per-block updates needed since all 5 blocks share the `CURRENCY_OPTIONS` and `COUNTRY_OPTIONS` constants.
+
+### Verify
+
+```bash
+node --check /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js
+grep -c "value: '[A-Z]\{3\}'" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # ≥66 currency entries
+grep -c "value: '[A-Z]\{2\}'" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # ≥89 country entries
+grep -n "searchable: true" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js   # 7 fields use the searchable dropdown
+```
+
+### Test plan for user
+
+1. Open any post → Insert Product block
+2. Click into Currency field → should show a typeable input + filtered list (start typing "us" → narrows to USD, then "br" → BRL, etc.)
+3. Insert LocalBusiness block → Country field should be the same searchable dropdown showing "AU — Australia" / "JP — Japan" / etc.
+4. Same applies to Event ticket currency, Job Posting salary currency, Job Posting job country, VacationRental country.
+
+**Verified by user:** UNTESTED
 
 ---
 

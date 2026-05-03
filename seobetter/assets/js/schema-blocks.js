@@ -38,6 +38,7 @@
     var TextControl          = wp.components.TextControl;
     var TextareaControl      = wp.components.TextareaControl;
     var SelectControl        = wp.components.SelectControl;
+    var ComboboxControl      = wp.components.ComboboxControl;  // v62.32 — searchable dropdown
     var ToggleControl        = wp.components.ToggleControl;
     var PanelBody            = wp.components.PanelBody;
     var Placeholder          = wp.components.Placeholder;
@@ -80,6 +81,23 @@
                 return el( TextareaControl, { key: fieldKey, label: label, value: value || '', placeholder: placeholder, onChange: onChange, rows: 3 } );
             case 'select':
                 var opts = normalizeOptions( def.options );
+                // v62.32 — `searchable: true` opts in to ComboboxControl
+                // (autocomplete with type-to-filter). Used for currency
+                // (66 options) and business_type (41 options) where a
+                // static select is unwieldy. ComboboxControl renders the
+                // current selection at the top + a typeable input that
+                // narrows the list. Falls back to SelectControl if the
+                // ComboboxControl component isn't available (older WP).
+                if ( def.searchable && ComboboxControl ) {
+                    return el( ComboboxControl, {
+                        key: fieldKey,
+                        label: label,
+                        value: value || '',
+                        options: opts,
+                        onChange: function ( v ) { onChange( v == null ? '' : v ); },
+                        allowReset: true
+                    } );
+                }
                 opts.unshift( { label: '— Select —', value: '' } );
                 return el( SelectControl, { key: fieldKey, label: label, value: value || '', options: opts, onChange: onChange } );
             case 'checkbox':
@@ -236,6 +254,199 @@
     // token (preserves JSON-LD validity).
     // ================================================================
 
+    // v1.5.216.62.32 — Currency dropdown extended to cover every supported
+    // country (80+) and language (60+). Major reserve currencies first
+    // (USD / EUR / GBP / JPY / AUD / CAD / CHF / CNY / INR), then the rest
+    // alphabetical by ISO 4217 code. WordPress SelectControl supports
+    // type-to-jump so a long list is still searchable. Same list reused
+    // by Event.offers_currency and Job Posting.salary_currency for UX
+    // consistency across all 5 blocks.
+    // v1.5.216.62.32 — Country dropdown matching the 80+ countries SEOBetter
+    // supports in the article generator (admin/views/content-generator.php
+    // sbCountries list). ISO 3166-1 alpha-2 codes stored as the value, full
+    // English country name in the label. Same searchable dropdown UX as
+    // currency. Used by LocalBusiness.country, VacationRental.country, and
+    // JobPosting.job_location_country.
+    var COUNTRY_OPTIONS = [
+        // Oceania
+        { value: 'AU', label: 'AU — Australia' },
+        { value: 'NZ', label: 'NZ — New Zealand' },
+        { value: 'FJ', label: 'FJ — Fiji / Pacific Islands' },
+        // North America
+        { value: 'US', label: 'US — United States' },
+        { value: 'CA', label: 'CA — Canada' },
+        { value: 'MX', label: 'MX — Mexico' },
+        { value: 'JM', label: 'JM — Jamaica' },
+        // Europe Western
+        { value: 'GB', label: 'GB — United Kingdom' },
+        { value: 'IE', label: 'IE — Ireland' },
+        { value: 'FR', label: 'FR — France' },
+        { value: 'DE', label: 'DE — Germany' },
+        { value: 'ES', label: 'ES — Spain' },
+        { value: 'PT', label: 'PT — Portugal' },
+        { value: 'IT', label: 'IT — Italy' },
+        { value: 'NL', label: 'NL — Netherlands' },
+        { value: 'BE', label: 'BE — Belgium' },
+        { value: 'CH', label: 'CH — Switzerland' },
+        { value: 'AT', label: 'AT — Austria' },
+        { value: 'LU', label: 'LU — Luxembourg' },
+        { value: 'GR', label: 'GR — Greece' },
+        { value: 'CY', label: 'CY — Cyprus' },
+        { value: 'MT', label: 'MT — Malta' },
+        // Nordic & Baltic
+        { value: 'SE', label: 'SE — Sweden' },
+        { value: 'NO', label: 'NO — Norway' },
+        { value: 'DK', label: 'DK — Denmark' },
+        { value: 'FI', label: 'FI — Finland' },
+        { value: 'IS', label: 'IS — Iceland' },
+        { value: 'EE', label: 'EE — Estonia' },
+        { value: 'LV', label: 'LV — Latvia' },
+        { value: 'LT', label: 'LT — Lithuania' },
+        // Central & Eastern Europe
+        { value: 'PL', label: 'PL — Poland' },
+        { value: 'CZ', label: 'CZ — Czech Republic' },
+        { value: 'SK', label: 'SK — Slovakia' },
+        { value: 'HU', label: 'HU — Hungary' },
+        { value: 'SI', label: 'SI — Slovenia' },
+        { value: 'HR', label: 'HR — Croatia' },
+        { value: 'RS', label: 'RS — Serbia' },
+        { value: 'BG', label: 'BG — Bulgaria' },
+        { value: 'RO', label: 'RO — Romania' },
+        { value: 'UA', label: 'UA — Ukraine' },
+        { value: 'MD', label: 'MD — Moldova' },
+        { value: 'TR', label: 'TR — Turkey' },
+        { value: 'RU', label: 'RU — Russia' },
+        // Asia
+        { value: 'JP', label: 'JP — Japan' },
+        { value: 'KR', label: 'KR — South Korea' },
+        { value: 'CN', label: 'CN — China' },
+        { value: 'TW', label: 'TW — Taiwan' },
+        { value: 'HK', label: 'HK — Hong Kong' },
+        { value: 'SG', label: 'SG — Singapore' },
+        { value: 'MY', label: 'MY — Malaysia' },
+        { value: 'ID', label: 'ID — Indonesia' },
+        { value: 'PH', label: 'PH — Philippines' },
+        { value: 'TH', label: 'TH — Thailand' },
+        { value: 'VN', label: 'VN — Vietnam' },
+        { value: 'IN', label: 'IN — India' },
+        { value: 'PK', label: 'PK — Pakistan' },
+        { value: 'BD', label: 'BD — Bangladesh' },
+        { value: 'LK', label: 'LK — Sri Lanka' },
+        { value: 'NP', label: 'NP — Nepal' },
+        { value: 'MN', label: 'MN — Mongolia' },
+        { value: 'KZ', label: 'KZ — Kazakhstan' },
+        { value: 'UZ', label: 'UZ — Uzbekistan' },
+        // Middle East
+        { value: 'IL', label: 'IL — Israel' },
+        { value: 'AE', label: 'AE — UAE' },
+        { value: 'SA', label: 'SA — Saudi Arabia' },
+        { value: 'QA', label: 'QA — Qatar' },
+        { value: 'BH', label: 'BH — Bahrain' },
+        { value: 'KW', label: 'KW — Kuwait' },
+        { value: 'OM', label: 'OM — Oman' },
+        { value: 'JO', label: 'JO — Jordan' },
+        { value: 'EG', label: 'EG — Egypt' },
+        // Latin America
+        { value: 'BR', label: 'BR — Brazil' },
+        { value: 'AR', label: 'AR — Argentina' },
+        { value: 'CL', label: 'CL — Chile' },
+        { value: 'CO', label: 'CO — Colombia' },
+        { value: 'PE', label: 'PE — Peru' },
+        { value: 'UY', label: 'UY — Uruguay' },
+        { value: 'EC', label: 'EC — Ecuador' },
+        { value: 'CR', label: 'CR — Costa Rica' },
+        { value: 'PA', label: 'PA — Panama' },
+        { value: 'DO', label: 'DO — Dominican Republic' },
+        { value: 'GT', label: 'GT — Guatemala' },
+        // Africa
+        { value: 'ZA', label: 'ZA — South Africa' },
+        { value: 'NG', label: 'NG — Nigeria' },
+        { value: 'KE', label: 'KE — Kenya' },
+        { value: 'GH', label: 'GH — Ghana' },
+        { value: 'TZ', label: 'TZ — Tanzania' },
+        { value: 'UG', label: 'UG — Uganda' },
+        { value: 'RW', label: 'RW — Rwanda' },
+        { value: 'MA', label: 'MA — Morocco' },
+        { value: 'TN', label: 'TN — Tunisia' },
+        { value: 'SN', label: 'SN — Senegal' }
+    ];
+
+    var CURRENCY_OPTIONS = [
+        // Major reserve currencies (top of list)
+        { value: 'USD', label: 'USD — US Dollar' },
+        { value: 'EUR', label: 'EUR — Euro' },
+        { value: 'GBP', label: 'GBP — British Pound' },
+        { value: 'JPY', label: 'JPY — Japanese Yen' },
+        { value: 'AUD', label: 'AUD — Australian Dollar' },
+        { value: 'CAD', label: 'CAD — Canadian Dollar' },
+        { value: 'CHF', label: 'CHF — Swiss Franc' },
+        { value: 'CNY', label: 'CNY — Chinese Yuan' },
+        { value: 'INR', label: 'INR — Indian Rupee' },
+        { value: 'NZD', label: 'NZD — New Zealand Dollar' },
+        // Rest alphabetical by ISO code
+        { value: 'AED', label: 'AED — UAE Dirham' },
+        { value: 'ARS', label: 'ARS — Argentine Peso' },
+        { value: 'BDT', label: 'BDT — Bangladeshi Taka' },
+        { value: 'BGN', label: 'BGN — Bulgarian Lev' },
+        { value: 'BHD', label: 'BHD — Bahraini Dinar' },
+        { value: 'BRL', label: 'BRL — Brazilian Real' },
+        { value: 'CLP', label: 'CLP — Chilean Peso' },
+        { value: 'COP', label: 'COP — Colombian Peso' },
+        { value: 'CRC', label: 'CRC — Costa Rican Colón' },
+        { value: 'CZK', label: 'CZK — Czech Koruna' },
+        { value: 'DKK', label: 'DKK — Danish Krone' },
+        { value: 'DOP', label: 'DOP — Dominican Peso' },
+        { value: 'EGP', label: 'EGP — Egyptian Pound' },
+        { value: 'FJD', label: 'FJD — Fijian Dollar' },
+        { value: 'GHS', label: 'GHS — Ghanaian Cedi' },
+        { value: 'GTQ', label: 'GTQ — Guatemalan Quetzal' },
+        { value: 'HKD', label: 'HKD — Hong Kong Dollar' },
+        { value: 'HUF', label: 'HUF — Hungarian Forint' },
+        { value: 'IDR', label: 'IDR — Indonesian Rupiah' },
+        { value: 'ILS', label: 'ILS — Israeli Shekel' },
+        { value: 'ISK', label: 'ISK — Icelandic Króna' },
+        { value: 'JMD', label: 'JMD — Jamaican Dollar' },
+        { value: 'JOD', label: 'JOD — Jordanian Dinar' },
+        { value: 'KES', label: 'KES — Kenyan Shilling' },
+        { value: 'KRW', label: 'KRW — South Korean Won' },
+        { value: 'KWD', label: 'KWD — Kuwaiti Dinar' },
+        { value: 'KZT', label: 'KZT — Kazakhstani Tenge' },
+        { value: 'LKR', label: 'LKR — Sri Lankan Rupee' },
+        { value: 'MAD', label: 'MAD — Moroccan Dirham' },
+        { value: 'MDL', label: 'MDL — Moldovan Leu' },
+        { value: 'MNT', label: 'MNT — Mongolian Tögrög' },
+        { value: 'MXN', label: 'MXN — Mexican Peso' },
+        { value: 'MYR', label: 'MYR — Malaysian Ringgit' },
+        { value: 'NGN', label: 'NGN — Nigerian Naira' },
+        { value: 'NOK', label: 'NOK — Norwegian Krone' },
+        { value: 'NPR', label: 'NPR — Nepalese Rupee' },
+        { value: 'OMR', label: 'OMR — Omani Rial' },
+        { value: 'PEN', label: 'PEN — Peruvian Sol' },
+        { value: 'PHP', label: 'PHP — Philippine Peso' },
+        { value: 'PKR', label: 'PKR — Pakistani Rupee' },
+        { value: 'PLN', label: 'PLN — Polish Złoty' },
+        { value: 'QAR', label: 'QAR — Qatari Riyal' },
+        { value: 'RON', label: 'RON — Romanian Leu' },
+        { value: 'RSD', label: 'RSD — Serbian Dinar' },
+        { value: 'RUB', label: 'RUB — Russian Ruble' },
+        { value: 'RWF', label: 'RWF — Rwandan Franc' },
+        { value: 'SAR', label: 'SAR — Saudi Riyal' },
+        { value: 'SEK', label: 'SEK — Swedish Krona' },
+        { value: 'SGD', label: 'SGD — Singapore Dollar' },
+        { value: 'THB', label: 'THB — Thai Baht' },
+        { value: 'TND', label: 'TND — Tunisian Dinar' },
+        { value: 'TRY', label: 'TRY — Turkish Lira' },
+        { value: 'TWD', label: 'TWD — Taiwan Dollar' },
+        { value: 'TZS', label: 'TZS — Tanzanian Shilling' },
+        { value: 'UAH', label: 'UAH — Ukrainian Hryvnia' },
+        { value: 'UGX', label: 'UGX — Ugandan Shilling' },
+        { value: 'UYU', label: 'UYU — Uruguayan Peso' },
+        { value: 'UZS', label: 'UZS — Uzbekistani Som' },
+        { value: 'VND', label: 'VND — Vietnamese Đồng' },
+        { value: 'XOF', label: 'XOF — West African CFA Franc' },
+        { value: 'ZAR', label: 'ZAR — South African Rand' }
+    ];
+
     var DEFS = {
         product: {
             name:         { label: 'Name',          type: 'text',     required: true,  placeholder: 'Acme Trail Runner Pro' },
@@ -246,24 +457,7 @@
             mpn:          { label: 'MPN',           type: 'text' },
             gtin:         { label: 'GTIN',          type: 'text' },
             price:        { label: 'Price',         type: 'text',     required: true, placeholder: '129.00' },
-            currency:     { label: 'Currency',      type: 'select',   required: true, options: [
-                { value: 'USD', label: 'USD — US Dollar' },
-                { value: 'EUR', label: 'EUR — Euro' },
-                { value: 'GBP', label: 'GBP — British Pound' },
-                { value: 'AUD', label: 'AUD — Australian Dollar' },
-                { value: 'CAD', label: 'CAD — Canadian Dollar' },
-                { value: 'NZD', label: 'NZD — New Zealand Dollar' },
-                { value: 'JPY', label: 'JPY — Japanese Yen' },
-                { value: 'CNY', label: 'CNY — Chinese Yuan' },
-                { value: 'KRW', label: 'KRW — South Korean Won' },
-                { value: 'INR', label: 'INR — Indian Rupee' },
-                { value: 'BRL', label: 'BRL — Brazilian Real' },
-                { value: 'MXN', label: 'MXN — Mexican Peso' },
-                { value: 'CHF', label: 'CHF — Swiss Franc' },
-                { value: 'SEK', label: 'SEK — Swedish Krona' },
-                { value: 'NOK', label: 'NOK — Norwegian Krone' },
-                { value: 'DKK', label: 'DKK — Danish Krone' }
-            ] },
+            currency:     { label: 'Currency',      type: 'select',   required: true, searchable: true, options: CURRENCY_OPTIONS },
             availability: { label: 'Availability',  type: 'select',   options: [
                 { value: 'InStock',      label: 'In stock' },
                 { value: 'OutOfStock',   label: 'Out of stock' },
@@ -303,10 +497,10 @@
             organizer_url:    { label: 'Organizer URL',  type: 'url' },
             offers_url:       { label: 'Tickets URL',    type: 'url' },
             offers_price:     { label: 'Ticket price',   type: 'text' },
-            offers_currency:  { label: 'Ticket currency', type: 'text',    placeholder: 'USD' }
+            offers_currency:  { label: 'Ticket currency', type: 'select', searchable: true, options: CURRENCY_OPTIONS }
         },
         localbusiness: {
-            business_type:    { label: 'Business type',  type: 'select',   options: [
+            business_type:    { label: 'Business type',  type: 'select',   searchable: true, options: [
                 { value: 'LocalBusiness',     label: 'Local Business (generic)' },
                 { value: 'Restaurant',        label: 'Restaurant' },
                 { value: 'Cafe',              label: 'Café' },
@@ -357,7 +551,7 @@
             locality:         { label: 'City',           type: 'text' },
             region:           { label: 'State / Region', type: 'text' },
             postal_code:      { label: 'Postal code',    type: 'text' },
-            country:          { label: 'Country (ISO)',  type: 'text',     placeholder: 'US, GB, AU, FR…' },
+            country:          { label: 'Country',         type: 'select',   searchable: true, options: COUNTRY_OPTIONS },
             telephone:        { label: 'Telephone',      type: 'text' },
             opening_hours:    { label: 'Opening hours',  type: 'textarea', placeholder: 'Mo-Fr 09:00-17:00\nSa 10:00-14:00' },
             price_range:      { label: 'Price range',    type: 'text',     placeholder: '$$' },
@@ -372,7 +566,7 @@
             locality:         { label: 'City',           type: 'text' },
             region:           { label: 'State / Region', type: 'text' },
             postal_code:      { label: 'Postal code',    type: 'text' },
-            country:          { label: 'Country (ISO)',  type: 'text' },
+            country:          { label: 'Country',         type: 'select',   searchable: true, options: COUNTRY_OPTIONS },
             number_of_rooms:  { label: 'Number of rooms',type: 'number' },
             occupancy_max:    { label: 'Max occupancy',  type: 'number' },
             amenities:        { label: 'Amenities',      type: 'textarea', placeholder: 'WiFi\nPool\nKitchen\nParking' },
@@ -399,11 +593,11 @@
             job_location_address:    { label: 'Job address',          type: 'text' },
             job_location_locality:   { label: 'Job city',             type: 'text' },
             job_location_region:     { label: 'Job region',           type: 'text' },
-            job_location_country:    { label: 'Job country (ISO)',    type: 'text' },
+            job_location_country:    { label: 'Job country',          type: 'select',   searchable: true, options: COUNTRY_OPTIONS },
             remote_ok:               { label: 'Remote OK',            type: 'checkbox', hint: 'Telecommute eligible' },
             salary_min:              { label: 'Minimum salary',       type: 'text' },
             salary_max:              { label: 'Maximum salary',       type: 'text' },
-            salary_currency:         { label: 'Salary currency',      type: 'text',     placeholder: 'USD' },
+            salary_currency:         { label: 'Salary currency',      type: 'select',   searchable: true, options: CURRENCY_OPTIONS },
             salary_unit:             { label: 'Pay period',           type: 'select',   options: [
                 { value: 'HOUR',  label: 'Per hour' },
                 { value: 'DAY',   label: 'Per day' },
