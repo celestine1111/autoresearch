@@ -19,7 +19,7 @@
 ## v1.5.216.62.32 — Searchable currency + country dropdowns covering all 80+ supported markets
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `de20441`
 
 ### Why
 
