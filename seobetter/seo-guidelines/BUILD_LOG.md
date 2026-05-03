@@ -7,12 +7,74 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.13)
+> **Last updated:** 2026-05-03 (v1.5.216.62.14)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.14 — Remove commercial pet sites from authority list + linkify spaces-stripped fallback + static whitelist cleanup
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audit of v62.13-generated article (https://srv1608940.hstgr.cloud/how-to-transition-your-dog-to-raw-food-safely-2026-expert-tips-pitfalls/) found 3 issues:
+
+1. **Expert quotes still from `thesprucepets.com`** despite v62.13's Sonar authority filter — root cause: `thesprucepets.com` and `petmd.com` were IN the authority list (treated as authorities), so the filter accepted them. They're commercial pet content sites, not authorities.
+
+2. **Plain-text source attributions like `(Solfed Dog Food)` and `(American Kennel Club)` not converted to hyperlinks** even though both URLs are in the citation pool. Root cause: `linkify_bracketed_references()` lookup compared `"solfed dog food"` (with spaces) against `"solfeddogfood.com"` (compacted host). `str_contains()` fails both directions because "solfeddogfood" is not a substring of "solfed dog food" with spaces.
+
+3. **User directive**: same fixes must apply across all 21 content types and all 60+ languages. Both fixes are universal (no category/language gating).
+
+### Fixes
+
+**Fix 1 — Remove commercial pet sites from authority lists** ([Content_Injector.php](../includes/Content_Injector.php) `get_authority_domains()` global animals + veterinary)
+- REMOVED: `petmd.com` (Chewy-owned commercial), `thesprucepets.com` (Dotdash/Meredith commercial editorial)
+- KEPT: `merckvetmanual.com` (Merck-published but explicitly peer-reviewed clinical reference), `mindiampets.com.au` (user's own site, intentional)
+
+**Fix 2 — Linkify spaces-stripped fallback** ([seobetter.php::linkify_bracketed_references()](../seobetter.php) line ~3370)
+- Build a parallel `$lookup_compact` table keyed by `[a-z0-9]`-only (spaces + punct stripped) versions of every lookup key
+- After the standard `str_contains` pass over `$lookup` fails, fall back to compact comparison: `text_compact === key_compact OR str_contains(text_compact, key_compact)`
+- Catches: AI writes `(Solfed Dog Food)` (15 chars, spaces) → compact is `solfeddogfood` → matches pool host `solfeddogfood.com` (compact `solfeddogfood`) → linkified
+- NOTE: Does NOT solve acronym mapping (e.g. `(American Kennel Club)` ↔ `akc.org`) — that requires per-domain alias data the citation pool doesn't carry yet. Phase B follow-up.
+
+**Fix 3 — Static whitelist cleanup** ([seobetter.php::get_trusted_domain_whitelist()](../seobetter.php) lines ~4238 + ~4243)
+- REMOVED from health: `webmd.com`, `healthline.com` (commercial consumer health, not peer-reviewed)
+- REMOVED from pets: `petmd.com`, `pedigree.com`, `royalcanin.com` (pet food brand marketing pages)
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — Fix 1 affects category=animals/vet only by intent; Fix 2 is universal across all categories; Fix 3 is universal |
+| ALL 21 content types? | ✅ Yes — fixes operate at link-validation + linkify layers, not at content-type-specific code |
+| ALL AI models? | ✅ Yes — fixes are post-AI; model-agnostic |
+| ALL languages? | ✅ Yes — Fix 2's compact-comparison handles full-width parens (Japanese) per existing v1.5.216.62 logic. Fix 1's authority list expansion in v62.12 covers 16 countries. |
+
+### Verify
+
+```bash
+grep -nE "thesprucepets|petmd\\.com" seobetter/includes/Content_Injector.php seobetter/seobetter.php
+# Expected: only the v1.5.216.62.14 REMOVED comments — no actual array entries
+
+grep -nA 3 "spaces-stripped fallback" seobetter/seobetter.php
+# Expected: shows the new $lookup_compact pass
+
+grep -nA 3 "lookup_compact" seobetter/seobetter.php
+# Expected: 4-5 matches in linkify_bracketed_references
+```
+
+**Test by user:** regenerate the dog raw-food article. Expected:
+- Expert quotes from authorities (avma.org, vetrecord.bmj.com, etc.) NOT thesprucepets/petmd
+- `(Solfed Dog Food)` rendered as `[Solfed Dog Food](https://solfeddogfood.com/...)` — clickable
+- `(American Kennel Club)` may still NOT linkify (acronym → akc.org gap; Phase B)
+
+**Verified by user:** UNTESTED
 
 ---
 

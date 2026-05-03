@@ -1719,22 +1719,25 @@ Return ONLY the Markdown table, nothing else.";
                 'reuters.com', 'apnews.com', 'bbc.com', 'wikipedia.org',
                 'ncbi.nlm.nih.gov', 'nature.com',
             ],
-            // v1.5.216.62.12 — expanded global animal/vet authorities so the AI
-            // has more high-quality non-commercial source options before the
-            // user's own mindiampets.com.au is matched. Adds WSAVA, FEDIAF,
-            // peer-reviewed vet journals (Vet Record, BMC Vet Res, Frontiers
-            // Vet Sci, AVMA Journals/JAVMA), and global welfare/professional
-            // bodies (ICatCare/ISFM, World Vet Association, FECAVA).
+            // v1.5.216.62.14 — REMOVED commercial pet sites: petmd.com (Chewy-owned
+            // commercial), thesprucepets.com (Dotdash/Meredith editorial content,
+            // not authoritative). Per policy: authority list is government regulators,
+            // university vet schools, professional associations (AVMA, RCVS, BVA),
+            // peer-reviewed journals, independent welfare bodies. No commercial brands
+            // even if they have substantive content.
+            //
+            // merckvetmanual.com retained — published by Merck but explicitly a
+            // peer-reviewed clinical reference, written by veterinary specialists.
             'animals' => [
                 'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com', 'woah.org',
-                'petmd.com', 'thesprucepets.com', 'merckvetmanual.com',
+                'merckvetmanual.com',
                 'wsava.org', 'fediaf.org', 'frontiersin.org', 'vetrecord.bmj.com',
                 'avmajournals.avma.org', 'wva-online.org', 'icatcare.org', 'fecava.org',
                 'mindiampets.com.au',
             ],
             'veterinary' => [
                 'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com', 'woah.org',
-                'merckvetmanual.com', 'petmd.com',
+                'merckvetmanual.com',
                 'wsava.org', 'fediaf.org', 'frontiersin.org', 'vetrecord.bmj.com',
                 'avmajournals.avma.org', 'bmcvetres.biomedcentral.com', 'wva-online.org', 'fecava.org',
                 'mindiampets.com.au',

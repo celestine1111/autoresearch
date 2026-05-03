@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.13
+ * Version: 1.5.216.62.14
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.13' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.14' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -3373,31 +3373,39 @@ final class SEOBetter {
         };
 
         // Build a lookup: normalized title/source_name → pool entry
+        // v1.5.216.62.14 — also store a spaces-stripped variant of every key so
+        // "American Kennel Club" → "americankennelclub" matches host "akc.org" → "akc"
+        // is impossible, but "(Solfed Dog Food)" → "solfeddogfood" DOES match host
+        // "solfeddogfood.com" → "solfeddogfood". Pre-fix: pool source_name was
+        // bare host (no spaces) but AI text had spaces → str_contains() failed
+        // both directions → bracket left unlinked.
+        $compact = function ( string $s ): string {
+            return preg_replace( '/[^a-z0-9]/', '', strtolower( $s ) );
+        };
         $lookup = [];
+        $lookup_compact = [];  // spaces-stripped → entry
+        $register = function ( string $key, array $entry ) use ( &$lookup, &$lookup_compact, $compact ): void {
+            if ( $key === '' ) return;
+            $lookup[ $key ] = $entry;
+            $key_compact = $compact( $key );
+            if ( strlen( $key_compact ) >= 3 ) {
+                $lookup_compact[ $key_compact ] = $entry;
+            }
+        };
         foreach ( $pool as $entry ) {
             $url = $entry['url'] ?? '';
             if ( empty( $url ) ) continue;
             $title = $norm( $entry['title'] ?? '' );
             $source = $norm( $entry['source_name'] ?? '' );
-            if ( strlen( $title ) > 10 ) {
-                $lookup[ $title ] = $entry;
-            }
-            // First 30 chars as key (AI often truncates titles)
-            if ( strlen( $title ) > 30 ) {
-                $lookup[ substr( $title, 0, 30 ) ] = $entry;
-            }
-            // First 20 chars
-            if ( strlen( $title ) > 20 ) {
-                $lookup[ substr( $title, 0, 20 ) ] = $entry;
-            }
+            if ( strlen( $title ) > 10 ) $register( $title, $entry );
+            if ( strlen( $title ) > 30 ) $register( substr( $title, 0, 30 ), $entry );
+            if ( strlen( $title ) > 20 ) $register( substr( $title, 0, 20 ), $entry );
             if ( strlen( $source ) > 3 ) {
-                $lookup[ $source ] = $entry;
+                $register( $source, $entry );
                 // v1.5.190 — Also add hostname without TLD as key.
-                // AI writes "(Healthline)" but source_name is "healthline.com".
-                // Strip .com/.org/.net/.co.uk/.com.au etc. so "healthline" matches.
                 $bare = preg_replace( '/\.(com|org|net|io|dev|co|edu|gov|int|info|biz|co\.uk|com\.au|co\.nz|com\.br|co\.jp)$/i', '', $source );
                 if ( $bare !== $source && strlen( $bare ) > 3 ) {
-                    $lookup[ $bare ] = $entry;
+                    $register( $bare, $entry );
                 }
             }
         }
@@ -3473,6 +3481,24 @@ final class SEOBetter {
                     if ( strlen( $key ) > 5 && ( str_contains( $text_n, $key ) || str_contains( $key, $text_n ) ) ) {
                         // Preserve original paren width — don't mix full / half in JA prose
                         return $open . '[' . $text . '](' . $entry['url'] . ')' . $close;
+                    }
+                }
+
+                // v1.5.216.62.14 — fallback: compare spaces-stripped versions.
+                // AI writes "(Solfed Dog Food)" → text_compact "solfeddogfood";
+                // pool host is "solfeddogfood.com" → key_compact "solfeddogfood".
+                // The original pass's str_contains over text_n with spaces fails
+                // because "solfeddogfood" isn't a substring of "solfed dog food".
+                $text_compact = preg_replace( '/[^a-z0-9]/', '', strtolower( $text ) );
+                if ( strlen( $text_compact ) >= 3 ) {
+                    foreach ( $lookup_compact as $key_compact => $entry ) {
+                        if ( strlen( $key_compact ) >= 4 && (
+                            $text_compact === $key_compact ||
+                            str_contains( $text_compact, $key_compact ) ||
+                            str_contains( $key_compact, $text_compact )
+                        ) ) {
+                            return $open . '[' . $text . '](' . $entry['url'] . ')' . $close;
+                        }
                     }
                 }
 
@@ -4235,12 +4261,16 @@ final class SEOBetter {
             // Health & science
             'who.int', 'cdc.gov', 'nih.gov', 'nature.com', 'sciencedirect.com',
             'pubmed.ncbi.nlm.nih.gov', 'mayoclinic.org', 'clevelandclinic.org',
-            'webmd.com', 'healthline.com', 'harvard.edu', 'ox.ac.uk',
+            'harvard.edu', 'ox.ac.uk',
+            // v1.5.216.62.14 — REMOVED webmd.com, healthline.com (commercial
+            // consumer health content sites, not peer-reviewed authorities).
 
             // Pet/animal authority (relevant for the current test site)
             'rspca.org.au', 'rspca.org.uk', 'aspca.org', 'akc.org', 'ukcdogs.com',
-            'avma.org', 'ava.com.au', 'pedigree.com', 'royalcanin.com',
-            'petmd.com', 'vcahospitals.com', 'bluecross.org.uk', 'dogstrust.org.uk',
+            'avma.org', 'ava.com.au',
+            'vcahospitals.com', 'bluecross.org.uk', 'dogstrust.org.uk',
+            // v1.5.216.62.14 — REMOVED petmd.com (Chewy-owned commercial),
+            // pedigree.com / royalcanin.com (pet-food brand marketing pages).
 
             // Tech authority
             'developer.mozilla.org', 'w3.org', 'schema.org', 'google.com',
