@@ -19,7 +19,7 @@
 ## v1.5.216.62.17 — Authority expansion across remaining categories + FAQ post-process safety net
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `958275c`
 
 ### Why
 
