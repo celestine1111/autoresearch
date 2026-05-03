@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.14
+ * Version: 1.5.216.62.15
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.14' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.15' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -3411,27 +3411,47 @@ final class SEOBetter {
         }
 
         // Find [bracketed text] that is NOT already a markdown link (no following (url))
+        // v1.5.216.62.15 — Lowered min length 10 → 3 so short acronym brackets
+        // like [AKC], [NIH], [FDA] get linkified. Added compact fallback (same
+        // as parenthetical pass) so [Solfed Dog Food] also matches host
+        // solfeddogfood.com via spaces-stripped comparison.
         $markdown = preg_replace_callback(
-            '/(?<!\!)\[([^\]]{10,120})\](?!\s*\(http)/',
-            function ( $match ) use ( $lookup, $norm ) {
+            '/(?<!\!)\[([^\]]{3,120})\](?!\s*\(http)/',
+            function ( $match ) use ( $lookup, $lookup_compact, $norm, $compact ) {
                 $text = $match[1];
                 $text_n = $norm( $text );
+
+                // Skip likely-non-references that happen to live in square brackets
+                // (footnote markers like [1] [2], code blocks, inline math)
+                if ( preg_match( '/^\d{1,3}$/', $text_n ) ) return $match[0]; // [1], [42]
+                if ( preg_match( '/^[a-z]$/i', $text_n ) ) return $match[0]; // [a]
 
                 // Try exact match
                 if ( isset( $lookup[ $text_n ] ) ) {
                     return '[' . $text . '](' . $lookup[ $text_n ]['url'] . ')';
                 }
 
-                // Try partial match
+                // Try partial match (with-spaces lookup)
                 foreach ( $lookup as $key => $entry ) {
                     if ( strlen( $key ) > 8 && str_contains( $text_n, $key ) ) {
                         return '[' . $text . '](' . $entry['url'] . ')';
                     }
-                    // v1.5.190 — Relaxed from 12 to 5 chars. AI writes short source
-                    // names like "(RTINGS)" (6 chars), "(AARP)" (4 chars) that need
-                    // to match against longer keys like "rtings.com".
                     if ( strlen( $text_n ) > 4 && str_contains( $key, $text_n ) ) {
                         return '[' . $text . '](' . $entry['url'] . ')';
+                    }
+                }
+
+                // v1.5.216.62.15 — compact fallback (spaces/punct stripped both sides)
+                $text_compact = $compact( $text );
+                if ( strlen( $text_compact ) >= 3 ) {
+                    foreach ( $lookup_compact as $key_compact => $entry ) {
+                        if ( strlen( $key_compact ) >= 3 && (
+                            $text_compact === $key_compact ||
+                            ( strlen( $key_compact ) > 4 && str_contains( $text_compact, $key_compact ) ) ||
+                            ( strlen( $text_compact ) > 4 && str_contains( $key_compact, $text_compact ) )
+                        ) ) {
+                            return '[' . $text . '](' . $entry['url'] . ')';
+                        }
                     }
                 }
 
@@ -3451,8 +3471,11 @@ final class SEOBetter {
         // （Hostinger, 2025）with full-width parens. Now both shapes are
         // recognized; the wrapper is rebuilt in the same paren width as the
         // input so the surrounding prose stays visually consistent.
+        // v1.5.216.62.15 — Lowered min length 4 → 2 so short acronym parentheticals
+        // like (AKC), (NIH), (FDA), (WHO) get evaluated. The stop-list inside the
+        // callback (e.g. (e.g.|i.e.|see) already protects against false positives.
         $markdown = preg_replace_callback(
-            '/([\(（])([^)）]{4,150})([\)）])(?=[.\s,;!?\n。！？、]|$)/mu',
+            '/([\(（])([^)）]{2,150})([\)）])(?=[.\s,;!?\n。！？、]|$)/mu',
             function ( $match ) use ( $lookup, $norm ) {
                 $open  = $match[1];
                 $text  = $match[2];
@@ -3561,13 +3584,34 @@ final class SEOBetter {
                     if ( str_contains( $inner, '](' ) ) continue;
 
                     $inner_n = $norm( $inner );
+                    $matched = false;
                     foreach ( $lookup as $key => $entry ) {
                         if ( strlen( $key ) > 5 && ( str_contains( $inner_n, $key ) || str_contains( $key, $inner_n ) ) ) {
                             // Preserve the same paren width as the original text
                             $replacement = $open_ch . '[' . $inner . '](' . $entry['url'] . ')' . $close_ch;
                             $line = substr( $line, 0, $start ) . $replacement . substr( $line, $pos );
                             $offset = $start + strlen( $replacement );
+                            $matched = true;
                             break;
+                        }
+                    }
+                    // v1.5.216.62.15 — compact fallback for nested parens, parity
+                    // with first-pass parenthetical handler.
+                    if ( ! $matched ) {
+                        $inner_compact = $compact( $inner );
+                        if ( strlen( $inner_compact ) >= 4 ) {
+                            foreach ( $lookup_compact as $key_compact => $entry ) {
+                                if ( strlen( $key_compact ) >= 4 && (
+                                    $inner_compact === $key_compact ||
+                                    str_contains( $inner_compact, $key_compact ) ||
+                                    str_contains( $key_compact, $inner_compact )
+                                ) ) {
+                                    $replacement = $open_ch . '[' . $inner . '](' . $entry['url'] . ')' . $close_ch;
+                                    $line = substr( $line, 0, $start ) . $replacement . substr( $line, $pos );
+                                    $offset = $start + strlen( $replacement );
+                                    break;
+                                }
+                            }
                         }
                     }
                 }

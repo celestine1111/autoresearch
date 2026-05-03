@@ -7,12 +7,69 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.14)
+> **Last updated:** 2026-05-03 (v1.5.216.62.15)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.15 — Linkify universality fix: square-bracket pass + nested-parens walker + short-acronym minimum length
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+v1.5.216.62.14 added the compact (spaces/punct stripped) lookup fallback to `linkify_bracketed_references()` but ONLY in the first-pass parenthetical regex. User confirmed bracketed text is still being missed across the site. Three gaps in v62.14:
+
+1. **`[bracketed text]` (square brackets)** — the first regex in linkify only used `$lookup` (with-spaces lookup), not `$lookup_compact`. So `[Solfed Dog Food]` square-bracket form was missed even when `(Solfed Dog Food)` parenthetical form was caught.
+
+2. **Short acronyms `(AKC)` `(NIH)` `(FDA)` `[NIH]`** — both regexes had minimum lengths (4 for parens, 10 for brackets) that prevented short acronyms from being evaluated at all. Even though `lookup_compact` keys like "akc" / "nih" / "fda" exist (3 chars from `register()`), the regex never reached the comparison step.
+
+3. **Nested-parens walker** (line 3491+, handles cases like `(Python API Tutorial (Beginner's Guide) | Moesif Blog)`) only used `$lookup`, not `$lookup_compact`. Parity gap with the first-pass handler.
+
+### Fixes
+
+All three patches are in [seobetter.php::linkify_bracketed_references()](../seobetter.php) ~line 3370:
+
+**Fix 1 — Square-bracket pass uses compact lookup**
+- Lowered minimum length: 10 → 3 chars (catches [AKC], [NIH], [FDA])
+- Added stop-list for footnote-style brackets ([1], [a]) to prevent false positives
+- Added compact-fallback loop after the with-spaces loop (parity with parenthetical pass)
+
+**Fix 2 — Parenthetical pass minimum length lowered**
+- Was: `[^)]{4,150}` → now: `[^)]{2,150}`
+- Catches 2-3 char acronyms; existing stop-list (e.g., i.e., see, fig.) prevents false positives
+
+**Fix 3 — Nested-parens walker uses compact lookup**
+- After standard $lookup pass fails, fall back to $lookup_compact comparison
+- Required adding a `$matched` boolean flag so the fallback only runs if first pass missed
+- Same min-length 4 chars on compact keys (the nested case is for longer titles, not acronyms)
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — pure post-processing pass on all article markdown |
+| ALL 21 content types? | ✅ Yes — runs in `validate_outbound_links` pipeline used by every save |
+| ALL AI models? | ✅ Yes — model-agnostic |
+| ALL languages? | ✅ Yes — full-width `（）` parens already supported (v1.5.216.62), compact lookup is alpha+digit only so works for any Latin-script source name; non-Latin source names still match by direct host (e.g. `朝日新聞.com`) |
+| ALL countries? | ✅ Yes — runs against the citation_pool which is populated per-article from research APIs in any country |
+
+### Verify
+
+```bash
+grep -nA 3 "Lowered min length 10 → 3" seobetter/seobetter.php
+grep -nA 3 "Lowered min length 4 → 2" seobetter/seobetter.php
+grep -nA 3 "compact fallback for nested parens" seobetter/seobetter.php
+```
+
+**Test by user:** regenerate any article. Every `(Source Name)` and `[Source Name]` mention in the body should be a clickable hyperlink IF the source's host is in the citation_pool. Acronyms like `(AKC)`, `(NIH)`, `(FDA)` will now be evaluated (previously skipped); whether they linkify depends on whether the AI's research returned a URL whose bare host matches the acronym (e.g. `akc.org`'s bare = "akc"). For acronym → full-name aliasing (e.g. `(American Kennel Club)` → `akc.org`), see Phase B alias map TODO.
+
+**Verified by user:** UNTESTED
 
 ---
 
