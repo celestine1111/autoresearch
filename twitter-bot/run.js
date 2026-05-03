@@ -424,14 +424,18 @@ Return ONLY the JSON per §4 schema. The "tweets" array has one entry per scored
 
   const pick = candidates[0];
   await page.goto(pick.in_reply_to, { waitUntil: 'domcontentloaded' });
-  await jitter(3000, 5000);
+  await page.waitForSelector('article[data-testid="tweet"]', { timeout: 15000 });
+  await jitter(2000, 4000);
   await page.locator('button[data-testid="reply"]').first().click();
+  await page.waitForSelector('div[data-testid="tweetTextarea_0"]', { timeout: 10000 });
   await jitter(1500, 3000);
   const compose = page.locator('div[data-testid="tweetTextarea_0"]').first();
   await compose.click();
   await typeHuman(page, pick.text);
   await jitter(2000, 4000);
-  await page.locator('button[data-testid="tweetButton"]').first().click();
+  // Replies submit via tweetButtonInline (modal/inline composer), NOT tweetButton
+  // which only exists enabled on the dedicated /compose/post page.
+  await page.locator('button[data-testid="tweetButtonInline"]:not([disabled])').first().click({ timeout: 15000 });
   await jitter(3000, 5000);
 
   const handle = pick.in_reply_to.match(/x\.com\/([^\/?#]+)/)?.[1];
@@ -500,14 +504,16 @@ Return ONLY JSON per §4 schema.`;
   }
 
   await page.goto(pick.url, { waitUntil: 'domcontentloaded' });
-  await jitter(3000, 5000);
+  await page.waitForSelector('article[data-testid="tweet"]', { timeout: 15000 });
+  await jitter(2000, 4000);
   await page.locator('button[data-testid="reply"]').first().click();
+  await page.waitForSelector('div[data-testid="tweetTextarea_0"]', { timeout: 10000 });
   await jitter(1500, 3000);
   const compose = page.locator('div[data-testid="tweetTextarea_0"]').first();
   await compose.click();
   await typeHuman(page, reply.text);
   await jitter(2000, 4000);
-  await page.locator('button[data-testid="tweetButton"]').first().click();
+  await page.locator('button[data-testid="tweetButtonInline"]:not([disabled])').first().click({ timeout: 15000 });
   await jitter(3000, 5000);
 
   replied[pick.url] = Date.now();
