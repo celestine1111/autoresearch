@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.20
+ * Version: 1.5.216.62.21
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.20' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.21' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -3642,7 +3642,12 @@ final class SEOBetter {
         // callback (e.g. (e.g.|i.e.|see) already protects against false positives.
         $markdown = preg_replace_callback(
             '/([\(（])([^)）]{2,150})([\)）])(?=[.\s,;!?\n。！？、]|$)/mu',
-            function ( $match ) use ( $lookup, $norm ) {
+            // v1.5.216.62.21 — added $lookup_compact + $resolve_alias to use list.
+            // Without them PHP 8 throws "Value of type null is not callable" at
+            // line 3692 ($resolve_alias( $text_compact )) because PHP closures
+            // don't inherit parent scope automatically. Bug introduced in v62.16
+            // when alias resolver was wired in but use list wasn't updated.
+            function ( $match ) use ( $lookup, $lookup_compact, $norm, $resolve_alias ) {
                 $open  = $match[1];
                 $text  = $match[2];
                 $close = $match[3];

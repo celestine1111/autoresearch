@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.20)
+> **Last updated:** 2026-05-03 (v1.5.216.62.21)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.21 — REAL FIX: parens-pass closure missing $resolve_alias in use list
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+After v62.20 reverted the FAQ block (suspected culprit by code volume), the actual root cause of the "Value of type null is not callable" generation crash was identified: a closure scope bug in `linkify_bracketed_references()`.
+
+The parens-pass `preg_replace_callback` closure at `seobetter.php::linkify_bracketed_references()` line ~3645 calls `$resolve_alias( $text_compact )` (added in v62.16) and iterates `$lookup_compact` (added in v62.14/15) — but the closure's `use ( ... )` list only imports `$lookup` and `$norm`. PHP closures do NOT inherit parent scope automatically; unimported variables are undefined inside the closure body. In PHP 8+, calling an undefined variable as a function fatals with exactly the user's reported error: "Value of type null is not callable".
+
+This bug fired on virtually every article — any time the parens-pass encountered a parenthetical `(Source Name)` that didn't match the primary `$lookup` table (i.e. most parentheticals). The 92% completion mark is consistent with the linkify pass running near the end of `assemble_final()`.
+
+### Fix
+
+**linkify_bracketed_references()** — `seobetter.php` line ~3645
+
+Added `$lookup_compact` and `$resolve_alias` to the parens-pass closure's `use` list:
+
+```php
+// Before (BROKEN):
+function ( $match ) use ( $lookup, $norm ) {
+    ...
+    foreach ( $lookup_compact as ... )       // undefined → warning + no iterations
+    $alias_match = $resolve_alias( ... );    // undefined → FATAL "null is not callable"
+}
+
+// After (FIXED):
+function ( $match ) use ( $lookup, $lookup_compact, $norm, $resolve_alias ) {
+    ...
+}
+```
+
+The bracket-pass closure at line ~3582 already had the correct `use` list (`$lookup, $lookup_compact, $norm, $compact, $resolve_alias`) — the bug was confined to the parens-pass closure where the alias resolver was added without updating `use`.
+
+### Verify
+
+```bash
+grep -n "preg_replace_callback" /Users/ben/Documents/autoresearch/seobetter/seobetter.php | head -20
+sed -n '3640,3650p' /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+```
+
+Expected: closure use list at line ~3645 includes `$lookup_compact` and `$resolve_alias`.
+
+### Reflection
+
+I should have caught this in v62.16 when I wired in `$resolve_alias`. The pre-fix checklist (3 systematic questions) didn't cover closure scope hygiene. Adding to my own watch-out list: **whenever adding a call inside an existing closure, FIRST grep the closure's `use` list and confirm every variable referenced in the new code is captured.** PHP's silent-then-fatal failure mode here (foreach on undefined just warns; calling undefined as function fatals) made it look like FAQ was the culprit by code volume rather than a one-line use-list omission.
+
+**Verified by user:** UNTESTED
 
 ---
 
