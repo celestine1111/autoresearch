@@ -913,11 +913,22 @@ CSS;
                     // Tip/Note/Warning above match $section['content'] correctly; Did You Know
                     // diverged. Same convention now: capture from raw markdown so inline_markdown
                     // can re-render any links inside the callout body.
-                    elseif ( preg_match( '/^(did\s*you\s*know|fun\s*fact)\??\s*[:—-]?\s*(.*)$/is', $section['content'], $dyk_match ) ) {
-                        $body_text = $this->inline_markdown( trim( $dyk_match[2] ) ) ?: $text;
+                    //
+                    // v1.5.216.62.23 — language-aware detection. Pre-fix the regex was
+                    // English-only ('did\s*you\s*know|fun\s*fact'), so non-English
+                    // articles where the AI translated the prefix (e.g. Spanish
+                    // "¿Sabías que?", Japanese "ご存知ですか", German "Wussten Sie schon")
+                    // failed to match and rendered as a plain <p> instead of the styled
+                    // yellow callout. Tip/Note/Warning have been language-aware since
+                    // v1.5.206d-fix6; Did You Know now follows the same Localized_Strings
+                    // convention with a 30-language translation table.
+                    elseif ( preg_match( '/^(?:' . Localized_Strings::get_detection_pattern( 'did_you_know', $article_lang, 'did\s*you\s*know|fun\s*fact' ) . ')[\?？]?\s*[:：—-]?\s*(.*)$/ius', $section['content'], $dyk_match ) ) {
+                        $body_text = $this->inline_markdown( trim( $dyk_match[1] ) ) ?: $text;
+                        if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'didyouknow' );
+                        $dyk_label = esc_html( Localized_Strings::get( 'did_you_know', $article_lang ) ) . '?';
                         $html = '<div style="background:#fefce8 !important;border-left:4px solid #eab308;padding:1em 1.25em;border-radius:0 8px 8px 0;margin:1.25em 0;color:#713f12 !important;line-height:1.7">';
-                        $html .= '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#a16207 !important;margin-bottom:0.35em;display:flex;align-items:center">' . $icon . 'Did you know?</div>';
+                        $html .= '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#a16207 !important;margin-bottom:0.35em;display:flex;align-items:center">' . $icon . $dyk_label . '</div>';
                         $html .= '<div>' . $body_text . '</div>';
                         $html .= '</div>';
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";

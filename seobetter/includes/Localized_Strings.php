@@ -123,6 +123,7 @@ class Localized_Strings {
             'tip'               => 'Tip',
             'note'              => 'Note',
             'warning'           => 'Warning',
+            'did_you_know'      => 'Did you know',
             'pros'              => 'Pros',
             'cons'              => 'Cons',
             // v1.5.206d-fix9 — common prose-template section anchors
@@ -703,6 +704,50 @@ class Localized_Strings {
                 'id'    => 'Peringatan',
                 'ms'    => 'Amaran',
                 'he'    => 'אזהרה',
+            ],
+
+            // v1.5.216.62.23 — Did You Know box translations.
+            // Pre-fix: Content_Formatter Did You Know elseif was English-only.
+            // Non-English articles produced "Did you know?" translations
+            // via the AI (e.g. Spanish "¿Sabías que?") that the regex
+            // couldn't match → no styled callout box → plain <p>.
+            // Translations chosen as the most natural conversational
+            // form per language (e.g. JA "ご存知ですか" formal vs "知って
+            // いますか" casual — went with "ご存知ですか" since articles
+            // skew formal).
+            'did_you_know' => [
+                'en'    => 'Did you know',
+                'ja'    => 'ご存知ですか',
+                'zh'    => '你知道吗',
+                'zh-cn' => '你知道吗',
+                'zh-tw' => '你知道嗎',
+                'ko'    => '알고 계셨나요',
+                'ru'    => 'Знаете ли вы',
+                'de'    => 'Wussten Sie schon',
+                'fr'    => 'Le saviez-vous',
+                'es'    => 'Sabías que',
+                'it'    => 'Lo sapevi',
+                'pt'    => 'Você sabia',
+                'pt-br' => 'Você sabia',
+                'hi'    => 'क्या आप जानते हैं',
+                'ar'    => 'هل تعلم',
+                'nl'    => 'Wist je dat',
+                'pl'    => 'Czy wiesz, że',
+                'tr'    => 'Biliyor musunuz',
+                'sv'    => 'Visste du att',
+                'da'    => 'Vidste du at',
+                'no'    => 'Visste du at',
+                'fi'    => 'Tiesitkö, että',
+                'cs'    => 'Věděli jste, že',
+                'hu'    => 'Tudtad, hogy',
+                'ro'    => 'Știați că',
+                'el'    => 'Το ξέρατε ότι',
+                'uk'    => 'Чи знали ви',
+                'vi'    => 'Bạn có biết',
+                'th'    => 'รู้หรือไม่ว่า',
+                'id'    => 'Tahukah kamu',
+                'ms'    => 'Tahukah anda',
+                'he'    => 'הידעת',
             ],
 
             // Common H2 section anchors — the AI translates these in non-English

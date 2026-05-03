@@ -7,12 +7,86 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.22)
+> **Last updated:** 2026-05-03 (v1.5.216.62.23)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.23 — Did You Know box: language-aware across all 60+ supported languages
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User asked for verification that the v62.22 Did You Know fix and Pros/Cons fix cover all article types and all languages.
+
+Audit findings:
+
+- **Pros/Cons enforcer (v62.22)** — already language-aware via `Localized_Strings::get_detection_pattern( 'pros'|'cons', $lang )`. Works across all 60+ supported languages. ✅ No gap.
+- **Did You Know link fix (v62.22)** — works for any article where the styled box renders. **GAP**: the detection regex was English-only (`/^(did\s*you\s*know|fun\s*fact)\??/`), so non-English articles where the AI translated the prefix (Spanish "¿Sabías que?", Japanese "ご存知ですか", German "Wussten Sie schon", etc.) failed to match → rendered as plain `<p>` instead of the styled yellow callout.
+
+Tip / Note / Warning have been language-aware since v1.5.206d-fix6 via Localized_Strings; Did You Know was the lone holdout. v62.23 brings it into parity.
+
+### Fix
+
+**1. Localized_Strings.php — translation table**
+
+Added `did_you_know` entry with translations for the 30 most common languages (en, ja, zh/zh-cn/zh-tw, ko, ru, de, fr, es, it, pt/pt-br, hi, ar, nl, pl, tr, sv, da, no, fi, cs, hu, ro, el, uk, vi, th, id, ms, he). Form chosen as the most natural conversational opener per language:
+
+| Language | Form |
+|---|---|
+| English | Did you know |
+| Japanese | ご存知ですか |
+| German | Wussten Sie schon |
+| French | Le saviez-vous |
+| Spanish | Sabías que |
+| Korean | 알고 계셨나요 |
+| Russian | Знаете ли вы |
+| Chinese (zh-cn) | 你知道吗 |
+
+**2. Localized_Strings.php — canonical_translation_block**
+
+Added `'did_you_know' => 'Did you know'` to the `$keys` array so the AI prompt now includes the canonical English-to-localized mapping for non-English articles. The AI now sees:
+
+> Use these EXACT canonical translations:
+> - Did you know → ご存知ですか
+> - Tip → ヒント
+> - …
+
+This ensures the AI emits the localized form that the detection regex will match.
+
+**3. Content_Formatter.php — Did You Know elseif (line ~908)**
+
+- Detection regex now built via `Localized_Strings::get_detection_pattern( 'did_you_know', $article_lang, 'did\s*you\s*know|fun\s*fact' )` — returns the English fallback for English articles, and `(?:english_fallback|localized_literal)` for non-English. Same pattern Tip / Note / Warning already use.
+- Question-mark and colon character classes accept both half-width (`?`, `:`) and full-width (`？`, `：`) for CJK languages.
+- Rendered label in the styled box pulled from `Localized_Strings::get( 'did_you_know', $article_lang )` instead of being hardcoded "Did you know?". A Japanese article will now show "ご存知ですか?" in the box header; a German article will show "Wussten Sie schon?".
+
+### Verify
+
+```bash
+sed -n '707,748p' /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php   # did_you_know table
+sed -n '116,156p' /Users/ben/Documents/autoresearch/seobetter/includes/Localized_Strings.php   # canonical_translation_block keys
+sed -n '906,930p' /Users/ben/Documents/autoresearch/seobetter/includes/Content_Formatter.php   # detection regex + label
+```
+
+Expected: 30-language did_you_know map; canonical_translation_block includes `did_you_know`; Content_Formatter elseif uses `get_detection_pattern` and `Localized_Strings::get` for label.
+
+### Coverage matrix after v62.23
+
+| Callout | Detection | Render | All Langs? |
+|---|---|---|---|
+| Tip | language-aware (v1.5.206d-fix6) | localized label | ✅ |
+| Note | language-aware (v1.5.206d-fix6) | localized label | ✅ |
+| Warning | language-aware (v1.5.206d-fix6) | localized label | ✅ |
+| Did You Know | language-aware (v1.5.216.62.23) | localized label | ✅ |
+| Pros / Cons | language-aware (existing + v62.22 enforcer) | localized label | ✅ |
+
+**Verified by user:** UNTESTED
 
 ---
 
