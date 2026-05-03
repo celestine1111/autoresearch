@@ -7,12 +7,42 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.9)
+> **Last updated:** 2026-05-03 (v1.5.216.62.10)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.10 — Fix Tavily-key diagnostic + richer per-stage filter counts in inject_quotes
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Bug 1 — Diagnostic always falsely showed "Tavily NOT configured"
+
+The v1.5.216.62.8 diagnostic banner read `get_option('seobetter_tavily_api_key')` to check whether Tavily was configured. But the actual save handler writes the key to `seobetter_settings['tavily_api_key']` (different option). The two never matched, so the diagnostic always lied — even after a successful save the banner said "❌ NOT configured."
+
+**Fix:** [Async_Generator.php](../includes/Async_Generator.php) ~line 2476 — now reads `get_option('seobetter_settings')['tavily_api_key']`, the same location the actual extraction uses at [Content_Injector.php:2191](../includes/Content_Injector.php#L2191).
+
+### Bug 2 — "No verifiable quotes found" error message hides which stage dropped quotes
+
+[Content_Injector.php::inject_quotes()](../includes/Content_Injector.php) Source 2 (PHP-direct Tavily) had a generic error string that didn't say whether Tavily returned 0 raw results, OR returned results that all failed the substantive_re/e-commerce_re filters. With per-stage counts, we can tell which is failing for any keyword.
+
+**Fix:** added per-stage counters (`$tavily_raw_count`, `$tavily_passed_count`, `$tavily_filter_rejects`) and surfaced them in the error message + return array. The diagnostic banner can now show "Tavily raw=8, passed=2, rejected=6" so we can see if the filter is too strict for a given content domain.
+
+### Verify
+
+```bash
+grep -nA2 "tavily_raw_count" seobetter/includes/Content_Injector.php
+grep -nB2 "tavily_key_set" seobetter/includes/Async_Generator.php
+```
+
+**Test by user:** generate any article. If diagnostic still shows ❌ NOT configured after save, the Tavily field write is broken. If it shows ✅ configured but quotes still 0, the new "Tavily raw=N, passed=M" detail in the reason will pinpoint whether Tavily returned 0 results OR the substantive/e-commerce filters are too strict.
+
+**Verified by user:** UNTESTED
 
 ---
 

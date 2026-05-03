@@ -2489,7 +2489,14 @@ class Async_Generator {
             $qd_country = (string) ( $options['country'] ?? '' );
 
             $sonar_quote_count = is_array( $sonar_data['quotes'] ?? null ) ? count( $sonar_data['quotes'] ) : 0;
-            $tavily_key_set    = (bool) get_option( 'seobetter_tavily_api_key', '' );
+            // v1.5.216.62.10 — Tavily key is saved into seobetter_settings['tavily_api_key']
+            // by the General Settings save handler. Previously the diagnostic checked
+            // get_option('seobetter_tavily_api_key') which is a different key that nothing
+            // ever writes to → diagnostic always falsely showed "NOT configured" even
+            // when the actual extraction was working from the right location.
+            $sb_settings    = get_option( 'seobetter_settings', [] );
+            $tavily_key_raw = (string) ( $sb_settings['tavily_api_key'] ?? '' );
+            $tavily_key_set = $tavily_key_raw !== '';
             $quote_result = Content_Injector::inject_quotes( $markdown, $keyword, $sonar_data, $qd_domain, $qd_country );
 
             // v1.5.216.62.8 — capture the inject_quotes status so the result

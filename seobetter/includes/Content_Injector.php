@@ -404,18 +404,44 @@ class Content_Injector {
         }
 
         // Source 2: Direct Tavily call from PHP (only if Source 1 found < 2 quotes)
+        // v1.5.216.62.10 — track per-stage counts so the diagnostic can pinpoint
+        // exactly which stage drops quotes (e.g. Tavily returns 8 raw, 6 fail
+        // substantive_re, 2 fail e-commerce_re, 0 reach final $quotes array).
+        $tavily_raw_count      = 0;
+        $tavily_passed_count   = 0;
+        $tavily_filter_rejects = 0;
         if ( count( $quotes ) < 2 ) {
             $tavily = self::tavily_search_and_extract( $keyword, $domain, $country );
+            $tavily_raw_count = count( $tavily['quotes'] ?? [] );
             foreach ( ( $tavily['quotes'] ?? [] ) as $q ) {
                 $valid = $validate_quote( $q );
-                if ( ! $valid ) continue;
+                if ( ! $valid ) {
+                    $tavily_filter_rejects++;
+                    continue;
+                }
+                $tavily_passed_count++;
                 $quotes[] = "\"{$valid['text']}\" — [{$valid['source']}]({$valid['url']})";
                 if ( count( $quotes ) >= 3 ) break;
             }
         }
 
         if ( empty( $quotes ) ) {
-            return [ 'success' => false, 'error' => 'No verifiable quotes found. Tavily could not extract relevant sentences with source URLs for this keyword. Quotes skipped to prevent hallucination.' ];
+            // v1.5.216.62.10 — richer error so the UI banner shows exactly which
+            // stage failed instead of a generic "no verifiable quotes found".
+            $reason = sprintf(
+                'No verifiable quotes found. Tavily raw=%d, passed substantive/e-commerce filter=%d, rejected=%d. Sonar pool=%d.',
+                $tavily_raw_count,
+                $tavily_passed_count,
+                $tavily_filter_rejects,
+                isset( $sonar_data['quotes'] ) && is_array( $sonar_data['quotes'] ) ? count( $sonar_data['quotes'] ) : 0
+            );
+            return [
+                'success' => false,
+                'error'   => $reason,
+                'tavily_raw_count'      => $tavily_raw_count,
+                'tavily_passed_count'   => $tavily_passed_count,
+                'tavily_filter_rejects' => $tavily_filter_rejects,
+            ];
         }
 
         // Insert quotes after H2 headings (skip Key Takeaways and FAQ)
