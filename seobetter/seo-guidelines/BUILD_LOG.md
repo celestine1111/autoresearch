@@ -19,7 +19,7 @@
 ## v1.5.216.62.11 — Strip empty headings post-generation (fixes "### Cons" with no body)
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `fe0acb0`
 
 ### Bug
 
