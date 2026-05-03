@@ -19,7 +19,7 @@
 ## v1.5.216.62.24 — Rich Results metabox 2-state refactor + 21-platform video + Schema Block front-end cards
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `f8e95b6`
 
 ### Why
 
