@@ -1278,25 +1278,13 @@ define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
         <span id="seobetter-gsc-status-msg" style="margin-left:12px;font-size:12px;color:#6b7280"></span>
 
         <?php
-        // v1.5.216.53 — WP_DEBUG-gated test data seeder. Lets the developer
-        // exercise Freshness / Decay / Striking-distance features before any
-        // real GSC traffic exists. Hidden in production builds because
-        // WP_DEBUG=false there. Backend (GSC_Manager::seed_test_snapshots)
-        // re-checks WP_DEBUG so this is double-gated.
-        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) :
+        // v1.5.216.62.18 — REMOVED WP_DEBUG mock GSC seeder UI per user
+        // directive ("remove the test things you put into settings"). Backend
+        // GSC_Manager::seed_test_snapshots() retained as dead code for
+        // potential future devtool revival. To clear any seeded data still
+        // in the database from prior testing sessions, run:
+        //   DELETE FROM wp_postmeta WHERE meta_key='_seobetter_gsc_snapshots';
         ?>
-        <div style="margin-top:18px;padding:12px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px">
-            <div style="font-size:13px;font-weight:600;color:#78350f;margin-bottom:6px">
-                ⚠️ <?php esc_html_e( 'Developer testing — WP_DEBUG only', 'seobetter' ); ?>
-            </div>
-            <p style="margin:0 0 8px;font-size:11px;color:#78350f;line-height:1.5">
-                <?php esc_html_e( 'Seed mock GSC snapshots for your most-recent posts so Content Freshness, Decay Alerts, and Striking-distance flags render before real GSC traffic is available. Test data only — clear before going live.', 'seobetter' ); ?>
-            </p>
-            <button type="button" id="seobetter-gsc-seed" class="button" style="margin-right:8px"><?php esc_html_e( 'Seed sample GSC data', 'seobetter' ); ?></button>
-            <button type="button" id="seobetter-gsc-clear-test" class="button" style="color:#991b1b"><?php esc_html_e( 'Clear test data', 'seobetter' ); ?></button>
-            <span id="seobetter-gsc-seed-msg" style="margin-left:10px;font-size:12px;color:#78350f"></span>
-        </div>
-        <?php endif; ?>
 
         <script>
         jQuery(function($) {
@@ -1392,57 +1380,11 @@ define( 'SEOBETTER_GSC_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );</pre>
                 });
             });
 
-            // v1.5.216.53 — seed / clear mock GSC snapshots. Buttons only
-            // render under WP_DEBUG (PHP-side), and the REST endpoints
-            // re-check WP_DEBUG so production installs cannot trigger them.
-            $('#seobetter-gsc-seed').on('click', function() {
-                var $btn = $(this);
-                var $msg = $('#seobetter-gsc-seed-msg');
-                $btn.prop('disabled', true).text('<?php echo esc_js( __( 'Seeding…', 'seobetter' ) ); ?>');
-                $msg.text('').css('color', '#78350f');
-                $.ajax({
-                    url: '<?php echo esc_js( rest_url( 'seobetter/v1/gsc/seed-test-data' ) ); ?>',
-                    method: 'POST',
-                    headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
-                }).done(function(res) {
-                    if (res && res.success) {
-                        $msg.text('✓ <?php echo esc_js( __( 'Seeded', 'seobetter' ) ); ?> ' + (res.rows_inserted || 0) + ' <?php echo esc_js( __( 'snapshots across', 'seobetter' ) ); ?> ' + (res.posts_seeded || 0) + ' <?php echo esc_js( __( 'posts. Reload Freshness page to see.', 'seobetter' ) ); ?>').css('color', '#059669');
-                    } else {
-                        $msg.text('✗ ' + (res && res.error ? res.error : '<?php echo esc_js( __( 'Seed failed', 'seobetter' ) ); ?>')).css('color', '#dc2626');
-                    }
-                }).fail(function(xhr) {
-                    var msg = '<?php echo esc_js( __( 'Seed failed', 'seobetter' ) ); ?>';
-                    try { var r = JSON.parse(xhr.responseText); msg = r.error || msg; } catch(e) {}
-                    $msg.text('✗ ' + msg).css('color', '#dc2626');
-                }).always(function() {
-                    $btn.prop('disabled', false).text('<?php echo esc_js( __( 'Seed sample GSC data', 'seobetter' ) ); ?>');
-                });
-            });
-
-            $('#seobetter-gsc-clear-test').on('click', function() {
-                if (!confirm('<?php echo esc_js( __( 'Wipe all GSC snapshots? This deletes both real synced data and seeded test data.', 'seobetter' ) ); ?>')) return;
-                var $btn = $(this);
-                var $msg = $('#seobetter-gsc-seed-msg');
-                $btn.prop('disabled', true).text('<?php echo esc_js( __( 'Clearing…', 'seobetter' ) ); ?>');
-                $msg.text('').css('color', '#78350f');
-                $.ajax({
-                    url: '<?php echo esc_js( rest_url( 'seobetter/v1/gsc/clear-test-data' ) ); ?>',
-                    method: 'POST',
-                    headers: { 'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>' },
-                }).done(function(res) {
-                    if (res && res.success) {
-                        $msg.text('✓ <?php echo esc_js( __( 'Cleared', 'seobetter' ) ); ?> ' + (res.rows_deleted || 0) + ' <?php echo esc_js( __( 'snapshot row(s).', 'seobetter' ) ); ?>').css('color', '#059669');
-                    } else {
-                        $msg.text('✗ ' + (res && res.error ? res.error : '<?php echo esc_js( __( 'Clear failed', 'seobetter' ) ); ?>')).css('color', '#dc2626');
-                    }
-                }).fail(function(xhr) {
-                    var msg = '<?php echo esc_js( __( 'Clear failed', 'seobetter' ) ); ?>';
-                    try { var r = JSON.parse(xhr.responseText); msg = r.error || msg; } catch(e) {}
-                    $msg.text('✗ ' + msg).css('color', '#dc2626');
-                }).always(function() {
-                    $btn.prop('disabled', false).text('<?php echo esc_js( __( 'Clear test data', 'seobetter' ) ); ?>');
-                });
-            });
+            // v1.5.216.62.18 — REMOVED mock GSC seed/clear button JS handlers
+            // (UI buttons removed above). Backend REST endpoints
+            // /gsc/seed-test-data and /gsc/clear-test-data remain registered
+            // but are now unreachable from the UI; can be removed in a follow-up
+            // cleanup if desired. They double-check WP_DEBUG anyway.
         });
         </script>
     <?php endif; ?>

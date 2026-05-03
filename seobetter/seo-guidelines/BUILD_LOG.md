@@ -7,12 +7,50 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.17)
+> **Last updated:** 2026-05-03 (v1.5.216.62.18)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.18 — Remove WP_DEBUG mock GSC seeder UI + rename Internal Links slug
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User pre-launch cleanup: (1) remove the WP_DEBUG-gated mock GSC data seeder UI from Settings (had served its purpose during Freshness page development); (2) fix Internal Links page URL — user reported the page as "broken" because they tried `?page=seobetter-internal-links` but the actual registered slug was `seobetter-links`. Per menu-items audit, the page itself works fine; only the slug naming was inconsistent with `seobetter-freshness` and `seobetter-bulk`.
+
+### Fixes
+
+**Fix 1 — Mock GSC seeder UI removal** ([admin/views/settings.php:1280-1299](../admin/views/settings.php))
+- Removed the developer-testing card with "Seed sample GSC data" + "Clear test data" buttons
+- Removed the JS handlers for both buttons
+- Backend `GSC_Manager::seed_test_snapshots()` + REST endpoints `/gsc/seed-test-data` + `/gsc/clear-test-data` retained as dead code (still WP_DEBUG-gated server-side)
+- To clear any seeded data still in the database: `DELETE FROM wp_postmeta WHERE meta_key='_seobetter_gsc_snapshots'`
+
+**Fix 2 — Rename Internal Links slug** for consistency with sibling menu items
+- Was: `?page=seobetter-links` (inconsistent — `seobetter-freshness` / `seobetter-bulk` are descriptive)
+- Now: `?page=seobetter-internal-links`
+- Updated 5 references: 1 in [seobetter.php:200](../seobetter.php) (add_submenu_page), 4 in [admin/views/link-suggestions.php:25,32,126,162](../admin/views/link-suggestions.php) (intra-page tab links + form hidden field)
+
+### Verify
+
+```bash
+grep -rn "seobetter-internal-links" seobetter/seobetter.php seobetter/admin/views/link-suggestions.php | wc -l
+# Expected: 5 (1 menu reg + 4 intra-page links)
+
+grep -rn "seobetter-links\b" seobetter/seobetter.php seobetter/admin/views/ 2>&1 | wc -l
+# Expected: 0
+```
+
+**Test by user:** WP Admin → SEOBetter → Internal Links should now resolve to `?page=seobetter-internal-links` URL. Settings → GSC card no longer shows the yellow developer-testing seed/clear panel.
+
+**Verified by user:** UNTESTED
 
 ---
 

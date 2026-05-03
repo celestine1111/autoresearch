@@ -22,14 +22,14 @@ $orphan_report = $suggester->find_orphan_posts();
 
     <!-- Tab nav -->
     <h2 class="nav-tab-wrapper" style="margin-bottom:16px">
-        <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-links&tab=orphan' ) ); ?>" class="nav-tab <?php echo $active_tab === 'orphan' ? 'nav-tab-active' : ''; ?>">
+        <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-internal-links&tab=orphan' ) ); ?>" class="nav-tab <?php echo $active_tab === 'orphan' ? 'nav-tab-active' : ''; ?>">
             <?php esc_html_e( 'Orphan Pages', 'seobetter' ); ?>
             <span style="background:#64748b;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:0.05em">FREE</span>
             <?php if ( $orphan_report['orphan_count'] > 0 ) : ?>
                 <span style="background:#dc2626;color:#fff;font-size:11px;padding:1px 8px;border-radius:10px;margin-left:6px;font-weight:700"><?php echo esc_html( $orphan_report['orphan_count'] ); ?></span>
             <?php endif; ?>
         </a>
-        <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-links&tab=suggester' ) ); ?>" class="nav-tab <?php echo $active_tab === 'suggester' ? 'nav-tab-active' : ''; ?>">
+        <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-internal-links&tab=suggester' ) ); ?>" class="nav-tab <?php echo $active_tab === 'suggester' ? 'nav-tab-active' : ''; ?>">
             <?php esc_html_e( 'Link Suggestions', 'seobetter' ); ?>
             <span style="background:#8b5cf6;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:0.05em">PRO+</span>
         </a>
@@ -123,7 +123,7 @@ $orphan_report = $suggester->find_orphan_posts();
                             <td style="font-size:12px"><?php echo esc_html( number_format( $o['word_count'] ) ); ?></td>
                             <td>
                                 <?php if ( $can_use_pro ) : ?>
-                                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-links&tab=suggester&post_id=' . $o['id'] ) ); ?>" class="button button-primary button-small"><?php esc_html_e( 'Find inbound links →', 'seobetter' ); ?></a>
+                                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-internal-links&tab=suggester&post_id=' . $o['id'] ) ); ?>" class="button button-primary button-small"><?php esc_html_e( 'Find inbound links →', 'seobetter' ); ?></a>
                                 <?php else : ?>
                                     <a href="<?php echo esc_url( $o['edit_url'] ); ?>" class="button button-small"><?php esc_html_e( 'Edit', 'seobetter' ); ?></a>
                                 <?php endif; ?>
@@ -159,7 +159,7 @@ $orphan_report = $suggester->find_orphan_posts();
             <!-- Active suggester -->
             <div class="seobetter-card">
                 <form method="get" style="display:flex;gap:10px;align-items:center;margin-bottom:18px">
-                    <input type="hidden" name="page" value="seobetter-links" />
+                    <input type="hidden" name="page" value="seobetter-internal-links" />
                     <input type="hidden" name="tab" value="suggester" />
                     <label style="font-weight:600"><?php esc_html_e( 'Select a post:', 'seobetter' ); ?></label>
                     <select name="post_id" onchange="this.form.submit()" style="flex:1;max-width:500px">
