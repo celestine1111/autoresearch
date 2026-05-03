@@ -19,7 +19,7 @@
 ## v1.5.216.62.31 — Schema Blocks UX overhaul (media picker · readable enum labels · save hint · required-field fix)
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `6843d25`
 
 ### Why
 
