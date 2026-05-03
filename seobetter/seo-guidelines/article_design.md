@@ -326,6 +326,37 @@ Auto-detected when `content_type === 'how_to'` AND the list is ordered (`<ol>`) 
 - Threading: `format_hybrid()` reads `$options['content_type']` (passed in by `seobetter.php::rest_save_draft()` and `Async_Generator::assemble_final()`)
 - Source: `Content_Formatter.php::format_hybrid()` list branch — HowTo step boxes
 
+### 5.15 Schema Block Cards — front-end render (`v1.5.216.62.24+`, Pro+)
+
+Pre-v62.24, the 5 user-edited Schema Blocks (Product / Event / LocalBusiness / VacationRental / JobPosting) emitted JSON-LD ONLY — schema was correct in `<script type="application/ld+json">` but the post body had no visible card. v62.24 adds a front-end render path so each enabled block produces a **styled human-readable card** prepended to the post content via the `the_content` filter (priority 9, before `wpautop`). The schema continues to flow into @graph as before — the card is purely additive.
+
+**Architecture:**
+- `Schema_Blocks_Manager::render_all_html(int $post_id): string` — iterates `BLOCK_TYPES` in order, calls per-type renderer, concatenates.
+- `Schema_Blocks_Manager::render_html(string $type, array $b): string` — dispatch.
+- Per-type renderers: `render_product_card`, `render_event_card`, `render_localbusiness_card`, `render_vacationrental_card`, `render_jobposting_card`.
+- Helpers: `format_address_lines()`, `build_maps_directions_url()`, `humanize_business_type()`.
+- Hooked at `seobetter.php::inject_schema_block_cards()` — main loop singular only, `License_Manager::can_use('schema_blocks_5')` gated.
+- Render guard: each render method runs the same required-field check as its `build_*_jsonld()` sibling. Missing required fields → returns empty string → no card. Never half-empty UI.
+
+**LocalBusiness card** (most detailed, per Ben's spec):
+- Header row: 📍 icon (36px square, slate background) + business name (1.15em bold) + business-type label (uppercase 0.8em slate) + price-range pill (green) on the right
+- Optional hero image (220px max height, rounded 8px)
+- Optional description paragraph (0.95em slate)
+- 2-column grid for Address + Phone (Phone is `tel:` clickable, accent blue)
+- Hours block: uppercase "Hours" header + bullet-free list of opening_hours lines
+- CTA row at bottom: dark "→ Directions" button (Google Maps URL from lat/lng if present, else address fallback) + outline "📞 Call" button
+- `humanize_business_type()` maps 50+ Schema.org sub-types (Restaurant, Cafe, BarOrPub, Hotel, BedAndBreakfast, Hostel, Bakery, Brewery, Winery, ClothingStore, Hospital, Pharmacy, BeautySalon, Locksmith, Plumber, etc.) to readable labels.
+
+**Product card:** 140px square image (left) + brand label + name + description + large price + currency + availability badge + SKU footer.
+
+**Event card:** 📅 icon + name + optional hero image + description + When/Where grid + "Get tickets →" CTA when URL set.
+
+**VacationRental card:** wide hero image (top) + name + price-range row + address line + description + facts pill row (rooms / sleeps N / pet-friendly).
+
+**JobPosting card:** hiring-organization label + job title + pill row (location / employment_type / salary) + description + "Apply →" CTA.
+
+All cards use inline styles (theme-proof per the plugin's standard approach), mobile-first single-column responsive layout, neutral accent colors that don't fight the article's accent.
+
 ### 5.16b Preview = saved draft parity (`v1.5.21+`)
 
 Through v1.5.20 the two formatters had diverged. `format_hybrid()` had 14 styled block branches with custom SVG icons, eyebrow headers, and v1.5.14/v1.5.17 features (Did You Know, Definition, Highlight, Expert Quote, Stat callout, Social Citation, HowTo Step Boxes). `format_classic()` (used by the result-panel preview) still had only 4 branches (tip/note/warning paragraph, takeaways/pros/cons/ingredients list) using CSS classes instead of inline styles. **Result: the preview was a stripped-down version of the article that didn't match the saved draft.**

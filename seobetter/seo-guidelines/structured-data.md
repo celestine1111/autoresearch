@@ -46,35 +46,37 @@
 
 ---
 
-## 3. RICH RESULT STATUS (as of April 2026)
+## 3. RICH RESULT STATUS (as of May 2026 — updated v1.5.216.62.24)
 
 | Schema Type | Google Status | Used by SEOBetter |
 |---|---|---|
 | **Article / BlogPosting / NewsArticle** | ACTIVE | Yes — most article types |
 | **Recipe** | ACTIVE (enriched) | Yes — recipe type |
 | **Review snippet** | ACTIVE | Yes — review type |
-| **FAQPage** | RESTRICTED (gov/health only) | Yes — but no rich results for most sites |
-| **HowTo** | DEPRECATED (Sept 2023) | Yes but SHOULD NOT — no rich results |
-| **LocalBusiness** | ACTIVE | Yes — auto-detected from addresses |
+| **FAQPage** | RESTRICTED (gov/health only) | Yes — auto-emit when content has FAQ section |
+| **HowTo** | DEPRECATED (Sept 2023) | **No — `case 'HowTo'` removed in v1.5.213. Metabox tile dropped in v62.24** since Google does not deliver the rich result anymore. `how_to` content type maps to `Article` per CONTENT_TYPE_MAP. |
+| **LocalBusiness** | ACTIVE for the business's own page or authoritative aggregator | **Manual Schema Block only (v62.24)** — the auto-emit-from-article-content path was retired since article-style sites do not qualify for the Map Pack rich result. Pro+ users insert a LocalBusiness Schema Block for legitimate single-business pages. |
 | **ItemList** | ACTIVE | Yes — listicle type |
 | **BreadcrumbList** | ACTIVE | Yes — all types |
 | **DefinedTerm** | ACTIVE | Yes — glossary type |
-| **Product** | ACTIVE | Yes (v1.5.135) — review, buying_guide, comparison, sponsored |
-| **Organization** | ACTIVE | Yes (v1.5.135) — press_release, case_study, sponsored |
-| **QAPage** | ACTIVE | Yes (v1.5.135) — interview, faq_page |
-| **ClaimReview** | ACTIVE | Yes (v1.5.135) — news, opinion (fact check language) |
-| **JobPosting** | ACTIVE | Yes (v1.5.135) — career/HR content with salary |
-| **VacationRental/LodgingBusiness** | ACTIVE | Yes (v1.5.135) — travel/accommodation content |
-| **VideoObject** | ACTIVE | Yes — auto-detected from YouTube/Vimeo embeds |
+| **Product** | ACTIVE | Manual Schema Block (Pro+) + auto-detect for review/buying_guide/comparison/sponsored |
+| **Organization** | ACTIVE | Yes — universal, all article types |
+| **QAPage** | ACTIVE | Yes — interview, faq_page |
+| **ClaimReview** | ACTIVE | Yes — news, opinion (fact check language) |
+| **JobPosting** | ACTIVE | Manual Schema Block (Pro+) |
+| **VacationRental/LodgingBusiness** | ACTIVE | Manual Schema Block (Pro+) |
+| **VideoObject** | ACTIVE | Yes — **auto-detected from 21 platforms in v62.24**: YouTube · Vimeo · Rumble · Bilibili · Youku · iQiyi · Niconico · Naver TV · Kakao TV · Dailymotion · Vidio · Aparat · RuTube · VK Video · Coub · TikTok · Twitch · Facebook Watch · Instagram Reels · Wistia · Mux · Brightcove |
 | **SoftwareApplication** | ACTIVE | Yes — tech/business category with app mentions |
-| **Event** | ACTIVE | Yes — auto-detected from dates + locations |
+| **Event** | ACTIVE | Manual Schema Block (Pro+) + auto-detect for news/blog with date+venue |
 | **Course** | ACTIVE | Yes — education/tech category |
 | **Movie** | ACTIVE | Yes — entertainment category |
 | **Book** | ACTIVE | Yes — books category |
 | **Dataset** | ACTIVE | Yes — white_paper, scholarly with data tables |
 | **ImageObject** | ACTIVE | Yes — license metadata on images |
 | **ProfilePage** | ACTIVE | Yes — interview, personal_essay |
-| **Speakable** | ACTIVE | Yes — blog, news, opinion, pillar |
+| **Speakable** | ACTIVE | Yes — blog, news, opinion, pillar, how_to, faq_page, interview, recipe, personal_essay, press_release |
+| **DiscussionForumPosting** | ACTIVE for forum software | **No — metabox tile dropped in v62.24.** Schema applies to Reddit/Discourse/vBulletin-style threads, not articles. |
+| **Paywall (`isAccessibleForFree=false`)** | ACTIVE for major publishers | **No — metabox tile dropped in v62.24.** Almost never appears in real Google SERPs for non-publisher sites; no clear user action path. |
 
 ---
 
@@ -364,34 +366,59 @@ Sponsored deliberately remains excluded per Google policy — voice assistants s
 
 **REST endpoint:** `POST /seobetter/v1/schema-blocks/{post_id}` with payload `{ blocks: { product: {...}, event: {...}, ... } }`. Pro+ gated at handler level via `License_Manager::can_use('schema_blocks_5')`.
 
+**v1.5.216.62.24 — Front-end styled card rendering.** Pre-v62.24 the Schema Blocks emitted JSON-LD ONLY — the structured data was correct in `<script type="application/ld+json">` but the post body had no visible card. v62.24 adds a front-end render path: each enabled block generates a styled HTML card prepended to the post content via `the_content` filter (priority 9, before wpautop).
+
+**Hook:** `seobetter.php::inject_schema_block_cards()` runs only on `is_singular() && in_the_loop() && is_main_query()` and only when `License_Manager::can_use('schema_blocks_5')` is true. Calls `Schema_Blocks_Manager::render_all_html()` which iterates BLOCK_TYPES in order and concatenates each enabled block's card HTML.
+
+**Per-block card design** (all use inline styles for theme-proofness, mobile-first single-column responsive):
+
+| Block | Card layout |
+|---|---|
+| `localbusiness` | 📍 icon + name + business-type label · price-range badge · optional hero image · description · address-grid (Address / Phone with click-to-call `tel:` link) · opening-hours list under "Hours" header · CTA row → "Directions" (Google Maps URL from lat/lng or address) + "Call" button |
+| `product` | optional 140px square image (left) · brand label · name · description · large price + currency · availability badge · SKU footer |
+| `event` | 📅 icon + name · optional hero image · description · "When" / "Where" grid · "Get tickets" CTA (if URL set) |
+| `vacationrental` | wide hero image (top) · name + price-range row · address line · description · facts row (rooms / sleeps N / pet-friendly badge) |
+| `jobposting` | hiring-organization label · job title · pill row (location / employment_type / salary) · description · "Apply" CTA |
+
+**`humanize_business_type()` helper** in Schema_Blocks_Manager maps the 50+ Schema.org LocalBusiness sub-types (Restaurant, Cafe, BarOrPub, Hotel, BedAndBreakfast, Hostel, Bakery, Brewery, Winery, ClothingStore, Hospital, Pharmacy, BeautySalon, etc.) to readable display labels for the card header. Falls back to ucfirst(type) for unmapped types.
+
+**Render guard:** each render method runs the same required-field check as its `build_*_jsonld()` sibling — if required fields are missing, returns empty string and renders nothing. Never half-empty cards.
+
 ---
 
 ## 5. CONTENT TYPE → SCHEMA TYPE MAPPING
 
-| Content Type | Primary @type | Secondary @type(s) | Notes |
-|---|---|---|---|
-| blog_post | BlogPosting | FAQPage (if FAQ section exists) | Standard blog article |
-| how_to | Article | FAQPage (if FAQ exists) | NOT HowTo (deprecated by Google) |
-| listicle | Article | ItemList, FAQPage | ItemList for numbered items |
-| review | Review OR Article | FAQPage | Review ONLY if rating extractable, else Article |
-| comparison | Article | FAQPage | No special schema |
-| buying_guide | Article | ItemList, FAQPage | ItemList for product list |
-| recipe | Recipe | FAQPage | Required: name + image. No hardcoded times. |
-| faq_page | FAQPage | — | Restricted to gov/health for rich results |
-| news_article | NewsArticle | FAQPage | News-specific fields |
-| opinion | OpinionNewsArticle | FAQPage | Opinion variant |
-| tech_article | TechArticle | FAQPage | Technical article |
-| white_paper | Article | FAQPage | Report format |
-| scholarly | ScholarlyArticle | FAQPage | Academic format |
-| live_blog | LiveBlogPosting | — | Live event coverage |
-| press_release | NewsArticle | — | Corporate announcement |
-| personal_essay | BlogPosting | — | Personal narrative |
-| glossary_definition | DefinedTerm | — | Single term definition |
-| sponsored | BlogPosting (v1.5.209) | Organization | `articleSection: "Sponsored"` + `backstory` + `citation[]` + optional `sponsor` Organization. AdvertiserContentArticle rejected by Google — BlogPosting with disclosure enrichments is the compliant path. |
-| case_study | Article | FAQPage, Organization | Business results |
-| interview | Article | FAQPage | Q&A format |
-| pillar_guide | Article | FAQPage, ItemList | Comprehensive guide |
-| LOCAL (places) | LocalBusiness | ItemList | When article lists real businesses |
+**v1.5.216.62.24 update:** added explicit "Auto / Manual Block" column. Auto = emitted by Schema_Generator at save time from content detection. Manual Block = Pro+ user inserts a Schema Block in the metabox panel. The two are not exclusive — a single article can have both auto-emitted Article schema AND a manual Product / Event / LocalBusiness / VacationRental / JobPosting block.
+
+| Content Type | Primary @type | Auto secondary @types | Manual Block options (Pro+) | Notes |
+|---|---|---|---|---|
+| blog_post | BlogPosting | FAQPage*, Speakable, BreadcrumbList, Organization, Person | All 5 | Standard blog article |
+| how_to | Article | FAQPage*, Speakable, citation[], BreadcrumbList | All 5 | NOT HowTo (deprecated by Google Sept 2023) |
+| listicle | Article | ItemList, FAQPage*, BreadcrumbList | All 5 | ItemList for numbered items |
+| review | Review OR Article | FAQPage*, Product*, AggregateRating, BreadcrumbList | All 5 | Review ONLY if rating extractable, else Article |
+| comparison | Article | FAQPage*, Product*, BreadcrumbList | All 5 | No special schema |
+| buying_guide | Article | ItemList, FAQPage*, Product*, BreadcrumbList | All 5 | ItemList for product list |
+| recipe | Recipe + Article wrapper | Speakable, BreadcrumbList | None recommended | Required: name + image. No hardcoded times. v1.5.213 wrapper. |
+| faq_page | FAQPage | Speakable, BreadcrumbList | None | Restricted to gov/health for rich results |
+| news_article | NewsArticle | Speakable, FAQPage*, BreadcrumbList | Event | News-specific fields |
+| opinion | OpinionNewsArticle | Speakable, citation[], FAQPage*, BreadcrumbList | Event | Opinion variant |
+| tech_article | TechArticle | citation[], Speakable, FAQPage*, BreadcrumbList | Product | Technical article |
+| white_paper | Article | citation[], FAQPage*, Dataset (tables), BreadcrumbList | None | Report format |
+| scholarly_article | ScholarlyArticle | citation[], FAQPage*, Dataset, BreadcrumbList | None | Academic format |
+| live_blog | LiveBlogPosting | BreadcrumbList | None | Live event coverage |
+| press_release | NewsArticle (enriched) | Speakable, citation[], Organization, FAQPage*, BreadcrumbList | Event | Corporate announcement |
+| personal_essay | BlogPosting (enriched) | Speakable, ProfilePage, citation[], BreadcrumbList | None | Personal narrative |
+| glossary_definition | DefinedTerm | BreadcrumbList | None | Single term definition |
+| sponsored | BlogPosting (sponsored disclosure) | Organization, citation[], FAQPage*, BreadcrumbList | Product | `articleSection: "Sponsored"` + `backstory` + `citation[]` + optional `sponsor` Organization. AdvertiserContentArticle rejected by Google — BlogPosting with disclosure enrichments is the compliant path. |
+| case_study | Article | Organization, citation[], FAQPage*, BreadcrumbList | All 5 | Business results |
+| interview | Article + ProfilePage | QAPage, citation[], Speakable, FAQPage*, BreadcrumbList | None | Q&A format |
+| pillar_guide | Article + ItemList | citation[], Speakable, FAQPage*, BreadcrumbList | All 5 | Comprehensive guide |
+
+*FAQPage = automatic when article body contains a `## Frequently Asked Questions` section with 3+ Q&A pairs. Excluded types: recipe, live_blog, faq_page-as-primary.
+
+*Product (auto) = detected from review/comparison content with extractable price + product name. Manual Product Schema Block always overrides auto-detection for the same @type.
+
+**LocalBusiness as primary @type** = manual Schema Block ONLY (Pro+). v1.5.216.62.24 retired the auto-emit-from-article-listing path because article-style sites do not qualify for Google's Map Pack rich result; the manual block exists for the legitimate single-business-page use case where a customer is publishing about *their own* business.
 
 ---
 

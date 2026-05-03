@@ -7,12 +7,88 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.23)
+> **Last updated:** 2026-05-03 (v1.5.216.62.24)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.24 — Rich Results metabox 2-state refactor + 21-platform video + Schema Block front-end cards
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audited the Rich Results tab in the post metabox and identified that the 3-state model (Active / Available / Not applicable) was misleading: orange "Available" tiles promised functionality the user often had no path to activate (Local Business / Map Pack on a how-to article, Paywall on a free blog, HowTo on a content type Google had deprecated). Some "Available" tiles required user actions like "add an FAQ section to your article" while others required Pro+ Schema Blocks — both were rolled into the same orange badge with no differentiation. After my proposal + the user's research-first request on LocalBusiness, decision was: drop 4 dead tiles, replace 3-state with honest 2-state, extend video detection internationally, and ship the front-end render path for the existing manual Schema Block system.
+
+### Changes
+
+**A. Rich Results metabox refactor** — `seobetter.php` ~lines 5795-6062
+
+- Dropped 4 tiles: `howto`, `paywall`, `discussion_forum`, `local_business`. Each was either deprecated by Google, never appeared as a real rich result for article-style sites, or applied to forum software rather than articles.
+- Replaced 3-state status with **2-state**: ✓ Active / ○ Not in this article. The amber Available tier is gone.
+- Added `action_hint` field to every remaining tile. Each Not-in-this-article tile now shows an explicit next step ("Add a Frequently Asked Questions section to activate", "Insert a Product Schema Block (Pro+) to activate", "Embed a video — 21 platforms supported", "Use Recipe content type to activate", etc.) OR the existing "Doesn't apply to this content type" fallback when the type genuinely isn't applicable.
+- Tightened `$appearances_universal` to the 4 schemas SEOBetter actually emits for every article: standard_article, article_with_image, breadcrumbs, speakable. Pre-fix the list also included paywall / video / local_business which created fake "Available" badges on every post.
+
+**B. International video detection** — `Schema_Generator.php::detect_video_schema()` + `get_video_platform_configs()`
+
+Extended from 2 platforms (YouTube, Vimeo) to **21 platforms**:
+- Global: YouTube, Vimeo, Rumble, TikTok, Twitch, Facebook Watch, Instagram Reels
+- China: Bilibili, Youku, iQiyi
+- Japan: Niconico
+- Korea: Naver TV, Kakao TV
+- France: Dailymotion
+- Indonesia: Vidio
+- Iran: Aparat
+- Russia: RuTube, VK Video, Coub
+- Corporate / OTT: Wistia, Mux, Brightcove
+
+Per-platform configs declare `pattern` (PCRE regex), optional `embed_template` / `content_template` / `thumbnail_template` (sprintf format strings using captured ID), and `publisher_name`. First-match-wins, single VideoObject per article. Function pluralized: refactored from a hardcoded YouTube + Vimeo if-chain into a config-driven loop so adding the next platform is a one-entry append.
+
+**C. Schema Block front-end styled card rendering** — `Schema_Blocks_Manager::render_html()` + `seobetter.php::inject_schema_block_cards()`
+
+Pre-v62.24 the 5 manual Schema Blocks (Product / Event / LocalBusiness / VacationRental / JobPosting) emitted JSON-LD only — schema was correct in @graph but the post body had no visible card. v62.24 adds:
+- `Schema_Blocks_Manager::render_all_html(int $post_id): string` — iterates BLOCK_TYPES, calls per-type renderer, concatenates.
+- `Schema_Blocks_Manager::render_html(string $type, array $b): string` — dispatch.
+- 5 per-type render methods (`render_localbusiness_card`, `render_product_card`, `render_event_card`, `render_vacationrental_card`, `render_jobposting_card`) — each runs the same required-field check as its `build_*_jsonld()` sibling and returns empty string when invalid (never half-empty cards).
+- Helpers: `format_address_lines()`, `build_maps_directions_url()`, `humanize_business_type()` (50+ Schema.org sub-types mapped to readable labels — Restaurant / Cafe / BarOrPub / Hotel / Bakery / Pharmacy / Locksmith / etc.).
+- Hook: `seobetter.php::inject_schema_block_cards()` filters `the_content` at priority 9, gated on `is_singular() && in_the_loop() && is_main_query() && License_Manager::can_use('schema_blocks_5')`.
+
+LocalBusiness card includes: business-type icon header, name + sub-type label, optional price-range pill, optional hero image, description, address grid (with `tel:` click-to-call phone), opening-hours list, and CTA row with "→ Directions" (Google Maps URL from lat/lng or address) + "📞 Call" buttons. Product/Event/VacationRental/JobPosting cards follow the same inline-styles theme-proof convention with type-appropriate field surfacing.
+
+### Why this fixes "all articles" — not "one by one"
+
+- Every published post re-runs the metabox tile classifier on its own @graph at render time. The moment v62.24 ships, every existing AND every future post shows the cleaned-up tiles. No regenerate needed.
+- Video detection runs from `Schema_Generator::generate()` which fires on every article-save. Articles regenerated after v62.24 with any of the 21 platform embeds get VideoObject schema automatically.
+- Schema Block render is a `the_content` filter — fires on every front-end view of every post that has a saved enabled block. Pro+ posts that previously had invisible LocalBusiness data now render the styled card with no further action.
+
+Works for ALL 21 content types, ALL 60+ languages (Schema_Generator + cards are language-agnostic — they use the data the user supplied), ALL 16 supported countries (LocalBusiness card's address formatter handles country field), and ALL categories (no category branching in any of the new code paths — universal).
+
+### Verify
+
+```bash
+sed -n '5793,5878p' /Users/ben/Documents/autoresearch/seobetter/seobetter.php             # 2-state tile config
+sed -n '6005,6064p' /Users/ben/Documents/autoresearch/seobetter/seobetter.php             # 2-state tile render
+sed -n '1888,2080p' /Users/ben/Documents/autoresearch/seobetter/includes/Schema_Generator.php  # 21-platform video
+grep -nE 'render_all_html|render_html|render_localbusiness_card' /Users/ben/Documents/autoresearch/seobetter/includes/Schema_Blocks_Manager.php  # render path
+grep -n 'inject_schema_block_cards' /Users/ben/Documents/autoresearch/seobetter/seobetter.php  # the_content hook
+```
+
+Expected: 2-state status loop · 21-platform configs array · 5 render_*_card methods + render_all_html · the_content filter at priority 9.
+
+### Doc co-updates (per skill mapping)
+
+- `structured-data.md` §3 — Rich Result Status table updated: HowTo / Paywall / DiscussionForum / LocalBusiness rows reflect the dropped-tile + manual-block-only changes; VideoObject row lists all 21 platforms.
+- `structured-data.md` §4.X — Schema Block section extended with the v62.24 front-end render-path architecture + per-block card design.
+- `structured-data.md` §5 — content_type → @type table redrawn with explicit Auto / Manual Block columns.
+- `SEO-GEO-AI-GUIDELINES.md` §10.4 — Schema Notes synced with the dropped tiles, the 21-platform video extension, the Schema Block front-end render addition, and the new 2-state metabox model.
+- `article_design.md` §5.15 (NEW) — Schema Block Card visual spec for all 5 types.
+
+**Verified by user:** UNTESTED
 
 ---
 

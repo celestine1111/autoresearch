@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.23
+ * Version: 1.5.216.62.24
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.23' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.24' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -127,12 +127,51 @@ final class SEOBetter {
         add_action( 'add_meta_boxes', [ $this, 'register_metabox' ] );
         add_action( 'save_post', [ $this, 'save_metabox' ], 10, 2 );
 
+        // v1.5.216.62.24 — Front-end Schema Block card rendering. Pro+ users
+        // who fill in a LocalBusiness / Product / Event / VacationRental /
+        // JobPosting Schema Block see a styled card on the published post in
+        // addition to the JSON-LD that's already injected into @graph. The
+        // card prepends the post body so the human-readable card sits above
+        // the article content. License-gated at the manager level — non-Pro+
+        // sites that somehow have data saved still don't render anything.
+        add_filter( 'the_content', [ $this, 'inject_schema_block_cards' ], 9 );
+
         register_activation_hook( __FILE__, [ $this, 'activate' ] );
         register_deactivation_hook( __FILE__, [ $this, 'deactivate' ] );
     }
 
     public function load_textdomain(): void {
         load_plugin_textdomain( 'seobetter', false, dirname( SEOBETTER_PLUGIN_BASENAME ) . '/languages' );
+    }
+
+    /**
+     * v1.5.216.62.24 — Front-end Schema Block card injector.
+     *
+     * Hooked at priority 9 on `the_content` so cards prepend the article body
+     * BEFORE wpautop / shortcode passes run. Only fires on the main loop's
+     * singular post view (not feeds, not REST, not list views) and only when
+     * the Pro+ Schema Block license is active.
+     *
+     * Multiple enabled blocks render in BLOCK_TYPES order (product, event,
+     * localbusiness, vacationrental, jobposting). Each block builds its own
+     * card via Schema_Blocks_Manager::render_all_html(). Cards skipped
+     * silently if required fields missing — never render half-empty UI.
+     */
+    public function inject_schema_block_cards( string $content ): string {
+        if ( is_admin() || ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
+            return $content;
+        }
+        if ( ! class_exists( 'SEOBetter\\Schema_Blocks_Manager' ) ) {
+            return $content;
+        }
+        if ( ! SEOBetter\License_Manager::can_use( 'schema_blocks_5' ) ) {
+            return $content;
+        }
+        $post_id = get_the_ID();
+        if ( ! $post_id ) return $content;
+        $cards_html = SEOBetter\Schema_Blocks_Manager::render_all_html( (int) $post_id );
+        if ( $cards_html === '' ) return $content;
+        return $cards_html . $content;
     }
 
     public function activate(): void {
@@ -5792,50 +5831,68 @@ final class SEOBetter {
                 $modified_date_mysql = $post->post_modified_gmt;
                 $days_since_modified = $modified_date_mysql ? floor( ( time() - strtotime( $modified_date_mysql ) ) / DAY_IN_SECONDS ) : 999;
 
+                // v1.5.216.62.24 — Rich Results metabox refactor.
+                //
+                // DROPPED tiles (Google does not deliver rich results for these on
+                // article-style sites — confusing "Available" promises retired):
+                //   - howto: HowTo rich result deprecated by Google Sept 2023.
+                //   - paywall: Paywall indicator basically never appears in real
+                //              Google SERPs for non-publisher sites.
+                //   - discussion_forum: DiscussionForumPosting is for forum software
+                //                       (Reddit, Discourse, vBulletin), not articles.
+                //   - local_business: LocalBusiness Map Pack is reserved for the
+                //                     business's own page or authoritative aggregators.
+                //                     A SEOBetter article that lists restaurants
+                //                     emits valid schema but won't trigger Map Pack.
+                //                     Manual LocalBusiness Schema Block (Pro+) covers
+                //                     the legitimate single-business-page use case.
+                //
+                // STATE MODEL changed from 3-state (active / available / not_applicable)
+                // to 2-state (active / not_in_article). The amber Available tier was
+                // ambiguous — it lumped "would auto-activate if you added X to the
+                // article" with "would auto-activate if you bought Pro+" with "no path
+                // to activate". v62.24 collapses everything that is NOT Active into a
+                // single grey state with a per-tile action_hint that explains the
+                // exact next step (or "doesn't apply to this content type").
+                //
+                // Each tile carries its own action_hint string. Universal action_hint
+                // suffix " — auto-emitted by SEOBetter; if grey, this is a bug" is
+                // appended at render time for tiles that should always be Active.
                 $appearances = [
-                    'standard_article'   => [ 'label' => 'Standard Article',       'eligible' => $has_type( $article_types ), 'schema' => 'Article / BlogPosting / NewsArticle', 'why' => 'Basic blue-link Google result.' ],
-                    'article_with_image' => [ 'label' => 'Article + thumbnail',    'eligible' => $has_type( $article_types ) && $featured_image_url !== '', 'schema' => 'Article + featured image', 'why' => 'Adds a thumbnail next to the result.' ],
-                    'recipe_card'        => [ 'label' => 'Recipe card',            'eligible' => $has_type( [ 'Recipe' ] ), 'schema' => 'Recipe', 'why' => 'Full recipe card with image, rating, time, calories.' ],
-                    'recipe_carousel'    => [ 'label' => 'Recipe carousel',        'eligible' => $has_type( [ 'Recipe' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Recipe + ItemList ≥3', 'why' => 'Host-driven horizontal scroller.' ],
-                    'recipe_gallery'     => [ 'label' => 'Recipe gallery',         'eligible' => $has_type( [ 'Recipe' ] ), 'schema' => 'Recipe', 'why' => 'Google multi-site recipe gallery.' ],
-                    'product_card'       => [ 'label' => 'Product card',           'eligible' => $has_type( [ 'Product' ] ), 'schema' => 'Product + offers', 'why' => 'Image + price + rating + availability.' ],
-                    'product_carousel'   => [ 'label' => 'Product carousel',       'eligible' => $has_type( [ 'Product' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Product + ItemList ≥3', 'why' => 'Horizontal product gallery.' ],
-                    'review_snippet'     => [ 'label' => 'Review snippet',         'eligible' => $has_type( [ 'Review', 'AggregateRating' ] ), 'schema' => 'Review / AggregateRating', 'why' => 'Inline star rating below the title.' ],
-                    'faq'                => [ 'label' => 'FAQ rich result',        'eligible' => $has_type( [ 'FAQPage' ] ), 'schema' => 'FAQPage', 'why' => 'Expandable Q&A rows (desktop limited since 2023).' ],
-                    'howto'              => [ 'label' => 'HowTo step carousel',   'eligible' => $has_type( [ 'HowTo' ] ), 'schema' => 'HowTo', 'why' => 'Numbered step thumbnails (mobile + Assistant).' ],
-                    'event_card'         => [ 'label' => 'Event card',             'eligible' => $has_type( [ 'Event' ] ), 'schema' => 'Event', 'why' => 'Date + venue + Get tickets CTA.' ],
-                    'event_carousel'     => [ 'label' => 'Event carousel',         'eligible' => $has_type( [ 'Event' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Event + ItemList', 'why' => 'Horizontal multi-date cards.' ],
-                    'local_business'    => [ 'label' => 'Local Business / Map Pack', 'eligible' => $has_type( $local_business_types ), 'schema' => 'LocalBusiness + address', 'why' => 'Map pin + hours + Directions + Call.' ],
-                    'video'              => [ 'label' => 'Video rich result',      'eligible' => $has_type( [ 'VideoObject' ] ), 'schema' => 'VideoObject', 'why' => 'Large play-button thumbnail + duration.' ],
-                    'video_carousel'     => [ 'label' => 'Video carousel',         'eligible' => $has_type( [ 'VideoObject' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'VideoObject + ItemList', 'why' => 'Top Videos section.' ],
-                    'top_stories'        => [ 'label' => 'Top Stories (News)',     'eligible' => $has_type( [ 'NewsArticle','ReportageNewsArticle','AnalysisNewsArticle','OpinionNewsArticle' ] ), 'schema' => 'NewsArticle', 'why' => 'News carousel. Requires Google News inclusion.' ],
-                    'course_carousel'    => [ 'label' => 'Course carousel',        'eligible' => $has_type( [ 'Course' ] ), 'schema' => 'Course', 'why' => 'Provider + course + duration + price.' ],
-                    'movie_carousel'     => [ 'label' => 'Movie carousel',         'eligible' => $has_type( [ 'Movie' ] ), 'schema' => 'Movie', 'why' => 'Poster + title + year + director.' ],
-                    'vacation_rental'    => [ 'label' => 'Vacation Rental',        'eligible' => $has_type( [ 'VacationRental','LodgingBusiness' ] ), 'schema' => 'VacationRental', 'why' => 'Property + price/night + rating.' ],
-                    'job_posting'        => [ 'label' => 'Job posting',            'eligible' => $has_type( [ 'JobPosting' ] ), 'schema' => 'JobPosting', 'why' => 'Interactive job card with Apply CTA.' ],
-                    'software_app'       => [ 'label' => 'Software App',           'eligible' => $has_type( [ 'SoftwareApplication','MobileApplication','WebApplication' ] ), 'schema' => 'SoftwareApplication', 'why' => 'Icon + rating + price + download.' ],
-                    'dataset'            => [ 'label' => 'Dataset',                'eligible' => $has_type( [ 'Dataset' ] ), 'schema' => 'Dataset', 'why' => 'Appears in Google Dataset Search.' ],
-                    'qa_page'            => [ 'label' => 'Q&A page',               'eligible' => $has_type( [ 'QAPage' ] ), 'schema' => 'QAPage', 'why' => 'Accepted answer excerpt + upvote count.' ],
-                    'discussion_forum'   => [ 'label' => 'Discussion Forum',       'eligible' => $has_type( [ 'DiscussionForumPosting' ] ), 'schema' => 'DiscussionForumPosting', 'why' => 'Thread + top reply + reply count.' ],
-                    'profile_page'       => [ 'label' => 'Profile Page',           'eligible' => $has_type( [ 'ProfilePage' ] ), 'schema' => 'ProfilePage', 'why' => 'Author photo + name + bio excerpt.' ],
-                    'breadcrumbs'        => [ 'label' => 'Breadcrumb trail',       'eligible' => $has_type( [ 'BreadcrumbList' ] ), 'schema' => 'BreadcrumbList', 'why' => 'Path shown in URL line: site › category › article.' ],
-                    'speakable'          => [ 'label' => 'Speakable (voice)',      'eligible' => $has_speakable, 'schema' => 'Speakable within Article', 'why' => 'Google Assistant read-aloud.' ],
-                    'paywall'            => [ 'label' => 'Paywall indicator',      'eligible' => $is_paywalled, 'schema' => 'isAccessibleForFree=false', 'why' => '🔒 icon for subscription content.' ],
+                    'standard_article'   => [ 'label' => 'Standard Article',       'eligible' => $has_type( $article_types ), 'schema' => 'Article / BlogPosting / NewsArticle', 'why' => 'Basic blue-link Google result.', 'action_hint' => 'Auto-emitted for every article — should always be Active.' ],
+                    'article_with_image' => [ 'label' => 'Article + thumbnail',    'eligible' => $has_type( $article_types ) && $featured_image_url !== '', 'schema' => 'Article + featured image', 'why' => 'Adds a thumbnail next to the result.', 'action_hint' => 'Set a Featured Image on this post to activate.' ],
+                    'recipe_card'        => [ 'label' => 'Recipe card',            'eligible' => $has_type( [ 'Recipe' ] ), 'schema' => 'Recipe', 'why' => 'Full recipe card with image, rating, time, calories.', 'action_hint' => 'Use Recipe content type to activate.' ],
+                    'recipe_carousel'    => [ 'label' => 'Recipe carousel',        'eligible' => $has_type( [ 'Recipe' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Recipe + ItemList ≥3', 'why' => 'Host-driven horizontal scroller.', 'action_hint' => 'Use Recipe content type with 3+ recipes to activate.' ],
+                    'recipe_gallery'     => [ 'label' => 'Recipe gallery',         'eligible' => $has_type( [ 'Recipe' ] ), 'schema' => 'Recipe', 'why' => 'Google multi-site recipe gallery.', 'action_hint' => 'Use Recipe content type to activate.' ],
+                    'product_card'       => [ 'label' => 'Product card',           'eligible' => $has_type( [ 'Product' ] ), 'schema' => 'Product + offers', 'why' => 'Image + price + rating + availability.', 'action_hint' => 'Insert a Product Schema Block (Pro+) to activate.' ],
+                    'product_carousel'   => [ 'label' => 'Product carousel',       'eligible' => $has_type( [ 'Product' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Product + ItemList ≥3', 'why' => 'Horizontal product gallery.', 'action_hint' => 'Insert 3+ Product Schema Blocks (Pro+) to activate.' ],
+                    'review_snippet'     => [ 'label' => 'Review snippet',         'eligible' => $has_type( [ 'Review', 'AggregateRating' ] ), 'schema' => 'Review / AggregateRating', 'why' => 'Inline star rating below the title.', 'action_hint' => 'Use Review content type with an extractable rating to activate.' ],
+                    'faq'                => [ 'label' => 'FAQ rich result',        'eligible' => $has_type( [ 'FAQPage' ] ), 'schema' => 'FAQPage', 'why' => 'Expandable Q&A rows (desktop limited since 2023).', 'action_hint' => 'Add a "## Frequently Asked Questions" section with 3+ Q&A pairs to activate.' ],
+                    'event_card'         => [ 'label' => 'Event card',             'eligible' => $has_type( [ 'Event' ] ), 'schema' => 'Event', 'why' => 'Date + venue + Get tickets CTA.', 'action_hint' => 'Insert an Event Schema Block (Pro+) to activate.' ],
+                    'event_carousel'     => [ 'label' => 'Event carousel',         'eligible' => $has_type( [ 'Event' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Event + ItemList', 'why' => 'Horizontal multi-date cards.', 'action_hint' => 'Insert 3+ Event Schema Blocks (Pro+) to activate.' ],
+                    'video'              => [ 'label' => 'Video rich result',      'eligible' => $has_type( [ 'VideoObject' ] ), 'schema' => 'VideoObject', 'why' => 'Large play-button thumbnail + duration.', 'action_hint' => 'Embed a video (YouTube, Vimeo, Rumble, Bilibili, Niconico, Dailymotion, TikTok, etc. — 21 platforms supported) to activate.' ],
+                    'video_carousel'     => [ 'label' => 'Video carousel',         'eligible' => $has_type( [ 'VideoObject' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'VideoObject + ItemList', 'why' => 'Top Videos section.', 'action_hint' => 'Embed 3+ videos to activate.' ],
+                    'top_stories'        => [ 'label' => 'Top Stories (News)',     'eligible' => $has_type( [ 'NewsArticle','ReportageNewsArticle','AnalysisNewsArticle','OpinionNewsArticle' ] ), 'schema' => 'NewsArticle', 'why' => 'News carousel. Requires Google News inclusion.', 'action_hint' => 'Use News Article / Press Release / Opinion content type to activate.' ],
+                    'course_carousel'    => [ 'label' => 'Course carousel',        'eligible' => $has_type( [ 'Course' ] ), 'schema' => 'Course', 'why' => 'Provider + course + duration + price.', 'action_hint' => 'Auto-detected from tech_article / education category content with course-like structure.' ],
+                    'movie_carousel'     => [ 'label' => 'Movie carousel',         'eligible' => $has_type( [ 'Movie' ] ), 'schema' => 'Movie', 'why' => 'Poster + title + year + director.', 'action_hint' => 'Auto-detected from review / listicle of movies.' ],
+                    'vacation_rental'    => [ 'label' => 'Vacation Rental',        'eligible' => $has_type( [ 'VacationRental','LodgingBusiness' ] ), 'schema' => 'VacationRental', 'why' => 'Property + price/night + rating.', 'action_hint' => 'Insert a Vacation Rental Schema Block (Pro+) to activate.' ],
+                    'job_posting'        => [ 'label' => 'Job posting',            'eligible' => $has_type( [ 'JobPosting' ] ), 'schema' => 'JobPosting', 'why' => 'Interactive job card with Apply CTA.', 'action_hint' => 'Insert a Job Posting Schema Block (Pro+) to activate.' ],
+                    'software_app'       => [ 'label' => 'Software App',           'eligible' => $has_type( [ 'SoftwareApplication','MobileApplication','WebApplication' ] ), 'schema' => 'SoftwareApplication', 'why' => 'Icon + rating + price + download.', 'action_hint' => 'Auto-detected from review/comparison of software in technology category.' ],
+                    'dataset'            => [ 'label' => 'Dataset',                'eligible' => $has_type( [ 'Dataset' ] ), 'schema' => 'Dataset', 'why' => 'Appears in Google Dataset Search.', 'action_hint' => 'Auto-detected from white_paper / scholarly_article with data tables.' ],
+                    'qa_page'            => [ 'label' => 'Q&A page',               'eligible' => $has_type( [ 'QAPage' ] ), 'schema' => 'QAPage', 'why' => 'Accepted answer excerpt + upvote count.', 'action_hint' => 'Use Interview content type to activate.' ],
+                    'profile_page'       => [ 'label' => 'Profile Page',           'eligible' => $has_type( [ 'ProfilePage' ] ), 'schema' => 'ProfilePage', 'why' => 'Author photo + name + bio excerpt.', 'action_hint' => 'Use Interview / Personal Essay content type to activate.' ],
+                    'breadcrumbs'        => [ 'label' => 'Breadcrumb trail',       'eligible' => $has_type( [ 'BreadcrumbList' ] ), 'schema' => 'BreadcrumbList', 'why' => 'Path shown in URL line: site › category › article.', 'action_hint' => 'Auto-emitted for every article — should always be Active.' ],
+                    'speakable'          => [ 'label' => 'Speakable (voice)',      'eligible' => $has_speakable, 'schema' => 'Speakable within Article', 'why' => 'Google Assistant read-aloud.', 'action_hint' => 'Auto-emitted for blog_post, news_article, opinion, pillar_guide, how_to, faq_page, interview, recipe, personal_essay, press_release.' ],
                 ];
                 $eligible_count = count( array_filter( array_column( $appearances, 'eligible' ) ) );
                 $total_appearances = count( $appearances );
 
-                // v1.5.212 — Per-content-type applicability matrix.
-                // Fixes Ben's UX critique on v1.5.207: showing "Add Product schema" on a
-                // Blog Post is misleading since Product schema doesn't apply to blog posts.
-                //
-                // Three-state status per tile:
-                //   'active'          — schema detected in @graph (green)
-                //   'available'       — applicable to this content_type + adding schema
-                //                       (via block, settings, or content) would emit it (amber)
-                //   'not_applicable'  — this appearance doesn't fit the article's content_type;
-                //                       no action shown (grey, informational)
-                $appearances_universal = [ 'standard_article', 'article_with_image', 'breadcrumbs', 'speakable', 'paywall', 'video', 'local_business' ];
+                // v1.5.216.62.24 — Per-content-type applicability map (drives the
+                // action-hint visibility — tiles that don't apply to this content
+                // type still render greyed out with a "doesn't apply" hint instead
+                // of the schema-add hint, so the user is never told to add schema
+                // that wouldn't pass Google validation for their type).
+                $appearances_universal = [ 'standard_article', 'article_with_image', 'breadcrumbs', 'speakable' ];
                 $applicability = [
                     'recipe_card'       => [ 'recipe' ],
                     'recipe_carousel'   => [ 'recipe' ],
@@ -5843,10 +5900,10 @@ final class SEOBetter {
                     'product_card'      => [ 'review', 'buying_guide', 'comparison', 'sponsored', 'listicle' ],
                     'product_carousel'  => [ 'buying_guide', 'listicle', 'comparison' ],
                     'review_snippet'    => [ 'review', 'buying_guide', 'comparison' ],
-                    'faq'               => [ 'blog_post', 'how_to', 'listicle', 'review', 'comparison', 'buying_guide', 'recipe', 'tech_article', 'white_paper', 'scholarly_article', 'glossary_definition', 'case_study', 'interview', 'pillar_guide', 'news_article', 'opinion', 'faq_page' ],
-                    'howto'             => [ 'how_to', 'tech_article' ],
+                    'faq'               => [ 'blog_post', 'how_to', 'listicle', 'review', 'comparison', 'buying_guide', 'recipe', 'tech_article', 'white_paper', 'scholarly_article', 'glossary_definition', 'case_study', 'interview', 'pillar_guide', 'news_article', 'opinion', 'faq_page', 'press_release', 'sponsored' ],
                     'event_card'        => [ 'news_article', 'opinion', 'press_release', 'blog_post' ],
                     'event_carousel'    => [ 'news_article', 'listicle' ],
+                    'video'             => [],  // applicable to all content types — universal via fallback below
                     'video_carousel'    => [ 'news_article', 'listicle' ],
                     'top_stories'       => [ 'news_article', 'opinion', 'press_release' ],
                     'course_carousel'   => [ 'tech_article', 'listicle', 'buying_guide' ],
@@ -5856,21 +5913,23 @@ final class SEOBetter {
                     'software_app'      => [ 'review', 'buying_guide', 'tech_article', 'comparison' ],
                     'dataset'           => [ 'white_paper', 'scholarly_article', 'tech_article' ],
                     'qa_page'           => [ 'interview', 'faq_page', 'case_study' ],
-                    'discussion_forum'  => [],  // forum-post @type — not applicable to articles
-                    'profile_page'      => [ 'interview' ],
+                    'profile_page'      => [ 'interview', 'personal_essay' ],
                 ];
 
-                // Compute 3-state status per appearance
+                // v1.5.216.62.24 — 2-state status: active / not_in_article.
+                // Universal tiles are always considered "applicable" so they always
+                // render an action_hint. Type-specific tiles outside the applicability
+                // list render a "doesn't apply to this content type" hint. The video
+                // tile is treated as universal (any post can embed a video).
                 foreach ( $appearances as $key => $app ) {
                     if ( $app['eligible'] ) {
                         $appearances[ $key ]['status'] = 'active';
-                    } elseif ( in_array( $key, $appearances_universal, true ) ) {
-                        $appearances[ $key ]['status'] = 'available';
-                    } elseif ( isset( $applicability[ $key ] ) && in_array( $content_type_saved, $applicability[ $key ], true ) ) {
-                        $appearances[ $key ]['status'] = 'available';
-                    } else {
-                        $appearances[ $key ]['status'] = 'not_applicable';
+                        continue;
                     }
+                    $is_universal = in_array( $key, $appearances_universal, true ) || $key === 'video';
+                    $is_type_applicable = isset( $applicability[ $key ] ) && in_array( $content_type_saved, $applicability[ $key ], true );
+                    $appearances[ $key ]['status'] = 'not_in_article';
+                    $appearances[ $key ]['type_applicable'] = $is_universal || $is_type_applicable;
                 }
 
                 $discover_checks = [
@@ -5983,33 +6042,26 @@ final class SEOBetter {
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:20px">
                         <?php foreach ( $appearances as $key => $app ) :
-                            // v1.5.212 — 3-state badge: Active / Available / Not applicable
-                            $status = $app['status'] ?? 'not_applicable';
-                            switch ( $status ) {
-                                case 'active':
-                                    $tile_border = '#22c55e';
-                                    $tile_bg = '#fff';
-                                    $tile_opacity = '';
-                                    $badge_bg = '#dcfce7';
-                                    $badge_color = '#166534';
-                                    $badge_text = '✓ Active';
-                                    break;
-                                case 'available':
-                                    $tile_border = '#f59e0b';
-                                    $tile_bg = '#fff';
-                                    $tile_opacity = '';
-                                    $badge_bg = '#fef3c7';
-                                    $badge_color = '#92400e';
-                                    $badge_text = '● Available';
-                                    break;
-                                default:  // not_applicable
-                                    $tile_border = '#e5e7eb';
-                                    $tile_bg = '#f9fafb';
-                                    $tile_opacity = 'opacity:0.55;';
-                                    $badge_bg = '#e5e7eb';
-                                    $badge_color = '#6b7280';
-                                    $badge_text = '○ Not applicable';
-                                    break;
+                            // v1.5.216.62.24 — 2-state badge: Active / Not in this article.
+                            // Pre-v62.24 had a 3rd "Available" amber state that confusingly
+                            // mixed "would activate if you added X" with "no path to activate".
+                            // Now: green = real, grey = not yet (with explicit action_hint).
+                            $status = $app['status'] ?? 'not_in_article';
+                            $type_applicable = $app['type_applicable'] ?? true;
+                            if ( $status === 'active' ) {
+                                $tile_border = '#22c55e';
+                                $tile_bg = '#fff';
+                                $tile_opacity = '';
+                                $badge_bg = '#dcfce7';
+                                $badge_color = '#166534';
+                                $badge_text = '✓ Active';
+                            } else {
+                                $tile_border = '#e5e7eb';
+                                $tile_bg = '#f9fafb';
+                                $tile_opacity = 'opacity:0.65;';
+                                $badge_bg = '#e5e7eb';
+                                $badge_color = '#6b7280';
+                                $badge_text = '○ Not in this article';
                             }
                         ?>
                             <div style="border:1px solid <?php echo $tile_border; ?>;border-radius:8px;padding:12px;background:<?php echo $tile_bg; ?>;<?php echo $tile_opacity; ?>">
@@ -6023,10 +6075,12 @@ final class SEOBetter {
                                 <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6;font-size:10px;color:#6b7280;line-height:1.4">
                                     <div><strong>Requires:</strong> <?php echo esc_html( $app['schema'] ); ?></div>
                                     <div style="margin-top:2px"><?php echo esc_html( $app['why'] ); ?></div>
-                                    <?php if ( $status === 'not_applicable' ) : ?>
-                                        <div style="margin-top:4px;font-style:italic;color:#9ca3af">Doesn't apply to this content type (<?php echo esc_html( $content_type_saved ?: 'blog_post' ); ?>).</div>
-                                    <?php elseif ( $status === 'available' ) : ?>
-                                        <div style="margin-top:4px;font-style:italic;color:#92400e">Schema not yet emitted. Applicable to this content type — add via block or content detection.</div>
+                                    <?php if ( $status !== 'active' ) : ?>
+                                        <?php if ( $type_applicable ) : ?>
+                                            <div style="margin-top:4px;font-style:italic;color:#4b5563"><strong>How to activate:</strong> <?php echo esc_html( $app['action_hint'] ?? 'No automatic path — add via block or content detection.' ); ?></div>
+                                        <?php else : ?>
+                                            <div style="margin-top:4px;font-style:italic;color:#9ca3af">Doesn't apply to this content type (<?php echo esc_html( $content_type_saved ?: 'blog_post' ); ?>).</div>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -6034,20 +6088,15 @@ final class SEOBetter {
                     </div>
 
                     <?php
-                    // v1.5.212 — 3-state legend + summary counts above the grid
-                    $counts = [
-                        'active' => 0,
-                        'available' => 0,
-                        'not_applicable' => 0,
-                    ];
+                    // v1.5.216.62.24 — 2-state legend + counts.
+                    $counts = [ 'active' => 0, 'not_in_article' => 0 ];
                     foreach ( $appearances as $a ) {
-                        $counts[ $a['status'] ?? 'not_applicable' ]++;
+                        $counts[ $a['status'] ?? 'not_in_article' ]++;
                     }
                     ?>
                     <div style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#4b5563">
-                        <div><span style="color:#166534;font-weight:700">✓ Active</span> = <?php echo $counts['active']; ?> (schema detected, rich result eligible)</div>
-                        <div><span style="color:#92400e;font-weight:700">● Available</span> = <?php echo $counts['available']; ?> (applicable to this content type, add via block)</div>
-                        <div><span style="color:#6b7280;font-weight:700">○ Not applicable</span> = <?php echo $counts['not_applicable']; ?> (doesn't apply to this content type)</div>
+                        <div><span style="color:#166534;font-weight:700">✓ Active</span> = <?php echo $counts['active']; ?> (schema in @graph, rich result eligible)</div>
+                        <div><span style="color:#6b7280;font-weight:700">○ Not in this article</span> = <?php echo $counts['not_in_article']; ?> (each tile shows how to activate, or notes when it doesn't apply to your content type)</div>
                     </div>
                 </div>
 

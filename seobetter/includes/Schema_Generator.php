@@ -1888,34 +1888,193 @@ class Schema_Generator {
     // ================================================================
 
     /**
-     * VideoObject — detect embedded YouTube/Vimeo/HTML5 video.
+     * VideoObject — detect embedded video from 21 platforms (global + regional).
+     *
+     * v1.5.216.62.24 — extended from YouTube + Vimeo to 21 platforms including
+     * regional players that dominate non-Western markets:
+     *   Global: YouTube, Vimeo, Rumble, TikTok, Twitch, Facebook Watch, Instagram Reels
+     *   China:  Bilibili, Youku, iQiyi
+     *   Japan:  Niconico
+     *   Korea:  Naver TV, Kakao TV
+     *   France: Dailymotion
+     *   Indonesia: Vidio
+     *   Iran:   Aparat
+     *   Russia: RuTube, VK Video, Coub
+     *   Corp:   Wistia, Mux, Brightcove
+     *
+     * Per-platform configs live in get_video_platform_configs() so the list is
+     * easy to extend. First match wins (single VideoObject per article).
+     *
+     * Returns a fully-formed VideoObject node with embedUrl + thumbnailUrl
+     * (where extractable) + name + description + uploadDate.
      */
     private function detect_video_schema( \WP_Post $post, string $content ): ?array {
-        // YouTube embed
-        if ( preg_match( '/(?:youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/', $content, $yt ) ) {
-            $video_id = $yt[1];
-            return [
-                '@type'        => 'VideoObject',
-                'name'         => $post->post_title,
-                'description'  => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
-                'thumbnailUrl' => "https://img.youtube.com/vi/{$video_id}/maxresdefault.jpg",
-                'uploadDate'   => get_the_date( 'c', $post ),
-                'embedUrl'     => "https://www.youtube.com/embed/{$video_id}",
-                'contentUrl'   => "https://www.youtube.com/watch?v={$video_id}",
-            ];
-        }
-        // Vimeo embed
-        if ( preg_match( '/vimeo\.com\/(?:video\/)?(\d+)/', $content, $vm ) ) {
-            return [
-                '@type'        => 'VideoObject',
-                'name'         => $post->post_title,
-                'description'  => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
-                'thumbnailUrl' => [],
-                'uploadDate'   => get_the_date( 'c', $post ),
-                'embedUrl'     => "https://player.vimeo.com/video/{$vm[1]}",
-            ];
+        $configs = self::get_video_platform_configs();
+        foreach ( $configs as $platform ) {
+            if ( preg_match( $platform['pattern'], $content, $m ) ) {
+                $node = [
+                    '@type'       => 'VideoObject',
+                    'name'        => $post->post_title,
+                    'description' => wp_trim_words( wp_strip_all_tags( $content ), 30 ),
+                    'uploadDate'  => get_the_date( 'c', $post ),
+                ];
+                // Some platforms expose a deterministic embedUrl + thumbnailUrl
+                // pattern from the captured ID; others (Vimeo, TikTok, FB) need
+                // an oEmbed call we don't make here, so we set what we know.
+                if ( isset( $platform['embed_template'] ) && isset( $m[1] ) ) {
+                    $node['embedUrl'] = sprintf( $platform['embed_template'], $m[1] );
+                }
+                if ( isset( $platform['content_template'] ) && isset( $m[1] ) ) {
+                    $node['contentUrl'] = sprintf( $platform['content_template'], $m[1] );
+                }
+                if ( isset( $platform['thumbnail_template'] ) && isset( $m[1] ) ) {
+                    $node['thumbnailUrl'] = sprintf( $platform['thumbnail_template'], $m[1] );
+                }
+                $node['publisher'] = $platform['publisher_name'];
+                return $node;
+            }
         }
         return null;
+    }
+
+    /**
+     * v1.5.216.62.24 — Per-platform regex + URL templates for video detection.
+     *
+     * Order matters: more specific patterns first so we don't accidentally match
+     * a Bilibili URL with the Vimeo regex (Vimeo's `vimeo.com/123456` is broad).
+     * YouTube + Vimeo first to preserve pre-v62.24 behavior for the 99% case.
+     *
+     * Each entry:
+     *   pattern            - PCRE matching the embed/share URL, capture 1 = ID
+     *   embed_template     - sprintf format for player URL (optional)
+     *   content_template   - sprintf format for canonical watch URL (optional)
+     *   thumbnail_template - sprintf format for thumbnail URL (optional, preferred)
+     *   publisher_name     - human-readable platform name
+     */
+    private static function get_video_platform_configs(): array {
+        return [
+            // ---- Global ----
+            [
+                'pattern'            => '/(?:youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/watch\?v=|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{11})/',
+                'embed_template'     => 'https://www.youtube.com/embed/%s',
+                'content_template'   => 'https://www.youtube.com/watch?v=%s',
+                'thumbnail_template' => 'https://img.youtube.com/vi/%s/maxresdefault.jpg',
+                'publisher_name'     => 'YouTube',
+            ],
+            [
+                'pattern'          => '/vimeo\.com\/(?:video\/)?(\d{6,})/',
+                'embed_template'   => 'https://player.vimeo.com/video/%s',
+                'content_template' => 'https://vimeo.com/%s',
+                'publisher_name'   => 'Vimeo',
+            ],
+            [
+                'pattern'          => '/rumble\.com\/(?:embed\/)?(v[a-z0-9]+)/i',
+                'embed_template'   => 'https://rumble.com/embed/%s/',
+                'publisher_name'   => 'Rumble',
+            ],
+            [
+                'pattern'          => '/tiktok\.com\/(?:@[\w.]+\/video\/|embed\/v\d+\/)(\d+)/',
+                'embed_template'   => 'https://www.tiktok.com/embed/v2/%s',
+                'publisher_name'   => 'TikTok',
+            ],
+            [
+                'pattern'          => '/(?:clips\.twitch\.tv\/|twitch\.tv\/videos\/)([a-zA-Z0-9_-]+)/',
+                'publisher_name'   => 'Twitch',
+            ],
+            [
+                'pattern'          => '/(?:facebook\.com\/watch\/?\?v=|fb\.watch\/)([a-zA-Z0-9_-]+)/',
+                'publisher_name'   => 'Facebook Watch',
+            ],
+            [
+                'pattern'          => '/instagram\.com\/reel\/([a-zA-Z0-9_-]+)/',
+                'publisher_name'   => 'Instagram Reels',
+            ],
+            // ---- China ----
+            [
+                'pattern'          => '/(?:bilibili\.com\/video\/|player\.bilibili\.com\/player\.html\?bvid=)(BV[a-zA-Z0-9]+)/',
+                'embed_template'   => 'https://player.bilibili.com/player.html?bvid=%s',
+                'content_template' => 'https://www.bilibili.com/video/%s',
+                'publisher_name'   => 'Bilibili',
+            ],
+            [
+                'pattern'          => '/(?:v\.youku\.com\/v_show\/id_|player\.youku\.com\/embed\/)([a-zA-Z0-9=]+)/',
+                'embed_template'   => 'https://player.youku.com/embed/%s',
+                'publisher_name'   => 'Youku',
+            ],
+            [
+                'pattern'          => '/iqiyi\.com\/v_([a-zA-Z0-9]+)\.html/',
+                'publisher_name'   => 'iQiyi',
+            ],
+            // ---- Japan ----
+            [
+                'pattern'          => '/(?:nicovideo\.jp\/watch\/|embed\.nicovideo\.jp\/watch\/)(sm\d+|nm\d+|so\d+)/',
+                'embed_template'   => 'https://embed.nicovideo.jp/watch/%s',
+                'content_template' => 'https://www.nicovideo.jp/watch/%s',
+                'publisher_name'   => 'Niconico',
+            ],
+            // ---- Korea ----
+            [
+                'pattern'          => '/tv\.naver\.com\/v\/(\d+)/',
+                'content_template' => 'https://tv.naver.com/v/%s',
+                'publisher_name'   => 'Naver TV',
+            ],
+            [
+                'pattern'          => '/tv\.kakao\.com\/(?:channel\/\d+\/cliplink\/|v\/)(\d+)/',
+                'content_template' => 'https://tv.kakao.com/v/%s',
+                'publisher_name'   => 'Kakao TV',
+            ],
+            // ---- France ----
+            [
+                'pattern'          => '/dailymotion\.com\/(?:video\/|embed\/video\/)([a-zA-Z0-9]+)/',
+                'embed_template'   => 'https://www.dailymotion.com/embed/video/%s',
+                'content_template' => 'https://www.dailymotion.com/video/%s',
+                'thumbnail_template' => 'https://www.dailymotion.com/thumbnail/video/%s',
+                'publisher_name'   => 'Dailymotion',
+            ],
+            // ---- Indonesia ----
+            [
+                'pattern'          => '/vidio\.com\/(?:watch\/|embed\/)(\d+)/',
+                'embed_template'   => 'https://www.vidio.com/embed/%s',
+                'publisher_name'   => 'Vidio',
+            ],
+            // ---- Iran ----
+            [
+                'pattern'          => '/aparat\.com\/v\/([a-zA-Z0-9]+)/',
+                'content_template' => 'https://www.aparat.com/v/%s',
+                'publisher_name'   => 'Aparat',
+            ],
+            // ---- Russia ----
+            [
+                'pattern'          => '/(?:rutube\.ru\/play\/embed\/|rutube\.ru\/video\/)([a-z0-9]+)/i',
+                'embed_template'   => 'https://rutube.ru/play/embed/%s',
+                'content_template' => 'https://rutube.ru/video/%s',
+                'publisher_name'   => 'RuTube',
+            ],
+            [
+                'pattern'          => '/(?:vk\.com\/video_ext\.php\?oid=([\d-]+)&id=\d+|vkvideo\.ru\/video([\d_-]+))/',
+                'publisher_name'   => 'VK Video',
+            ],
+            [
+                'pattern'          => '/coub\.com\/(?:view|embed)\/([a-zA-Z0-9]+)/',
+                'embed_template'   => 'https://coub.com/embed/%s',
+                'content_template' => 'https://coub.com/view/%s',
+                'publisher_name'   => 'Coub',
+            ],
+            // ---- Corporate / OTT ----
+            [
+                'pattern'          => '/wistia\.com\/medias\/([a-zA-Z0-9]+)/',
+                'embed_template'   => 'https://fast.wistia.com/embed/medias/%s',
+                'publisher_name'   => 'Wistia',
+            ],
+            [
+                'pattern'          => '/stream\.mux\.com\/([a-zA-Z0-9]+)/',
+                'publisher_name'   => 'Mux',
+            ],
+            [
+                'pattern'          => '/players\.brightcove\.net\/(\d+)\/.*?videoId=([a-zA-Z0-9]+)/',
+                'publisher_name'   => 'Brightcove',
+            ],
+        ];
     }
 
     /**
