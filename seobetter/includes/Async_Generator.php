@@ -2534,6 +2534,38 @@ class Async_Generator {
             ];
         }
 
+        // v1.5.216.62.11 — Strip empty headings.
+        //
+        // AI models occasionally emit a section heading with no body content
+        // (e.g. "### Cons" followed immediately by "### References") because they
+        // already covered that topic in a comparison table or Pros section above.
+        // The empty heading looks broken to readers and hurts CORE-EEAT scoring.
+        //
+        // Universal fix: any heading whose body is empty before the next heading
+        // gets dropped. Works for ALL keywords, ALL 21 content types, ALL AI
+        // models. Whitelist guard: never strip H1 (article title), never strip
+        // headings that match a structural-required name (Key Takeaways, FAQ,
+        // References, Recipe instructions) — those should stay even if temporarily
+        // empty mid-pipeline because later inject steps may populate them.
+        $structural_keep = '/^#{1,6}\s+(Key\s*Takeaway|FAQ|Frequently|Reference|Recipe|Ingredient|Instruction|Direction|Storage|Method)/i';
+        // Repeat until no more empty headings (cascading deletes — A→B→C where B
+        // and C are both empty would otherwise need 2 passes).
+        $prev = '';
+        $iter = 0;
+        while ( $prev !== $markdown && $iter < 5 ) {
+            $prev = $markdown;
+            $markdown = preg_replace_callback(
+                '/^(#{2,6})[ \t]+([^\n]+)\n+(?=#{1,6}[ \t])/m',
+                function ( $m ) use ( $structural_keep ) {
+                    // Keep structural headings even if temporarily empty
+                    if ( preg_match( $structural_keep, $m[0] ) ) return $m[0];
+                    return '';
+                },
+                $markdown
+            );
+            $iter++;
+        }
+
         // v1.5.206d-fix9 — Defensive Last Updated sanitizer. Even with fix6's
         // canonical translations table + fix9's stronger prompt, the AI still
         // occasionally writes the English "Last Updated: April 2026" inside

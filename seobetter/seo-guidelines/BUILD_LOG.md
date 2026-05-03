@@ -7,12 +7,49 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.10)
+> **Last updated:** 2026-05-03 (v1.5.216.62.11)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.11 — Strip empty headings post-generation (fixes "### Cons" with no body)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Bug
+
+User regenerated `how to transition your dog to raw food safely 2026` (How-To). Article had `### Cons` heading immediately followed by `### References` with literally zero content between them. AI had covered the Pros/Cons content in a comparison table earlier in the article and skipped populating the dedicated Cons section.
+
+URL: https://srv1608940.hstgr.cloud/how-to-guide-how-to-transition-your-dog-to-raw-food-safely-2026-2/
+
+This is a universal AI-output failure mode — happens with any model occasionally. The bare heading shows up to readers as a broken page and hurts CORE-EEAT scoring.
+
+### Fix
+
+`includes/Async_Generator.php::assemble_final()` — added a post-quote-injection pass that strips any heading (H2-H6) whose body is empty before the next heading. Iterates up to 5 times to handle cascading empties (heading A → empty B → empty C). Whitelist guard preserves structural headings (Key Takeaways, FAQ, References, Recipe instructions) even if temporarily empty mid-pipeline because later inject steps may populate them.
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — pure structural fix, no keyword dependency |
+| ALL 21 content types? | ✅ Yes — empty headings are universally bad |
+| ALL AI models? | ✅ Yes — every model occasionally emits an unfilled heading; this catches them all |
+
+### Verify
+
+```bash
+grep -nB1 -A20 "Strip empty headings" seobetter/includes/Async_Generator.php
+```
+
+**Test by user:** regenerate same article. The bare `### Cons` should be gone — only headings with actual content remain.
+
+**Verified by user:** UNTESTED
 
 ---
 
