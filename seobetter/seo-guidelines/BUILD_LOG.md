@@ -7,12 +7,43 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.3)
+> **Last updated:** 2026-05-03 (v1.5.216.62.4)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.4 — Remove broken "Test Rich Results" link from generator post-save status
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Bug
+
+After saving a draft from the Content Generator, the status line rendered ` · 🔍 Test Rich Results →` linking to `https://search.google.com/test/rich-results?url=<draft_permalink>`. Drafts have no public URL, so Google's tester returned an error every time the user clicked it. v1.5.216.27 (Phase 1 item 8) shipped this without gating on publish status.
+
+### Fix
+
+Removed the post-save link entirely. The Edit-post metabox at `seobetter.php` (line ~6072) already has a Rich Results link with a publish-state warning ("Publish the post first — Google can only test published URLs.") — that's the supported entry point.
+
+### Files
+
+- **Drop post-save link** — `admin/views/content-generator.php` (was lines 1782-1787, now removed). Status line is now `Edit post → · Schema → <plugin>` only
+- **Drop unused server fields** — `seobetter.php::rest_save_draft()` lines ~2070-2103. Removed `rich_results_types` (the @graph @type extraction loop) and `rich_results_test_url` from the JSON response. Kept `permalink` since it's cheap and may be useful later
+- **Update co-located comment** — `admin/views/content-generator.php:1280-1287` notes the link removal and points to the metabox path
+
+### Verify
+
+```bash
+grep -n "Test Rich Results\|rich_results_test_url\|rich_results_types" seobetter/admin/views/content-generator.php seobetter/seobetter.php
+```
+
+Should return zero matches in both files (BUILD_LOG references are fine).
+
+**Verified by user:** UNTESTED
 
 ---
 

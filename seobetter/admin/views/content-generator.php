@@ -1281,8 +1281,10 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
         // Shows which Google rich-result lanes WILL fire for this content type
         // BEFORE save. Reuses the same schemaMap used for the pre-generation
         // hint so the preview is byte-consistent with pre-flight expectations.
-        // After save, the post-save status line gets a "Test in Google Rich
-        // Results Test" link wired through `r.rich_results_test_url`.
+        // (v1.5.216.62.4 — post-save Rich Results link removed: drafts have no
+        // public URL, so Google's tester errored. The Edit-post metabox at
+        // seobetter.php::add_post_meta_box has a Rich Results link that already
+        // gates on publish status — that's the supported path.)
         var ctForRR = (document.querySelector('[name="content_type"]')||{}).value||'blog_post';
         var rrBundle = (typeof schemaMap !== 'undefined' && schemaMap[ctForRR]) ? schemaMap[ctForRR] : null;
         if (rrBundle) {
@@ -1774,17 +1776,7 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                     else if (r.schema_dest === 'rankmath') schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → RankMath</span>';
                     else schemaNote = ' <span style="font-size:11px;color:#6b7280">Schema → SEOBetter (auto-injected)</span>';
 
-                    // v1.5.216.27 — Phase 1 item 8: surface Rich Results validation link.
-                    // r.rich_results_test_url is built server-side in rest_save_draft()
-                    // using rawurlencode(get_permalink). Empty when post lacks a permalink
-                    // (shouldn't happen for saved posts, but defensive). Also show a
-                    // count of active rich-result lanes for at-a-glance feedback.
-                    var rrValidate = '';
-                    if (r.rich_results_test_url) {
-                        var rrCount = (r.rich_results_types && r.rich_results_types.length) || 0;
-                        rrValidate = ' &middot; <a href="'+r.rich_results_test_url+'" target="_blank" rel="noopener" style="color:#059669;font-weight:600;text-decoration:none" title="Validate '+rrCount+' schema @types in Google\'s official tester">🔍 Test Rich Results &rarr;</a>';
-                    }
-                    statusEl.innerHTML = '<a href="'+r.edit_url+'" style="color:#764ba2;font-weight:600">Edit post &rarr;</a>' + schemaNote + rrValidate;
+                    statusEl.innerHTML = '<a href="'+r.edit_url+'" style="color:#764ba2;font-weight:600">Edit post &rarr;</a>' + schemaNote;
                 } else {
                     btn.disabled = false;
                     btn.textContent = 'Save as WordPress Draft';
