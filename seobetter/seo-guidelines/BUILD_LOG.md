@@ -19,7 +19,7 @@
 ## v1.5.216.62.7 — Wire inject_quotes into auto-pipeline (fixes Expert Quotes 0/100 across launch test gate)
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `f581e9c`
 
 ### Bug
 
