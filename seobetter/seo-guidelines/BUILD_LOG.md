@@ -19,7 +19,7 @@
 ## v1.5.216.62.6 — Optimize All result panel exposes actual skip reasons
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `60c4136`
 
 ### Why
 
