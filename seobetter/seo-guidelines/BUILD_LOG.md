@@ -19,7 +19,7 @@
 ## v1.5.216.62.16 — Acronym alias map + 3-char bare-host registration + Pass 1 length symmetry
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `7d4720f`
 
 ### Why
 
