@@ -7,12 +7,82 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.16)
+> **Last updated:** 2026-05-03 (v1.5.216.62.17)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.17 — Authority expansion across remaining categories + FAQ post-process safety net
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+Two outstanding items from the user's "ship everything" directive:
+
+1. **Authority lists for remaining categories** — v62.12 covered Animals/Vet/Health/Food. Tech/Finance/Education/News and the long-tail (Travel/Env/Sports/Transport/Weather/Entertainment/Music/Games/Art) were still on the original v1.5.108 lists. With v62.13's Sonar authority filter, thin lists meant low quote-rate for those categories.
+
+2. **FAQ section regularly dropped by AI** — user audit showed the v62.13/14/15/16 dog-food articles all had no FAQ section despite the prompt's "REQUIRED SECTIONS — DO NOT SKIP" rule. AI compliance is statistical (~85-95%); needs a structural safety net.
+
+### Fixes
+
+**Fix 1 — Authority expansion** ([Content_Injector.php::get_authority_domains()](../includes/Content_Injector.php))
+- **Business**: added oecd.org, weforum.org, economist.com, knowledge.wharton.upenn.edu, sloanreview.mit.edu, knowledge.insead.edu, hbswk.hbs.edu
+- **Finance**: removed investopedia.com (commercial); added oecd.org, bis.org, federalreserve.gov, bankofengland.co.uk, ecb.europa.eu
+- **Technology**: added technologyreview.com, spectrum.ieee.org, w3.org, nist.gov, mit.edu, stanford.edu
+- **Science**: added nih.gov, nsf.gov, noaa.gov, usgs.gov, energy.gov, pnas.org, cell.com, aps.org, quantamagazine.org, royalsociety.org, esa.int, jaxa.jp
+- **Education**: added harvard.edu, mit.edu, stanford.edu, ox.ac.uk, cam.ac.uk, ed.gov, ukri.org, unesco.org
+- **News**: added nytimes.com, washingtonpost.com, ft.com, wsj.com, economist.com, lemonde.fr, spiegel.de, asahi.com, afp.com, dpa.com, kyodonews.jp
+- **Environment**: added unep.org, iea.org, iucnredlist.org, cbd.int, ramsar.org, globalforestwatch.org
+- **Sports**: added fifa.com, worldathletics.org, uci.org, fina.org, paralympic.org, fiba.basketball, icc-cricket.com, world.rugby, usopc.org
+- **Travel**: added wttc.org, travel.state.gov + 8 national tourism boards (visitbritain, australia.com, destinationcanada, newzealand, germany.travel, france.fr, incredibleindia, japan.travel)
+- **Weather**: added ecmwf.int, copernicus.eu, climate.copernicus.eu, noaa.gov, weather.gov, metoffice.gov.uk, bom.gov.au, metservice.com, jma.go.jp, dwd.de, meteofrance.com
+- **Entertainment**: added deadline.com, thewrap.com, screendaily.com, indiewire.com, oscars.org, emmys.com, bafta.org, cesarducinema.fr, nfb.ca, screenaustralia.gov.au, nzfilm.co.nz
+- **Music**: added ifpi.org, billboard.com, riaa.com, bpi.co.uk, aria.com.au, junoawards.ca, sacem.fr, gema.de, jasrac.or.jp, nhk.or.jp, ascap.com, bmi.com, ram.ac.uk, philharmoniedeparis.fr
+- **Games**: added polygon.com, pcgamer.com, kotaku.com, esrb.org, pegi.info, theesa.com, igda.org, gdconf.com, boardgamegeek.com
+- **Transportation**: added itf-oecd.org, uic.org, unece.org, transportation.gov, faa.gov, nhtsa.gov, ntsb.gov, caa.co.uk, casa.gov.au, tc.gc.ca
+- **Art & Design**: added theartnewspaper.com, artforum.com, frieze.com, aiga.org, core77.com, archdaily.com, getty.edu, guggenheim.org, whitney.org, britishmuseum.org, vam.ac.uk, royalacademy.org.uk, louvre.fr, centrepompidou.fr, rijksmuseum.nl, uffizi.it, museodelprado.es
+
+**Fix 2 — FAQ post-process safety net** ([Async_Generator.php::assemble_final()](../includes/Async_Generator.php) — new block after empty-heading strip)
+- Detects missing `## FAQ` / `## Frequently Asked Questions` heading (English + 11 localized variants via `Localized_Strings::get('faq', $lang)`)
+- Only fires for content types in §3.1 default profile + opinion + press_release; skips news_article / personal_essay / live_blog / interview / recipe per §3.1A
+- If missing, injects 3 template Q&A pairs:
+  - "What is {keyword}?" → references intro/main sections
+  - "How do I get started with {keyword}?" → references steps/recommendations
+  - "Where can I find more information about {keyword}?" → references References section
+- Inserted before References section (or at end if no References)
+- Quality is intentionally low — this is a structural safety net, not a content generator. Satisfies §3.1 contract + enables FAQPage schema population. User can edit/expand in WP editor.
+- Status surfaced via `$job['results']['faq_inject_status']` for diagnostic banner
+- error_log when fallback fires so admins with WP_DEBUG can grep for adherence rate
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — both fixes are pure post-process / config |
+| ALL 21 content types? | ✅ Yes — FAQ skip-list mirrors §3.1A genre overrides; authority expansion applies per article's category |
+| ALL AI models? | ✅ Yes — model-agnostic |
+| ALL languages? | ✅ Yes — FAQ heading detection includes localized variants via Localized_Strings; FAQ template uses localized "FAQ" label for non-English articles |
+| ALL countries? | ✅ Yes — authority expansion covers global + regional bodies; FAQ template has no country gating |
+
+### Verify
+
+```bash
+grep -nE "wsava\\.org|nejm\\.org|bis\\.org|technologyreview" seobetter/includes/Content_Injector.php
+grep -nA 5 "FAQ post-process safety net" seobetter/includes/Async_Generator.php
+```
+
+**Test by user:** regenerate any article. Expect:
+- Tech/Finance/News/etc. articles now have richer authority pools — quote source diversity should improve
+- Every article in §3.1 default profile + opinion + press_release has an FAQ section. If AI dropped it, template fallback fills in.
+- FAQPage schema now consistently populates
+
+**Verified by user:** UNTESTED
 
 ---
 

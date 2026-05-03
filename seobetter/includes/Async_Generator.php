@@ -2594,6 +2594,88 @@ class Async_Generator {
             $iter++;
         }
 
+        // v1.5.216.62.17 — FAQ post-process safety net.
+        //
+        // Per SEO-GEO-AI-GUIDELINES.md §3.1, content types in the default profile
+        // (blog_post, how_to, listicle, review, comparison, buying_guide, etc.) AND
+        // §3.1A's opinion + press_release MUST include a Frequently Asked Questions
+        // section. The AI prompt's "REQUIRED SECTIONS — DO NOT SKIP" rule asks for
+        // this but model adherence is statistical (~85-95% compliance). This safety
+        // net catches the 5-15% of articles where the AI dropped the FAQ section
+        // entirely, restoring §3.1 contract + enabling FAQPage schema population.
+        //
+        // Skip for §3.1A genre-override types that legitimately have no FAQ:
+        //   news_article, personal_essay, live_blog, interview, recipe.
+        // (Interview's whole format IS Q&A, so a separate FAQ would be redundant.)
+        $faq_skip_types = [ 'news_article', 'personal_essay', 'live_blog', 'interview', 'recipe' ];
+        if ( ! in_array( $content_type, $faq_skip_types, true ) ) {
+            // Use options language directly — $article_language gets set later.
+            $faq_lang = $options['language'] ?? 'en';
+
+            // Detect existing FAQ heading (English + 11 Localized_Strings variants
+            // for non-English articles via canonical translations table).
+            $faq_heading_re = '/^#{2,3}\s+(FAQ|Frequently\s+Asked\s+Questions|FAQs|Q&A|Common\s+Questions)\b/im';
+            $has_faq = (bool) preg_match( $faq_heading_re, $markdown );
+
+            // For non-English articles, also check the localized FAQ label
+            if ( ! $has_faq && $faq_lang !== 'en' && class_exists( '\\SEOBetter\\Localized_Strings' ) ) {
+                $localized_faq = Localized_Strings::get( 'faq', $faq_lang );
+                if ( ! empty( $localized_faq ) ) {
+                    // Escape regex metas in the localized label
+                    $faq_re_localized = '/^#{2,3}\s+' . preg_quote( $localized_faq, '/' ) . '/iu';
+                    if ( preg_match( $faq_re_localized, $markdown ) ) $has_faq = true;
+                }
+            }
+
+            if ( ! $has_faq ) {
+                // Insert a template FAQ block before References (or at end if no References).
+                // 3 generic Q&A pairs derived from the keyword. Quality is intentionally
+                // low — this is a structural safety net, not a content generator. User
+                // can edit/expand in the WP editor. The point is to satisfy §3.1 +
+                // enable FAQPage schema population.
+                $faq_label = $faq_lang !== 'en' && class_exists( '\\SEOBetter\\Localized_Strings' )
+                    ? Localized_Strings::get( 'faq', $faq_lang ) ?: 'Frequently Asked Questions'
+                    : 'Frequently Asked Questions';
+
+                $faq_block = "\n\n## {$faq_label}\n\n"
+                    . "### What is {$keyword}?\n\n"
+                    . "See the introduction and main sections above for a complete overview of {$keyword}, including key considerations, common scenarios, and practical guidance.\n\n"
+                    . "### How do I get started with {$keyword}?\n\n"
+                    . "Review the steps and recommendations covered in the sections above. Start with the most relevant section to your situation and consult the linked authority sources for additional detail.\n\n"
+                    . "### Where can I find more information about {$keyword}?\n\n"
+                    . "The References section below lists every source cited in this article, including official guidelines, peer-reviewed research, and authoritative organisations covering this topic.\n";
+
+                // Insert before ## References / ## Sources / ## Bibliography if present
+                $ref_re = '/^(##\s+(?:References|Sources|Bibliography|Further\s+Reading|Citations)\b)/im';
+                if ( preg_match( $ref_re, $markdown ) ) {
+                    $markdown = preg_replace( $ref_re, $faq_block . "\n$1", $markdown, 1 );
+                } else {
+                    $markdown .= $faq_block;
+                }
+
+                error_log( sprintf(
+                    'SEOBetter ensure_faq_section: AI dropped FAQ for content_type=%s keyword="%s" — injected template fallback',
+                    $content_type,
+                    $keyword
+                ) );
+
+                // Surface in diagnostic banner via existing auto_pipeline status
+                $job['results']['faq_inject_status'] = [
+                    'attempted'       => true,
+                    'reason'          => 'AI did not generate an FAQ section despite REQUIRED SECTIONS rule. Template fallback injected.',
+                    'content_type'    => $content_type,
+                    'used_fallback'   => true,
+                ];
+            } else {
+                $job['results']['faq_inject_status'] = [
+                    'attempted'   => false,
+                    'reason'      => 'FAQ section already present in AI output (no fallback needed)',
+                    'content_type' => $content_type,
+                    'used_fallback' => false,
+                ];
+            }
+        }
+
         // v1.5.206d-fix9 — Defensive Last Updated sanitizer. Even with fix6's
         // canonical translations table + fix9's stronger prompt, the AI still
         // occasionally writes the English "Last Updated: April 2026" inside

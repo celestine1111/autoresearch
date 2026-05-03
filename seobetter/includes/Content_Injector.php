@@ -1742,9 +1742,16 @@ Return ONLY the Markdown table, nothing else.";
                 'avmajournals.avma.org', 'bmcvetres.biomedcentral.com', 'wva-online.org', 'fecava.org',
                 'mindiampets.com.au',
             ],
+            // v1.5.216.62.17 — added top global museums + design bodies
             'art_design' => [
                 'moma.org', 'tate.org.uk', 'metmuseum.org', 'nga.gov',
                 'designweek.co.uk', 'itsnicethat.com', 'dezeen.com',
+                'theartnewspaper.com', 'artforum.com', 'frieze.com',
+                'aiga.org', 'core77.com', 'archdaily.com',
+                'getty.edu', 'guggenheim.org', 'whitney.org',
+                'britishmuseum.org', 'vam.ac.uk', 'royalacademy.org.uk',
+                'louvre.fr', 'centrepompidou.fr', 'rijksmuseum.nl',
+                'uffizi.it', 'museodelprado.es',
             ],
             'blockchain' => [
                 'ethereum.org', 'bitcoin.org', 'coindesk.com', 'theblock.co',
@@ -1754,9 +1761,14 @@ Return ONLY the Markdown table, nothing else.";
                 'loc.gov', 'bl.uk', 'theguardian.com', 'nytimes.com',
                 'publishersweekly.com', 'kirkusreviews.com',
             ],
+            // v1.5.216.62.17 — added top-tier b-school + multilateral data sources
             'business' => [
                 'hbr.org', 'reuters.com', 'bloomberg.com', 'mckinsey.com',
-                'forbes.com', 'ft.com', 'mindiam.com', 'seobetter.com',
+                'forbes.com', 'ft.com',
+                'oecd.org', 'weforum.org', 'economist.com',
+                'knowledge.wharton.upenn.edu', 'sloanreview.mit.edu',
+                'knowledge.insead.edu', 'hbswk.hbs.edu',
+                'mindiam.com', 'seobetter.com',
             ],
             'cryptocurrency' => [
                 'coindesk.com', 'cointelegraph.com', 'decrypt.co', 'theblock.co',
@@ -1770,21 +1782,35 @@ Return ONLY the Markdown table, nothing else.";
                 'digitalcommerce360.com', 'practicalecommerce.com', 'baymard.com',
                 'reuters.com', 'hbr.org', 'mindiam.com', 'seobetter.com',
             ],
+            // v1.5.216.62.17 — added top universities + research bodies
             'education' => [
                 'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com',
                 'edutopia.org', 'chronicle.com',
+                'harvard.edu', 'mit.edu', 'stanford.edu', 'ox.ac.uk', 'cam.ac.uk',
+                'ed.gov', 'ukri.org', 'unesco.org',
             ],
+            // v1.5.216.62.17 — added top trade outlets + national academies
             'entertainment' => [
                 'variety.com', 'hollywoodreporter.com', 'bfi.org.uk',
                 'rottentomatoes.com', 'bbc.com',
+                'deadline.com', 'thewrap.com', 'screendaily.com', 'indiewire.com',
+                'oscars.org', 'emmys.com', 'bafta.org', 'cesarducinema.fr',
+                'nfb.ca', 'screenaustralia.gov.au', 'nzfilm.co.nz',
             ],
+            // v1.5.216.62.17 — added UN/IEA/biodiversity bodies
             'environment' => [
                 'un.org', 'nature.com', 'nationalgeographic.com', 'wwf.org',
                 'ipcc.ch', 'iucn.org',
+                'unep.org', 'iea.org', 'iucnredlist.org', 'cbd.int',
+                'ramsar.org', 'globalforestwatch.org',
             ],
+            // v1.5.216.62.17 — REMOVED investopedia.com (commercial consumer
+            // finance content site). Added BIS, ECB, Fed (gov regulators) + OECD.
             'finance' => [
-                'reuters.com', 'bloomberg.com', 'investopedia.com',
-                'ft.com', 'imf.org', 'worldbank.org',
+                'reuters.com', 'bloomberg.com', 'ft.com',
+                'imf.org', 'worldbank.org',
+                'oecd.org', 'bis.org', 'federalreserve.gov',
+                'bankofengland.co.uk', 'ecb.europa.eu',
             ],
             'food' => [
                 'who.int', 'ncbi.nlm.nih.gov', 'nature.com',
@@ -1792,9 +1818,13 @@ Return ONLY the Markdown table, nothing else.";
                 // v1.5.216.62.12 additions — global food safety + nutrition
                 'efsa.europa.eu', 'codexalimentarius.org', 'jandonline.org', 'ift.org',
             ],
+            // v1.5.216.62.17 — added trade bodies + ratings authorities + reference
             'games' => [
                 'gamedeveloper.com', 'gdcvault.com', 'eurogamer.net',
                 'rockpapershotgun.com', 'arstechnica.com',
+                'polygon.com', 'pcgamer.com', 'kotaku.com',
+                'esrb.org', 'pegi.info', 'theesa.com',
+                'igda.org', 'gdconf.com', 'boardgamegeek.com',
             ],
             'government' => [
                 'un.org', 'reuters.com', 'bbc.com', 'apnews.com',
@@ -1806,38 +1836,69 @@ Return ONLY the Markdown table, nothing else.";
                 'nejm.org', 'jamanetwork.com', 'cochranelibrary.com',
                 'europepmc.org', 'ecdc.europa.eu', 'medrxiv.org',
             ],
+            // v1.5.216.62.17 — added IFPI + national rights orgs + heritage bodies
             'music' => [
                 'pitchfork.com', 'rollingstone.com', 'bbc.com',
                 'nme.com', 'grammy.com',
+                'ifpi.org', 'billboard.com', 'riaa.com', 'bpi.co.uk',
+                'aria.com.au', 'junoawards.ca', 'sacem.fr', 'gema.de',
+                'jasrac.or.jp', 'nhk.or.jp', 'ascap.com', 'bmi.com',
+                'ram.ac.uk', 'philharmoniedeparis.fr',
             ],
+            // v1.5.216.62.17 — added top global newspapers + wire services
             'news' => [
                 'reuters.com', 'apnews.com', 'bbc.com',
                 'theguardian.com', 'aljazeera.com',
+                'nytimes.com', 'washingtonpost.com', 'ft.com', 'wsj.com',
+                'economist.com', 'lemonde.fr', 'spiegel.de', 'asahi.com',
+                'afp.com', 'dpa.com', 'kyodonews.jp',
             ],
+            // v1.5.216.62.17 — added flagship multi-disciplinary journals + agencies
             'science' => [
                 'nature.com', 'science.org', 'ncbi.nlm.nih.gov', 'nasa.gov',
                 'scientificamerican.com', 'newscientist.com', 'phys.org',
+                'nih.gov', 'nsf.gov', 'noaa.gov', 'usgs.gov', 'energy.gov',
+                'pnas.org', 'cell.com', 'aps.org', 'quantamagazine.org',
+                'royalsociety.org', 'esa.int', 'jaxa.jp',
             ],
+            // v1.5.216.62.17 — added top global sport governing bodies
             'sports' => [
                 'olympics.com', 'wada-ama.org', 'bbc.com',
+                'fifa.com', 'worldathletics.org', 'uci.org', 'fina.org',
+                'paralympic.org', 'fiba.basketball', 'icc-cricket.com',
+                'world.rugby', 'usopc.org',
                 'reuters.com', 'espn.com',
             ],
+            // v1.5.216.62.17 — added top CS research bodies + standards orgs
             'technology' => [
                 'ieee.org', 'acm.org', 'arxiv.org', 'nature.com',
                 'techcrunch.com', 'arstechnica.com', 'wired.com', 'theverge.com',
+                'technologyreview.com', 'spectrum.ieee.org',
+                'w3.org', 'nist.gov', 'mit.edu', 'stanford.edu',
                 'mindiam.com', 'seobetter.com',
             ],
+            // v1.5.216.62.17 — added national transport ministries + safety bureaus
             'transportation' => [
-                'icao.int', 'iata.org', 'imo.org', 'reuters.com',
-                'bbc.com',
+                'icao.int', 'iata.org', 'imo.org', 'reuters.com', 'bbc.com',
+                'itf-oecd.org', 'uic.org', 'unece.org',
+                'transportation.gov', 'faa.gov', 'nhtsa.gov', 'ntsb.gov',
+                'caa.co.uk', 'casa.gov.au', 'tc.gc.ca',
             ],
+            // v1.5.216.62.17 — added WTTC + national tourism boards
             'travel' => [
                 'unwto.org', 'lonelyplanet.com', 'bbc.com',
                 'nationalgeographic.com', 'reuters.com',
+                'wttc.org', 'travel.state.gov', 'visitbritain.com', 'australia.com',
+                'destinationcanada.com', 'newzealand.com', 'germany.travel',
+                'france.fr', 'incredibleindia.gov.in', 'japan.travel',
             ],
+            // v1.5.216.62.17 — added national met services + ECMWF/Copernicus
             'weather' => [
                 'wmo.int', 'nature.com', 'bbc.com',
                 'sciencedaily.com',
+                'ecmwf.int', 'copernicus.eu', 'climate.copernicus.eu', 'noaa.gov',
+                'weather.gov', 'metoffice.gov.uk', 'bom.gov.au', 'metservice.com',
+                'jma.go.jp', 'dwd.de', 'meteofrance.com',
             ],
         ];
 
