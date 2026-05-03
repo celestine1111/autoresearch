@@ -19,7 +19,7 @@
 ## v1.5.216.62.10 — Fix Tavily-key diagnostic + richer per-stage filter counts in inject_quotes
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `ec586a9`
 
 ### Bug 1 — Diagnostic always falsely showed "Tavily NOT configured"
 
