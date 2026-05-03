@@ -19,7 +19,7 @@
 ## v1.5.216.62.22 — Did You Know link rendering + Pros/Cons balance enforcer
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `995c1d7`
 
 ### Why
 
