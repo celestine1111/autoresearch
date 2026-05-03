@@ -46,6 +46,82 @@
     var Button               = wp.components.Button;
     var el                   = wp.element.createElement;
     var Fragment             = wp.element.Fragment;
+    var useState             = wp.element.useState;  // v62.33 — for in-block save button state
+
+    /**
+     * v1.5.216.62.33 — In-block "Save post" button.
+     *
+     * Adds a small button below each block's preview area that programmatically
+     * triggers the post save (same as clicking "Update" at the top of the
+     * editor). Resolves the recurring "where's the save button" complaint
+     * without scrolling to the top of the editor.
+     *
+     * Three states:
+     *   idle   — green "Save post" button, clickable
+     *   saving — disabled "Saving…" button while wp.data.dispatch resolves
+     *   saved  — grey "Saved ✓" for 2 seconds, then back to idle
+     *
+     * If wp.data isn't available (extreme edge case), the component renders
+     * nothing — the post-level Update button at the top still works.
+     */
+    function SavePostButton() {
+        if ( ! wp.data || ! useState ) return null;
+        var s = useState( 'idle' );
+        var status = s[0];
+        var setStatus = s[1];
+
+        function onClick() {
+            if ( status === 'saving' ) return;
+            setStatus( 'saving' );
+            try {
+                var promise = wp.data.dispatch( 'core/editor' ).savePost();
+                if ( promise && typeof promise.then === 'function' ) {
+                    promise.then( function () {
+                        setStatus( 'saved' );
+                        setTimeout( function () { setStatus( 'idle' ); }, 2000 );
+                    } ).catch( function () {
+                        setStatus( 'idle' );
+                    } );
+                } else {
+                    // Older WP — savePost() is fire-and-forget. Show "Saved" briefly.
+                    setTimeout( function () { setStatus( 'saved' ); }, 600 );
+                    setTimeout( function () { setStatus( 'idle' ); }, 2600 );
+                }
+            } catch ( e ) {
+                setStatus( 'idle' );
+            }
+        }
+
+        var label = status === 'saving' ? 'Saving…' :
+                    status === 'saved'  ? 'Saved ✓' :
+                                          'Save post';
+        var bg    = status === 'saving' ? '#9ca3af' :
+                    status === 'saved'  ? '#16a34a' :
+                                          '#0f172a';
+
+        return el( 'div', { style: { padding: '12px', textAlign: 'center', borderTop: '1px solid #e5e7eb', background: '#f9fafb', borderRadius: '0 0 8px 8px', marginTop: '-2px' } },
+            el( 'button', {
+                type: 'button',
+                onClick: onClick,
+                disabled: status === 'saving',
+                style: {
+                    background: bg,
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 22px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: status === 'saving' ? 'progress' : 'pointer',
+                    transition: 'background 200ms ease',
+                    minWidth: '120px'
+                }
+            }, label ),
+            el( 'div', { style: { fontSize: '11px', color: '#6b7280', marginTop: '6px' } },
+                'Same as clicking Update at the top of the editor.'
+            )
+        );
+    }
 
     /**
      * Normalize a select-options descriptor to the [{ label, value }]
@@ -207,16 +283,17 @@
             return el( Fragment, null,
                 el( InspectorControls, null,
                     el( PanelBody, { title: panelTitle, initialOpen: true },
-                        // v62.31 — sticky save-hint at the top so users
-                        // know the per-block "Save" button doesn't exist
-                        // (Gutenberg saves block attrs when the post is
-                        // updated). Notice with status='info' renders a
-                        // small inline tip with the WordPress design system.
+                        // v62.31 — sticky save-hint at the top of the
+                        // sidebar panel. v62.33 added an in-block "Save
+                        // post" button beneath the preview so this hint
+                        // is now a back-up explanation rather than the
+                        // primary path. Both work — pick whichever the
+                        // user finds first.
                         Notice ? el( Notice, {
                             status: 'info',
                             isDismissible: false,
                             className: 'sb-block-save-hint'
-                        }, 'Block settings save when you click Update on the post (top right). There is no per-block save button — that is normal Gutenberg behavior.' ) : null,
+                        }, 'Use the "Save post" button below the block preview, or click Update at the top of the editor — both save the same way.' ) : null,
                         // v62.31 — required-field warning banner
                         missingRequired.length > 0 && Notice ? el( Notice, {
                             status: 'warning',
@@ -225,7 +302,14 @@
                         fields
                     )
                 ),
-                el( 'div', blockProps, preview )
+                // v62.33 — wrap the preview + the new in-block Save Post
+                // button in a single container so they visually belong
+                // together. The button gets a subtle border-top so it
+                // reads as a footer to the preview card.
+                el( 'div', blockProps,
+                    preview,
+                    el( SavePostButton, null )
+                )
             );
         };
     }

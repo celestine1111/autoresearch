@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.32)
+> **Last updated:** 2026-05-04 (v1.5.216.62.33)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.33 — In-block "Save post" button (skip the scroll-to-top)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User asked: "is there a save button?" — answered no, Gutenberg saves all blocks when you click Update at the top of the editor. User followed up: "id add it instead of scrolling to top". So adding a programmatic save button INSIDE each Schema Block, beneath the styled preview.
+
+### Fix — `assets/js/schema-blocks.js`
+
+New `SavePostButton` React component, rendered beneath the ServerSideRender preview in every Schema Block's edit() output. Three states:
+
+| State | Label | Color | Behavior |
+|---|---|---|---|
+| idle | "Save post" | dark slate `#0f172a` | Clickable; on click → switches to "saving" |
+| saving | "Saving…" | grey `#9ca3af`, disabled | While `wp.data.dispatch( 'core/editor' ).savePost()` resolves |
+| saved | "Saved ✓" | green `#16a34a` | For 2 seconds, then auto-resets to idle |
+
+Mechanics:
+- Calls `wp.data.dispatch( 'core/editor' ).savePost()` — the exact same action the post-level "Update" button triggers. No new save path; we just expose the existing one in a more discoverable place.
+- Returns `null` if `wp.data` or `wp.element.useState` are unavailable (extreme edge case — older WP). The post-level Update button still works in that fallback.
+- Sub-line beneath the button: "Same as clicking Update at the top of the editor." — explains exactly what's happening so users aren't surprised.
+
+### Sidebar hint also updated
+
+The v62.31 Notice at the top of the InspectorControls panel previously said "There is no per-block save button". After v62.33 there IS a save button — the panel hint now points at it: "Use the 'Save post' button below the block preview, or click Update at the top of the editor — both save the same way."
+
+### Why this preserves Gutenberg architecture
+
+The new button is purely a UX shortcut. Underneath, it triggers the standard `core/editor`/`savePost` action — same code path as Update, same auto-save semantics, same draft/publish state machine. No bypass, no parallel save store, nothing custom. Gutenberg never sees the button as a special action — it sees a normal `savePost()` dispatch.
+
+### Verify
+
+```bash
+node --check /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js
+grep -n "SavePostButton" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js
+grep -n "core/editor" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # one match — the savePost dispatch
+```
+
+### Test plan
+
+1. Insert any Schema Block (Product / Event / etc.)
+2. Fill in fields — preview renders
+3. Beneath the preview: "Save post" green button
+4. Click it → button shows "Saving…" briefly → "Saved ✓" for 2s → back to "Save post"
+5. Confirm in WP that the post saved (Permalink updates if it was a new draft, etc.)
+
+**Verified by user:** UNTESTED
 
 ---
 
