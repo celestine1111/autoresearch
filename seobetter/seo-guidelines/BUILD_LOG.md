@@ -7,12 +7,59 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.8)
+> **Last updated:** 2026-05-03 (v1.5.216.62.9)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.9 — Fix nested-form bug breaking ALL General Settings saves ("link expired" on every save)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Bug
+
+User couldn't save the Tavily API Key (or Pexels, or any other field after the llms.txt-cache row in General Settings). Every Save click returned WordPress's `"The link you followed has expired. Please try again."`
+
+This is the WP nonce-mismatch error. Initially blamed on cache (incognito + cache-purge had no effect) before realizing the root cause is in the markup itself.
+
+### Root cause
+
+[admin/views/settings.php:707-710](../admin/views/settings.php) had a nested `<form>` for the "Regenerate now" llms.txt cache button, sitting INSIDE the outer General Settings form. HTML5 forbids nested forms — browsers close the outer form when they see the inner one. Result:
+
+- Outer form started at line 49 with `seobetter_settings_nonce`
+- Inner form opened at line 707 → outer form silently closed by browser
+- Tavily field (line 728), Pexels field (line 736), and Save button (line 742) were all **outside** any form
+- Save button submitted to the page URL with no fields and no nonce
+- `check_admin_referer( 'seobetter_settings_nonce' )` failed → "expired"
+
+### Fix
+
+Replaced the nested form with a plain `<button type="submit" name="seobetter_llms_clear_cache" value="1">`. The button now submits the OUTER General Settings form, which already has the correct nonce. Updated the handler to verify against `seobetter_settings_nonce` (the outer form's nonce) instead of the now-removed `seobetter_llms_clear_cache` nonce. Used `wp_verify_nonce()` directly instead of `check_admin_referer()` so the nonce check doesn't terminate execution if it fails (because the same form submission can land on either branch).
+
+### Verify
+
+```bash
+grep -nA3 "seobetter_llms_clear_cache" seobetter/admin/views/settings.php | head -20
+# Should show no <form> tag wrapping the button — just <button type="submit" name=...>
+```
+
+**Test by user:** WP Admin → SEOBetter → Settings → General tab → paste Tavily key → Save Settings. Should save without "link expired" error. Then regenerate test article and confirm Expert Quotes ≥50/100.
+
+**Verified by user:** UNTESTED
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ N/A — UI bug |
+| ALL 21 content types? | ✅ N/A — UI bug |
+| ALL AI models? | ✅ N/A — UI bug |
+| All users? | ✅ Yes — fix benefits anyone trying to save General Settings, not just this user |
 
 ---
 

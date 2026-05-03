@@ -704,17 +704,24 @@ $sb_active_tier = SEOBetter\License_Manager::get_active_tier();
                 <tr>
                     <th><?php esc_html_e( 'llms.txt cache', 'seobetter' ); ?></th>
                     <td>
-                        <form method="post" style="display:inline">
-                            <?php wp_nonce_field( 'seobetter_llms_clear_cache' ); ?>
-                            <button type="submit" name="seobetter_llms_clear_cache" class="button"><?php esc_html_e( 'Regenerate now', 'seobetter' ); ?></button>
-                        </form>
+                        <?php // v1.5.216.62.9 — was a nested <form> here, which broke the outer
+                              // General Settings form (HTML doesn't allow nested forms; browsers
+                              // close the outer form when they see the inner one). Result: every
+                              // field after this row (Tavily key, Pexels key) was outside the
+                              // form and the Save button submitted without the nonce → "link
+                              // expired" on every save attempt. Now this button submits the
+                              // OUTER form using the existing seobetter_settings_nonce, and the
+                              // handler below switches on the button's name=value. ?>
+                        <button type="submit" name="seobetter_llms_clear_cache" value="1" class="button"><?php esc_html_e( 'Regenerate now', 'seobetter' ); ?></button>
                         <p class="description"><?php esc_html_e( 'Auto-invalidates on every post save. Use this only if you want to refresh manually (e.g. after a settings change).', 'seobetter' ); ?></p>
                     </td>
                 </tr>
                 <?php endif; ?>
                 <?php
                 // v1.5.216.31 — Handle the regenerate-now button
-                if ( isset( $_POST['seobetter_llms_clear_cache'] ) && check_admin_referer( 'seobetter_llms_clear_cache' ) ) {
+                // v1.5.216.62.9 — uses the outer form's nonce (seobetter_settings_nonce) since
+                // the button is now part of that form, not a nested one.
+                if ( isset( $_POST['seobetter_llms_clear_cache'] ) && isset( $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'seobetter_settings_nonce' ) ) {
                     SEOBetter\LLMS_Txt_Generator::clear_cache();
                     echo '<div class="notice notice-success is-dismissible" style="margin:8px 0"><p>' . esc_html__( 'llms.txt cache cleared. Next request will regenerate.', 'seobetter' ) . '</p></div>';
                 }
