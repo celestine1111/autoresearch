@@ -2457,6 +2457,16 @@ class Async_Generator {
         // Skip for content types where unlinked quotes are EXPECTED structural content:
         // Case Study (client testimonials), Interview (speaker quotes), Press Release
         // (executive quotes), Personal Essay (personal narrative quotes).
+        // v1.5.216.62.13 — Strip unsourced inline-stat parentheticals across
+        // ALL content types (not gated by quote_exempt — even Personal Essay
+        // shouldn't have "(SourceName)" attribution-shaped fabrications).
+        // Universal: works for ALL languages because patterns are digit-based.
+        $markdown = Content_Injector::strip_unsourced_inline_stats(
+            $markdown,
+            $job['results']['citation_pool'] ?? [],
+            $job['results']['sonar_data'] ?? null
+        );
+
         $quote_exempt = [ 'case_study', 'interview', 'press_release', 'personal_essay', 'opinion' ];
         if ( ! in_array( $content_type, $quote_exempt, true ) ) {
             $markdown = Content_Injector::strip_unlinked_quotes( $markdown );
@@ -2535,18 +2545,20 @@ class Async_Generator {
         }
 
         // v1.5.216.62.11 — Strip empty headings.
+        // v1.5.216.62.13 — Enhanced: also catches headings whose only body is
+        // whitespace, OR a single short fragment under 30 chars (caught a real
+        // case: "## Pros and Cons of Switching Your Dog to Raw Food" with only
+        // a single sub-30-char placeholder line before the next H2).
         //
         // AI models occasionally emit a section heading with no body content
         // (e.g. "### Cons" followed immediately by "### References") because they
         // already covered that topic in a comparison table or Pros section above.
         // The empty heading looks broken to readers and hurts CORE-EEAT scoring.
         //
-        // Universal fix: any heading whose body is empty before the next heading
-        // gets dropped. Works for ALL keywords, ALL 21 content types, ALL AI
-        // models. Whitelist guard: never strip H1 (article title), never strip
-        // headings that match a structural-required name (Key Takeaways, FAQ,
-        // References, Recipe instructions) — those should stay even if temporarily
-        // empty mid-pipeline because later inject steps may populate them.
+        // Universal fix: any heading whose body is empty (or trivially short)
+        // before the next heading gets dropped. Works for ALL keywords, ALL 21
+        // content types, ALL AI models. Whitelist guard: never strip H1 (article
+        // title), never strip headings that match a structural-required name.
         $structural_keep = '/^#{1,6}\s+(Key\s*Takeaway|FAQ|Frequently|Reference|Recipe|Ingredient|Instruction|Direction|Storage|Method)/i';
         // Repeat until no more empty headings (cascading deletes — A→B→C where B
         // and C are both empty would otherwise need 2 passes).
@@ -2554,12 +2566,28 @@ class Async_Generator {
         $iter = 0;
         while ( $prev !== $markdown && $iter < 5 ) {
             $prev = $markdown;
+            // Pass A: heading immediately followed by another heading (zero body).
             $markdown = preg_replace_callback(
                 '/^(#{2,6})[ \t]+([^\n]+)\n+(?=#{1,6}[ \t])/m',
                 function ( $m ) use ( $structural_keep ) {
-                    // Keep structural headings even if temporarily empty
                     if ( preg_match( $structural_keep, $m[0] ) ) return $m[0];
                     return '';
+                },
+                $markdown
+            );
+            // Pass B: heading followed by ONLY a short stub (under 30 chars total
+            // body content, after stripping markdown bullets/whitespace) before
+            // the next heading. Catches "## Pros and Cons\n\nThe pros and cons:\n\n## References".
+            $markdown = preg_replace_callback(
+                '/^(#{2,6})[ \t]+([^\n]+)\n+([\s\S]*?)(?=^#{1,6}[ \t])/m',
+                function ( $m ) use ( $structural_keep ) {
+                    if ( preg_match( $structural_keep, $m[0] ) ) return $m[0];
+                    // Body content with markdown structural chars stripped
+                    $body = preg_replace( '/[\-*+>#`|]/', '', $m[3] );
+                    $body = trim( preg_replace( '/\s+/', ' ', $body ) );
+                    // If body has under 30 substantive chars, treat as empty
+                    if ( strlen( $body ) < 30 ) return '';
+                    return $m[0];
                 },
                 $markdown
             );

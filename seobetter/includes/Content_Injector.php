@@ -380,12 +380,34 @@ class Content_Injector {
             return [ 'text' => $text, 'url' => $url, 'source' => $source ];
         };
 
-        // v1.5.113b — Simplified Source 1: Sonar data already comes from
-        // Perplexity's curated web search. Only filter out e-commerce junk.
-        // The authority + substantive filters were causing 0 quotes on every
-        // article because Sonar returns quality editorial sites that don't
-        // happen to be in our authority domain list. Perplexity IS the quality
-        // filter — we don't need to second-guess it.
+        // v1.5.216.62.13 — Sonar quotes now require authority-domain match.
+        //
+        // Background: v1.5.113b removed the authority filter from this branch
+        // because it produced 0 quotes. v1.5.216.62.13 reinstates it because
+        // user audit (2026-05-03) found the Sonar path was returning commercial
+        // pet retailer URLs (solfeddogfood.com, primalpetfoods.com,
+        // stevesrealfood.com, paleoridge.co.uk) as "expert quote sources" — not
+        // hallucinations technically, but commercial brand attributions don't
+        // meet the §15B Trust signal bar.
+        //
+        // The 0-quotes failure mode v1.5.113b warned about is now mitigated by
+        // v1.5.216.62.12's authority-domain expansion (2-4× more domains per
+        // category) AND by Source 2 (Tavily PHP-direct) which uses the same
+        // authority filter as a fallback. If both return 0, we deliberately
+        // emit no quote — better no quote than commercial-brand-as-authority.
+        $authority_domains = self::get_authority_domains( $domain, $country );
+        $is_authority_url = function ( $url ) use ( $authority_domains ) {
+            $host = wp_parse_url( $url, PHP_URL_HOST ) ?? '';
+            $host = preg_replace( '/^www\./', '', strtolower( $host ) );
+            if ( $host === '' ) return false;
+            foreach ( $authority_domains as $auth ) {
+                $auth_clean = strtolower( trim( $auth ) );
+                if ( $host === $auth_clean ) return true;
+                if ( str_ends_with( $host, '.' . $auth_clean ) ) return true;
+            }
+            return false;
+        };
+
         if ( ! empty( $sonar_data['quotes'] ) ) {
             foreach ( $sonar_data['quotes'] as $q ) {
                 if ( ! is_array( $q ) || empty( $q['text'] ) || empty( $q['url'] ) ) continue;
@@ -395,9 +417,10 @@ class Content_Injector {
                 if ( strlen( $text ) < 30 || strlen( $text ) > 300 ) continue;
                 if ( ! preg_match( '#^https?://#', $url ) ) continue;
                 if ( empty( $source ) ) $source = wp_parse_url( $url, PHP_URL_HOST ) ?? 'Source';
-                // Only block: junk + e-commerce. No authority filter, no substantive filter.
+                // Block: junk + e-commerce + non-authority URLs (v1.5.216.62.13).
                 if ( preg_match( $junk_re, $text ) ) continue;
                 if ( preg_match( $ecommerce_re, $text ) ) continue;
+                if ( ! $is_authority_url( $url ) ) continue;
                 $quotes[] = "\"{$text}\" — [{$source}]({$url})";
                 if ( count( $quotes ) >= 3 ) break;
             }
@@ -1496,6 +1519,120 @@ Return ONLY the Markdown table, nothing else.";
      *
      * Works for ALL keywords, ALL content types, ALL AI models.
      */
+    /**
+     * v1.5.216.62.13 — Strip parenthetical attributions on inline statistics
+     * when the cited source isn't in the article's verified citation pool.
+     *
+     * Catches the user-reported hallucination pattern (2026-05-03 audit):
+     *   "Over 65% of owners who transition gradually report fewer issues (Steve's Real Food)."
+     *   "An estimated 45% of UK pet owners have tried raw food for their dogs in 2026 (SoGlos)."
+     *
+     * The stat is preserved as plain prose (the number itself may be real); only the
+     * unverifiable parenthetical attribution is stripped. Universal: works for ALL
+     * keywords, ALL content types, ALL AI models, ALL languages (digit + paren
+     * patterns are language-agnostic).
+     *
+     * @param string $markdown      Article markdown
+     * @param array  $citation_pool Verified citation pool URLs (from Citation_Pool::build)
+     * @param array  $sonar_data    Sonar/Tavily research data with citations + quotes
+     * @return string               Markdown with unverified parentheticals stripped
+     */
+    public static function strip_unsourced_inline_stats( string $markdown, array $citation_pool = [], ?array $sonar_data = null ): string {
+        // Build lookup of verifiable source-name fragments from the article's pool.
+        // We compare attribution text loosely — if the pool has akc.org or
+        // "American Kennel Club", we accept "(AKC)" or "(American Kennel Club)".
+        $verifiable = [];
+        foreach ( $citation_pool as $entry ) {
+            if ( ! empty( $entry['source_name'] ) ) {
+                $verifiable[] = strtolower( trim( $entry['source_name'] ) );
+            }
+            if ( ! empty( $entry['url'] ) ) {
+                $host = wp_parse_url( $entry['url'], PHP_URL_HOST ) ?? '';
+                $host = preg_replace( '/^www\./', '', strtolower( $host ) );
+                if ( $host !== '' ) {
+                    $verifiable[] = $host;
+                    // First label of the host (e.g. "akc" from "akc.org") for
+                    // acronym-style attributions like "(AKC)".
+                    $first = explode( '.', $host )[0] ?? '';
+                    if ( strlen( $first ) >= 2 ) $verifiable[] = $first;
+                }
+            }
+        }
+        foreach ( ( $sonar_data['citations'] ?? [] ) as $cit ) {
+            if ( is_string( $cit ) ) {
+                $host = wp_parse_url( $cit, PHP_URL_HOST ) ?? '';
+                $host = preg_replace( '/^www\./', '', strtolower( $host ) );
+                if ( $host !== '' ) $verifiable[] = $host;
+            }
+        }
+        $verifiable = array_unique( $verifiable );
+
+        $is_verifiable_attribution = function ( string $attribution ) use ( $verifiable ) {
+            $needle = strtolower( trim( $attribution ) );
+            // Trivial matches always allowed (very generic terms that anyone might use)
+            // — these aren't fabricated sources, they're stylistic.
+            $generic_allowed = [ 'study', 'research', 'experts', 'veterinarians', 'vets', 'reports', 'data' ];
+            foreach ( $generic_allowed as $g ) {
+                if ( $needle === $g ) return true;
+            }
+            // Year-only parentheticals ("(2026)") are dates, not sources — leave them
+            if ( preg_match( '/^\d{4}$/', $needle ) ) return true;
+            foreach ( $verifiable as $v ) {
+                if ( $v === '' ) continue;
+                // Exact match
+                if ( $needle === $v ) return true;
+                // Source name appears within attribution (e.g. attribution "akc.org study"
+                // matches verifiable "akc.org" or "akc")
+                if ( strlen( $v ) >= 3 && strpos( $needle, $v ) !== false ) return true;
+                // Acronym match — common authority orgs that abbreviate
+                $acronym = preg_replace( '/[^a-z]/', '', $needle );
+                if ( strlen( $acronym ) >= 2 && $acronym === $v ) return true;
+            }
+            return false;
+        };
+
+        // Pattern A: inline stat with parenthetical attribution.
+        // "X%" or "N out of M" or "N in M" followed by "(SourceName)"
+        $patterns = [
+            '/(\b\d{1,3}(?:[.,]\d+)?\s*%[^.\n]*?)\s*\(([A-Z][^)]{1,40})\)/u',
+            '/(\b\d+\s+(?:out\s+of|in)\s+\d+[^.\n]*?)\s*\(([A-Z][^)]{1,40})\)/iu',
+            '/(\baccording\s+to\s+[A-Z][\w\s]{2,30}[,;]\s+\d[\d.,%]*)/iu', // "According to X, 65%..."
+        ];
+
+        $stripped_count = 0;
+        foreach ( $patterns as $pattern ) {
+            $markdown = preg_replace_callback(
+                $pattern,
+                function ( $m ) use ( $is_verifiable_attribution, &$stripped_count ) {
+                    // Only first 2 patterns have group 2 (attribution); pattern 3 is "According to"
+                    if ( ! isset( $m[2] ) ) {
+                        // "According to X" — extract source name between "to" and ","
+                        if ( preg_match( '/according\s+to\s+([A-Z][\w\s]{2,30})[,;]/iu', $m[0], $a ) ) {
+                            $attribution = $a[1];
+                            if ( $is_verifiable_attribution( $attribution ) ) return $m[0];
+                            // Strip the "According to X," prefix, keep just the stat
+                            $stripped_count++;
+                            return preg_replace( '/^according\s+to\s+[A-Z][\w\s]{2,30}[,;]\s*/iu', '', $m[0] );
+                        }
+                        return $m[0];
+                    }
+                    $attribution = $m[2];
+                    if ( $is_verifiable_attribution( $attribution ) ) return $m[0];
+                    // Strip the parenthetical, keep the stat as plain prose
+                    $stripped_count++;
+                    return rtrim( $m[1] );
+                },
+                $markdown
+            );
+        }
+
+        if ( $stripped_count > 0 && function_exists( 'error_log' ) ) {
+            error_log( sprintf( 'SEOBetter strip_unsourced_inline_stats: removed %d unverified parenthetical attribution(s) from article body', $stripped_count ) );
+        }
+
+        return $markdown;
+    }
+
     public static function strip_unlinked_quotes( string $markdown ): string {
         $lines = explode( "\n", $markdown );
         $cleaned = [];

@@ -7,12 +7,75 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.12)
+> **Last updated:** 2026-05-03 (v1.5.216.62.13)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.13 — Sonar authority filter + enhanced empty-heading strip + inline-stat hallucination strip
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audit on 2026-05-03 of the v62.12-generated dog raw-food article (GEO 91 ✅) flagged 3 remaining quality concerns:
+
+1. **Sonar still returning commercial sources**: 2 expert quotes from `thesprucepets.com` + 7 references from `solfeddogfood.com`, `primalpetfoods.com`, `stevesrealfood.com`, `paleoridge.co.uk`. None of these are in the authority-domains list, but Source 1 (Sonar) in `inject_quotes` had no authority filter — only junk + e-commerce. Removed in v1.5.113b after worry it would zero out quotes; the v62.12 expansion now provides enough authority coverage to justify reinstating.
+
+2. **"## Pros and Cons" heading still empty**: v62.11's strip-empty-headings only caught the heading-immediately-followed-by-heading case. This article had `## Pros and Cons of Switching Your Dog to Raw Food` followed by ~25 chars of fragment then the next H2. The body was below my 30-char threshold but the regex didn't match because there WAS some whitespace + a stub.
+
+3. **Unsourced inline statistics**: "Over 65% of owners (Steve's Real Food)" and "An estimated 45% of UK pet owners have tried raw food (SoGlos)" — parenthetical attributions to commercial brands or vague organizations not in the citation pool. Per §15B Trust signal, plain stats are fine but fabricated parenthetical sources are a fail.
+
+### Fixes
+
+**Fix 1 — Sonar authority filter** ([Content_Injector.php::inject_quotes()](../includes/Content_Injector.php) line ~395)
+- Source 1 (sonar_data quotes) now requires the URL host to match the authority-domains list for the article's category + country
+- Mitigation for v1.5.113b's "0 quotes" concern: v62.12's authority expansion (~600 new domains across 16 countries) plus Source 2 (Tavily PHP-direct) fallback ensures most articles still get 2-3 quotes
+- If both sources return zero, NO quote is injected per §15B — better no quote than commercial-brand-as-authority
+
+**Fix 2 — Enhanced empty-heading strip** ([Async_Generator.php::assemble_final()](../includes/Async_Generator.php) line ~2540)
+- Added Pass B that catches headings followed by ≤30 substantive chars before the next heading (was: only zero chars)
+- "Substantive chars" = body with markdown structural chars (`-*+>#\`|`) and whitespace stripped
+- Universal — works for all 21 content types and all languages
+
+**Fix 3 — Inline-stat hallucination strip** ([Content_Injector.php::strip_unsourced_inline_stats()](../includes/Content_Injector.php) — NEW function ~line 1473, called from Async_Generator before strip_unlinked_quotes)
+- Detects 3 patterns: `\d+%\s*(\w)`, `\d+\s+(?:in|out\s+of)\s+\d+\s*(\w)`, `According to X, \d+`
+- Cross-checks parenthetical attribution against citation_pool source names + sonar_data citation hosts + acronym variants
+- Allows generic stylistic terms (study, research, experts, vets) and year-only parens
+- Strips ONLY the unverified parenthetical — preserves the stat as plain prose
+- Universal: digit patterns work in all 60+ languages
+- error_log output for visibility
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — authority filter + universal regex patterns |
+| ALL 21 content types? | ✅ Yes — Sonar filter applies pre-Source-1 (universal); inline-stat strip applies pre-quote-strip (universal); empty-heading enhancement applies in assemble_final (universal) |
+| ALL AI models? | ✅ Yes — all 3 fixes are post-AI; model-agnostic |
+
+### Verify
+
+```bash
+grep -nA 5 "v1.5.216.62.13 — Sonar quotes now require authority" seobetter/includes/Content_Injector.php
+grep -nA 5 "strip_unsourced_inline_stats" seobetter/includes/Content_Injector.php | head -20
+grep -nA 5 "Pass B: heading followed by ONLY a short stub" seobetter/includes/Async_Generator.php
+```
+
+**Test by user:** regenerate the dog raw-food article. Expected:
+- Expert Quotes now from authority sources (AVMA, AAHA, Vet Record, etc.) NOT thesprucepets / commercial pet sites — OR no quote at all if no authorities have substantive content for this keyword
+- Empty `## Pros and Cons` heading should be GONE
+- "(Steve's Real Food)" / "(SoGlos)" parenthetical attributions stripped from inline stats
+- Total GEO should hold ≥90 (was 91 in v62.12)
+
+**Phase A1 (FAQ post-process safety net) deferred to v1.5.216.62.14** — requires an extra AI call to generate FAQ on demand; want to validate v62.13 quality first.
+
+**Verified by user:** UNTESTED
 
 ---
 
