@@ -323,6 +323,43 @@ async function typeHuman(page, text) {
   }
 }
 
+// More reliable than page.keyboard.type for X's contenteditable compose box —
+// pressSequentially is bound to the locator so focus can't drift away.
+async function typeIntoCompose(compose, text) {
+  await compose.click();
+  await compose.pressSequentially(text, { delay: 25 + Math.random() * 30 });
+}
+
+// Submit a reply by trying inline button → main button → Ctrl+Enter shortcut.
+// Each X UI variant uses a different submit affordance; this hits all three.
+async function submitReply(page) {
+  const inline = page.locator('button[data-testid="tweetButtonInline"]:not([disabled])').first();
+  const main   = page.locator('button[data-testid="tweetButton"]:not([disabled])').first();
+  try { await inline.click({ timeout: 8000 }); return 'inline'; } catch {}
+  try { await main.click({ timeout: 4000 }); return 'main'; } catch {}
+  // Last resort — keyboard shortcut works on both Mac and Linux Chromium
+  await page.keyboard.press('Control+Enter');
+  await jitter(1500, 2500);
+  return 'kbd';
+}
+
+// Dump diagnostic state for debugging — useful when a click fails on us
+async function debugReplyFailure(page, context) {
+  const ts = Date.now();
+  const shotPath = `/tmp/replyfail-${ts}.png`;
+  try { await page.screenshot({ path: shotPath, fullPage: false }); } catch {}
+  const buttonStates = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('button[data-testid]'))
+      .filter(b => /tweet|post|reply/i.test(b.getAttribute('data-testid') || ''))
+      .map(b => ({
+        testid: b.getAttribute('data-testid'),
+        disabled: b.disabled || b.getAttribute('aria-disabled') === 'true',
+        visible: b.offsetParent !== null,
+      }));
+  });
+  return `\nscreenshot: ${shotPath}\nbuttons: ${JSON.stringify(buttonStates)}\ncontext: ${context}`;
+}
+
 // =============================================================================
 // ACTIONS
 // =============================================================================
@@ -430,12 +467,14 @@ Return ONLY the JSON per §4 schema. The "tweets" array has one entry per scored
   await page.waitForSelector('div[data-testid="tweetTextarea_0"]', { timeout: 10000 });
   await jitter(1500, 3000);
   const compose = page.locator('div[data-testid="tweetTextarea_0"]').first();
-  await compose.click();
-  await typeHuman(page, pick.text);
+  await typeIntoCompose(compose, pick.text);
   await jitter(2000, 4000);
-  // Replies submit via tweetButtonInline (modal/inline composer), NOT tweetButton
-  // which only exists enabled on the dedicated /compose/post page.
-  await page.locator('button[data-testid="tweetButtonInline"]:not([disabled])').first().click({ timeout: 15000 });
+  let submitMethod;
+  try {
+    submitMethod = await submitReply(page);
+  } catch (err) {
+    throw new Error(err.message + await debugReplyFailure(page, `reply_${lang} to ${pick.in_reply_to}`));
+  }
   await jitter(3000, 5000);
 
   const handle = pick.in_reply_to.match(/x\.com\/([^\/?#]+)/)?.[1];
@@ -510,10 +549,13 @@ Return ONLY JSON per §4 schema.`;
   await page.waitForSelector('div[data-testid="tweetTextarea_0"]', { timeout: 10000 });
   await jitter(1500, 3000);
   const compose = page.locator('div[data-testid="tweetTextarea_0"]').first();
-  await compose.click();
-  await typeHuman(page, reply.text);
+  await typeIntoCompose(compose, reply.text);
   await jitter(2000, 4000);
-  await page.locator('button[data-testid="tweetButtonInline"]:not([disabled])').first().click({ timeout: 15000 });
+  try {
+    await submitReply(page);
+  } catch (err) {
+    throw new Error(err.message + await debugReplyFailure(page, `mention_reply to ${pick.url}`));
+  }
   await jitter(3000, 5000);
 
   replied[pick.url] = Date.now();
