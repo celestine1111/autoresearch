@@ -7,12 +7,38 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.19)
+> **Last updated:** 2026-05-03 (v1.5.216.62.20)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.20 — HOTFIX: Revert v62.17 FAQ post-process safety net
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User reported "Value of type null is not callable" error at footer during article generation immediately after uploading v62.19 (which followed v62.17). Without a file:line, the FAQ post-process safety net (~80-line insertion in `assemble_final()`) is the most likely culprit by sheer surface area.
+
+### Fix
+
+Reverted the v62.17 FAQ block. Comment block left in place noting the revert. v62.19 schema fixes (FAQ_TYPES + detect_qa_schema + 3-image array) retained — small low-risk changes.
+
+### Diagnostic next steps
+
+If error persists after v62.20 upload → root cause is NOT the FAQ block, and we need the actual file:line from WP debug log to pinpoint. Likely candidates if FAQ wasn't the cause:
+- v62.13 Sonar authority filter closure in inject_quotes
+- v62.13 strip_unsourced_inline_stats nested closures
+- v62.19 schema_generator changes (less likely — small + clean)
+
+If error gone → FAQ block had a hidden dependency I missed. Will diff carefully and re-introduce in a safer pattern in v62.21.
+
+**Verified by user:** UNTESTED
 
 ---
 
