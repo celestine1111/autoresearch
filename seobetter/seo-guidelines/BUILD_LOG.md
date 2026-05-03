@@ -7,12 +7,41 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.5)
+> **Last updated:** 2026-05-03 (v1.5.216.62.6)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.6 — Optimize All result panel exposes actual skip reasons
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+Diagnosing the Expert Quotes 0/100 issue across the launch test gate. The UI was showing `Skipped: 4 steps (already passing)` — misleading because it implied the steps were genuinely fine when they may have actually FAILED with a real reason. Without inspecting the network response in DevTools, users had no way to see `quotes: No verifiable quotes found...` or similar diagnostic messages.
+
+### Fix
+
+`admin/views/content-generator.php:2031` — the Optimize All result panel now renders skipped steps as an expandable `<details>` summary with each step's full message in a `<li>`. Default collapsed (preserves the existing terse summary), expandable to see the reasons.
+
+Each reason comes from `Content_Injector::inject_citations()` via `$result['steps_skipped']` array. Format: `"<step_name>: <reason>"` (e.g. `quotes: No verifiable quotes found. Tavily could not extract relevant sentences with source URLs for this keyword. Quotes skipped to prevent hallucination.`).
+
+### Verify
+
+```bash
+grep -n "Skipped:" seobetter/admin/views/content-generator.php
+```
+
+Expected: line ~2031 now uses `<details>` markup, not the old `+ result.steps_skipped.length + ' (already passing)'` pattern.
+
+**Test by user:** generate any article, click Optimize All, click "Skipped: N steps (click for details)" — should expand to show actual reasons. Used to diagnose quotes 0/100.
+
+**Verified by user:** UNTESTED
 
 ---
 

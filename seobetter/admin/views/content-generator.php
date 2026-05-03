@@ -2029,7 +2029,17 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
                             detail += '<span style="color:#166534">✓ Applied: ' + result.steps_run.join(', ') + '</span>';
                         }
                         if (result.steps_skipped && result.steps_skipped.length) {
-                            detail += '<br><span style="color:#9ca3af">Skipped: ' + result.steps_skipped.length + ' (already passing)</span>';
+                            // v1.5.216.62.6 — show the actual skip reasons inline so users
+                            // can see WHY a step was skipped (e.g. "quotes: no verifiable
+                            // quotes found"). Previously hid behind a count + "already passing"
+                            // which was misleading when a step actually failed.
+                            detail += '<details style="margin-top:6px;font-size:12px;color:#6b7280"><summary style="cursor:pointer;color:#9ca3af">Skipped: ' + result.steps_skipped.length + ' steps (click for details)</summary>';
+                            detail += '<ul style="margin:6px 0 0 18px;padding:0;line-height:1.5">';
+                            result.steps_skipped.forEach(function(s) {
+                                var safe = String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                detail += '<li style="margin:2px 0">' + safe + '</li>';
+                            });
+                            detail += '</ul></details>';
                         }
                         if (result.sonar_used) {
                             detail += '<br><span style="color:#764ba2">Powered by Perplexity Sonar</span>';
