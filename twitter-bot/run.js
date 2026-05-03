@@ -613,11 +613,50 @@ async function actionMetrics(page) {
     };
   });
 
-  const counts = loadState('daily-counts', {})[todayKey()] || {};
-  const summary = `Followers: ${stats.followers} | Following: ${stats.following}
-Today: ${counts.post || 0} posts · ${counts.reply || 0} replies · ${counts.mention_reply || 0} mention replies · ${counts.like || 0} likes`;
+  const allCounts = loadState('daily-counts', {});
+  const counts = allCounts[todayKey()] || {};
 
-  const body = `📊 SEOBetter daily — ${todayKey()}
+  // 7-day rollup — sum across the last 7 days of state files
+  const weekly = { post: 0, reply: 0, mention_reply: 0, like: 0 };
+  const lastSevenDates = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setUTCDate(d.getUTCDate() - i);
+    const k = d.toISOString().slice(0, 10);
+    lastSevenDates.push(k);
+    const day = allCounts[k] || {};
+    weekly.post          += day.post          || 0;
+    weekly.reply         += day.reply         || 0;
+    weekly.mention_reply += day.mention_reply || 0;
+    weekly.like          += day.like          || 0;
+  }
+
+  // Persist follower count for delta calculation
+  const fhist = loadState('follower-history', {});
+  fhist[todayKey()] = stats.followers;
+  // GC: keep last 30 days
+  Object.keys(fhist).sort().slice(0, -30).forEach(k => delete fhist[k]);
+  saveState('follower-history', fhist);
+  const sevenAgoFollowers = fhist[lastSevenDates[0]] || '?';
+
+  // Per-day breakdown table
+  const byDay = lastSevenDates.map(k => {
+    const d = allCounts[k] || {};
+    return `  ${k}  ${String(d.post||0).padStart(2)}p ${String(d.reply||0).padStart(3)}r ${String(d.mention_reply||0).padStart(3)}m ${String(d.like||0).padStart(3)}L`;
+  }).join('\n');
+
+  const summary = `Followers: ${stats.followers}  (7d ago: ${sevenAgoFollowers})
+Following: ${stats.following}
+
+TODAY  (${todayKey()})
+  ${counts.post || 0} posts · ${counts.reply || 0} replies · ${counts.mention_reply || 0} mention replies · ${counts.like || 0} likes
+
+LAST 7 DAYS  total
+  ${weekly.post} posts · ${weekly.reply} replies · ${weekly.mention_reply} mention replies · ${weekly.like} likes
+
+per day  (p=posts r=replies m=mention-replies L=likes)
+${byDay}`;
+
+  const body = `📊 SEOBetter — ${todayKey()}
 
 ${summary}
 
@@ -626,10 +665,11 @@ ${digestRead()}
 ────────────────────────────
 
 Edit /opt/twitter-bot/agent-prompt.md over SSH to change voice / queries / pillars.
-Tail /opt/twitter-bot/log.txt for live debugging.`;
+Tail /opt/twitter-bot/log.txt for live debugging.
+Daily caps: post=${CAPS.post} reply=${CAPS.reply} mention=${CAPS.mention_reply} like=${CAPS.like}`;
 
-  await email(`📊 SEOBetter daily — ${todayKey()}`, body);
-  return `daily digest emailed to ${EMAIL_TO}`;
+  await email(`📊 SEOBetter — ${todayKey()}`, body);
+  return `daily digest (with 7-day rollup) emailed to ${EMAIL_TO}`;
 }
 
 // =============================================================================
