@@ -19,7 +19,7 @@
 ## v1.5.216.62.5 — Promote Google Places to RECOMMENDED in Settings UI + clarify small-town gap
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `1bafe7f`
 
 ### Why
 
