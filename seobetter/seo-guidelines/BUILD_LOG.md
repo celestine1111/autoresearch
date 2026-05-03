@@ -19,7 +19,7 @@
 ## v1.5.216.62.21 — REAL FIX: parens-pass closure missing $resolve_alias in use list
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `02e5a14`
 
 ### Why
 
