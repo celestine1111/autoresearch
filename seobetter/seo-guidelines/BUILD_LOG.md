@@ -19,7 +19,7 @@
 ## v1.5.216.62.26 — Honesty pass: drop unverifiable stats + Discover icons + LLM score refactor
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `ec2691e`
 
 ### Why
 
