@@ -367,7 +367,15 @@ async function actionReplySearch(page, systemPrompt, useLang) {
   await page.goto(`https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=live`, {
     waitUntil: 'domcontentloaded',
   });
-  await jitter(3000, 6000);
+  // X's React app takes 8-12s to populate search results. Wait for the first
+  // tweet article to appear instead of blind-sleeping a fixed amount.
+  try {
+    await page.waitForSelector('article[data-testid="tweet"]', { timeout: 15000 });
+    await jitter(1500, 3000); // small extra so all 10 results render, not just first
+  } catch {
+    // Genuine 0 results — bail out of the action cleanly.
+    return `searched "${query.substring(0, 60)}" (${lang}): 0 results after 15s wait`;
+  }
 
   const tweets = await page.evaluate(() => {
     const articles = document.querySelectorAll('article[data-testid="tweet"]');
@@ -439,7 +447,16 @@ async function actionMentions(page, systemPrompt) {
   if (getDailyCount('mention_reply') >= CAPS.mention_reply) return 'skipped: mention cap reached';
 
   await page.goto('https://x.com/notifications/mentions', { waitUntil: 'domcontentloaded' });
-  await jitter(3000, 5000);
+  // Wait for either tweets to render or for an "empty state" indicator.
+  try {
+    await Promise.race([
+      page.waitForSelector('article[data-testid="tweet"]', { timeout: 15000 }),
+      page.waitForSelector('[data-testid="emptyState"]', { timeout: 15000 }),
+    ]);
+    await jitter(1000, 2500);
+  } catch {
+    // Page didn't settle; carry on with whatever rendered.
+  }
 
   const mentions = await page.evaluate(() => {
     const articles = document.querySelectorAll('article[data-testid="tweet"]');
@@ -511,7 +528,12 @@ async function actionLikes(page) {
   await page.goto(`https://x.com/search?q=${encodeURIComponent(q)}&src=typed_query&f=live`, {
     waitUntil: 'domcontentloaded',
   });
-  await jitter(3000, 5000);
+  try {
+    await page.waitForSelector('article[data-testid="tweet"]', { timeout: 15000 });
+    await jitter(1500, 3000);
+  } catch {
+    return `searched "${q}": 0 results after 15s wait (no tweets to like)`;
+  }
 
   const liked = await page.evaluate(async () => {
     const articles = Array.from(document.querySelectorAll('article[data-testid="tweet"]')).slice(0, 6);
