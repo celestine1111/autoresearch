@@ -8,7 +8,7 @@ Single-file cron-driven Twitter agent for `@seobetter3`. No Hermes. ~500 lines, 
 
 ## What this bot does
 
-Per cron tick (every 8 minutes by default), picks ONE action and reports to Telegram:
+Per cron tick (every 8 minutes), picks ONE action and silently appends to today's digest file. **No Telegram. No per-tick email noise.** Email only fires for: (a) once-a-day digest at 7 PM ET, (b) cookie expiry, (c) 3+ consecutive errors in an hour.
 
 | Action | Frequency | What it does |
 |---|---|---|
@@ -17,12 +17,14 @@ Per cron tick (every 8 minutes by default), picks ONE action and reports to Tele
 | `mentions`    | 10% of ticks | Checks `/notifications/mentions`, replies to substantive comments on your tweets (Loop 6 — algo's +75 signal) |
 | `likes`       |  7% of ticks | Likes 5-6 tweets matching a niche query — cheap visibility boost |
 | `post`        |  3% of ticks | Original post, pillar-rotated 60/25/10/5 per playbook |
-| `metrics`     | once daily   | Telegram report: follower count + today's actions |
+| `metrics`     | once daily   | Builds the daily digest from the day's per-tick log and emails it via Mailgun |
 | `sleep`       | 1 AM – 8 AM ET | No actions during human sleep window |
 
 Daily caps enforced: 12 posts, 100 replies, 50 mention replies, 400 likes — well below Twitter's documented soft thresholds.
 
 The brain is `agent-prompt.md` (your existing 922-line playbook). Edit that file to change behavior — the bot reloads it every run.
+
+To control the bot WITHOUT Telegram: SSH into the VPS, edit `agent-prompt.md`, save. The next cron tick (≤8 min later) picks up the change.
 
 ---
 
@@ -141,21 +143,19 @@ Save (Ctrl+O, Enter, Ctrl+X) and lock it:
 chmod 600 /opt/twitter-bot/twitter-state.json
 ```
 
-When these cookies expire (~30 days), repeat this step. **Never paste tokens into Telegram or chat anymore — only into this file.**
+When these cookies expire (~30 days), repeat this step. The bot will email you "🚨 COOKIES EXPIRED" automatically when this happens. **Never paste tokens into chat anymore — only into this file.**
 
 ---
 
-## STEP 4 — Telegram bot for status pings
+## STEP 4 — Mailgun for daily digest emails
 
-In Telegram on your phone:
+You already have Mailgun. We just need three values from your dashboard.
 
-1. Search `@BotFather` → `/newbot` → name `seobetter-status` → save the **token**
-2. Send any message ("hi") to your new bot
-3. From the VPS:
-   ```bash
-   curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates"
-   ```
-   Look for `"chat":{"id": 12345...` — that's your **chat ID**.
+1. Log in to **mailgun.com** → Sending → **Domains**. Pick (or note) the domain you want to send from. Two paths:
+   - **Production domain** like `mg.seobetter.com` (recommended — better deliverability, but requires DNS records)
+   - **Sandbox domain** like `sandboxXYZ.mailgun.org` (works immediately, but only sends to "authorized recipients" — you must add `mindiamaiweb@gmail.com` to that list under Sandbox → Authorized Recipients)
+2. Go to **Sending → Sending API keys** (or Account → API Keys depending on UI version) → copy the **Private API key** (starts with `key-…` or just a long hex string)
+3. Note your **region** — `us` (default) or `eu`. Look at your dashboard URL: `app.mailgun.com` = US, `app.eu.mailgun.com` = EU.
 
 Create `/opt/twitter-bot/.env`:
 
@@ -166,8 +166,12 @@ nano /opt/twitter-bot/.env
 Paste (with your real values):
 
 ```
-TELEGRAM_BOT_TOKEN=7234567890:AAH...
-TELEGRAM_CHAT_ID=12345678
+MAILGUN_API_KEY=key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+MAILGUN_DOMAIN=mg.seobetter.com
+MAILGUN_REGION=us
+EMAIL_TO=mindiamaiweb@gmail.com
+EMAIL_FROM=SEOBetter Bot <bot@mg.seobetter.com>
+
 OPENROUTER_API_KEY=sk-or-v1-...
 MODEL=google/gemini-3-flash-lite-preview
 ```
@@ -175,6 +179,31 @@ MODEL=google/gemini-3-flash-lite-preview
 ```bash
 chmod 600 /opt/twitter-bot/.env
 ```
+
+**Test the email plumbing right now** before going further:
+
+```bash
+cd /opt/twitter-bot && node -e "
+require('dotenv').config();
+const f = new URLSearchParams({
+  from: process.env.EMAIL_FROM,
+  to: process.env.EMAIL_TO,
+  subject: 'SEOBetter bot — Mailgun test',
+  text: 'If you see this, Mailgun is wired up correctly.',
+});
+const host = (process.env.MAILGUN_REGION||'us')==='eu'?'api.eu.mailgun.net':'api.mailgun.net';
+fetch(\`https://\${host}/v3/\${process.env.MAILGUN_DOMAIN}/messages\`, {
+  method: 'POST',
+  headers: {
+    Authorization: 'Basic ' + Buffer.from('api:'+process.env.MAILGUN_API_KEY).toString('base64'),
+    'Content-Type': 'application/x-www-form-urlencoded',
+  },
+  body: f.toString(),
+}).then(r => r.text()).then(t => console.log('mailgun says:', t));
+"
+```
+
+If you see `{"id":"<...@mg.seobetter.com>","message":"Queued. Thank you."}` — the email is on its way to your inbox. If you see `Forbidden` or `Unauthorized` → API key is wrong. If you see `not allowed` → it's a sandbox domain and `mindiamaiweb@gmail.com` isn't in the Authorized Recipients list yet.
 
 ---
 
@@ -184,26 +213,29 @@ Run each action once, verify it works, before turning on the cron.
 
 ```bash
 cd /opt/twitter-bot
-node run.js metrics       # should print follower count + 0 actions today + Telegram ping
+node run.js metrics       # builds digest + emails it (digest will be empty on first run)
 ```
 
-If you see a `📊 Daily report` Telegram message land — login worked. Continue:
+If you receive a `📊 SEOBetter daily — 2026-05-03` email at mindiamaiweb@gmail.com — login + email both work. Continue:
 
 ```bash
-node run.js likes         # should like 5-6 tweets in a niche query, Telegram pings result
-node run.js reply_en      # should pick an English prospect, reply, Telegram pings
-node run.js reply_multi   # should pick a non-English prospect, reply in their language
+node run.js likes         # should like 5-6 niche tweets
+node run.js reply_en      # picks an English prospect, replies
+node run.js reply_multi   # picks a non-English prospect, replies in their language
 node run.js mentions      # checks notifications, replies if any new
 node run.js post          # posts ONE original tweet
 ```
 
-Watch your Twitter profile after each — the action should be visible.
+Watch your Twitter profile after each — the action should be visible. Each smoke-test action also writes a line to today's digest file (which the next `node run.js metrics` will email to you).
 
-If anything fails, check the log:
+If anything fails, two places to look:
 
 ```bash
-tail -50 /opt/twitter-bot/log.txt
+tail -50 /opt/twitter-bot/log.txt              # general log
+cat /opt/twitter-bot/state/digest-$(date -u +%Y-%m-%d).txt    # today's per-tick activity
 ```
+
+Critical errors (cookies expired, 3+ failures in an hour) email you immediately — no need to monitor the log unless you're debugging.
 
 ---
 
@@ -234,17 +266,17 @@ crontab -l                # should show your entry
 
 ## STEP 7 — Watch it work
 
-Three useful commands:
+Three useful commands (run from the VPS shell):
 
 ```bash
-tail -f /opt/twitter-bot/log.txt          # live action stream
-ls -la /opt/twitter-bot/state/            # state files: replied handles, daily counts, query rotation
-cat /opt/twitter-bot/state/daily-counts.json    # actions taken today
+tail -f /opt/twitter-bot/log.txt                            # live action stream
+cat /opt/twitter-bot/state/digest-$(date -u +%Y-%m-%d).txt  # today's per-tick activity
+cat /opt/twitter-bot/state/daily-counts.json                # action counts
 ```
 
-Watch your Telegram chat for the first hour. You should see ~8 status pings (every cron tick), most being `reply_en` or `reply_multi`.
+For the first hour, refresh your @seobetter3 profile and watch tweets / replies appear. The first **email** lands at 7 PM ET (00:00 UTC) — the daily digest.
 
-By end of day 1, expected counters: 30-50 replies, 4-6 likes batches, 1-2 posts, 1 metrics report.
+By end of day 1, expected counters: 30-50 replies, 4-6 likes batches, 1-2 posts, 1 daily-digest email.
 
 ---
 
@@ -266,11 +298,11 @@ To change the cron cadence: `crontab -e` → modify the `*/8` to `*/5` (every 5 
 
 ## Maintenance
 
-**Monthly:** refresh `twitter-state.json` when cookies expire. The bot will Telegram-ping you "🚨 COOKIES EXPIRED" automatically when this happens.
+**Monthly:** refresh `twitter-state.json` when cookies expire. The bot emails you "🚨 COOKIES EXPIRED" automatically when this happens.
 
-**Weekly:** glance at `daily-counts.json` to make sure you're not hitting daily caps.
+**Weekly:** glance at the daily digest emails to make sure replies are landing in the right languages and the prospect scoring looks reasonable.
 
-**As needed:** if Twitter changes a UI selector and a button stops working, the Telegram error message will tell you which selector failed. Update in `run.js`, redeploy.
+**As needed:** if Twitter changes a UI selector and a button stops working, the bot emails an error after 3 consecutive failures in an hour. The email contains the last 50 log lines so you can see which selector broke. Update in `run.js`, redeploy.
 
 ---
 

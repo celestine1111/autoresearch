@@ -24,10 +24,13 @@ const PROMPT_FILE = path.join(ROOT, 'agent-prompt.md');
 const STATE_DIR   = path.join(ROOT, 'state');
 const LOG_FILE    = path.join(ROOT, 'log.txt');
 
-const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TG_CHAT  = process.env.TELEGRAM_CHAT_ID;
-const OR_KEY   = process.env.OPENROUTER_API_KEY;
-const MODEL    = process.env.MODEL || 'google/gemini-3-flash-lite-preview';
+const MG_KEY      = process.env.MAILGUN_API_KEY;
+const MG_DOMAIN   = process.env.MAILGUN_DOMAIN;        // e.g. mg.seobetter.com or sandboxXXX.mailgun.org
+const MG_REGION   = (process.env.MAILGUN_REGION || 'us').toLowerCase();  // 'us' | 'eu'
+const EMAIL_TO    = process.env.EMAIL_TO   || 'mindiamaiweb@gmail.com';
+const EMAIL_FROM  = process.env.EMAIL_FROM || `SEOBetter Bot <bot@${MG_DOMAIN || 'mailgun.org'}>`;
+const OR_KEY      = process.env.OPENROUTER_API_KEY;
+const MODEL       = process.env.MODEL || 'google/gemini-3-flash-lite-preview';
 
 // Daily caps — per twitter-agent-prompt.md §9 daily limits
 const CAPS = {
@@ -49,19 +52,43 @@ const log = (msg) => {
 const sleep  = (ms) => new Promise(r => setTimeout(r, ms));
 const jitter = (min, max) => sleep(min + Math.random() * (max - min));
 
-async function tg(msg) {
-  if (!TG_TOKEN || !TG_CHAT) return;
+// Send a real email via Mailgun. Use sparingly — daily digest + critical alerts only.
+// Per-tick chatter goes to digestAppend(), not here.
+async function email(subject, body) {
+  if (!MG_KEY || !MG_DOMAIN) { log('email skipped: missing MAILGUN_API_KEY or MAILGUN_DOMAIN'); return; }
+  const host = MG_REGION === 'eu' ? 'api.eu.mailgun.net' : 'api.mailgun.net';
+  const url = `https://${host}/v3/${MG_DOMAIN}/messages`;
+  const auth = 'Basic ' + Buffer.from(`api:${MG_KEY}`).toString('base64');
+  const form = new URLSearchParams({
+    from: EMAIL_FROM,
+    to: EMAIL_TO,
+    subject,
+    text: body,
+  });
   try {
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TG_CHAT,
-        text: msg.substring(0, 4000),
-        disable_web_page_preview: true,
-      }),
+      headers: {
+        'Authorization': auth,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: form.toString(),
     });
-  } catch (e) { log(`tg fail: ${e.message}`); }
+    if (!res.ok) log(`email fail: ${res.status} ${await res.text()}`);
+  } catch (e) { log(`email fail: ${e.message}`); }
+}
+
+// Append a one-line entry to today's digest file. Read by the daily metrics
+// action and sent as ONE email at 7 PM ET. No per-tick email noise.
+function digestAppend(line) {
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  const f = path.join(STATE_DIR, `digest-${todayKey()}.txt`);
+  fs.appendFileSync(f, `[${new Date().toISOString().slice(11, 16)}] ${line}\n`);
+}
+
+function digestRead() {
+  const f = path.join(STATE_DIR, `digest-${todayKey()}.txt`);
+  return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '(no actions logged today)';
 }
 
 async function gemini(systemPrompt, userPrompt) {
@@ -482,9 +509,22 @@ async function actionMetrics(page) {
   });
 
   const counts = loadState('daily-counts', {})[todayKey()] || {};
-  return `📊 ${todayKey()} report
-Followers: ${stats.followers} | Following: ${stats.following}
+  const summary = `Followers: ${stats.followers} | Following: ${stats.following}
 Today: ${counts.post || 0} posts · ${counts.reply || 0} replies · ${counts.mention_reply || 0} mention replies · ${counts.like || 0} likes`;
+
+  const body = `📊 SEOBetter daily — ${todayKey()}
+
+${summary}
+
+────── Today's actions ──────
+${digestRead()}
+────────────────────────────
+
+Edit /opt/twitter-bot/agent-prompt.md over SSH to change voice / queries / pillars.
+Tail /opt/twitter-bot/log.txt for live debugging.`;
+
+  await email(`📊 SEOBetter daily — ${todayKey()}`, body);
+  return `daily digest emailed to ${EMAIL_TO}`;
 }
 
 // =============================================================================
@@ -524,13 +564,14 @@ function pickAction() {
   }
 
   if (!fs.existsSync(PROMPT_FILE)) {
-    await tg(`❌ ${PROMPT_FILE} missing`);
+    await email('🚨 SEOBetter bot — agent-prompt.md missing', `Cron tick failed: ${PROMPT_FILE} not found on VPS.`);
     process.exit(1);
   }
   const systemPrompt = fs.readFileSync(PROMPT_FILE, 'utf8');
 
   let result;
   let browser;
+  let critical = false;
   try {
     const launched = await launch();
     browser = launched.browser;
@@ -548,8 +589,14 @@ function pickAction() {
   } catch (err) {
     if (err.message === 'COOKIES_EXPIRED') {
       result = '🚨 COOKIES EXPIRED — refresh twitter-state.json from Firefox auth_token + ct0';
+      critical = true;
     } else {
       result = `❌ ${action} failed: ${err.message}`;
+      // Email immediately if we've had 3+ failures in the last hour
+      const recent = loadState('recent-fails', []).filter(t => Date.now() - t < 60 * 60 * 1000);
+      recent.push(Date.now());
+      saveState('recent-fails', recent);
+      if (recent.length >= 3) critical = true;
     }
     log(err.stack || err.message);
   } finally {
@@ -557,6 +604,19 @@ function pickAction() {
   }
 
   log(`result: ${result}`);
-  await tg(`[${new Date().toISOString().slice(11, 16)} UTC · ${action}] ${result}`);
+  digestAppend(`${action} → ${result}`);
+
+  // Critical alerts get an immediate email; everything else waits for the daily digest.
+  if (critical) {
+    await email(`🚨 SEOBetter bot — ${action} alert`, `${result}\n\nVPS log tail:\n${tailLog(50)}`);
+  }
+
   process.exit(0);
 })();
+
+function tailLog(n) {
+  try {
+    const lines = fs.readFileSync(LOG_FILE, 'utf8').split('\n');
+    return lines.slice(-n).join('\n');
+  } catch { return '(no log)'; }
+}
