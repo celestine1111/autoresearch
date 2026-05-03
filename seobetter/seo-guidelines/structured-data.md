@@ -46,7 +46,27 @@
 
 ---
 
-## 3. RICH RESULT STATUS (as of May 2026 — updated v1.5.216.62.24)
+## 3. RICH RESULT STATUS (as of May 2026 — updated v1.5.216.62.25)
+
+**Metabox tile audit:** v62.24 dropped 4 tiles (HowTo, Paywall, DiscussionForum, LocalBusiness/MapPack — Google deprecated or doesn't deliver rich results to article-style sites). v62.25 dropped a further 11 tiles whose schema is still EMITTED by Schema_Generator (still useful for LLM citations) but whose Google rich-result lane is essentially never delivered to article-style customer sites:
+
+| Dropped tile (v62.25) | Why no Google rich result for SEOBetter sites |
+|---|---|
+| Recipe carousel | Needs 3+ Recipes in ONE article. SEOBetter emits one Recipe per recipe article. |
+| Recipe gallery | Google's multi-site aggregation feature, not an on-page rich result. |
+| Product carousel | Needs 3+ Product Schema Blocks per post — rare in practice. |
+| Event carousel | Needs 3+ Events per post — rare in practice. |
+| Video carousel | Needs 3+ video embeds per post — rare in practice. |
+| Course carousel | Coursera / edX / Khan Academy dominate; articles essentially never qualify. |
+| Movie carousel | IMDb / Rotten Tomatoes / Letterboxd dominate; article reviews rarely fire. |
+| Software App | App Store pages dominate; articles ABOUT software almost never get the lane. |
+| Dataset | Google Dataset Search is a separate vertical, not the regular SERPs. |
+| Q&A page | Stack Overflow / Reddit dominate the QAPage rich result. |
+| Profile page | Author-archive use case; rarely fires for article posts. |
+
+Schemas for the dropped tiles are still emitted automatically by Schema_Generator where applicable — they continue to help LLM retrieval and structured-data validators. Only the metabox tile (which advertises a Google rich-result lane) is removed.
+
+**Final tile count after v62.25: 13 honest tiles.** Each tile shows a real activation path or notes when it doesn't apply to the current content type.
 
 | Schema Type | Google Status | Used by SEOBetter |
 |---|---|---|

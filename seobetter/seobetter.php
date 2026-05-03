@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.24
+ * Version: 1.5.216.62.25
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.24' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.25' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -5858,29 +5858,50 @@ final class SEOBetter {
                 // Each tile carries its own action_hint string. Universal action_hint
                 // suffix " — auto-emitted by SEOBetter; if grey, this is a bug" is
                 // appended at render time for tiles that should always be Active.
+                // v1.5.216.62.25 — second tile cleanup pass. v62.24 dropped 4
+                // tiles that Google had deprecated or never delivered. v62.25
+                // drops a further 11 niche tiles that Schema_Generator does
+                // still emit (and the schema does help LLM retrieval) but that
+                // realistically NEVER produce a Google rich result on article-
+                // style sites, so showing them in the metabox creates exactly
+                // the "lots of greyed-out tiles I can't do anything with"
+                // confusion the previous iteration aimed to fix.
+                //
+                // DROPPED in v62.25:
+                //   - recipe_carousel:  needs 3+ Recipes in ONE article — SEOBetter
+                //                       emits one Recipe per recipe article.
+                //   - recipe_gallery:   Google multi-site feature, not on-page.
+                //   - product_carousel: needs 3+ Product Schema Blocks per post.
+                //   - event_carousel:   needs 3+ Events per post.
+                //   - video_carousel:   needs 3+ video embeds per post.
+                //   - course_carousel:  Coursera / edX / Khan Academy dominate;
+                //                       articles essentially never get the lane.
+                //   - movie_carousel:   IMDb / Rotten Tomatoes / Letterboxd
+                //                       dominate; article reviews rarely fire.
+                //   - software_app:     app store pages dominate; articles about
+                //                       software almost never get the lane.
+                //   - dataset:          Google Dataset Search is a SEPARATE
+                //                       vertical, not the regular SERPs.
+                //   - qa_page:          Stack Overflow / Reddit dominate.
+                //   - profile_page:     Author-archive use case; rarely fires
+                //                       for article posts.
+                //
+                // Schema_Generator's auto-emission for these types is preserved
+                // — the schema still flows into @graph for LLM-citation benefit;
+                // we just stop advertising rich-result lanes that won't deliver.
+                // Final tile count: 24 → 13.
                 $appearances = [
                     'standard_article'   => [ 'label' => 'Standard Article',       'eligible' => $has_type( $article_types ), 'schema' => 'Article / BlogPosting / NewsArticle', 'why' => 'Basic blue-link Google result.', 'action_hint' => 'Auto-emitted for every article — should always be Active.' ],
                     'article_with_image' => [ 'label' => 'Article + thumbnail',    'eligible' => $has_type( $article_types ) && $featured_image_url !== '', 'schema' => 'Article + featured image', 'why' => 'Adds a thumbnail next to the result.', 'action_hint' => 'Set a Featured Image on this post to activate.' ],
                     'recipe_card'        => [ 'label' => 'Recipe card',            'eligible' => $has_type( [ 'Recipe' ] ), 'schema' => 'Recipe', 'why' => 'Full recipe card with image, rating, time, calories.', 'action_hint' => 'Use Recipe content type to activate.' ],
-                    'recipe_carousel'    => [ 'label' => 'Recipe carousel',        'eligible' => $has_type( [ 'Recipe' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Recipe + ItemList ≥3', 'why' => 'Host-driven horizontal scroller.', 'action_hint' => 'Use Recipe content type with 3+ recipes to activate.' ],
-                    'recipe_gallery'     => [ 'label' => 'Recipe gallery',         'eligible' => $has_type( [ 'Recipe' ] ), 'schema' => 'Recipe', 'why' => 'Google multi-site recipe gallery.', 'action_hint' => 'Use Recipe content type to activate.' ],
                     'product_card'       => [ 'label' => 'Product card',           'eligible' => $has_type( [ 'Product' ] ), 'schema' => 'Product + offers', 'why' => 'Image + price + rating + availability.', 'action_hint' => 'Insert a Product Schema Block (Pro+) to activate.' ],
-                    'product_carousel'   => [ 'label' => 'Product carousel',       'eligible' => $has_type( [ 'Product' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Product + ItemList ≥3', 'why' => 'Horizontal product gallery.', 'action_hint' => 'Insert 3+ Product Schema Blocks (Pro+) to activate.' ],
                     'review_snippet'     => [ 'label' => 'Review snippet',         'eligible' => $has_type( [ 'Review', 'AggregateRating' ] ), 'schema' => 'Review / AggregateRating', 'why' => 'Inline star rating below the title.', 'action_hint' => 'Use Review content type with an extractable rating to activate.' ],
                     'faq'                => [ 'label' => 'FAQ rich result',        'eligible' => $has_type( [ 'FAQPage' ] ), 'schema' => 'FAQPage', 'why' => 'Expandable Q&A rows (desktop limited since 2023).', 'action_hint' => 'Add a "## Frequently Asked Questions" section with 3+ Q&A pairs to activate.' ],
                     'event_card'         => [ 'label' => 'Event card',             'eligible' => $has_type( [ 'Event' ] ), 'schema' => 'Event', 'why' => 'Date + venue + Get tickets CTA.', 'action_hint' => 'Insert an Event Schema Block (Pro+) to activate.' ],
-                    'event_carousel'     => [ 'label' => 'Event carousel',         'eligible' => $has_type( [ 'Event' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'Event + ItemList', 'why' => 'Horizontal multi-date cards.', 'action_hint' => 'Insert 3+ Event Schema Blocks (Pro+) to activate.' ],
                     'video'              => [ 'label' => 'Video rich result',      'eligible' => $has_type( [ 'VideoObject' ] ), 'schema' => 'VideoObject', 'why' => 'Large play-button thumbnail + duration.', 'action_hint' => 'Embed a video (YouTube, Vimeo, Rumble, Bilibili, Niconico, Dailymotion, TikTok, etc. — 21 platforms supported) to activate.' ],
-                    'video_carousel'     => [ 'label' => 'Video carousel',         'eligible' => $has_type( [ 'VideoObject' ] ) && $has_type( [ 'ItemList' ] ), 'schema' => 'VideoObject + ItemList', 'why' => 'Top Videos section.', 'action_hint' => 'Embed 3+ videos to activate.' ],
                     'top_stories'        => [ 'label' => 'Top Stories (News)',     'eligible' => $has_type( [ 'NewsArticle','ReportageNewsArticle','AnalysisNewsArticle','OpinionNewsArticle' ] ), 'schema' => 'NewsArticle', 'why' => 'News carousel. Requires Google News inclusion.', 'action_hint' => 'Use News Article / Press Release / Opinion content type to activate.' ],
-                    'course_carousel'    => [ 'label' => 'Course carousel',        'eligible' => $has_type( [ 'Course' ] ), 'schema' => 'Course', 'why' => 'Provider + course + duration + price.', 'action_hint' => 'Auto-detected from tech_article / education category content with course-like structure.' ],
-                    'movie_carousel'     => [ 'label' => 'Movie carousel',         'eligible' => $has_type( [ 'Movie' ] ), 'schema' => 'Movie', 'why' => 'Poster + title + year + director.', 'action_hint' => 'Auto-detected from review / listicle of movies.' ],
                     'vacation_rental'    => [ 'label' => 'Vacation Rental',        'eligible' => $has_type( [ 'VacationRental','LodgingBusiness' ] ), 'schema' => 'VacationRental', 'why' => 'Property + price/night + rating.', 'action_hint' => 'Insert a Vacation Rental Schema Block (Pro+) to activate.' ],
                     'job_posting'        => [ 'label' => 'Job posting',            'eligible' => $has_type( [ 'JobPosting' ] ), 'schema' => 'JobPosting', 'why' => 'Interactive job card with Apply CTA.', 'action_hint' => 'Insert a Job Posting Schema Block (Pro+) to activate.' ],
-                    'software_app'       => [ 'label' => 'Software App',           'eligible' => $has_type( [ 'SoftwareApplication','MobileApplication','WebApplication' ] ), 'schema' => 'SoftwareApplication', 'why' => 'Icon + rating + price + download.', 'action_hint' => 'Auto-detected from review/comparison of software in technology category.' ],
-                    'dataset'            => [ 'label' => 'Dataset',                'eligible' => $has_type( [ 'Dataset' ] ), 'schema' => 'Dataset', 'why' => 'Appears in Google Dataset Search.', 'action_hint' => 'Auto-detected from white_paper / scholarly_article with data tables.' ],
-                    'qa_page'            => [ 'label' => 'Q&A page',               'eligible' => $has_type( [ 'QAPage' ] ), 'schema' => 'QAPage', 'why' => 'Accepted answer excerpt + upvote count.', 'action_hint' => 'Use Interview content type to activate.' ],
-                    'profile_page'       => [ 'label' => 'Profile Page',           'eligible' => $has_type( [ 'ProfilePage' ] ), 'schema' => 'ProfilePage', 'why' => 'Author photo + name + bio excerpt.', 'action_hint' => 'Use Interview / Personal Essay content type to activate.' ],
                     'breadcrumbs'        => [ 'label' => 'Breadcrumb trail',       'eligible' => $has_type( [ 'BreadcrumbList' ] ), 'schema' => 'BreadcrumbList', 'why' => 'Path shown in URL line: site › category › article.', 'action_hint' => 'Auto-emitted for every article — should always be Active.' ],
                     'speakable'          => [ 'label' => 'Speakable (voice)',      'eligible' => $has_speakable, 'schema' => 'Speakable within Article', 'why' => 'Google Assistant read-aloud.', 'action_hint' => 'Auto-emitted for blog_post, news_article, opinion, pillar_guide, how_to, faq_page, interview, recipe, personal_essay, press_release.' ],
                 ];
@@ -5893,27 +5914,21 @@ final class SEOBetter {
                 // of the schema-add hint, so the user is never told to add schema
                 // that wouldn't pass Google validation for their type).
                 $appearances_universal = [ 'standard_article', 'article_with_image', 'breadcrumbs', 'speakable' ];
+                // v1.5.216.62.25 — applicability map slimmed in lockstep with the
+                // tile drops above. Entries for retired tiles (recipe_carousel,
+                // recipe_gallery, product_carousel, event_carousel, video_carousel,
+                // course_carousel, movie_carousel, software_app, dataset, qa_page,
+                // profile_page) removed.
                 $applicability = [
                     'recipe_card'       => [ 'recipe' ],
-                    'recipe_carousel'   => [ 'recipe' ],
-                    'recipe_gallery'    => [ 'recipe' ],
                     'product_card'      => [ 'review', 'buying_guide', 'comparison', 'sponsored', 'listicle' ],
-                    'product_carousel'  => [ 'buying_guide', 'listicle', 'comparison' ],
                     'review_snippet'    => [ 'review', 'buying_guide', 'comparison' ],
                     'faq'               => [ 'blog_post', 'how_to', 'listicle', 'review', 'comparison', 'buying_guide', 'recipe', 'tech_article', 'white_paper', 'scholarly_article', 'glossary_definition', 'case_study', 'interview', 'pillar_guide', 'news_article', 'opinion', 'faq_page', 'press_release', 'sponsored' ],
                     'event_card'        => [ 'news_article', 'opinion', 'press_release', 'blog_post' ],
-                    'event_carousel'    => [ 'news_article', 'listicle' ],
                     'video'             => [],  // applicable to all content types — universal via fallback below
-                    'video_carousel'    => [ 'news_article', 'listicle' ],
                     'top_stories'       => [ 'news_article', 'opinion', 'press_release' ],
-                    'course_carousel'   => [ 'tech_article', 'listicle', 'buying_guide' ],
-                    'movie_carousel'    => [ 'review', 'listicle', 'opinion' ],
                     'vacation_rental'   => [ 'review', 'listicle', 'buying_guide' ],
                     'job_posting'       => [ 'news_article', 'case_study' ],
-                    'software_app'      => [ 'review', 'buying_guide', 'tech_article', 'comparison' ],
-                    'dataset'           => [ 'white_paper', 'scholarly_article', 'tech_article' ],
-                    'qa_page'           => [ 'interview', 'faq_page', 'case_study' ],
-                    'profile_page'      => [ 'interview', 'personal_essay' ],
                 ];
 
                 // v1.5.216.62.24 — 2-state status: active / not_in_article.

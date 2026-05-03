@@ -7,12 +7,84 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.24)
+> **Last updated:** 2026-05-03 (v1.5.216.62.25)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.25 — Rich Results metabox tile cleanup pass 2 (drop 11 will-never-fire tiles, 24 → 13)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+After v62.24 shipped (2-state model + 4 dropped tiles + 21-platform video + Schema Block cards), user opened the Rich Results tab and saw "5 of 24 Google Search appearances eligible" with a wall of greyed tiles for rich-result lanes that no SEOBetter article-style customer realistically activates. Direction was: drop tiles for things that will never be used so the panel only shows actionable rich-result lanes.
+
+### Audit (24 tiles → 13)
+
+| Tile | Realistic activation path on a SEOBetter article site? | Decision |
+|---|---|---|
+| standard_article | always | KEEP |
+| article_with_image | when featured image set | KEEP |
+| recipe_card | recipe content type emits 1 Recipe | KEEP |
+| recipe_carousel | needs 3+ Recipes in ONE article — SEOBetter emits one per article | DROP |
+| recipe_gallery | Google multi-site aggregation — not an on-page rich result | DROP |
+| product_card | Pro+ Schema Block + auto-detect for review type | KEEP |
+| product_carousel | needs 3+ Product Schema Blocks per post — rare | DROP |
+| review_snippet | review content type with extractable rating | KEEP |
+| faq | auto-emitted from `## Frequently Asked Questions` content | KEEP |
+| event_card | Pro+ Schema Block + auto-detect for news with date+venue | KEEP |
+| event_carousel | needs 3+ Events per post — rare | DROP |
+| video | 21-platform auto-detect | KEEP |
+| video_carousel | needs 3+ video embeds per post — rare | DROP |
+| top_stories | News content types | KEEP |
+| course_carousel | Coursera / edX / Khan Academy dominate; articles essentially never qualify | DROP |
+| movie_carousel | IMDb / Rotten Tomatoes / Letterboxd dominate; article reviews rarely fire | DROP |
+| vacation_rental | Pro+ Schema Block — narrow but real | KEEP |
+| job_posting | Pro+ Schema Block — narrow but real | KEEP |
+| software_app | App Store pages dominate; software articles almost never get the lane | DROP |
+| dataset | Google Dataset Search is a SEPARATE vertical, not regular SERPs | DROP |
+| qa_page | Stack Overflow / Reddit dominate the QA rich result | DROP |
+| profile_page | Author-archive use case; rarely fires for article posts | DROP |
+| breadcrumbs | always | KEEP |
+| speakable | always for SPEAKABLE_TYPES | KEEP |
+
+### Changes
+
+**`seobetter.php` ~line 5795-5878:**
+
+- Removed 11 tile entries from `$appearances`: `recipe_carousel`, `recipe_gallery`, `product_carousel`, `event_carousel`, `video_carousel`, `course_carousel`, `movie_carousel`, `software_app`, `dataset`, `qa_page`, `profile_page`.
+- Removed corresponding entries from `$applicability` map in lockstep.
+- New tile total: 13 (down from 24 in v62.24, originally 28 pre-v62.24).
+- Comment block at the top of `$appearances` documents what was dropped and why.
+
+**Schema_Generator's auto-emission for the dropped types stays.** Course / Movie / Dataset / SoftwareApplication / ProfilePage / QAPage detection still runs at save time and the schema still flows into `@graph` — useful for LLM citations even when Google doesn't deliver a rich result. The metabox just stops advertising rich-result lanes that won't fire.
+
+### Why this fixes "all articles" — not "one by one"
+
+The metabox tile classifier is a single render-time function; it runs on every post's metabox view against the live `@graph`. v62.25 takes effect the moment the plugin updates — every existing AND every future post immediately shows the slim 13-tile panel. No regenerate, no per-article work.
+
+Universal: works for ALL 21 content types, ALL 60+ languages, ALL 16 countries, ALL categories — no branching anywhere in the new code path.
+
+### Verify
+
+```bash
+sed -n '5795,5870p' /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+```
+
+Expected: `$appearances` array contains exactly 13 entries (`standard_article`, `article_with_image`, `recipe_card`, `product_card`, `review_snippet`, `faq`, `event_card`, `video`, `top_stories`, `vacation_rental`, `job_posting`, `breadcrumbs`, `speakable`).
+
+### Doc co-updates
+
+- `structured-data.md` §3 — Rich Result Status table notes the additional 11 tile drops in v62.25 (schemas continue to be emitted; just no metabox tile).
+- `SEO-GEO-AI-GUIDELINES.md` §10.4 — schema notes synced.
+
+**Verified by user:** UNTESTED
 
 ---
 
