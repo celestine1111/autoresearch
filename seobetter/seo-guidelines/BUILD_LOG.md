@@ -19,7 +19,7 @@
 ## v1.5.216.62.29 — HOTFIX for v62.28 fatal error + PHP 8.4 deprecation
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `927c7dc`
 
 ### Why
 
