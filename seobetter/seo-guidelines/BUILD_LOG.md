@@ -19,7 +19,7 @@
 ## v1.5.216.62.23 — Did You Know box: language-aware across all 60+ supported languages
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `ac437a8`
 
 ### Why
 
