@@ -19,7 +19,7 @@
 ## v1.5.216.62.12 — Authority-domains expansion (Animals/Vet/Health/Food + 6 NEW countries)
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `837cef2`
 
 ### Why
 
