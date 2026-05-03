@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.25
+ * Version: 1.5.216.62.26
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.25' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.26' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -969,22 +969,18 @@ final class SEOBetter {
             }
         }
 
-        // Schema impact statistics (research-backed, citable)
+        // v1.5.216.62.26 — Schema Impact Estimate stats removed.
+        // Pre-fix: this populated the Gutenberg sidebar with hardcoded
+        // marketing-flavored claims ("+157% organic traffic with video rich
+        // results — BrightEdge", "+87% CTR with FAQ schema — Ahrefs",
+        // "+30-40% AI citation rate — Princeton GEO study", etc.) that were
+        // either non-replicable, mis-attributed, or stitched from secondary
+        // sources we could not verify. Honesty over marketing fluff — the
+        // validation block (errors / warnings / passed checks) tells the
+        // user what schema is actually present and valid; that's the
+        // trustworthy signal. Empty array preserved so the JS sidebar's
+        // existence check `(rp.impact_stats || []).length > 0` no-ops cleanly.
         $result['rich_preview']['impact_stats'] = [];
-        $rt = array_column( $result['rich_preview']['rich_types'], 'type' );
-        if ( in_array( 'Recipe', $rt ) ) {
-            $result['rich_preview']['impact_stats'][] = '+2.7x clicks with Recipe schema (Searchmetrics, 2024)';
-        }
-        if ( in_array( 'FAQ', $rt ) ) {
-            $result['rich_preview']['impact_stats'][] = '+87% CTR with FAQ schema (Ahrefs study)';
-        }
-        if ( in_array( 'Review', $rt ) ) {
-            $result['rich_preview']['impact_stats'][] = '+35% CTR with star ratings (Search Engine Journal)';
-        }
-        if ( count( $rt ) > 0 ) {
-            $result['rich_preview']['impact_stats'][] = '+30-40% AI citation rate from structured data (Princeton GEO study)';
-            $result['rich_preview']['impact_stats'][] = 'Rich results get 58% of page 1 clicks (FirstPageSage, 2024)';
-        }
 
         // Validation status
         $errors = 0;
@@ -5990,15 +5986,54 @@ final class SEOBetter {
                 $og_title_set = (bool) get_post_meta( $post->ID, '_seobetter_meta_title', true );
                 $og_desc_len = mb_strlen( $meta_desc );
                 $site_icon_id = (int) get_option( 'site_icon', 0 );
+
+                // v1.5.216.62.26 — LLM Citation Readiness score refactored with
+                // honest, verifiable signals. Pre-fix scored 8 items including
+                // three "(Perplexity bonus)" / "(ChatGPT bonus)" / "(Gemini
+                // bonus)" claims that were SPECULATIVE — there is no public
+                // research demonstrating those bonuses, and the labels implied
+                // a level of platform-specific knowledge we don't have. Worse,
+                // one was a "HowTo (ChatGPT bonus)" check whose underlying
+                // schema Google had deprecated — flagging it as a missing
+                // ranking factor was actively misleading.
+                //
+                // New signal set (9 checks) — every entry is either a
+                // universal SEO/Open-Graph requirement or a Princeton GEO
+                // §1 finding (arxiv 2311.09735) we have a primary citation for:
+                //   1-5  Universal metadata that LLM citation cards (Perplexity
+                //        cards, ChatGPT-with-search citations, Gemini answer
+                //        boxes, Claude with Brave Search) all surface.
+                //   6    E-E-A-T schema — Google's published author/publisher
+                //        guidance, also relied on by every LLM retriever.
+                //   7    inLanguage — Princeton GEO §3 + observable: regional
+                //        engines (Baidu ERNIE, Yandex, Naver) and multilingual
+                //        retrievers key off this.
+                //   8    citation[] — Princeton GEO §1 specifically measured
+                //        +30% citation lift for pages with structured citation
+                //        graphs in their JSON-LD.
+                //   9    Recency — universal across all retrievers; LLMs cite
+                //        recent content for time-sensitive queries.
+                //
+                // Compute two derived signals (inLanguage / citation[] presence)
+                // by scanning the @graph for the relevant fields on any node.
+                $has_inlanguage = false;
+                $has_citation_array = false;
+                foreach ( $graph as $item ) {
+                    if ( ! is_array( $item ) ) continue;
+                    if ( ! empty( $item['inLanguage'] ) ) $has_inlanguage = true;
+                    if ( ! empty( $item['citation'] ) && is_array( $item['citation'] ) && count( $item['citation'] ) > 0 ) $has_citation_array = true;
+                }
+
                 $llm_checks = [
-                    [ 'label' => 'SEO title set and ≤ 70 chars',              'ok' => $og_title_set && mb_strlen( $meta_title ) <= 70 ],
-                    [ 'label' => 'Description 120–200 chars',                 'ok' => $og_desc_len >= 120 && $og_desc_len <= 200 ],
-                    [ 'label' => 'Featured image ≥ 1200×630 (Perplexity)',    'ok' => $featured_image_width >= 1200 && $featured_image_height >= 630 ],
-                    [ 'label' => 'Favicon (site icon) configured',            'ok' => $site_icon_id > 0 ],
-                    [ 'label' => 'Site name configured',                      'ok' => $site_name !== '' ],
-                    [ 'label' => 'FAQ schema (Perplexity bonus)',             'ok' => $has_type( [ 'FAQPage' ] ) ],
-                    [ 'label' => 'HowTo / step-structured (ChatGPT bonus)',   'ok' => $has_type( [ 'HowTo' ] ) ],
-                    [ 'label' => 'Organization schema (Gemini bonus)',        'ok' => $has_type( [ 'Organization' ] ) ],
+                    [ 'label' => 'SEO title set and ≤ 70 chars',                       'ok' => $og_title_set && mb_strlen( $meta_title ) <= 70 ],
+                    [ 'label' => 'Description 120–200 chars',                          'ok' => $og_desc_len >= 120 && $og_desc_len <= 200 ],
+                    [ 'label' => 'Featured image ≥ 1200×630 (Open Graph + LLM cards)', 'ok' => $featured_image_width >= 1200 && $featured_image_height >= 630 ],
+                    [ 'label' => 'Favicon (site icon) configured',                     'ok' => $site_icon_id > 0 ],
+                    [ 'label' => 'Site name configured',                               'ok' => $site_name !== '' ],
+                    [ 'label' => 'Author + Organization schema (E-E-A-T)',             'ok' => $has_eeat ],
+                    [ 'label' => 'inLanguage tagged on schema (regional retrieval)',   'ok' => $has_inlanguage ],
+                    [ 'label' => 'citation[] in schema (Princeton GEO +30%)',          'ok' => $has_citation_array ],
+                    [ 'label' => 'dateModified within 90 days (recency)',              'ok' => $days_since_modified <= 90 ],
                 ];
                 $llm_ready_count = count( array_filter( array_column( $llm_checks, 'ok' ) ) );
                 $llm_score = (int) round( ( $llm_ready_count / max( 1, count( $llm_checks ) ) ) * 100 );
@@ -6136,7 +6171,15 @@ final class SEOBetter {
                                     </div>
                                     <div style="font-size:15px;font-weight:600;color:#202124;line-height:1.3;margin-bottom:4px"><?php echo esc_html( $meta_title ); ?></div>
                                     <div style="font-size:12px;color:#4d5156;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"><?php echo esc_html( $meta_desc ); ?></div>
-                                    <div style="display:flex;gap:14px;margin-top:10px;padding-top:8px;border-top:1px solid #f3f4f6;font-size:13px;color:#9ca3af"><span>👍</span><span>🔖</span><span>⋯</span></div>
+                                    <?php // v1.5.216.62.26 — Removed 👍🔖⋯ action icons row.
+                                           // Those icons (thumbs-up / bookmark / overflow menu)
+                                           // appear in the Discover FEED card layout in the
+                                           // Google app, but never on Search SERPs. Showing them
+                                           // in the metabox preview created the impression that
+                                           // they are part of the rich result on google.com,
+                                           // which they are not. The preview now matches what
+                                           // the user will actually see on the Discover feed
+                                           // (favicon + site + title + description). ?>
                                 </div>
                             </div>
                         </div>
@@ -6285,25 +6328,17 @@ final class SEOBetter {
                     </div>
                 </div>
 
-                <!-- Schema Impact Estimate -->
-                <div style="margin-bottom:20px">
-                    <div style="font-size:13px;font-weight:600;margin-bottom:8px">Schema Impact Estimate</div>
-                    <?php
-                    $impacts = [];
-                    if ( in_array( 'Recipe', $active_types ) ) $impacts[] = '+2.7x clicks with Recipe rich results (Searchmetrics, 2024)';
-                    if ( in_array( 'FAQ', $active_types ) ) $impacts[] = '+87% CTR with FAQ schema for informational queries (Ahrefs)';
-                    if ( in_array( 'Review', $active_types ) || in_array( 'Product', $active_types ) ) $impacts[] = '+35% CTR with star ratings (Search Engine Journal)';
-                    if ( in_array( 'Video', $active_types ) ) $impacts[] = '+157% organic traffic with video rich results (BrightEdge)';
-                    if ( count( $active_types ) > 0 ) {
-                        $impacts[] = '+30-40% AI citation rate from structured data (Princeton GEO study)';
-                        $impacts[] = 'Pages with schema rank avg 4 positions higher (Milestone Research, 2023)';
-                        $impacts[] = 'Rich results get 58% of all page 1 clicks (FirstPageSage, 2024)';
-                    }
-                    foreach ( $impacts as $imp ) :
-                    ?>
-                        <div style="font-size:12px;color:#4b5563;padding:3px 0">&#128202; <?php echo esc_html( $imp ); ?></div>
-                    <?php endforeach; ?>
-                </div>
+                <?php // v1.5.216.62.26 — Schema Impact Estimate block removed.
+                       // The block previously rendered hardcoded stats like
+                       // "+157% organic traffic with video rich results
+                       // (BrightEdge)" / "+30-40% AI citation rate (Princeton)"
+                       // / "58% of page 1 clicks (FirstPageSage)". All claims
+                       // were either non-replicable, mis-attributed, or
+                       // synthesized from secondary sources we couldn't verify.
+                       // Removing rather than re-citing keeps the metabox
+                       // honest. The Validation block below tells the user
+                       // what schema is actually present and valid — that
+                       // is the trustworthy signal users should rely on. ?>
 
                 <!-- Schema Validation -->
                 <div style="margin-bottom:20px">

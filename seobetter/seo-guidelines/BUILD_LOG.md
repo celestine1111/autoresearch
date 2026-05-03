@@ -7,12 +7,83 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.25)
+> **Last updated:** 2026-05-03 (v1.5.216.62.26)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.26 — Honesty pass: drop unverifiable stats + Discover icons + LLM score refactor
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audit of the metabox surfaced three honesty problems:
+
+1. **"Schema Impact Estimate" block** displayed hardcoded marketing claims like "+157% organic traffic with video rich results (BrightEdge)", "+87% CTR with FAQ schema (Ahrefs)", "+30-40% AI citation rate (Princeton GEO study)", "+58% of page 1 clicks (FirstPageSage)", "Pages with schema rank avg 4 positions higher (Milestone Research, 2023)". The Princeton GEO paper exists (arxiv 2311.09735) but the +30-40% figure was a synthesized restatement; the BrightEdge / Searchmetrics / Ahrefs / FirstPageSage / Milestone numbers were either non-replicable, mis-attributed, or stitched from secondary blog summaries. Direction: drop them entirely rather than re-cite weakly.
+
+2. **Discover preview action icons (👍 / 🔖 / ⋯)** appeared in the Google Discover preview card. They show on the Google APP Discover feed but NOT on Search SERPs. The metabox preview was conflating two different surfaces and giving users the impression these icons would appear next to their result on google.com. Direction: remove.
+
+3. **LLM Citation Readiness score** had three speculative per-LLM-bonus checks ("FAQ schema (Perplexity bonus)", "HowTo (ChatGPT bonus)", "Organization (Gemini bonus)"). One was outright misleading — it flagged HowTo as a missing ranking factor when Google had deprecated the rich result altogether. Direction: refactor the score with only verifiable signals.
+
+### Changes
+
+**A. Schema Impact Estimate block removed (`seobetter.php` ~lines 6280-6300 metabox + ~lines 972-987 sidebar JSON)**
+- Block deleted from the metabox Rich Results tab.
+- `impact_stats` array in the REST `analyze()` response replaced with empty array (preserved key so the JS sidebar's existence check `(rp.impact_stats || []).length > 0` no-ops cleanly).
+- Validation block (errors / warnings / passed checks) remains — that's the trustworthy schema signal users should rely on.
+
+**B. Discover preview action icons removed (`seobetter.php` ~line 6139)**
+- The 👍 / 🔖 / ⋯ row at the bottom of the Discover mock card is gone.
+- The remaining preview matches what users actually see on the Discover feed (favicon + site name + title + description).
+
+**C. LLM Citation Readiness score refactored (`seobetter.php` ~lines 5985-6035)**
+
+Pre-fix (8 checks, three speculative):
+- ✓/✗ SEO title set and ≤ 70 chars
+- ✓/✗ Description 120–200 chars
+- ✓/✗ Featured image ≥ 1200×630 (Perplexity)
+- ✓/✗ Favicon (site icon) configured
+- ✓/✗ Site name configured
+- ✓/✗ FAQ schema **(Perplexity bonus)** ← speculative
+- ✓/✗ HowTo / step-structured **(ChatGPT bonus)** ← speculative + Google-deprecated
+- ✓/✗ Organization schema **(Gemini bonus)** ← speculative
+
+Post-fix (9 checks, all verifiable):
+- ✓/✗ SEO title set and ≤ 70 chars *(universal)*
+- ✓/✗ Description 120–200 chars *(universal Open Graph)*
+- ✓/✗ Featured image ≥ 1200×630 *(Open Graph + LLM citation cards)*
+- ✓/✗ Favicon (site icon) configured *(universal — appears in all citation cards)*
+- ✓/✗ Site name configured *(universal — branding)*
+- ✓/✗ Author + Organization schema (E-E-A-T) *(Google's published author/publisher guidance, also relied on by every LLM retriever)*
+- ✓/✗ inLanguage tagged on schema *(Princeton GEO §3 + observable: Baidu ERNIE, Yandex, Naver, multilingual retrievers key off this)*
+- ✓/✗ citation[] in schema *(Princeton GEO §1 — measured +30% lift for pages with structured citation graphs in JSON-LD; arxiv 2311.09735)*
+- ✓/✗ dateModified within 90 days *(universal recency signal, all retrievers)*
+
+Computed two new derived signals (`$has_inlanguage`, `$has_citation_array`) by scanning the @graph for those fields on any node. Score weighting unchanged: each check 1/9 of the total.
+
+### Why "honest" is the right tradeoff
+
+Even if some of the dropped claims were directionally true, the user can't verify them. Showing hardcoded numbers next to their post implies SEOBetter has measured these for *their* article, which is false. The Validation block (right below where the Impact Estimate used to live) tells the user what schema is actually present and what's missing — that's auditable, reproducible, and trustworthy. Trustworthy beats persuasive when the user is paying for honesty.
+
+### Verify
+
+```bash
+sed -n '5985,6035p' /Users/ben/Documents/autoresearch/seobetter/seobetter.php   # new LLM checks
+grep -n "Schema Impact" /Users/ben/Documents/autoresearch/seobetter/seobetter.php  # should match only the removal comment
+grep -n "👍\|🔖\|⋯" /Users/ben/Documents/autoresearch/seobetter/seobetter.php   # should produce no matches
+```
+
+### Doc co-updates
+
+- `SEO-GEO-AI-GUIDELINES.md` §10 — schema-notes paragraph synced with the LLM-score refactor (remove per-LLM bonus claims, document the new 9-signal model).
+
+**Verified by user:** UNTESTED
 
 ---
 
