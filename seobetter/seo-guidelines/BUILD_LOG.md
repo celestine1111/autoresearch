@@ -7,12 +7,75 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.21)
+> **Last updated:** 2026-05-03 (v1.5.216.62.22)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.22 — Did You Know link rendering + Pros/Cons balance enforcer
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audited the v62.21 article (https://srv1608940.hstgr.cloud/how-to-guide-how-to-transition-your-dog-to-raw-food-safely-2026-4/) and found two render-time issues:
+
+1. **Did You Know callout boxes had plain-text parentheticals** while the same `(Source – Site)` references elsewhere in the article were correctly hyperlinked. Same source text, different render output — pointing at a callout-specific bug rather than a linkify-pipeline bug.
+
+2. **Pros section rendered without a Cons section** (one-sided "Pros and Cons" block). Recurring across articles — the AI generates Pros bullets but skips Cons entirely.
+
+### Fix 1 — Did You Know callout matches raw markdown, not stripped HTML
+
+`Content_Formatter.php::format()` line ~908.
+
+The Did You Know `elseif` branch was matching its detection regex against `$plain` (which is `strip_tags($text)` → all `<a>` tags from `inline_markdown` already collapsed to plain text). Then it passed `$dyk_match[2]` back through `inline_markdown` — but at that point the `[text](url)` markdown link syntax was already destroyed. So callout body links rendered as plain text.
+
+The Tip / Note / Warning callouts immediately above already match `$section['content']` (raw markdown) — Did You Know diverged from that convention. Aligned now: matches raw markdown, captures the body, re-renders via `inline_markdown` so any links produced upstream by `linkify_bracketed_references` survive into the styled box.
+
+```php
+// Before:
+elseif ( preg_match( '/^(did\s*you\s*know|fun\s*fact)\??\s*[:—-]?\s*(.*)$/is', $plain, $dyk_match ) ) {
+
+// After:
+elseif ( preg_match( '/^(did\s*you\s*know|fun\s*fact)\??\s*[:—-]?\s*(.*)$/is', $section['content'], $dyk_match ) ) {
+```
+
+Works for ALL keywords, ALL 21 content types, ALL AI models — the bug was a single source-of-data swap and the fix is universal.
+
+### Fix 2 — Pros/Cons balance enforcer (prompt + post-process)
+
+**Prompt** — `Async_Generator.php::get_template_for_type()` line ~894
+
+Pre-fix said "with bullet lists" (plural ambiguous). AI models repeatedly emitted only Pros and skipped Cons. Now the contract is explicit:
+
+> PROS/CONS: Include a "## Pros and Cons" section with TWO bold-labelled bullet lists in this exact order. (1) Write "**Pros:**" on its own line, then 3-5 bullet points listing advantages. (2) Write "**Cons:**" on its own line, then 3-5 bullet points listing drawbacks. BOTH lists are REQUIRED with similar bullet counts.
+
+**Post-process safety net** — `Async_Generator.php::assemble_final()` after strip-empty-headings
+
+Universal regex scan: for each H2 section, check whether the body contains a Pros marker AND a Cons marker (covering `**Pros:**`, `**Pros**`, `### Pros`, `## Pros` shapes, plus full-width `：` for CJK). If exactly one is present (imbalanced), strip the entire H2 section. Detection language-aware via `Localized_Strings::get_detection_pattern( 'pros'|'cons', $lang )` — covers all 60+ supported languages.
+
+Behavior:
+- Balanced (both present, or neither) → unchanged
+- Imbalanced (one present, other missing) → entire H2 dropped
+
+Stripping is honest: if the AI produces a one-sided block, the article is incomplete and gets one less section rather than rendering visibly broken Pros without Cons.
+
+### Verify
+
+```bash
+sed -n '906,917p' /Users/ben/Documents/autoresearch/seobetter/includes/Content_Formatter.php   # Did You Know fix
+sed -n '893,901p' /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php     # prompt strengthening
+sed -n '2602,2640p' /Users/ben/Documents/autoresearch/seobetter/includes/Async_Generator.php   # post-process enforcer
+```
+
+Expected: Did You Know elif uses `$section['content']`; Pros/Cons prompt explicitly requires two lists; assemble_final has the balance enforcer block.
+
+**Verified by user:** UNTESTED
 
 ---
 

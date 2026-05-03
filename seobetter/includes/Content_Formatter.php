@@ -905,7 +905,15 @@ CSS;
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     }
                     // v1.5.14 — Did You Know box: paragraph starts with "Did you know" or "Fun fact"
-                    elseif ( preg_match( '/^(did\s*you\s*know|fun\s*fact)\??\s*[:—-]?\s*(.*)$/is', $plain, $dyk_match ) ) {
+                    // v1.5.216.62.22 — match against $section['content'] (raw markdown), not $plain.
+                    // Pre-fix: $plain = strip_tags($text) had already collapsed any [text](url)
+                    // markdown links produced by linkify_bracketed_references into plain text,
+                    // so when inline_markdown ran on $dyk_match[2] there were no markdown links
+                    // left to convert and the parenthetical references rendered as flat text.
+                    // Tip/Note/Warning above match $section['content'] correctly; Did You Know
+                    // diverged. Same convention now: capture from raw markdown so inline_markdown
+                    // can re-render any links inside the callout body.
+                    elseif ( preg_match( '/^(did\s*you\s*know|fun\s*fact)\??\s*[:—-]?\s*(.*)$/is', $section['content'], $dyk_match ) ) {
                         $body_text = $this->inline_markdown( trim( $dyk_match[2] ) ) ?: $text;
                         $icon = $this->sb_icon( 'didyouknow' );
                         $html = '<div style="background:#fefce8 !important;border-left:4px solid #eab308;padding:1em 1.25em;border-radius:0 8px 8px 0;margin:1.25em 0;color:#713f12 !important;line-height:1.7">';

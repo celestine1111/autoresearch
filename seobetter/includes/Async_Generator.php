@@ -891,8 +891,14 @@ class Async_Generator {
             // FAQ section
             . ' FAQ: Include a "## Frequently Asked Questions" section with 3-5 Q&A pairs. Questions should end with ? and be phrased as users search.'
             // Pros and Cons — only for types that use it (NOT white_paper, scholarly, press_release, personal_essay)
+            // v1.5.216.62.22 — explicit dual-list requirement. Pre-fix the prompt
+            // said "with bullet lists" (plural ambiguous) and AI models repeatedly
+            // emitted ONLY a Pros block, skipping Cons entirely. Now the contract
+            // is: TWO bold-labelled lists with similar counts, both REQUIRED.
+            // A post-process safety net in assemble_final() strips the entire H2
+            // section if the AI ignores this rule and emits an imbalanced block.
             . ( in_array( $content_type, [ 'white_paper', 'scholarly_article', 'press_release', 'personal_essay', 'live_blog', 'glossary_definition', 'interview' ], true )
-                ? '' : ' PROS/CONS: Include a "## Pros and Cons" section with bullet lists (auto-styles into colored boxes).' )
+                ? '' : ' PROS/CONS: Include a "## Pros and Cons" section with TWO bold-labelled bullet lists in this exact order. (1) Write "**Pros:**" on its own line, then 3-5 bullet points listing advantages. (2) Write "**Cons:**" on its own line, then 3-5 bullet points listing drawbacks. BOTH lists are REQUIRED with similar bullet counts. Skipping the Cons list, or writing it shorter than Pros, fails the article quality gate. The plugin auto-styles each list into a colored box (green for Pros, red for Cons).' )
             // Humanizer
             . ' HUMANIZER: No AI words (delve, leverage, pivotal, tapestry, landscape, multifaceted, comprehensive, utilizing, aforementioned). Vary sentence rhythm. Write like a knowledgeable human with opinions, not a textbook.'
             // E-E-A-T
@@ -2595,13 +2601,42 @@ class Async_Generator {
         }
 
         // v1.5.216.62.20 — REVERTED v1.5.216.62.17 FAQ post-process safety net.
-        // User reported "Value of type null is not callable" footer error during
-        // article generation immediately after v62.17/v62.19 ship. Reverting the
-        // bigger insertion (FAQ block, ~80 lines) as the primary suspect while
-        // we diagnose the actual error. v62.19 schema quick-fix changes (3 small
-        // edits in Schema_Generator) remain in place since they're unlikely to
-        // affect generation pipeline. If error persists after v62.20 upload,
-        // the root cause is elsewhere and needs file:line from the user.
+        // (Real cause of "null is not callable" was the parens-pass closure use
+        // list — fixed in v62.21. FAQ revert kept since FAQ block had no proven
+        // value yet.)
+
+        // v1.5.216.62.22 — Pros/Cons balance enforcer.
+        // AI sometimes emits "**Pros:**" + bullets but skips the "**Cons:**"
+        // half (or vice versa). User reports the same article repeatedly
+        // showing Pros with no Cons. Universal fix: scan each H2 section for
+        // imbalanced Pros-without-Cons (or Cons-without-Pros) markers and
+        // strip the entire H2 section so the article doesn't render a
+        // one-sided block. Detection is language-aware via Localized_Strings
+        // (covers all 60+ supported languages) — works for ALL keywords, ALL
+        // 21 content types, ALL AI models. Companion to the prompt update at
+        // get_template_for_type() which makes the dual-list contract explicit.
+        $pc_lang = $options['language'] ?? 'en';
+        $pros_pat = Localized_Strings::get_detection_pattern( 'pros', $pc_lang, '\bpros?\b' );
+        $cons_pat = Localized_Strings::get_detection_pattern( 'cons', $pc_lang, '\bcons?\b' );
+        // Marker shapes the AI realistically emits: **Pros:**, **Pros**,
+        // ### Pros, ## Pros. Half-width AND full-width colon (：) supported
+        // for CJK languages.
+        $pros_marker_re = '/(?:\*\*\s*' . $pros_pat . '\s*[:：]?\s*\*\*|^#{2,4}[ \t]+' . $pros_pat . '\b)/imu';
+        $cons_marker_re = '/(?:\*\*\s*' . $cons_pat . '\s*[:：]?\s*\*\*|^#{2,4}[ \t]+' . $cons_pat . '\b)/imu';
+        $markdown = preg_replace_callback(
+            '/^(##[ \t]+[^\n]+)\n([\s\S]*?)(?=^##[ \t]+|\z)/m',
+            function ( $m ) use ( $pros_marker_re, $cons_marker_re ) {
+                $body = $m[2];
+                $has_pros = (bool) preg_match( $pros_marker_re, $body );
+                $has_cons = (bool) preg_match( $cons_marker_re, $body );
+                // Both present (balanced) OR both absent (no Pros/Cons block)
+                // → keep section unchanged. Only strip when exactly one is
+                // present, since that's the imbalanced case the user reports.
+                if ( $has_pros === $has_cons ) return $m[0];
+                return '';
+            },
+            $markdown
+        );
 
         // v1.5.206d-fix9 — Defensive Last Updated sanitizer. Even with fix6's
         // canonical translations table + fix9's stronger prompt, the AI still
