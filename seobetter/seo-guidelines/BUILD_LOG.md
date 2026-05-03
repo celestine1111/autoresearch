@@ -7,12 +7,76 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.26)
+> **Last updated:** 2026-05-03 (v1.5.216.62.27)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.27 — Headline Analyzer expanded lexicons + actionable per-row tips
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audited the sidebar Headline Analyzer and asked whether the data was real or fake. Honest answer: the math was always real (`matches/total_words × 100`) but the word lists were tiny. Power words = 16 entries, Emotional = 10, Sentiment positive = 14, Sentiment negative = 9. Most well-crafted headlines scored 0% / 0% just because the user's actual word ("discover", "transform", "mastering", "secrets to") wasn't in the small list. The signal looked broken even when the headline was good.
+
+### Fix — `assets/js/editor-sidebar.js`
+
+**Lexicon expansion** (curated from public sources — CoSchedule headline research, Plutchik wheel of emotions, NLTK English stop-word list):
+
+| Lexicon | Pre-fix | v62.27 |
+|---|---|---|
+| Power words | 16 | ~145 |
+| Emotional words | 10 | ~115 |
+| Stop / common words | 28 | ~50 |
+| Positive sentiment | 14 | ~55 |
+| Negative sentiment | 9 | ~45 |
+
+Power words grouped for maintenance into 12 buckets: Authority, Promise, Curiosity, Exclusivity, Value, Newness, Completeness, Action / Instructional, Power, Improvement, Discovery, Audience.
+
+Emotional words grouped per Plutchik's eight-emotion wheel (joy, trust, fear, surprise, sadness, anger, anticipation, disgust) plus achievement/aesthetic and failure (for cautionary headlines).
+
+Stop word list normalized to the standard NLTK English set.
+
+**Per-row actionable tips** — `analyzeHeadline()` now emits a `tips` object with concrete copy-pasteable suggestions whenever a row is in warning state:
+
+```
+power: "Add 1-2 power words. Examples: best, ultimate, proven, secret, free, definitive, transform, master, breakthrough."
+emotional: "Add an emotional word to lift CTR. Examples: amazing, surprising, brilliant, life-changing, stunning, breathtaking."
+common: "Aim for 20-35% common words (the/a/in/of/etc) so the headline reads naturally."
+sentiment: "Neutral tone — try a positive word (best, proven, essential) or a cautionary one (warning, mistake, avoid) to match reader intent."
+cc / wc: "Too short — aim for 45-65 chars (Google SERP truncation)." / "Too few words — most CTR-winning headlines are 6-12 words." (and the inverse messages)
+```
+
+`hlRow()` extended to accept the tip and render it as a yellow `💡` callout below the row when the row is warning. Tip is hidden when the row passes (no clutter on green rows).
+
+**Punctuation-stripping in matching** — words ending in `?` `!` `,` `:` `;` now match the lexicon correctly (pre-fix, "Amazing?" wouldn't match "amazing" because of the `?`). Implemented as `.toLowerCase().replace(/[!?.,:;]/g, '')` in the filter.
+
+### What stays the same
+
+- The math: `matches / wc × 100`. Algorithm wasn't broken, only undersized lexicons were.
+- Type detection (List / How-to / Question / Comparison / General) — regex unchanged.
+- Character / word count thresholds (45-65 chars, 6-12 words).
+- Emotional threshold lowered: was `emotionalPct >= 5` (% threshold), now `foundEW.length >= 1` (raw count). One emotional word in a 8-word headline is 12.5% — meets the prior threshold and is a more honest target than a percentage that varies with headline length.
+
+### Honesty footnote
+
+Word lists are public, not proprietary. Anyone looking at `editor-sidebar.js` can see exactly what words score. No hidden weighting, no "AI sentiment model", no remote API call. The score is a transparent function of the headline against published lexicons — easy to debug, easy to verify, easy to extend.
+
+### Verify
+
+```bash
+sed -n '115,205p' /Users/ben/Documents/autoresearch/seobetter/assets/js/editor-sidebar.js   # analyzeHeadline + lexicons
+sed -n '470,490p' /Users/ben/Documents/autoresearch/seobetter/assets/js/editor-sidebar.js   # hlRow with tip support
+node --check /Users/ben/Documents/autoresearch/seobetter/assets/js/editor-sidebar.js         # parse
+```
+
+**Verified by user:** UNTESTED
 
 ---
 
