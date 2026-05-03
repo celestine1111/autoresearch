@@ -19,7 +19,7 @@
 ## v1.5.216.62.13 — Sonar authority filter + enhanced empty-heading strip + inline-stat hallucination strip
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `7ccfce2`
 
 ### Why
 
