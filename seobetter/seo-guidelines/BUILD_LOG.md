@@ -19,7 +19,7 @@
 ## v1.5.216.62.8 — Auto-pipeline quote injection diagnostic banner
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `ca1fcb1`
 
 ### Why
 
