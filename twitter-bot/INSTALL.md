@@ -173,8 +173,19 @@ EMAIL_TO=mindiamaiweb@gmail.com
 EMAIL_FROM=SEOBetter Bot <bot@mg.seobetter.com>
 
 OPENROUTER_API_KEY=sk-or-v1-...
+
+# Hybrid model routing — cheap model for the 90% of runs that are
+# search-and-reply, smart model for the 10% that are Loop 6 mentions
+# (highest-leverage action: algo +75, 150× distribution multiplier)
 MODEL=google/gemini-3-flash-lite-preview
+MODEL_MENTIONS=google/gemini-3-pro-preview
 ```
+
+**Estimated monthly cost** at the default cron cadence (`*/8 * * * *`):
+- All Flash Lite (skip MODEL_MENTIONS) → ~$3.50/mo
+- **Hybrid (default above) → ~$10/mo**
+- All Flash → ~$18/mo
+- All Pro → ~$72/mo
 
 ```bash
 chmod 600 /opt/twitter-bot/.env

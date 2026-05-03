@@ -29,8 +29,12 @@ const MG_DOMAIN   = process.env.MAILGUN_DOMAIN;        // e.g. mg.seobetter.com 
 const MG_REGION   = (process.env.MAILGUN_REGION || 'us').toLowerCase();  // 'us' | 'eu'
 const EMAIL_TO    = process.env.EMAIL_TO   || 'mindiamaiweb@gmail.com';
 const EMAIL_FROM  = process.env.EMAIL_FROM || `SEOBetter Bot <bot@${MG_DOMAIN || 'mailgun.org'}>`;
-const OR_KEY      = process.env.OPENROUTER_API_KEY;
-const MODEL       = process.env.MODEL || 'google/gemini-3-flash-lite-preview';
+const OR_KEY        = process.env.OPENROUTER_API_KEY;
+const MODEL         = process.env.MODEL          || 'google/gemini-3-flash-lite-preview';
+// Hybrid routing — mentions / Loop 6 is the highest-leverage action (algo +75
+// signal + 150× distribution per playbook §0). Worth using a smarter model for
+// just those ~10% of runs. Falls back to MODEL if not set.
+const MODEL_MENTIONS = process.env.MODEL_MENTIONS || MODEL;
 
 // Daily caps — per twitter-agent-prompt.md §9 daily limits
 const CAPS = {
@@ -91,7 +95,7 @@ function digestRead() {
   return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '(no actions logged today)';
 }
 
-async function gemini(systemPrompt, userPrompt) {
+async function gemini(systemPrompt, userPrompt, modelOverride) {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -101,7 +105,7 @@ async function gemini(systemPrompt, userPrompt) {
       'X-Title': 'SEOBetter Twitter Agent',
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: modelOverride || MODEL,
       messages: [
         // Cache the system prompt — it's ~30K chars and identical across runs
         { role: 'system', content: [
@@ -439,7 +443,9 @@ INPUT:
 Per Loop 6 + §6: substantive replies get a thoughtful response in their language; short agreement / spam / hostile gets next_action: skip.
 Return ONLY JSON per §4 schema.`;
 
-  const raw  = await gemini(systemPrompt, userPrompt);
+  // Hybrid routing: mentions get the smarter MODEL_MENTIONS (Loop 6 is the
+  // highest-leverage action — algo +75 + 150× distribution multiplier).
+  const raw  = await gemini(systemPrompt, userPrompt, MODEL_MENTIONS);
   const data = parseJson(raw);
   const reply = data.tweets?.[0];
   if (!reply?.text || ['skip', 'needs_human_review'].includes(data.next_action)) {
