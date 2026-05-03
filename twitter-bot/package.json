@@ -1,0 +1,22 @@
+{
+  "name": "seobetter-twitter-bot",
+  "version": "1.0.0",
+  "description": "Single-file cron-driven Twitter agent for @seobetter3 — replaces Hermes",
+  "main": "run.js",
+  "scripts": {
+    "post":    "node run.js post",
+    "reply":   "node run.js reply_en",
+    "multi":   "node run.js reply_multi",
+    "mentions":"node run.js mentions",
+    "likes":   "node run.js likes",
+    "metrics": "node run.js metrics",
+    "auto":    "node run.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0",
+    "dotenv":     "^16.4.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
