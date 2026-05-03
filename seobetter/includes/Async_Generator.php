@@ -2460,6 +2460,37 @@ class Async_Generator {
         $quote_exempt = [ 'case_study', 'interview', 'press_release', 'personal_essay', 'opinion' ];
         if ( ! in_array( $content_type, $quote_exempt, true ) ) {
             $markdown = Content_Injector::strip_unlinked_quotes( $markdown );
+
+            // v1.5.216.62.7 — Realize plugin_UX.md §139 intent.
+            //
+            // Background: v1.5.154 removed the Optimize All button and promised
+            // articles would be "fully optimized at generation time — citations,
+            // stats, quotes, readability all handled in the generation pipeline."
+            // Reality: only inject_named_source_links_public (citations) was wired
+            // in above. inject_quotes was orphaned behind a REST endpoint that no
+            // longer has a UI trigger.
+            //
+            // Result before this fix: AI-attributed quotes got stripped 6 lines
+            // up, but no verified Tavily quotes were ever added back. Every
+            // article scored Expert Quotes 0/100 — the largest single GEO lever
+            // (Princeton +41%) was permanently disabled.
+            //
+            // This call inserts verified Tavily quotes (authority-domain filtered
+            // per authority-domains.md) as `> "text" — [Source](url)` markdown
+            // blockquotes after qualifying H2 sections. Zero hallucination risk:
+            // every quote has a verified source URL from the authority whitelist.
+            // Returns success:false silently if no verifiable quotes found —
+            // better no quotes than fake quotes (§15B Trust signal).
+            //
+            // DO NOT re-add an "Optimize All" or "Fix Now" button — quotes,
+            // citations, stats, tables, freshness are all auto-pipeline by design.
+            $sonar_data = $job['results']['sonar_data'] ?? null;
+            $qd_domain  = (string) ( $options['domain']  ?? '' );
+            $qd_country = (string) ( $options['country'] ?? '' );
+            $quote_result = Content_Injector::inject_quotes( $markdown, $keyword, $sonar_data, $qd_domain, $qd_country );
+            if ( ! empty( $quote_result['success'] ) && ! empty( $quote_result['content'] ) ) {
+                $markdown = $quote_result['content'];
+            }
         }
 
         // v1.5.206d-fix9 — Defensive Last Updated sanitizer. Even with fix6's

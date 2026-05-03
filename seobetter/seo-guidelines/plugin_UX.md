@@ -136,7 +136,20 @@ Both ring variants (SVG-based in content-generator, div-bordered in CSS class fo
 
 ### 3.4 Suggestions Panel (v1.5.154 — replaces Optimize button)
 
-**v1.5.154:** The Optimize All button was REMOVED. Articles are now fully optimized at generation time — citations, stats, quotes, readability all handled in the generation pipeline. No second pass needed.
+**v1.5.154:** The Optimize All button was REMOVED. Articles are now fully optimized at generation time. The auto-pipeline lives in `Async_Generator::assemble_final()` and runs these steps in order:
+
+1. `Content_Injector::inject_named_source_links_public()` — citations (v1.5.154)
+2. `Citation_Pool::append_references_section()` — References block (v1.5.154)
+3. `Content_Injector::strip_unlinked_quotes()` — strips AI-attributed quotes lacking verified URLs (v1.5.146)
+4. `Content_Injector::inject_quotes()` — adds verified Tavily authority-domain quotes as `> "text" — [Source](url)` blockquotes (v1.5.216.62.7)
+5. Stock_Image_Inserter, Last-Updated localizer, banned-phrase scrub, etc.
+
+**HARD RULE — DO NOT add "Optimize All", "Fix Now", or any other on-demand optimization button back to the UI.** All optimization runs server-side at generation time. The buttons were removed because:
+- They created races (readability rewrite stripped citations the citation step just added)
+- They confused free vs paid tier UX
+- They gave users two ways to get the same result and the second pass often produced worse output
+
+If a future GEO check is failing across articles, the fix is to add another `inject_*` call to the `assemble_final()` pipeline — NOT to add a UI button.
 
 #### Suggestions panel (informational only, no action button)
 - **Header:** "Suggestions" title + improvement count
@@ -151,16 +164,18 @@ Color-coded banner rendered above the content preview in the result view when `r
 - **Red** (force_informational, article structurally hallucinated) — Places_Validator's post-gen pass stripped >50% of sections and the article is gutted; critical suggestion is also prepended to the fixes list
 
 Banner surfaces: `places_location`, `places_business_type`, `pool_size`, validator warnings, and (when amber) an explanation of why the listicle became informational. Primary diagnostic surface for users reporting "my Foursquare key isn't working" or "why are there still fake businesses". Source: [admin/views/content-generator.php](../admin/views/content-generator.php) inline `renderResult()` function around the content-preview block.
-- **Two button modes:**
-  - **"Add now" (purple)** — INJECT mode: adds new content WITHOUT editing existing text
-  - **"Check" (gray)** — FLAG mode: shows what to fix manually, doesn't touch content
+**v1.5.216.62.7 — DEPRECATED documentation block kept for historical reference.** The button modes and 5 INJECT FIXES described below are for the legacy "Fix Now" / "Optimize All" flow that was REMOVED in v1.5.154. The underlying functions (`Content_Injector::inject_citations`, `inject_quotes`, `inject_table`, etc.) still exist as REST endpoints, but no UI button calls them. They are invoked automatically inside `Async_Generator::assemble_final()` at generation time. Do not re-introduce these buttons.
 
-#### INJECT FIXES (5 buttons — add new content)
-1. **Add Citations & References** (+10 pts) — Uses Citation Pool (DDG/Brave/Reddit/HN/Wikipedia) or Sonar-provided URLs via `optimize_all()`. Appends `## References` section + inline `[N]` anchor links. Zero hallucinated URLs. **Hidden when article already has citations** (v1.5.74b+): JS checks both the score AND whether the markdown already has a `## References` section with links OR the HTML has `<a href>` tags.
-2. **Add Expert Quotes** (+6 pts) — v1.5.94: SCRAPED QUOTES ONLY. Real sentences extracted from real web pages by the Vercel scraper. Each quote has exact page text + verified source URL. NO LLM fallback — if the scraper found 0 quotes for this keyword, the step is skipped entirely. Zero hallucination guarantee.
-3. **Add Statistics** (+10 pts) — Pulls real stats from Vercel research API or AI fallback. Via `optimize_all()`, stats come from Sonar with real source names.
-4. **Add Comparison Table** (+5 pts) — v1.5.75+: AI generates markdown table with DYNAMIC columns (no longer hardcodes "Price Range"). Via `optimize_all()`, table data comes from Sonar with real product specs.
-5. **Add Freshness Signal** (+6 pts) — Prepends "Last Updated: [Month Year]" to top of article. Skips if already present.
+#### LEGACY: button modes (REMOVED — auto-pipeline only)
+- ~~"Add now" (purple)~~ — INJECT mode (now runs at generation time)
+- ~~"Check" (gray)~~ — FLAG mode (now runs at generation time)
+
+#### LEGACY: INJECT FIXES (5 buttons — REMOVED, all auto-run server-side)
+1. ~~Add Citations & References~~ → auto: `inject_named_source_links_public()` + `append_references_section()` (Async_Generator line ~2437)
+2. ~~Add Expert Quotes~~ → auto: `inject_quotes()` (Async_Generator line ~2463, v1.5.216.62.7)
+3. ~~Add Statistics~~ → handled by AI prompt + research data passing (no separate inject step needed)
+4. ~~Add Comparison Table~~ → not yet auto-piped, see Phase 1 backlog
+5. ~~Add Freshness Signal~~ → handled by Last-Updated localizer in `assemble_final()`
 
 #### REWRITE FIXES (2 buttons — modify existing text via AI)
 6. **Simplify Readability** (+10 pts) — AI rewrites sections with Flesch-Kincaid grade > 8 to grade 7. Breaks long sentences, swaps complex words ("use" not "utilize"), converts to active voice. Preserves all facts, citations, links. Per SEO-GEO-AI-GUIDELINES §5: targets grade 6-8.

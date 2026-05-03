@@ -850,11 +850,25 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 **Score badge** in top-right of metabox header — color-coded green/amber/red.
 
-### 11.6 Analyze & Improve — Single "Optimize All" Button (v1.5.83+)
+### 11.6 Auto-Optimization Pipeline (v1.5.154 removed Optimize All button; v1.5.216.62.7 wired the missing inject_quotes step)
 
-`includes/Content_Injector.php` provides 11 methods: 5 inject (add content), 2 rewrite (modify content), 3 flag (advisory), plus 1 orchestrator.
+**HARD RULE: Do NOT add an "Optimize All" or "Fix Now" button back to the UI.** All optimization runs server-side at generation time inside `Async_Generator::assemble_final()`. The button-based flow was removed in v1.5.154 because it created races (readability rewrite stripped citations the citation step just added) and confused free-vs-paid UX.
 
-**"⚡ Optimize All" — single-click orchestrator (v1.5.78):**
+`includes/Content_Injector.php` still provides the 11 methods (5 inject, 2 rewrite, 3 flag, 1 orchestrator) — but they're invoked from the auto-pipeline, not from any UI button. Any new GEO check that needs improving across all articles should be wired into `assemble_final()`, NOT exposed as a UI button.
+
+**Auto-pipeline current state (`assemble_final` line ~2429-2470):**
+- `inject_named_source_links_public()` — citations (v1.5.154)
+- `Citation_Pool::append_references_section()` — References block (v1.5.154)
+- `strip_unlinked_quotes()` — strips AI-fabricated unlinked quotes (v1.5.146)
+- `inject_quotes()` — adds verified Tavily authority-domain quotes (**v1.5.216.62.7** — was missing until then; cause of Expert Quotes 0/100 across launch test gate)
+- Stock_Image_Inserter, Last-Updated localizer, banned-phrase scrub
+
+**Still NOT in auto-pipeline (Phase 1 backlog — wire if needed):**
+- `inject_table()` — comparison tables, currently relies on AI prompt to emit
+- `inject_statistics()` — currently relies on AI copying VERIFIED STATISTICS prompt block
+- `inject_freshness()` — Last-Updated handled by localizer instead
+
+**Legacy `optimize_all()` orchestrator (REST endpoint still exists; no UI):**
 - `optimize_all($markdown, $keyword, $existing_pool, $scores)` — runs all 6 fixes below in one pass
 - Step 0: ONE Perplexity Sonar call via `call_sonar_research()` → returns `{citations, quotes, statistics, table_data}` as structured JSON from live web search
 - Steps 1-4: injects research data from Sonar (or falls back to existing methods if no OpenRouter key)

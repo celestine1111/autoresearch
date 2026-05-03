@@ -7,12 +7,69 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.6)
+> **Last updated:** 2026-05-03 (v1.5.216.62.7)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.7 — Wire inject_quotes into auto-pipeline (fixes Expert Quotes 0/100 across launch test gate)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Bug
+
+All 3 launch-test-gate articles scored Expert Quotes 0/100 — Princeton's largest single AI-visibility boost (+41%) was permanently disabled. Diagnosis traced to a documentation/code drift:
+
+- [plugin_UX.md §3.4](../seo-guidelines/plugin_UX.md) v1.5.154 promised: *"Articles are now fully optimized at generation time — citations, stats, quotes, readability all handled in the generation pipeline."*
+- [Async_Generator.php::assemble_final()](../includes/Async_Generator.php) reality: only `inject_named_source_links_public()` (citations) was actually wired in. `strip_unlinked_quotes()` ran 6 lines later and removed any AI-attributed quotes lacking verified URLs — but **no `inject_quotes()` call ever followed**, so verified Tavily quotes were never added back. Articles came out with zero quotes by design.
+- The `Content_Injector::inject_quotes()` function existed and worked correctly (line 347), with a REST endpoint, but no UI button called it (Optimize All was removed in v1.5.154).
+
+This is a textbook DRIFT BUG per the seobetter skill rule: guidelines describe intent, grep describes reality, grep wins.
+
+### Fix
+
+`includes/Async_Generator.php:2463` — added `Content_Injector::inject_quotes()` call immediately after `strip_unlinked_quotes()` runs. Skips the same content_types in `$quote_exempt` (Case Study, Interview, Press Release, Personal Essay, Opinion). Uses verified Tavily authority-domain quotes via `$job['results']['sonar_data']`. Returns `success:false` silently if no verifiable quotes found — better no quotes than fake quotes (§15B Trust signal).
+
+### Co-doc updates
+
+- **plugin_UX.md §3.4** — added explicit auto-pipeline list (5 steps now in `assemble_final()`) + HARD RULE: do NOT re-add Optimize All / Fix Now buttons. Marked the "INJECT FIXES" 5-button block as DEPRECATED LEGACY.
+- **plugin_functionality_wordpress.md §11.6** — restructured to lead with the auto-pipeline rule, then document the legacy `optimize_all()` orchestrator (which still exists as a REST endpoint but has no UI trigger). Notes which inject_* methods are NOT yet auto-piped (table, statistics, freshness — Phase 1 backlog).
+
+### 3 Systematic Questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — uses Tavily authority-domain extraction, works universally |
+| ALL 21 content types? | ✅ Yes — same `$quote_exempt` skip list as `strip_unlinked_quotes` (Case Study, Interview, Press Release, Personal Essay, Opinion all expect their own structural quote format) |
+| ALL AI models? | ✅ Yes — server-side Tavily extraction, no AI dependency for quote text |
+
+### Universal Design Principle compliance
+
+| Principle | Compliance |
+|---|---|
+| Absolute rules over fuzzy matching | ✅ Verified URL or skip; no fuzzy name guessing |
+| Fail gracefully, never silently | ✅ `success:false` is a deliberate skip with user-visible reason via the new debug panel from v1.5.216.62.6 |
+| Data must be verifiable | ✅ Every quote URL comes from authority-domains.md whitelist via Tavily |
+| Server-side research for ALL users | ✅ `sonar_data` (Vercel) + Tavily PHP fallback both server-side |
+
+### Verify
+
+```bash
+grep -n "inject_quotes" seobetter/includes/Async_Generator.php
+# Should now show line ~2487 calling Content_Injector::inject_quotes (was missing entirely before)
+
+grep -nA3 "DO NOT add" seobetter/seo-guidelines/plugin_UX.md
+# Should show the HARD RULE banner forbidding Optimize All / Fix Now reintroduction
+```
+
+**Test by user:** generate one article with content_type=blog_post or how_to. Verify the rendered article has at least one `<blockquote class="wp-block-quote">` with `> "text" — [Source](url)` format. GEO panel should show Expert Quotes ≥50/100.
+
+**Verified by user:** UNTESTED
 
 ---
 
