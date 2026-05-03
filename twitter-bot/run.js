@@ -292,6 +292,11 @@ async function launch() {
     userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
     locale: 'en-US',
     timezoneId: 'America/New_York',
+    // Required when going through a proxy that MITMs HTTPS to inject headers
+    // (ScrapeOps, BrightData with super-proxy mode, etc.). Safe here because
+    // the proxy is paid, scoped to our account, and only used for x.com /
+    // openrouter / mailgun — all of which we trust + auth via cookies/keys.
+    ignoreHTTPSErrors: true,
   });
   // Hide webdriver flag (basic stealth)
   await context.addInitScript(() => {
