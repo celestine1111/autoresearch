@@ -7,12 +7,95 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.29)
+> **Last updated:** 2026-05-03 (v1.5.216.62.30)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.30 — SERP preview cleanup + citation URL tracking-param stripping
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audit surfaced two issues:
+
+1. **SERP preview rich-badges that don't appear in real Google.** The metabox preview decorated articles with badges like "📋 Step-by-step guide · ~15 min" (how-to), "📋 List article · 10 items" (listicle), "⚖ Comparison · Side-by-side" (comparison/buying_guide), and "Top stories · DATE" (news/press_release). None of those pills exist on actual Google SERPs. Particularly bad: the how-to badge — Google deprecated the HowTo rich result Sept 2023 (we already documented this in v62.24). Showing it in the preview was actively misleading. User pointed it out by name: "📋 Step-by-step guide · ~15 min that is not how it would look in google".
+
+2. **Citation URLs in @graph carrying Google Shopping tracking params.** User found `citation[].url` like `https://primalpetfoods.com/pages/canine-transitioning?srsltid=AfmBOorjzuW5FyWlpI7ZuCM_ngS6ySsNTsmLQwLOUK4Mkhkp_dTfR5ao` in the live JSON-LD on a published article. The `srsltid` token is a Google Shopping click-attribution parameter, not part of the canonical source URL. It pollutes the citation graph (LLMs that parse `citation[]` dedupe poorly when the same source appears with different `srsltid` values across articles, weakening the citation signal).
+
+### Fix 1 — SERP preview rich-badges aligned to real Google ([seobetter.php](seobetter/seobetter.php) ~line 5468)
+
+What real Google SERPs actually show for article-style sites:
+- Favicon + site name + breadcrumb URL (top row)
+- Blue title link
+- Description (2 lines max)
+- *That's it.* No content-type pills.
+
+Real rich-result enhancements (limited to 3 content types):
+- Recipe: yellow stars + rating + review count + cook time + calories
+- Review: yellow stars + rating + review count
+- FAQ (gov/health-restricted since 2023): expandable Q&A rows
+
+Changes:
+- **Dropped how_to badge** — Google deprecated the rich result Sept 2023.
+- **Dropped listicle badge** — never a real Google badge; listicles render as standard Article.
+- **Dropped comparison/buying_guide badge** — never a real Google badge.
+- **Dropped news/live_blog/press_release "Top stories" pill** — Top Stories is a separate carousel block at the top of news SERPs, not a pill under individual results.
+- **Cleaned Recipe badge format** — same fields, but spaced/styled to match Google's actual rendering: `★★★★★ 4.8 (120) · 30 min · 320 cal` with proper color hierarchy (rating value in #202124, count + meta in #5f6368).
+- **Cleaned Review badge format** — dropped the misleading "Rating: 4.7/5 · Reviewed by author" string. Real Google shows just `★★★★★ 4.7 (128)` with no labels.
+- **Kept FAQ visualization** — accurate for the rare gov/health rich-result case it actually fires.
+
+Both desktop and mobile views share this code path (the device toggle just resizes the card and tightens truncation), so a single fix covers both surfaces.
+
+### Fix 2 — Citation URL tracking-param sanitization ([Schema_Generator.php::extract_outbound_urls](seobetter/includes/Schema_Generator.php#L896))
+
+Added `Schema_Generator::strip_tracking_params( string $url ): string` static helper, called from `extract_outbound_urls()` before each URL is added to the citation list.
+
+Strips the standard list of ad/analytics tracking parameters used by major platforms:
+
+| Platform | Params stripped |
+|---|---|
+| Google | `srsltid`, `gclid`, `gclsrc`, `gbraid`, `wbraid`, `dclid` |
+| Google Analytics | `_ga`, `_gid` |
+| Meta | `fbclid`, `igshid` |
+| Microsoft Ads | `msclkid` |
+| Yandex | `yclid` |
+| Mailchimp | `mc_cid`, `mc_eid` |
+| HubSpot | `_hsenc`, `_hsmi`, `__hssc`, `__hstc`, `__hsfp` |
+| Vero | `vero_id`, `vero_conv` |
+| Drip | `drip_uid` |
+| Klaviyo | `_kx` |
+| Pardot | `pk_campaign`, `pk_kwd`, `pk_source`, `pk_medium` |
+| Universal | any param starting with `utm_` (utm_source, utm_medium, utm_campaign, utm_term, utm_content, utm_id, etc.) |
+
+Conservative on `ref` and `source` — those are NOT stripped because many sites use them as legitimate query params (internal click attribution, content sourcing). The cost of false-positive stripping (corrupted destination URL) outweighs the benefit. Can revisit if a real-world false-positive comes up.
+
+If stripping leaves the query string empty, the trailing `?` is removed too — clean URL out: `https://example.com/page` not `https://example.com/page?`.
+
+The user's reported example URL becomes:
+```
+Before: https://primalpetfoods.com/pages/canine-transitioning?srsltid=AfmBOorjzuW5FyWlpI7ZuCM_ngS6ySsNTsmLQwLOUK4Mkhkp_dTfR5ao
+After:  https://primalpetfoods.com/pages/canine-transitioning
+```
+
+Affects ALL citation[] entries across all 21 content types — universal helper, no per-type branching.
+
+### Verify
+
+```bash
+sed -n '5468,5520p' /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+grep -n "strip_tracking_params" /Users/ben/Documents/autoresearch/seobetter/includes/Schema_Generator.php
+```
+
+Existing articles need to be re-saved (or regenerated) for the new citation-URL clean-up to take effect — the URLs are cached in `_seobetter_schema` post meta from the last save. New articles get the clean URLs automatically.
+
+**Verified by user:** UNTESTED
 
 ---
 

@@ -924,6 +924,16 @@ class Schema_Generator {
         $out = [];
         foreach ( $urls as $u ) {
             $u = trim( $u, " \t\n\r\0\x0B\"'" );
+            // v1.5.216.62.30 — strip tracking parameters before the URL
+            // ends up in citation[] schema. Pre-fix, citations could land
+            // in @graph as e.g. https://primalpetfoods.com/...?srsltid=AfmB
+            // OorjzuW... — that srsltid token is a Google Shopping click-
+            // attribution param, not part of the canonical source URL.
+            // Citation graphs that LLMs (Perplexity / ChatGPT / Claude)
+            // parse should point at canonical sources, not Google-tracked
+            // variants — otherwise the same source dedupes poorly across
+            // articles and weakens the citation signal.
+            $u = self::strip_tracking_params( $u );
             $host = wp_parse_url( $u, PHP_URL_HOST );
             if ( ! $host || $host === $site_host ) continue;
             $key = $normalize( $u );
@@ -934,6 +944,97 @@ class Schema_Generator {
             if ( count( $out ) >= 20 ) break;
         }
         return $out;
+    }
+
+    /**
+     * v1.5.216.62.30 — Strip ad/analytics tracking parameters from a URL
+     * so citation[] in @graph points at canonical sources.
+     *
+     * Removes the standard list of tracking query parameters used by ad
+     * platforms, analytics tools, and email marketing services. Preserves
+     * everything else in the query string (including legitimate product
+     * IDs, page numbers, search params).
+     *
+     * Sources for the parameter list:
+     *   - Google: srsltid, gclid, gclsrc, gbraid, wbraid, dclid, _ga
+     *   - Meta:   fbclid, igshid
+     *   - Microsoft: msclkid
+     *   - Yandex: yclid
+     *   - Mailchimp: mc_cid, mc_eid
+     *   - HubSpot: _hsenc, _hsmi
+     *   - Vero: vero_id, vero_conv
+     *   - Universal: utm_source, utm_medium, utm_campaign, utm_term, utm_content
+     *
+     * If stripping leaves an empty query string, the `?` is removed too —
+     * the URL ends up clean (`https://example.com/page` not `…/page?`).
+     *
+     * @param string $url Input URL (may or may not have tracking params).
+     * @return string URL with tracking params removed.
+     */
+    public static function strip_tracking_params( string $url ): string {
+        $parts = wp_parse_url( $url );
+        if ( empty( $parts['query'] ) ) return $url;
+
+        parse_str( $parts['query'], $params );
+        if ( empty( $params ) || ! is_array( $params ) ) return $url;
+
+        $strip_keys = [
+            // Google
+            'srsltid', 'gclid', 'gclsrc', 'gbraid', 'wbraid', 'dclid',
+            // Meta
+            'fbclid', 'igshid',
+            // Microsoft Ads
+            'msclkid',
+            // Yandex
+            'yclid',
+            // Mailchimp
+            'mc_cid', 'mc_eid',
+            // HubSpot
+            '_hsenc', '_hsmi', '__hssc', '__hstc', '__hsfp',
+            // Vero
+            'vero_id', 'vero_conv',
+            // Drip
+            'drip_uid',
+            // Klaviyo
+            '_kx',
+            // Pardot
+            'pk_campaign', 'pk_kwd', 'pk_source', 'pk_medium',
+            // Google Analytics cross-domain
+            '_ga', '_gid',
+        ];
+        // NOTE: 'ref' and 'source' are deliberately NOT in the strip list —
+        // many sites use them as legitimate query params (e.g. ?ref=footer
+        // for internal click attribution that isn't ad-tracking, or ?source=
+        // for content sourcing). The cost of false-positive stripping
+        // (corrupted destination URL) outweighs the benefit. We can revisit
+        // if a specific false-positive case comes up.
+
+        // Conservative — drop only the well-known tracking keys, preserve everything else.
+        // Also drop any key starting with 'utm_' (utm_source / utm_medium / utm_campaign / utm_term / utm_content / etc.).
+        foreach ( array_keys( $params ) as $key ) {
+            $lc = strtolower( (string) $key );
+            if ( in_array( $lc, $strip_keys, true ) ) {
+                unset( $params[ $key ] );
+                continue;
+            }
+            if ( strpos( $lc, 'utm_' ) === 0 ) {
+                unset( $params[ $key ] );
+            }
+        }
+
+        // Rebuild URL with cleaned query string (or no query string at all if empty)
+        $scheme = $parts['scheme'] ?? 'https';
+        $host   = $parts['host'] ?? '';
+        $port   = isset( $parts['port'] ) ? ':' . $parts['port'] : '';
+        $user   = $parts['user'] ?? '';
+        $pass   = isset( $parts['pass'] ) ? ':' . $parts['pass'] : '';
+        $auth   = $user || $pass ? $user . $pass . '@' : '';
+        $path   = $parts['path'] ?? '';
+        $query  = ! empty( $params ) ? '?' . http_build_query( $params ) : '';
+        $frag   = isset( $parts['fragment'] ) ? '#' . $parts['fragment'] : '';
+
+        if ( ! $host ) return $url; // malformed — return as-is rather than corrupt
+        return $scheme . '://' . $auth . $host . $port . $path . $query . $frag;
     }
 
     /**

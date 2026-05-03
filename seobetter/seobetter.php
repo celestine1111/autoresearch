@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.29
+ * Version: 1.5.216.62.30
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.29' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.30' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -5466,30 +5466,61 @@ final class SEOBetter {
                         <div id="sb-serp-title" style="font-size:20px;line-height:1.3;color:#1a0dab;font-weight:400;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer"><?php echo esc_html( $meta_title ); ?></div>
                         <div id="sb-serp-desc" style="font-size:14px;color:#4d5156;line-height:1.58;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"><?php echo esc_html( $meta_desc ); ?></div>
                         <?php
-                        // Content-type rich-result hints. These mock the likely Google enhancement
-                        // for the article's @type based on _seobetter_content_type. They're visual
-                        // approximations — actual rich results depend on the schema validating.
+                        // v1.5.216.62.30 — SERP preview rich-result badge cleanup.
+                        //
+                        // Pre-fix the preview decorated content types with badges that
+                        // DON'T appear in real Google SERPs:
+                        //   - how_to: "📋 Step-by-step guide · ~15 min" — Google
+                        //     deprecated the HowTo rich result Sept 2023. No badge
+                        //     appears for how-to articles anymore.
+                        //   - listicle: "📋 List article · 10 items" — never a real
+                        //     Google badge. Listicles render as standard Article.
+                        //   - comparison / buying_guide: "⚖ Comparison · Side-by-side"
+                        //     — never a real Google badge.
+                        //   - news / live_blog / press_release: "Top stories · DATE"
+                        //     pill — Top Stories is a SEPARATE carousel block at the
+                        //     top of news SERPs, not a pill under individual results.
+                        //
+                        // What Google ACTUALLY shows for article-style sites:
+                        //   1. Favicon + site name + breadcrumb URL (top row)
+                        //   2. Blue title link
+                        //   3. Description (2 lines max)
+                        //   For Recipe ONLY: stars + rating + review count + time + calories
+                        //   For Review ONLY: stars + rating + review count
+                        //   For FAQ (restricted to gov/health since 2023): expandable Q&A rows
+                        //   Everything else: nothing extra above/below.
+                        //
+                        // Format aligned to Google's actual SERP:
+                        //   - Recipe / Review: drop "Rating: X/Y" label and "Reviewed
+                        //     by author" string — real Google shows just stars + value
+                        //     + review count, no extra labels.
+                        //   - FAQ visualization preserved (accurate for the rare
+                        //     gov/health case it actually fires).
+                        //
+                        // Both desktop and mobile views share this code path — the
+                        // device toggle just resizes the card and tightens truncation.
                         $rich_badge = '';
                         $ct = strtolower( $content_type_saved );
                         if ( in_array( $ct, [ 'recipe' ], true ) ) {
-                            $rich_badge = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:#202124"><span style="color:#fbbc04;letter-spacing:-1px">★★★★★</span><span style="color:#4d5156">4.8 (120) · 30 min · ~320 cal</span></div>';
+                            // Real Google Recipe rich result: stars + rating value + review count + time + calories
+                            $rich_badge = '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;color:#202124;flex-wrap:wrap"><span style="color:#fbbc04;letter-spacing:-1px;font-size:14px">★★★★★</span><span style="color:#202124;font-weight:500">4.8</span><span style="color:#5f6368">(120)</span><span style="color:#5f6368">·</span><span style="color:#5f6368">30 min</span><span style="color:#5f6368">·</span><span style="color:#5f6368">320 cal</span></div>';
                         } elseif ( in_array( $ct, [ 'review', 'product_review' ], true ) ) {
-                            $rich_badge = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:#202124"><span style="color:#fbbc04;letter-spacing:-1px">★★★★★</span><span style="color:#4d5156">Rating: 4.7/5 · Reviewed by author</span></div>';
-                        } elseif ( in_array( $ct, [ 'how_to', 'howto', 'how-to' ], true ) ) {
-                            $rich_badge = '<div style="margin-top:8px;font-size:13px;color:#4d5156">📋 Step-by-step guide · ~15 min</div>';
+                            // Real Google Review snippet: stars + rating value + review count. No "Rating: X/Y" label, no "Reviewed by author".
+                            $rich_badge = '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;color:#202124;flex-wrap:wrap"><span style="color:#fbbc04;letter-spacing:-1px;font-size:14px">★★★★★</span><span style="color:#202124;font-weight:500">4.7</span><span style="color:#5f6368">(128)</span></div>';
                         } elseif ( in_array( $ct, [ 'faq' ], true ) ) {
                             $kw_safe = $keyword ? esc_html( $keyword ) : 'this';
                             $rich_badge  = '<div style="margin-top:10px;font-size:13px">';
                             $rich_badge .= '<div style="border-top:1px solid #ececec;padding:8px 0;color:#202124;display:flex;justify-content:space-between"><span>What is ' . $kw_safe . '?</span><span style="color:#5f6368">▾</span></div>';
                             $rich_badge .= '<div style="border-top:1px solid #ececec;padding:8px 0;color:#202124;display:flex;justify-content:space-between"><span>How does it work?</span><span style="color:#5f6368">▾</span></div>';
                             $rich_badge .= '</div>';
-                        } elseif ( in_array( $ct, [ 'news', 'live_blog', 'press_release' ], true ) ) {
-                            $rich_badge = '<div style="margin-top:8px;font-size:12px;color:#70757a">Top stories · ' . esc_html( $post_date ) . '</div>';
-                        } elseif ( in_array( $ct, [ 'listicle' ], true ) ) {
-                            $rich_badge = '<div style="margin-top:8px;font-size:12px;color:#70757a">📋 List article · 10 items</div>';
-                        } elseif ( in_array( $ct, [ 'comparison', 'buying_guide' ], true ) ) {
-                            $rich_badge = '<div style="margin-top:8px;font-size:12px;color:#70757a">⚖ Comparison · Side-by-side</div>';
                         }
+                        // No badge for: blog_post, how_to, listicle, comparison,
+                        // buying_guide, news_article, opinion, press_release,
+                        // live_blog, tech_article, white_paper, scholarly_article,
+                        // glossary_definition, sponsored, case_study, interview,
+                        // pillar_guide, personal_essay. Real Google SERPs show only
+                        // favicon + site + URL + title + description for these — no
+                        // extra pill, badge, or carousel hint.
                         if ( $rich_badge ) {
                             echo $rich_badge; // already-escaped content
                         }
