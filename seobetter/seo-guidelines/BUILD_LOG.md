@@ -19,7 +19,7 @@
 ## v1.5.216.62.9 — Fix nested-form bug breaking ALL General Settings saves ("link expired" on every save)
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `fcaa6a9`
 
 ### Bug
 
