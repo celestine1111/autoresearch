@@ -19,7 +19,7 @@
 ## v1.5.216.62.33 — In-block "Save post" button (skip the scroll-to-top)
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `219f665`
 
 ### Why
 
