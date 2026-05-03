@@ -7,12 +7,46 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.4)
+> **Last updated:** 2026-05-03 (v1.5.216.62.5)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.5 — Promote Google Places to RECOMMENDED in Settings UI + clarify small-town gap
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+End-to-end Lucignano test confirmed the small-town hypothesis: with Google Places key NOT configured, the article generator hallucinated places. Adding the key flipped Tier 5 of the waterfall on, and the result page now shows real Lucignano restaurants (verified by user against external sources). The previous Settings UI labeled Google Places as "PAID" (yellow warning badge) and treated it as a fully optional add-on. That framing under-sells how essential it is for any keyword targeting a town under ~50K population. Foursquare and HERE genuinely don't have coverage there. Sonar (Tier 0) is good for big cities but unreliable in tiny towns where web sources are thin enough that the LLM hallucinates.
+
+### Files
+
+- **Settings UI badge** — `admin/views/settings.php:977` — changed from yellow `seobetter-score-poor` "PAID" → green `seobetter-score-ok` "⭐ RECOMMENDED"
+- **Settings UI description** — `admin/views/settings.php:983` — rewrote to lead with "strongly recommended for any local-business article", call out the Lucignano-class small-town gap explicitly by example, and reassure about cost up front (free $200/mo credit covers ~5K articles/month)
+- **Settings card intro** — `admin/views/settings.php:841` — added the ⭐ recommendation directly into the intro paragraph and clarified that small-town coverage is poor without Google Places
+
+### Co-doc updates
+
+- **plugin_UX.md §8C** — updated field descriptions + required-elements checklist to match the new badge color + description framing. Notes the ⭐ RECOMMENDED green badge replaces the old PAID yellow badge.
+
+### Verify
+
+```bash
+grep -nE "RECOMMENDED|small-town|Lucignano" seobetter/admin/views/settings.php
+grep -nE "RECOMMENDED|Lucignano" seobetter/seo-guidelines/plugin_UX.md
+```
+
+Both should return matches in the rewritten Places card sections.
+
+### Verified by user
+
+✓ Verified 2026-05-03 — Lucignano test article (`https://srv1608940.hstgr.cloud/i-migliori-ristoranti-a-lucignano-nel-2026-la-guida-aggiornata/`) returned real verified businesses after Google Places key was added. UI copy update lands in the same commit so future users get the strong recommendation up front.
 
 ---
 

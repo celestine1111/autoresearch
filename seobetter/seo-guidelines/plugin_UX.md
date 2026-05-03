@@ -719,21 +719,21 @@ AIOSEO-style settings panel that appears below the post content area on Post and
 
 **Location:** [admin/views/settings.php](../admin/views/settings.php) — new card added after the main Settings card.
 
-**Purpose:** Three optional API key fields for the v1.5.24 Places waterfall (Foursquare, HERE, Google Places) that ground local-intent articles in real business data instead of letting the LLM invent businesses.
+**Purpose:** API key fields for the v1.5.24 Places waterfall (Foursquare, HERE, Google Places) that ground local-intent articles in real business data instead of letting the LLM invent businesses.
 
-**Fields (all optional, stored in `seobetter_settings` option):**
-- `foursquare_api_key` — free 1K calls/day, no payment method required
-- `here_api_key` — free 1K transactions/day, no payment method required
-- `google_places_api_key` — paid but generous $200/month free credit (≈5,000 articles), requires Google Cloud billing account
+**Fields (stored in `seobetter_settings` option):**
+- `foursquare_api_key` — free 1K calls/day, no payment method required (FREE badge)
+- `here_api_key` — free 1K transactions/day, no payment method required (FREE badge)
+- `google_places_api_key` — **⭐ RECOMMENDED for production use** (badge changed from PAID yellow → RECOMMENDED green in v1.5.216.62.5). Without this key, articles about towns under ~50K population frequently fail because Foursquare/HERE/OSM have sparse small-town coverage. Google's $200/month free credit covers ~5,000 articles/month — effectively zero cost at typical SaaS volume. Requires Google Cloud billing account (card on file).
 
 **Required elements on the Places Integrations card:**
 - [ ] Heading: "Places Integrations (Local Business Data)"
-- [ ] Description paragraph explaining waterfall + coverage percentages
-- [ ] Info callout: "All keys are OPTIONAL. Plugin works out of the box with free OSM + Wikidata"
+- [ ] Description paragraph explaining waterfall + coverage percentages, with explicit ⭐ recommendation for Google Places, especially for small-town keywords (Lucignano-class)
+- [ ] Info callout: "Foursquare + HERE keys are optional. Plugin works out of the box with free OSM + Wikidata, but small-town coverage is poor without Google Places."
 - [ ] Row for OSM + Wikidata with "ALWAYS ON" badge and description
-- [ ] Row for Foursquare with password input + "Get Free Key" button linking to developer.foursquare.com
-- [ ] Row for HERE with password input + "Get Free Key" button linking to developer.here.com
-- [ ] Row for Google Places with password input + "Get Key" button linking to console.cloud.google.com (note: PAID badge)
+- [ ] Row for Foursquare with password input + "Get Free Key" button linking to developer.foursquare.com (FREE badge)
+- [ ] Row for HERE with password input + "Get Free Key" button linking to developer.here.com (FREE badge)
+- [ ] Row for Google Places with password input + "Get Key" button linking to console.cloud.google.com (⭐ RECOMMENDED badge — green, NOT the previous PAID yellow). Description must explicitly call out the small-town gap and reassure about cost
 - [ ] Save button with form nonce `seobetter_places_nonce`
 - [ ] "How the waterfall works" green info box at the bottom explaining the fallback order and the hard-refuse behavior
 

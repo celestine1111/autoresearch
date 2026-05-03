@@ -838,7 +838,7 @@ $sb_active_tier = SEOBetter\License_Manager::get_active_tier();
     <div class="seobetter-card" style="margin-bottom:20px">
         <h2><?php esc_html_e( 'Places Integrations (Local Business Data)', 'seobetter' ); ?></h2>
         <p class="description" style="margin-bottom:16px">
-            <?php esc_html_e( 'Configure optional Places API keys to get real local business data for listicles, buying guides, and reviews. Without any keys, SEOBetter uses free OpenStreetMap + Wikidata (covers ~40% of small cities globally). Adding free Foursquare + HERE keys raises coverage to ~85%. Adding Google Places raises it to ~99%.', 'seobetter' ); ?>
+            <?php esc_html_e( 'Configure Places API keys to get real local business data for listicles, buying guides, and reviews. ⭐ Google Places is strongly recommended — without it, articles about smaller towns (under ~50,000 population) will frequently hallucinate businesses or fail with "places insufficient" warnings. Coverage by setup: free OpenStreetMap + Wikidata only ~40% (large cities work, small towns fail). Adding free Foursquare + HERE keys raises coverage to ~85%. Adding Google Places raises it to ~99% globally including remote villages.', 'seobetter' ); ?>
         </p>
         <p class="description" style="padding:8px 12px;background:#eef2ff;border-radius:4px;color:#3730a3;margin-bottom:16px">
             <span class="dashicons dashicons-info-outline"></span>
@@ -974,13 +974,13 @@ $sb_active_tier = SEOBetter\License_Manager::get_active_tier();
                 <!-- Google Places -->
                 <tr>
                     <th><?php esc_html_e( 'Google Places API Key', 'seobetter' ); ?>
-                        <span class="seobetter-score seobetter-score-poor" style="font-size:10px;margin-left:6px;background:#fef3c7;color:#92400e"><?php esc_html_e( 'PAID', 'seobetter' ); ?></span>
+                        <span class="seobetter-score seobetter-score-ok" style="font-size:10px;margin-left:6px;background:#dcfce7;color:#166534"><?php esc_html_e( '⭐ RECOMMENDED', 'seobetter' ); ?></span>
                     </th>
                     <td>
                         <input type="password" name="google_places_api_key" value="<?php echo esc_attr( $settings['google_places_api_key'] ?? '' ); ?>" class="regular-text" placeholder="AIza..." autocomplete="off" />
                         <a href="https://console.cloud.google.com/apis/library/places-backend.googleapis.com" target="_blank" rel="noopener" class="button button-small" style="margin-left:8px"><?php esc_html_e( 'Get Key', 'seobetter' ); ?></a>
                         <p class="description">
-                            <?php esc_html_e( 'Paid via Google Cloud, but generous $200/month free credit = approximately 5,000 articles/month free. Best global coverage including remote villages in rural Asia, Africa, and Latin America that other providers miss. 10-minute setup at console.cloud.google.com → create a project → enable "Places API (New)" → generate API key → paste it here. Requires a Google Cloud billing account, but you will NOT be charged unless you exceed ~5,000 articles per month.', 'seobetter' ); ?>
+                            <?php esc_html_e( 'Strongly recommended for any local-business article. Without this key, articles about towns under ~50,000 population (e.g. "best restaurants in Lucignano 2026") will often miss real businesses because Foursquare / HERE / OpenStreetMap have sparse small-town coverage. Google Places fills that gap with comprehensive global business data including remote villages. Costs are essentially zero in practice: Google\'s $200/month free credit covers ~5,000 articles/month, and you will not be charged unless you exceed that. 10-minute setup at console.cloud.google.com → create a project → enable "Places API (New)" → Credentials → Create API key → paste here. Requires a Google Cloud billing account (card on file), but the free credit kicks in automatically.', 'seobetter' ); ?>
                         </p>
                     </td>
                 </tr>
