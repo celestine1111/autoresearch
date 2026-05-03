@@ -7,12 +7,40 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.7)
+> **Last updated:** 2026-05-03 (v1.5.216.62.8)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.8 — Auto-pipeline quote injection diagnostic banner
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+v1.5.216.62.7 wired inject_quotes into the auto-pipeline but user re-ran the test article and still got Expert Quotes 0/100. inject_quotes silently returned `success:false` for some reason — could be (a) Tavily key not configured, (b) no substantive sentences extracted from authority domains for this keyword, (c) H2 regex didn't match insertable spots, (d) content_type put it in `$quote_exempt`. All four failure paths looked identical to the user (zero quotes in article, no error visible).
+
+### Fix
+
+`includes/Async_Generator.php:2487` — captures the inject_quotes result + diagnostic context (sonar_quote_count, tavily_key_set, content_type, reason) into `$job['results']['quote_inject_status']`. Surfaces in the assemble_final return as `auto_pipeline.quote_injection`. Also error_logs to PHP error log so admins with WP_DEBUG can grep `SEOBetter inject_quotes` to see all generation attempts and reasons.
+
+`admin/views/content-generator.php:1486` — renderResult() now displays a banner above the content preview showing the quote injection status. Green "✅ Expert Quotes: 2 added" on success, amber "⚠️ Expert Quotes: skipped — <reason>" on failure with a 4-line diagnostic panel showing Tavily key state + Sonar quote pool size + content type. Mirrors the existing Places_Validator banner pattern.
+
+### Verify
+
+```bash
+grep -nA20 "auto_pipeline diagnostic banner" seobetter/admin/views/content-generator.php
+grep -nA10 "quote_inject_status" seobetter/includes/Async_Generator.php
+```
+
+**Test by user:** generate any article, look at the result panel. If Expert Quotes 0/100, the new banner shows exactly which of the 4 failure paths fired. If user has WP_DEBUG enabled, `tail -f wp-content/debug.log | grep SEOBetter` shows all inject_quotes attempts.
+
+**Verified by user:** UNTESTED
 
 ---
 

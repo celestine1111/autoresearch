@@ -2487,10 +2487,44 @@ class Async_Generator {
             $sonar_data = $job['results']['sonar_data'] ?? null;
             $qd_domain  = (string) ( $options['domain']  ?? '' );
             $qd_country = (string) ( $options['country'] ?? '' );
+
+            $sonar_quote_count = is_array( $sonar_data['quotes'] ?? null ) ? count( $sonar_data['quotes'] ) : 0;
+            $tavily_key_set    = (bool) get_option( 'seobetter_tavily_api_key', '' );
             $quote_result = Content_Injector::inject_quotes( $markdown, $keyword, $sonar_data, $qd_domain, $qd_country );
-            if ( ! empty( $quote_result['success'] ) && ! empty( $quote_result['content'] ) ) {
+
+            // v1.5.216.62.8 — capture the inject_quotes status so the result
+            // panel can surface WHY quotes are missing when GEO Expert Quotes
+            // shows 0/100. Three failure paths exist and previously all looked
+            // identical to the user (zero quotes in article, no error visible).
+            $quote_inject_status = [
+                'attempted'         => true,
+                'success'           => ! empty( $quote_result['success'] ),
+                'added'             => $quote_result['added'] ?? '',
+                'reason'            => $quote_result['error'] ?? '',
+                'sonar_quote_count' => $sonar_quote_count,
+                'tavily_key_set'    => $tavily_key_set,
+                'content_type'      => $content_type,
+            ];
+            $job['results']['quote_inject_status'] = $quote_inject_status;
+            error_log( sprintf(
+                'SEOBetter inject_quotes [%s] keyword="%s" success=%s sonar_quotes=%d tavily_key=%s reason=%s',
+                $content_type,
+                $keyword,
+                $quote_inject_status['success'] ? 'YES' : 'NO',
+                $sonar_quote_count,
+                $tavily_key_set ? 'set' : 'MISSING',
+                $quote_inject_status['reason'] ?: '(none)'
+            ) );
+
+            if ( $quote_inject_status['success'] && ! empty( $quote_result['content'] ) ) {
                 $markdown = $quote_result['content'];
             }
+        } else {
+            $job['results']['quote_inject_status'] = [
+                'attempted'    => false,
+                'reason'       => 'content_type ' . $content_type . ' is in $quote_exempt — quote pipeline skipped intentionally',
+                'content_type' => $content_type,
+            ];
         }
 
         // v1.5.206d-fix9 — Defensive Last Updated sanitizer. Even with fix6's
@@ -2766,6 +2800,13 @@ class Async_Generator {
             // v1.5.27 — also surface places_insufficient + is_local_intent so
             // the UI can show an orange "written as informational instead of
             // listicle" banner with a link to Settings → Integrations.
+            // v1.5.216.62.8 — diagnostic for the auto-pipeline so users can see
+            // WHY a step was skipped (e.g. Expert Quotes 0/100 → "Tavily key
+            // missing" vs "no verifiable quotes for keyword" vs "content_type
+            // exempt"). Replaces the previous silent skip behavior.
+            'auto_pipeline'    => [
+                'quote_injection' => $job['results']['quote_inject_status'] ?? null,
+            ],
             'places_validator' => [
                 'pool_size'             => count( $places_pool ),
                 'warnings'              => $places_warnings,

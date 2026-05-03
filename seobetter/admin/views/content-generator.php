@@ -1483,6 +1483,37 @@ document.getElementById('sb-gen-social').addEventListener('click', function() {
             h += '</div>';
         }
 
+        // v1.5.216.62.8 — Auto-pipeline diagnostic banner.
+        // Mirrors the Places_Validator banner pattern. Surfaces WHY a step
+        // skipped instead of silently producing 0/100. Currently only quote
+        // injection is wired through; future inject_* steps (table, stats)
+        // can append more diagnostic chips into the same banner.
+        if (res.auto_pipeline && res.auto_pipeline.quote_injection) {
+            var qi = res.auto_pipeline.quote_injection;
+            if (qi.attempted) {
+                var qi_bg = qi.success ? '#f0fdf4' : '#fffbeb';
+                var qi_border = qi.success ? '#22c55e' : '#f59e0b';
+                var qi_icon = qi.success ? '✅' : '⚠️';
+                var qi_title = qi.success
+                    ? 'Expert Quotes: ' + (qi.added || 'injected')
+                    : 'Expert Quotes: skipped — see reason below';
+                h += '<div style="padding:14px 18px;background:'+qi_bg+';border-left:4px solid '+qi_border+';border-radius:0 8px 8px 0;margin-bottom:16px;font-size:13px">';
+                h += '<div style="font-weight:700;margin-bottom:6px">'+qi_icon+' '+qi_title+'</div>';
+                if (!qi.success) {
+                    h += '<div style="color:#374151;line-height:1.6">';
+                    h += '<strong>Reason:</strong> '+(qi.reason || 'unknown')+'<br>';
+                    h += '<strong>Tavily key:</strong> '+(qi.tavily_key_set ? '✅ configured' : '❌ NOT configured — Settings → AI Providers → Tavily Search API Key')+'<br>';
+                    h += '<strong>Sonar quotes available:</strong> '+(qi.sonar_quote_count || 0)+'<br>';
+                    h += '<strong>Content type:</strong> '+(qi.content_type || '?');
+                    h += '</div>';
+                }
+                h += '</div>';
+            } else if (qi.reason) {
+                // content_type was in $quote_exempt — informational only
+                h += '<div style="padding:10px 14px;background:#f3f4f6;border-radius:6px;margin-bottom:16px;font-size:12px;color:#6b7280">ℹ️ Expert Quotes: skipped intentionally for this content type ('+qi.content_type+').</div>';
+            }
+        }
+
         // Content preview with style block
         var content = res.content || '';
         var styleMatch = content.match(/<style>[\s\S]*?<\/style>/);
