@@ -19,7 +19,7 @@
 ## v1.5.216.62.27 — Headline Analyzer expanded lexicons + actionable per-row tips
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `ec5ce68`
 
 ### Why
 
