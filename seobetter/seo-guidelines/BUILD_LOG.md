@@ -19,7 +19,7 @@
 ## v1.5.216.62.30 — SERP preview cleanup + citation URL tracking-param stripping
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `7bff671`
 
 ### Why
 
