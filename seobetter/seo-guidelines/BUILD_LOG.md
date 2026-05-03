@@ -19,7 +19,7 @@
 ## v1.5.216.62.15 — Linkify universality fix: square-bracket pass + nested-parens walker + short-acronym minimum length
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `8719e58`
 
 ### Why
 
