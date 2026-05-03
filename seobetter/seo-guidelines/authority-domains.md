@@ -4,7 +4,7 @@
 > Only non-commercial, informational sources. No private brands.
 > Used by `Content_Injector::get_authority_domains($domain, $country)`
 >
-> **Last updated:** 2026-04-18 (v1.5.108)
+> **Last updated:** 2026-05-03 (v1.5.216.62.12)
 >
 > **User sites (GLOBAL - all countries):**
 > - `mindiampets.com.au` - in animals + veterinary (all countries)
@@ -177,6 +177,101 @@ Any article type + any category combination works. A "Review" of "grain free cat
 
 ---
 
+## v1.5.216.62.12 Expansion (2026-05-03) — Animals/Vet, Health, Food, 6 NEW countries
+
+### Why this expansion
+
+User audit on 2026-05-03 found that an English How-To article about dog raw food got its expert quote from `mindiampets.com.au` (the user's own domain) rather than a stronger authority like AVMA, RSPCA, or a peer-reviewed vet journal. Root cause: the existing global Animals list had 8 entries with mindiampets.com.au alongside genuine authorities, and Tavily ranked the user's site high because it had substantive content matching the keyword. Fix: add ~10 more global animal/vet authorities so the AI has more high-quality non-commercial source options before the user's own domain matches.
+
+### Global expansions (in code)
+
+**Animals (added):**
+- `wsava.org` — World Small Animal Veterinary Association — global vet guidelines
+- `fediaf.org` — European Pet Food Industry federation — peer-reviewed nutritional guidelines
+- `frontiersin.org` — Frontiers in Veterinary Science — major open-access peer-reviewed vet journal
+- `vetrecord.bmj.com` — Vet Record — flagship peer-reviewed journal of the BVA
+- `avmajournals.avma.org` — AVMA peer-reviewed journals (JAVMA, AJVR)
+- `wva-online.org` — World Veterinary Association
+- `icatcare.org` — International Cat Care / ISFM — feline welfare/medicine
+- `fecava.org` — Federation of European Companion Animal Vet Associations
+
+**Veterinary (added):** WSAVA, FEDIAF, Frontiers, Vet Record, AVMA Journals, BMC Vet Res (`bmcvetres.biomedcentral.com`), WVA, FECAVA.
+
+**Health (added):**
+- `nejm.org` — New England Journal of Medicine
+- `jamanetwork.com` — JAMA + Specialty journals
+- `cochranelibrary.com` — Cochrane systematic reviews — gold standard for EBM
+- `europepmc.org` — Europe PMC — open-access biomedical literature mirror
+- `ecdc.europa.eu` — European Centre for Disease Prevention and Control
+- `medrxiv.org` — pre-print server for health sciences
+
+**Food (added):**
+- `efsa.europa.eu` — European Food Safety Authority
+- `codexalimentarius.org` — joint FAO/WHO food standards programme
+- `jandonline.org` — Journal of the Academy of Nutrition and Dietetics
+- `ift.org` — Institute of Food Technologists
+
+### Country expansions (in code)
+
+**AU Animals:** added aaws.org.au, animalmedicinesaustralia.org.au, adelaide.edu.au, jcu.edu.au, murdoch.edu.au, csu.edu.au, wildlife.org.au.
+
+**US Animals:** added aphis.usda.gov, nal.usda.gov, aaha.org, aavmc.org, humanesociety.org, awionline.org, morrisanimalfoundation.org, vet.upenn.edu, vet.osu.edu, cvm.ncsu.edu, vetmed.tamu.edu, vetmed.wisc.edu, fws.gov.
+
+**GB Animals:** added defra.gov.uk, rcvs.org.uk, bsava.com, vmd.defra.gov.uk, pdsa.org.uk, bluecross.org.uk, dogstrust.org.uk, cats.org.uk, nottingham.ac.uk, liverpool.ac.uk, ed.ac.uk, bristol.ac.uk.
+
+**JP Animals (NEW):** maff.go.jp, env.go.jp, jvma-vet.jp, niah.naro.go.jp, vet.u-tokyo.ac.jp, vmas.jp.
+
+### NEW country blocks (6 countries)
+
+These countries previously had NO country-specific lists for animals/vet/health/news/finance. Tavily fell back to global only. Now they have native local authorities.
+
+**Italy (IT):**
+- Animals: salute.gov.it, izs.it, fnovi.it, anmvi.it, lav.it, enpa.it, isprambiente.gov.it
+- Health: salute.gov.it, iss.it, aifa.gov.it, humanitas.it, unibo.it
+- News: corriere.it, repubblica.it, lastampa.it, ansa.it, rai.it
+- Finance: bancaditalia.it, consob.it, mef.gov.it, agenziaentrate.gov.it, istat.it
+
+**Spain (ES):**
+- Animals: mapa.gob.es, miteco.gob.es, colvet.es, avepa.org, csic.es, ucm.es, uab.cat
+- Health: sanidad.gob.es, isciii.es, aemps.gob.es, csic.es
+- News: elpais.com, elmundo.es, lavanguardia.com, rtve.es, efe.com
+- Finance: bde.es, cnmv.es, hacienda.gob.es, ine.es
+
+**Brazil (BR):**
+- Animals: gov.br, ibama.gov.br, cfmv.gov.br, embrapa.br, fmvz.usp.br, fiocruz.br
+- Health: gov.br, fiocruz.br, usp.br, unifesp.br
+- News: folha.uol.com.br, oglobo.globo.com, valor.globo.com, estadao.com.br
+- Finance: bcb.gov.br, cvm.gov.br, ibge.gov.br
+
+**Mexico (MX):**
+- Animals: gob.mx, fmvz.unam.mx, inecc.gob.mx
+- Veterinary: gob.mx, fmvz.unam.mx, fmvz.uady.mx
+- Health: gob.mx, insp.mx, imss.gob.mx, unam.mx
+- News: eluniversal.com.mx, reforma.com, jornada.com.mx, milenio.com
+- Finance: banxico.org.mx, cnbv.gob.mx, inegi.org.mx
+
+**South Korea (KR):**
+- Animals: mafra.go.kr, qia.go.kr, kvma.or.kr, me.go.kr, vet.snu.ac.kr
+- Health: mohw.go.kr, kdca.go.kr, snu.ac.kr, yonsei.ac.kr
+- News: chosun.com, donga.com, joongang.co.kr, hani.co.kr, yna.co.kr
+- Finance: bok.or.kr, fsc.go.kr, fss.or.kr, kostat.go.kr
+
+**China (CN):**
+- Animals: moa.gov.cn, mee.gov.cn, caas.cn, cau.edu.cn, forestry.gov.cn
+- Health: nhc.gov.cn, chinacdc.cn, cma.org.cn, pumc.edu.cn
+- News: xinhuanet.com, chinadaily.com.cn, people.com.cn, caixinglobal.com, scmp.com
+- Finance: pbc.gov.cn, csrc.gov.cn, mof.gov.cn, stats.gov.cn
+
+### Verification status
+
+These additions were sourced from 6 parallel Explore agents (animals/vet, health/food, finance/business/crypto, tech/science, education/gov/news/books, travel + 8 long-tail) using canonical institutional knowledge. Some agents could not run live HTTP HEAD checks in their sandboxed environment, so edge-case domains (e.g. multi-segment paths like `gov.br/saude`) were normalized to the bare host (`gov.br`) which Tavily's `include_domains` accepts. Recommend monitoring per-keyword Tavily extraction for any consistently-failing domain over the next month and removing if dead.
+
+### Categories still missing country-specific lists (Phase B follow-up)
+
+Tech, Science, Education, Government, Books, Travel, Environment, Sports, Transportation, Weather, Entertainment, Music, Games, Art & Design — agents found country-level sources for these but coding to all 16 countries is staged for v1.5.216.62.13. The expansion file `seo-guidelines/authority-domains-expansion-pending.md` (TODO: create) will hold the agent outputs as raw markdown until they're integrated into `Content_Injector::get_authority_domains()`.
+
+---
+
 ## Editing These Lists
 
 1. Edit `includes/Content_Injector.php::get_authority_domains()` — the code
@@ -187,4 +282,4 @@ Any article type + any category combination works. A "Review" of "grain free cat
 
 Categories not listed for a specific country use the **global list only**. If the global list returns < 2 Tavily results, the search falls back to unrestricted (with the substantive language filter still active).
 
-Currently missing country-specific lists for: art_design, blockchain, books, cryptocurrency, currency, ecommerce, games, music, sports, transportation, travel, weather. These are either global by nature (cryptocurrency) or too niche for country-specific sources. Add country lists as needed.
+Currently missing country-specific lists for: art_design, blockchain, books, cryptocurrency, currency, ecommerce, games, music, sports, transportation, travel, weather. These are either global by nature (cryptocurrency) or too niche for country-specific sources. Add country lists as needed (the agent research from v1.5.216.62.12 has prepared most of these — staged for v1.5.216.62.13).

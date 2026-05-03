@@ -7,12 +7,72 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.11)
+> **Last updated:** 2026-05-03 (v1.5.216.62.12)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.12 — Authority-domains expansion (Animals/Vet/Health/Food + 6 NEW countries)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audit on 2026-05-03 found that the dog raw-food test article got its expert quote from `mindiampets.com.au` (the user's own site, in the global Animals authority list per v1.5.108) rather than a stronger external authority like AVMA or RSPCA. Root cause: only 8 global animal-authority domains existed alongside the user's, so Tavily ranked the user's substantive content above the others. Fix: add ~10 more global animal/vet authorities so the AI sees more high-quality non-commercial source options before the user's domain matches.
+
+### Strategy
+
+Spawned 6 parallel Explore agents covering Animals/Vet, Health/Food, Finance/Business/Crypto, Tech/Science, Education/Gov/News/Books, and Travel + 8 long-tail categories. Each agent researched ~10 countries. Total recommendations: ~600+ new non-commercial authority domains. This commit ships the highest-priority subset (the user's primary niche). Remaining categories staged for v1.5.216.62.13.
+
+### What shipped
+
+**Code changes** in [`Content_Injector::get_authority_domains()`](../includes/Content_Injector.php) lines ~1585-1900:
+
+1. **Global animals**: added wsava.org, fediaf.org, frontiersin.org, vetrecord.bmj.com, avmajournals.avma.org, wva-online.org, icatcare.org, fecava.org (8 new)
+2. **Global veterinary**: same 8 + bmcvetres.biomedcentral.com (9 new)
+3. **Global health**: nejm.org, jamanetwork.com, cochranelibrary.com, europepmc.org, ecdc.europa.eu, medrxiv.org (6 new)
+4. **Global food**: efsa.europa.eu, codexalimentarius.org, jandonline.org, ift.org (4 new)
+5. **AU animals/vet**: aaws.org.au, animalmedicinesaustralia.org.au, adelaide.edu.au, jcu.edu.au, murdoch.edu.au, csu.edu.au, wildlife.org.au
+6. **US animals**: aphis.usda.gov, nal.usda.gov, aaha.org, aavmc.org, humanesociety.org, awionline.org, morrisanimalfoundation.org, vet.upenn.edu, vet.osu.edu, cvm.ncsu.edu, vetmed.tamu.edu, vetmed.wisc.edu, fws.gov
+7. **GB animals/vet**: defra.gov.uk, rcvs.org.uk, bsava.com, vmd.defra.gov.uk, pdsa.org.uk, bluecross.org.uk, dogstrust.org.uk, cats.org.uk, nottingham.ac.uk, liverpool.ac.uk, ed.ac.uk, bristol.ac.uk
+8. **JP animals (NEW)**: maff.go.jp, env.go.jp, jvma-vet.jp, niah.naro.go.jp, vet.u-tokyo.ac.jp, vmas.jp
+9. **6 NEW country blocks**: IT, ES, BR, MX, KR, CN — animals + veterinary + health + news + finance per country (previously had no country-specific lists)
+
+**Doc changes** in [`authority-domains.md`](../seo-guidelines/authority-domains.md):
+- Updated last-updated date to v1.5.216.62.12
+- Added "v1.5.216.62.12 Expansion" section documenting all additions
+- Marked Phase B follow-up categories pending v1.5.216.62.13
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — broader authority pool benefits any animal/health/food/finance keyword |
+| ALL 21 content types? | ✅ Yes — authority domains feed Tavily extraction regardless of content type |
+| ALL AI models? | ✅ Yes — Tavily search is server-side, model-agnostic |
+
+### Verification note
+
+Agent research was sourced from canonical institutional knowledge (national vet associations, accredited vet schools, ministries, peer-reviewed journals). Live HTTP verification was not run for every domain. If a specific domain consistently fails Tavily extraction in production over the next month, remove it from this list and BUILD_LOG.
+
+### Verify
+
+```bash
+grep -nA 6 "wsava.org" seobetter/includes/Content_Injector.php | head -20
+grep -nA 6 "'IT' =>" seobetter/includes/Content_Injector.php
+grep -n "v1.5.216.62.12 Expansion" seobetter/seo-guidelines/authority-domains.md
+```
+
+**Test by user:** regenerate the dog raw-food article. The Tavily quote should NOW prefer one of the new authorities (AVMA, FEDIAF, Vet Record, AAHA, etc.) over `mindiampets.com.au`. If still ranks user's domain first, the keyword's content overlap is genuinely strongest there — strategic call to make.
+
+**Phase B follow-up (v1.5.216.62.13):** integrate remaining categories from agent research — Tech/Science, Education/Gov/News/Books, Travel/Env/Sports/Transport/Weather/Entertainment/Music/Games/Art Design — across 16 countries. ~400 more domains staged.
+
+**Verified by user:** UNTESTED
 
 ---
 

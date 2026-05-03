@@ -1582,14 +1582,24 @@ Return ONLY the Markdown table, nothing else.";
                 'reuters.com', 'apnews.com', 'bbc.com', 'wikipedia.org',
                 'ncbi.nlm.nih.gov', 'nature.com',
             ],
+            // v1.5.216.62.12 — expanded global animal/vet authorities so the AI
+            // has more high-quality non-commercial source options before the
+            // user's own mindiampets.com.au is matched. Adds WSAVA, FEDIAF,
+            // peer-reviewed vet journals (Vet Record, BMC Vet Res, Frontiers
+            // Vet Sci, AVMA Journals/JAVMA), and global welfare/professional
+            // bodies (ICatCare/ISFM, World Vet Association, FECAVA).
             'animals' => [
                 'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com', 'woah.org',
                 'petmd.com', 'thesprucepets.com', 'merckvetmanual.com',
+                'wsava.org', 'fediaf.org', 'frontiersin.org', 'vetrecord.bmj.com',
+                'avmajournals.avma.org', 'wva-online.org', 'icatcare.org', 'fecava.org',
                 'mindiampets.com.au',
             ],
             'veterinary' => [
                 'ncbi.nlm.nih.gov', 'nature.com', 'sciencedirect.com', 'woah.org',
                 'merckvetmanual.com', 'petmd.com',
+                'wsava.org', 'fediaf.org', 'frontiersin.org', 'vetrecord.bmj.com',
+                'avmajournals.avma.org', 'bmcvetres.biomedcentral.com', 'wva-online.org', 'fecava.org',
                 'mindiampets.com.au',
             ],
             'art_design' => [
@@ -1639,6 +1649,8 @@ Return ONLY the Markdown table, nothing else.";
             'food' => [
                 'who.int', 'ncbi.nlm.nih.gov', 'nature.com',
                 'fao.org', 'sciencedirect.com',
+                // v1.5.216.62.12 additions — global food safety + nutrition
+                'efsa.europa.eu', 'codexalimentarius.org', 'jandonline.org', 'ift.org',
             ],
             'games' => [
                 'gamedeveloper.com', 'gdcvault.com', 'eurogamer.net',
@@ -1650,6 +1662,9 @@ Return ONLY the Markdown table, nothing else.";
             ],
             'health' => [
                 'who.int', 'ncbi.nlm.nih.gov', 'nature.com', 'thelancet.com', 'bmj.com',
+                // v1.5.216.62.12 additions — top-tier peer-reviewed + meta-research
+                'nejm.org', 'jamanetwork.com', 'cochranelibrary.com',
+                'europepmc.org', 'ecdc.europa.eu', 'medrxiv.org',
             ],
             'music' => [
                 'pitchfork.com', 'rollingstone.com', 'bbc.com',
@@ -1689,14 +1704,22 @@ Return ONLY the Markdown table, nothing else.";
         // ---- COUNTRY-SPECIFIC domains ----
         $by_country = [
             'AU' => [
+                // v1.5.216.62.12 — added national welfare standards body, accredited
+                // vet schools, plus wildlife health authority. Pushes mindiampets.com.au
+                // further down the Tavily ranking by giving the AI more authority options.
                 'animals' => [
                     'rspca.org.au', 'apvma.gov.au', 'sydney.edu.au', 'unimelb.edu.au',
                     'abc.net.au', 'csiro.au', 'agriculture.gov.au',
+                    'aaws.org.au', 'animalmedicinesaustralia.org.au',
+                    'adelaide.edu.au', 'jcu.edu.au', 'murdoch.edu.au', 'csu.edu.au',
+                    'wildlife.org.au',
                     'mindiampets.com.au',
                 ],
                 'veterinary' => [
                     'rspca.org.au', 'apvma.gov.au', 'sydney.edu.au', 'unimelb.edu.au',
                     'abc.net.au', 'csiro.au', 'ava.com.au',
+                    'aaws.org.au', 'adelaide.edu.au', 'jcu.edu.au', 'murdoch.edu.au',
+                    'csu.edu.au', 'wildlife.org.au',
                     'mindiampets.com.au',
                 ],
                 'health' => [
@@ -1730,13 +1753,24 @@ Return ONLY the Markdown table, nothing else.";
                 ],
             ],
             'US' => [
+                // v1.5.216.62.12 — added USDA APHIS, AAHA hospital accreditor,
+                // additional accredited vet schools, AAVMC.
                 'animals' => [
                     'fda.gov', 'vet.cornell.edu', 'avma.org', 'aspca.org', 'cdc.gov',
-                    'nih.gov', 'tufts.edu', 'ucdavis.edu', 'mindiampets.com.au',
+                    'nih.gov', 'tufts.edu', 'ucdavis.edu',
+                    'aphis.usda.gov', 'nal.usda.gov', 'aaha.org', 'aavmc.org',
+                    'humanesociety.org', 'awionline.org', 'morrisanimalfoundation.org',
+                    'vet.upenn.edu', 'vet.osu.edu', 'cvm.ncsu.edu', 'vetmed.tamu.edu',
+                    'vetmed.wisc.edu', 'fws.gov',
+                    'mindiampets.com.au',
                 ],
                 'veterinary' => [
                     'fda.gov', 'vet.cornell.edu', 'avma.org', 'cdc.gov', 'nih.gov',
-                    'tufts.edu', 'ucdavis.edu', 'mindiampets.com.au',
+                    'tufts.edu', 'ucdavis.edu',
+                    'aphis.usda.gov', 'aaha.org', 'aavmc.org',
+                    'vet.upenn.edu', 'vet.osu.edu', 'cvm.ncsu.edu', 'vetmed.tamu.edu',
+                    'vetmed.wisc.edu',
+                    'mindiampets.com.au',
                 ],
                 'health' => [
                     'nih.gov', 'cdc.gov', 'fda.gov', 'mayoclinic.org', 'clevelandclinic.org',
@@ -1763,11 +1797,20 @@ Return ONLY the Markdown table, nothing else.";
                 ],
             ],
             'GB' => [
+                // v1.5.216.62.12 — added DEFRA, RCVS, BSAVA, accredited vet schools,
+                // welfare charities (PDSA, Blue Cross, Dogs Trust, Cats Protection).
                 'animals' => [
-                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk', 'mindiampets.com.au',
+                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk',
+                    'defra.gov.uk', 'rcvs.org.uk', 'bsava.com', 'vmd.defra.gov.uk',
+                    'pdsa.org.uk', 'bluecross.org.uk', 'dogstrust.org.uk', 'cats.org.uk',
+                    'nottingham.ac.uk', 'liverpool.ac.uk', 'ed.ac.uk', 'bristol.ac.uk',
+                    'mindiampets.com.au',
                 ],
                 'veterinary' => [
-                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk', 'mindiampets.com.au',
+                    'rspca.org.uk', 'bva.co.uk', 'rvc.ac.uk', 'gov.uk', 'bbc.co.uk',
+                    'rcvs.org.uk', 'bsava.com', 'vmd.defra.gov.uk',
+                    'nottingham.ac.uk', 'liverpool.ac.uk', 'ed.ac.uk', 'bristol.ac.uk',
+                    'mindiampets.com.au',
                 ],
                 'health' => [
                     'nhs.uk', 'gov.uk', 'bbc.co.uk', 'nice.org.uk',
@@ -1848,9 +1891,99 @@ Return ONLY the Markdown table, nothing else.";
                 'finance' => [ 'mas.gov.sg' ],
             ],
             'JP' => [
-                'health' => [ 'mhlw.go.jp' ],
-                'news'   => [ 'japantimes.co.jp', 'nhk.or.jp' ],
-                'technology' => [ 'nikkei.com' ],
+                // v1.5.216.62.12 — Japanese animal health + vet authorities (no
+                // animals/vet entries existed before).
+                'animals' => [
+                    'maff.go.jp', 'env.go.jp', 'jvma-vet.jp', 'niah.naro.go.jp',
+                    'vet.u-tokyo.ac.jp', 'mindiampets.com.au',
+                ],
+                'veterinary' => [
+                    'maff.go.jp', 'jvma-vet.jp', 'niah.naro.go.jp',
+                    'vet.u-tokyo.ac.jp', 'vmas.jp', 'mindiampets.com.au',
+                ],
+                'health' => [ 'mhlw.go.jp', 'ncgm.go.jp', 'ncc.go.jp', 'niid.go.jp', 'pmda.go.jp' ],
+                'news'   => [ 'japantimes.co.jp', 'nhk.or.jp', 'asahi.com', 'mainichi.jp', 'yomiuri.co.jp' ],
+                'technology' => [ 'nikkei.com', 'u-tokyo.ac.jp', 'kyoto-u.ac.jp', 'aist.go.jp', 'nict.go.jp' ],
+            ],
+            // v1.5.216.62.12 — 6 NEW country blocks. Previously these countries had
+            // no Animals/Veterinary lists, so Tavily fell back to global only — which
+            // includes user's mindiampets.com.au and ranks it high. Adding native
+            // government / vet school / welfare body sources gives the AI proper
+            // local authorities to cite for in-country articles.
+            'IT' => [
+                'animals' => [
+                    'salute.gov.it', 'izs.it', 'fnovi.it', 'anmvi.it',
+                    'lav.it', 'enpa.it', 'isprambiente.gov.it', 'mindiampets.com.au',
+                ],
+                'veterinary' => [
+                    'salute.gov.it', 'izs.it', 'fnovi.it', 'anmvi.it',
+                    'isprambiente.gov.it', 'mindiampets.com.au',
+                ],
+                'health' => [ 'salute.gov.it', 'iss.it', 'aifa.gov.it', 'humanitas.it', 'unibo.it' ],
+                'news'   => [ 'corriere.it', 'repubblica.it', 'lastampa.it', 'ansa.it', 'rai.it' ],
+                'finance' => [ 'bancaditalia.it', 'consob.it', 'mef.gov.it', 'agenziaentrate.gov.it', 'istat.it' ],
+            ],
+            'ES' => [
+                'animals' => [
+                    'mapa.gob.es', 'miteco.gob.es', 'colvet.es', 'avepa.org',
+                    'csic.es', 'ucm.es', 'uab.cat', 'mindiampets.com.au',
+                ],
+                'veterinary' => [
+                    'mapa.gob.es', 'colvet.es', 'avepa.org', 'csic.es',
+                    'ucm.es', 'uab.cat', 'mindiampets.com.au',
+                ],
+                'health' => [ 'sanidad.gob.es', 'isciii.es', 'aemps.gob.es', 'csic.es' ],
+                'news'   => [ 'elpais.com', 'elmundo.es', 'lavanguardia.com', 'rtve.es', 'efe.com' ],
+                'finance' => [ 'bde.es', 'cnmv.es', 'hacienda.gob.es', 'ine.es' ],
+            ],
+            'BR' => [
+                'animals' => [
+                    'gov.br', 'ibama.gov.br', 'cfmv.gov.br', 'embrapa.br',
+                    'fmvz.usp.br', 'fiocruz.br', 'mindiampets.com.au',
+                ],
+                'veterinary' => [
+                    'gov.br', 'cfmv.gov.br', 'embrapa.br', 'fmvz.usp.br',
+                    'fiocruz.br', 'mindiampets.com.au',
+                ],
+                'health' => [ 'gov.br', 'fiocruz.br', 'usp.br', 'unifesp.br' ],
+                'news'   => [ 'folha.uol.com.br', 'oglobo.globo.com', 'valor.globo.com', 'estadao.com.br' ],
+                'finance' => [ 'bcb.gov.br', 'cvm.gov.br', 'ibge.gov.br' ],
+            ],
+            'MX' => [
+                'animals' => [
+                    'gob.mx', 'fmvz.unam.mx', 'inecc.gob.mx', 'mindiampets.com.au',
+                ],
+                'veterinary' => [
+                    'gob.mx', 'fmvz.unam.mx', 'fmvz.uady.mx', 'mindiampets.com.au',
+                ],
+                'health' => [ 'gob.mx', 'insp.mx', 'imss.gob.mx', 'unam.mx' ],
+                'news'   => [ 'eluniversal.com.mx', 'reforma.com', 'jornada.com.mx', 'milenio.com' ],
+                'finance' => [ 'banxico.org.mx', 'cnbv.gob.mx', 'inegi.org.mx' ],
+            ],
+            'KR' => [
+                'animals' => [
+                    'mafra.go.kr', 'qia.go.kr', 'kvma.or.kr', 'me.go.kr',
+                    'vet.snu.ac.kr', 'mindiampets.com.au',
+                ],
+                'veterinary' => [
+                    'mafra.go.kr', 'qia.go.kr', 'kvma.or.kr',
+                    'vet.snu.ac.kr', 'mindiampets.com.au',
+                ],
+                'health' => [ 'mohw.go.kr', 'kdca.go.kr', 'snu.ac.kr', 'yonsei.ac.kr' ],
+                'news'   => [ 'chosun.com', 'donga.com', 'joongang.co.kr', 'hani.co.kr', 'yna.co.kr' ],
+                'finance' => [ 'bok.or.kr', 'fsc.go.kr', 'fss.or.kr', 'kostat.go.kr' ],
+            ],
+            'CN' => [
+                'animals' => [
+                    'moa.gov.cn', 'mee.gov.cn', 'caas.cn', 'cau.edu.cn',
+                    'forestry.gov.cn', 'mindiampets.com.au',
+                ],
+                'veterinary' => [
+                    'moa.gov.cn', 'caas.cn', 'cau.edu.cn', 'mindiampets.com.au',
+                ],
+                'health' => [ 'nhc.gov.cn', 'chinacdc.cn', 'cma.org.cn', 'pumc.edu.cn' ],
+                'news'   => [ 'xinhuanet.com', 'chinadaily.com.cn', 'people.com.cn', 'caixinglobal.com', 'scmp.com' ],
+                'finance' => [ 'pbc.gov.cn', 'csrc.gov.cn', 'mof.gov.cn', 'stats.gov.cn' ],
             ],
             // ── Oceania ──
             'FJ' => [
