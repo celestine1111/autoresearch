@@ -19,7 +19,7 @@
 ## v1.5.216.62.18 — Remove WP_DEBUG mock GSC seeder UI + rename Internal Links slug
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `937428c`
 
 ### Why
 
