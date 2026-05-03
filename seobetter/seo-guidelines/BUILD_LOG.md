@@ -19,7 +19,7 @@
 ## v1.5.216.62.28 — Schema Blocks: native Gutenberg blocks (metabox panel retired)
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `0b07247`
 
 ### Why
 
