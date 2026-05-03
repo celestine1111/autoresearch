@@ -19,7 +19,7 @@
 ## v1.5.216.62.4 — Remove broken "Test Rich Results" link from generator post-save status
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `a9531db`
 
 ### Bug
 
