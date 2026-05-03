@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.28
+ * Version: 1.5.216.62.29
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.28' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.29' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -139,7 +139,7 @@ final class SEOBetter {
         // the user's chosen block position rather than always prepended.
         // The pre-v62.28 the_content filter is retired since native blocks
         // handle rendering at the right scope.
-        Schema_Blocks_Registry::boot();
+        \SEOBetter\Schema_Blocks_Registry::boot();
 
         register_activation_hook( __FILE__, [ $this, 'activate' ] );
         register_deactivation_hook( __FILE__, [ $this, 'deactivate' ] );
@@ -6749,7 +6749,7 @@ final class SEOBetter {
      * Wired in __construct() via add_action('save_post', ...). Cheap —
      * just deletes 4-5 transients via LLMS_Txt_Generator::clear_cache().
      */
-    public function clear_llms_txt_cache_on_save( int $post_id, \WP_Post $post = null, bool $update = false ): void {
+    public function clear_llms_txt_cache_on_save( int $post_id, ?\WP_Post $post = null, bool $update = false ): void {
         if ( $post && $post->post_type !== 'post' && $post->post_type !== 'page' ) return;
         if ( wp_is_post_revision( $post_id ) ) return;
         \SEOBetter\LLMS_Txt_Generator::clear_cache();

@@ -7,12 +7,75 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.28)
+> **Last updated:** 2026-05-03 (v1.5.216.62.29)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.29 — HOTFIX for v62.28 fatal error + PHP 8.4 deprecation
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User uploaded v62.28 and saw the WordPress "There has been a critical error" page. The PHP error log:
+
+```
+Fatal error: Uncaught Error: Class "Schema_Blocks_Registry" not found
+in /wp-content/plugins/seobetter/seobetter.php:142
+```
+
+Plus a separate deprecation warning on PHP 8.4:
+```
+Deprecated: SEOBetter::clear_llms_txt_cache_on_save(): Implicitly marking
+parameter $post as nullable is deprecated, the explicit nullable type must
+be used instead in seobetter.php on line 6752
+```
+
+### Fix
+
+**Bug 1 — Namespace lookup** ([seobetter.php:142](seobetter/seobetter.php#L142))
+
+The main `SEOBetter` class lives in the global namespace (no `namespace` declaration in seobetter.php). When I wrote `Schema_Blocks_Registry::boot()` from inside a method of that global class, PHP resolved it as `\Schema_Blocks_Registry` (current namespace = global) — but the registry class is in `SEOBetter\Schema_Blocks_Registry`. Result: class-not-found fatal at plugin load.
+
+Fixed: changed to `\SEOBetter\Schema_Blocks_Registry::boot()` — fully qualified. Same convention as the other `SEOBetter\License_Manager::can_use(...)` calls already in seobetter.php.
+
+**Bug 2 — Implicit-nullable param** ([seobetter.php:6752](seobetter/seobetter.php#L6752))
+
+```php
+// Before (implicit nullable from default — deprecated in PHP 8.4):
+public function clear_llms_txt_cache_on_save( int $post_id, \WP_Post $post = null, bool $update = false ): void
+
+// After (explicit nullable):
+public function clear_llms_txt_cache_on_save( int $post_id, ?\WP_Post $post = null, bool $update = false ): void
+```
+
+Swept the rest of the codebase for the same anti-pattern — every other site in the plugin already uses the explicit `?` form. Just this one was missing.
+
+### Why this didn't fail in dev
+
+The fatal only surfaces when `Schema_Blocks_Registry::boot()` actually runs — that's during plugin load on every page. My local environment doesn't have PHP installed (`php -l` is not available) so I couldn't lint pre-flight. User's PHP 8.4 production hit it immediately.
+
+### Lesson for me
+
+When calling a namespaced class from a global-namespace class context, ALWAYS use the fully-qualified name with leading `\`. The seobetter.php codebase already had this convention via `SEOBetter\License_Manager::...` — I broke convention with the unqualified `Schema_Blocks_Registry::...` call. Should have followed the established pattern.
+
+### Verify
+
+```bash
+grep -n "Schema_Blocks_Registry::boot" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+# Expected: line 142 with `\SEOBetter\Schema_Blocks_Registry::boot();`
+
+grep -n "?\\\\WP_Post \\\$post = null" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+# Expected: line 6752 with `?\WP_Post $post = null`
+```
+
+**Verified by user:** UNTESTED
 
 ---
 
