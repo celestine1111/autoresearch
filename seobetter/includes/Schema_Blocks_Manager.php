@@ -234,13 +234,55 @@ class Schema_Blocks_Manager {
     // ====================================================================
 
     /**
-     * Build JSON-LD for all enabled blocks. Returns array of nodes ready
-     * to merge into @graph. Skips disabled / invalid blocks silently.
+     * Build JSON-LD for all schema blocks on a post.
+     *
+     * v1.5.216.62.28 — dual-source: walks Gutenberg blocks in
+     * post_content (the new v62.28 native blocks) AND legacy post meta
+     * (the pre-v62.28 metabox-panel storage). When a single post has
+     * BOTH a Gutenberg block AND a legacy meta entry of the same type,
+     * the Gutenberg block wins (single source of truth, single @type
+     * node in @graph — Google flags duplicates).
+     *
+     * Posts created post-v62.28 use Gutenberg blocks exclusively. Legacy
+     * post meta path is read-only — kept so customers who saved schema
+     * via the metabox panel before v62.28 don't lose their schema after
+     * the panel is retired. Customers can migrate by re-saving each
+     * legacy entry as a Gutenberg block (or via WP-CLI in a future
+     * release).
+     *
+     * Returns array of nodes ready to merge into @graph. Disabled /
+     * invalid blocks skipped silently — same fail-closed behavior as
+     * the original implementation.
+     *
+     * @param int $post_id WordPress post ID.
+     * @return array<int, array> JSON-LD nodes.
      */
     public static function build_all_jsonld( int $post_id ): array {
-        $all = self::get_all( $post_id );
         $nodes = [];
+        $seen_block_types = [];
+
+        // === New path: Gutenberg blocks in post_content ===
+        // Multiple blocks of the same type can co-exist (e.g. 5 Product
+        // cards in one buying guide); we emit a JSON-LD node per block.
+        if ( class_exists( Schema_Blocks_Registry::class ) ) {
+            $found = Schema_Blocks_Registry::collect_blocks_from_post( $post_id );
+            foreach ( $found as $entry ) {
+                $type  = $entry['type'];
+                $attrs = $entry['attrs'];
+                $node  = self::build_jsonld( $type, $attrs );
+                if ( $node ) {
+                    $nodes[] = $node;
+                    $seen_block_types[ $type ] = true;
+                }
+            }
+        }
+
+        // === Legacy path: post meta (pre-v62.28 metabox panel data) ===
+        // Skipped per-type when a Gutenberg block of the same type
+        // already emitted — avoids duplicate @type nodes in @graph.
+        $all = self::get_all( $post_id );
         foreach ( self::BLOCK_TYPES as $type ) {
+            if ( isset( $seen_block_types[ $type ] ) ) continue;
             $block = $all[ $type ] ?? [];
             if ( empty( $block['enabled'] ) ) continue;
             $node = self::build_jsonld( $type, $block );

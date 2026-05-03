@@ -388,7 +388,21 @@ Sponsored deliberately remains excluded per Google policy — voice assistants s
 
 **v1.5.216.62.24 — Front-end styled card rendering.** Pre-v62.24 the Schema Blocks emitted JSON-LD ONLY — the structured data was correct in `<script type="application/ld+json">` but the post body had no visible card. v62.24 adds a front-end render path: each enabled block generates a styled HTML card prepended to the post content via `the_content` filter (priority 9, before wpautop).
 
-**Hook:** `seobetter.php::inject_schema_block_cards()` runs only on `is_singular() && in_the_loop() && is_main_query()` and only when `License_Manager::can_use('schema_blocks_5')` is true. Calls `Schema_Blocks_Manager::render_all_html()` which iterates BLOCK_TYPES in order and concatenates each enabled block's card HTML.
+**v1.5.216.62.28 — Native Gutenberg blocks (metabox panel retired).** The 5 schema blocks are now native Gutenberg blocks under the "SEOBetter" inserter category:
+
+| Gutenberg block | Manager key |
+|---|---|
+| `seobetter/product` | product |
+| `seobetter/event` | event |
+| `seobetter/local-business` | localbusiness |
+| `seobetter/vacation-rental` | vacationrental |
+| `seobetter/job-posting` | jobposting |
+
+Each block uses InspectorControls for the form fields + `wp.serverSideRender` for live editor preview. Front-end render is the same PHP code path (`Schema_Blocks_Manager::render_html()`) so editor preview pixel-matches the published post. Multiple instances of the same block type per post are now allowed (e.g. 5 Product blocks in one buying guide). Inline placement — cards appear at the block's chosen position rather than always prepended to the whole post body. Pro+ gated at registration time (`Schema_Blocks_Registry::register_blocks()` is a no-op on Free / Pro tier so the blocks never appear in the inserter for non-eligible users).
+
+**Dual-source JSON-LD emission.** `Schema_Blocks_Manager::build_all_jsonld()` walks BOTH (a) Gutenberg blocks in `post_content` via `Schema_Blocks_Registry::collect_blocks_from_post()`, and (b) legacy `_seobetter_schema_blocks` post meta (read-only fallback for posts saved pre-v62.28). Per-type dedup: a Gutenberg block of type X always wins over a legacy meta entry of type X — single @type node per post in @graph (Google flags duplicates).
+
+**Pre-v62.28 hook (retired):** `seobetter.php::inject_schema_block_cards()` ran on `is_singular() && in_the_loop() && is_main_query()` and prepended cards via `the_content` filter (priority 9). v62.28 removes this method — cards now render at the block-render layer, inline at the chosen position.
 
 **Per-block card design** (all use inline styles for theme-proofness, mobile-first single-column responsive):
 

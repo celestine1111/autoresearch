@@ -326,9 +326,11 @@ Auto-detected when `content_type === 'how_to'` AND the list is ordered (`<ol>`) 
 - Threading: `format_hybrid()` reads `$options['content_type']` (passed in by `seobetter.php::rest_save_draft()` and `Async_Generator::assemble_final()`)
 - Source: `Content_Formatter.php::format_hybrid()` list branch — HowTo step boxes
 
-### 5.15 Schema Block Cards — front-end render (`v1.5.216.62.24+`, Pro+)
+### 5.15 Schema Block Cards — front-end render (`v1.5.216.62.24+` JSON-LD render path, `v1.5.216.62.28+` native Gutenberg blocks, Pro+)
 
-Pre-v62.24, the 5 user-edited Schema Blocks (Product / Event / LocalBusiness / VacationRental / JobPosting) emitted JSON-LD ONLY — schema was correct in `<script type="application/ld+json">` but the post body had no visible card. v62.24 adds a front-end render path so each enabled block produces a **styled human-readable card** prepended to the post content via the `the_content` filter (priority 9, before `wpautop`). The schema continues to flow into @graph as before — the card is purely additive.
+Pre-v62.24, the 5 user-edited Schema Blocks (Product / Event / LocalBusiness / VacationRental / JobPosting) emitted JSON-LD ONLY — schema was correct in `<script type="application/ld+json">` but the post body had no visible card. v62.24 added a front-end render path that prepended cards to post content via the `the_content` filter (priority 9, before `wpautop`).
+
+**v1.5.216.62.28 — Native Gutenberg blocks.** The entire system moved from a metabox-panel UI to native Gutenberg blocks (`seobetter/product`, `seobetter/event`, `seobetter/local-business`, `seobetter/vacation-rental`, `seobetter/job-posting`) under a new "SEOBetter" inserter category. Cards now render INLINE at the block's chosen position (not prepended). Multiple instances of the same block type per post are supported (e.g. 5 Product cards in a buying guide). Editor preview uses `wp.serverSideRender` against the same PHP `render_callback` the front-end uses, so what the writer sees in the editor pixel-matches what the visitor sees on the published post. Pro+ gated at registration time — `Schema_Blocks_Registry::register_blocks()` is a no-op on Free / Pro tier, blocks don't show in the inserter at all for non-eligible users. Each block's PHP render adapter (`Schema_Blocks_Registry::render_block()`) delegates to the existing `Schema_Blocks_Manager::render_*_card()` methods unchanged from v62.24 — same single source of truth for both schema and card markup.
 
 **Architecture:**
 - `Schema_Blocks_Manager::render_all_html(int $post_id): string` — iterates `BLOCK_TYPES` in order, calls per-type renderer, concatenates.

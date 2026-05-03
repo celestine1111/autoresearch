@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.27
+ * Version: 1.5.216.62.28
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,8 +18,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.27' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.28' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+// v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
+// uses this with plugins_url() to build the editor-script asset URL correctly.
+define( 'SEOBETTER_PLUGIN_FILE', __FILE__ );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
@@ -127,14 +130,16 @@ final class SEOBetter {
         add_action( 'add_meta_boxes', [ $this, 'register_metabox' ] );
         add_action( 'save_post', [ $this, 'save_metabox' ], 10, 2 );
 
-        // v1.5.216.62.24 — Front-end Schema Block card rendering. Pro+ users
-        // who fill in a LocalBusiness / Product / Event / VacationRental /
-        // JobPosting Schema Block see a styled card on the published post in
-        // addition to the JSON-LD that's already injected into @graph. The
-        // card prepends the post body so the human-readable card sits above
-        // the article content. License-gated at the manager level — non-Pro+
-        // sites that somehow have data saved still don't render anything.
-        add_filter( 'the_content', [ $this, 'inject_schema_block_cards' ], 9 );
+        // v1.5.216.62.28 — Schema Blocks migrated to native Gutenberg blocks
+        // (seobetter/product, /event, /local-business, /vacation-rental,
+        // /job-posting). Each block is dynamic-rendered in PHP via
+        // Schema_Blocks_Manager::render_html() — same code path the v62.24
+        // `the_content` filter was using, but now hooked at the block-render
+        // layer instead of post-content level. Cards now appear inline at
+        // the user's chosen block position rather than always prepended.
+        // The pre-v62.28 the_content filter is retired since native blocks
+        // handle rendering at the right scope.
+        Schema_Blocks_Registry::boot();
 
         register_activation_hook( __FILE__, [ $this, 'activate' ] );
         register_deactivation_hook( __FILE__, [ $this, 'deactivate' ] );
@@ -144,35 +149,13 @@ final class SEOBetter {
         load_plugin_textdomain( 'seobetter', false, dirname( SEOBETTER_PLUGIN_BASENAME ) . '/languages' );
     }
 
-    /**
-     * v1.5.216.62.24 — Front-end Schema Block card injector.
-     *
-     * Hooked at priority 9 on `the_content` so cards prepend the article body
-     * BEFORE wpautop / shortcode passes run. Only fires on the main loop's
-     * singular post view (not feeds, not REST, not list views) and only when
-     * the Pro+ Schema Block license is active.
-     *
-     * Multiple enabled blocks render in BLOCK_TYPES order (product, event,
-     * localbusiness, vacationrental, jobposting). Each block builds its own
-     * card via Schema_Blocks_Manager::render_all_html(). Cards skipped
-     * silently if required fields missing — never render half-empty UI.
-     */
-    public function inject_schema_block_cards( string $content ): string {
-        if ( is_admin() || ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
-            return $content;
-        }
-        if ( ! class_exists( 'SEOBetter\\Schema_Blocks_Manager' ) ) {
-            return $content;
-        }
-        if ( ! SEOBetter\License_Manager::can_use( 'schema_blocks_5' ) ) {
-            return $content;
-        }
-        $post_id = get_the_ID();
-        if ( ! $post_id ) return $content;
-        $cards_html = SEOBetter\Schema_Blocks_Manager::render_all_html( (int) $post_id );
-        if ( $cards_html === '' ) return $content;
-        return $cards_html . $content;
-    }
+    // v1.5.216.62.28 — Removed `inject_schema_block_cards` (the v62.24
+    // `the_content` filter). Schema Blocks are now native Gutenberg blocks
+    // that render inline at the user's chosen position via the block's
+    // PHP render_callback (Schema_Blocks_Registry::render_block →
+    // Schema_Blocks_Manager::render_html). Better placement, multiple
+    // instances per post, editor preview matches front-end. The v62.24
+    // function that prepended cards to the whole post is retired.
 
     public function activate(): void {
         // v1.5.216.45 — fix #5: wrap activation in output buffer to suppress
@@ -5428,7 +5411,12 @@ final class SEOBetter {
                 <button type="button" class="sb-meta-tab" data-tab="analysis" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Page Analysis</button>
                 <button type="button" class="sb-meta-tab" data-tab="readability" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Readability</button>
                 <button type="button" class="sb-meta-tab" data-tab="richresults" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Rich Results</button>
-                <button type="button" class="sb-meta-tab" data-tab="schemablocks" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280">Schema Blocks<?php echo SEOBetter\License_Manager::can_use( 'schema_blocks_5' ) ? '' : ' 🔒'; ?></button>
+                <?php // v1.5.216.62.28 — "Schema Blocks" metabox tab removed.
+                       // The 5 schema-data forms (Product / Event / LocalBusiness /
+                       // VacationRental / JobPosting) are now native Gutenberg blocks
+                       // in the inserter under the SEOBetter category. Pro+ users
+                       // get inline placement, editor preview, and multiple instances
+                       // per post — none of which the metabox panel could deliver. ?>
                 <button type="button" class="sb-meta-tab" data-tab="freshness" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280"><?php esc_html_e( 'Freshness', 'seobetter' ); ?><?php echo SEOBetter\License_Manager::can_use( 'freshness_diagnostic' ) ? '' : ' 🔒'; ?></button>
                 <div style="margin-left:auto;display:flex;align-items:center;padding-right:16px;gap:8px">
                     <span style="font-size:13px;font-weight:700;color:<?php echo esc_attr( $score_color ); ?>"><?php echo esc_html( $score ); ?>/100</span>
@@ -6419,166 +6407,16 @@ final class SEOBetter {
                 <?php } ?>
             </div>
 
-            <!-- v1.5.216.29 — Phase 1 item 10: Schema Blocks Tab (Pro+ gated).
-                 5 user-editable structured-data panels — Product / Event /
-                 LocalBusiness / VacationRental / JobPosting. Each panel has an
-                 enable toggle; saved blocks override Schema_Generator's
-                 auto-detection for the same @type. Free/Pro users see a locked
-                 upsell card. -->
-            <div class="sb-meta-panel" data-panel="schemablocks" style="padding:20px;display:none">
-                <?php
-                $can_blocks = SEOBetter\License_Manager::can_use( 'schema_blocks_5' );
-                $saved_blocks = SEOBetter\Schema_Blocks_Manager::get_all( $post->ID );
-                ?>
-
-                <?php if ( ! $can_blocks ) : ?>
-                <div style="padding:20px;background:linear-gradient(135deg,#f5f3ff 0%,#fdf4ff 100%);border:2px solid #c4b5fd;border-radius:8px;text-align:center">
-                    <div style="font-size:32px;margin-bottom:8px">🔒</div>
-                    <div style="font-size:16px;font-weight:700;color:#5b21b6;margin-bottom:6px">Schema Blocks require Pro+</div>
-                    <p style="margin:0 0 12px;font-size:13px;color:#6b21a8">Manually fill in authoritative Product / Event / LocalBusiness / VacationRental / JobPosting structured data — overrides AI auto-detection for high-stakes pages where exact SKU, price, salary, address values matter for Google Rich Results compliance.</p>
-                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=seobetter-settings' ) ); ?>" class="button" style="background:#7c3aed;color:#fff;border-color:#7c3aed">Upgrade to Pro+ &rarr;</a>
-                </div>
-                <?php else : ?>
-
-                <div style="margin-bottom:16px;padding:12px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;font-size:12px;color:#065f46">
-                    <strong>How this works:</strong> Enabled blocks emit JSON-LD into the @graph and <strong>override</strong> Schema_Generator's auto-detection for the same @type. Required fields are marked <span style="color:#dc2626">*</span> — blocks with missing required fields are silently skipped (we never emit invalid schema).
-                </div>
-
-                <?php // v1.5.216.44 — div, not form. Browsers + WordPress strip
-                       // nested <form> tags (this metabox lives inside the post-edit
-                       // form). Save button hits the REST endpoint via fetch directly,
-                       // no native form submission needed. Pre-fix the form tag was
-                       // dropped silently → JS never bound → save did nothing. ?>
-                <div id="sb-schema-blocks-form" data-post-id="<?php echo esc_attr( $post->ID ); ?>">
-                    <?php wp_nonce_field( 'wp_rest', '_sb_schema_blocks_nonce' ); ?>
-
-                    <?php
-                    // Render each block as a collapsible <details> panel
-                    $blocks_meta = [
-                        'product'        => [ 'icon' => '🛒', 'label' => 'Product', 'note' => 'Required: name, price, currency. Recommended: image, brand, SKU, availability.' ],
-                        'event'          => [ 'icon' => '📅', 'label' => 'Event', 'note' => 'Required: name, startDate, location (name OR address).' ],
-                        'localbusiness'  => [ 'icon' => '🏢', 'label' => 'LocalBusiness', 'note' => 'Required: name, address (street OR locality). Recommended: telephone, openingHours, priceRange.' ],
-                        'vacationrental' => [ 'icon' => '🏖️', 'label' => 'Vacation Rental', 'note' => 'Required: name, address. Recommended: numberOfRooms, occupancy, amenities.' ],
-                        'jobposting'     => [ 'icon' => '💼', 'label' => 'Job Posting', 'note' => 'Required: title, description, datePosted, hiringOrganization. Recommended: jobLocation, baseSalary, employmentType.' ],
-                    ];
-
-                    foreach ( $blocks_meta as $type => $meta ) :
-                        $b = $saved_blocks[ $type ] ?? [];
-                        $enabled = ! empty( $b['enabled'] );
-                    ?>
-                    <details style="margin-bottom:8px;border:1px solid #e5e7eb;border-radius:6px;background:#fff" <?php echo $enabled ? 'open' : ''; ?>>
-                        <summary style="padding:10px 12px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:8px;list-style:none">
-                            <span style="font-size:18px"><?php echo esc_html( $meta['icon'] ); ?></span>
-                            <span><?php echo esc_html( $meta['label'] ); ?></span>
-                            <?php if ( $enabled ) : ?>
-                                <span style="margin-left:auto;font-size:10px;padding:2px 8px;background:#ecfdf5;color:#065f46;border-radius:8px;font-weight:700">ENABLED</span>
-                            <?php endif; ?>
-                        </summary>
-                        <div style="padding:12px;border-top:1px solid #f3f4f6">
-                            <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13px">
-                                <input type="checkbox" name="blocks[<?php echo esc_attr( $type ); ?>][enabled]" value="1" <?php checked( $enabled ); ?> />
-                                Enable this block
-                            </label>
-                            <div style="font-size:11px;color:#6b7280;margin-bottom:10px"><?php echo esc_html( $meta['note'] ); ?></div>
-
-                            <?php
-                            // Per-type field rendering (compact key-value form)
-                            $field_defs = self::schema_block_field_defs( $type );
-                            foreach ( $field_defs as $field => $def ) :
-                                $val = $b[ $field ] ?? '';
-                                $name = sprintf( 'blocks[%s][%s]', $type, $field );
-                            ?>
-                                <div style="display:grid;grid-template-columns:140px 1fr;gap:8px;margin-bottom:6px;align-items:start">
-                                    <label style="font-size:12px;color:#374151;padding-top:6px"><?php echo esc_html( $def['label'] ); ?><?php echo ! empty( $def['required'] ) ? ' <span style="color:#dc2626">*</span>' : ''; ?></label>
-                                    <?php if ( $def['type'] === 'textarea' ) : ?>
-                                        <textarea name="<?php echo esc_attr( $name ); ?>" rows="2" style="padding:6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px"><?php echo esc_textarea( (string) $val ); ?></textarea>
-                                    <?php elseif ( $def['type'] === 'select' ) : ?>
-                                        <select name="<?php echo esc_attr( $name ); ?>" style="padding:6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">
-                                            <option value="">—</option>
-                                            <?php foreach ( $def['options'] as $opt ) : ?>
-                                                <option value="<?php echo esc_attr( $opt ); ?>" <?php selected( $val, $opt ); ?>><?php echo esc_html( $opt ); ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    <?php elseif ( $def['type'] === 'checkbox' ) : ?>
-                                        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding-top:4px">
-                                            <input type="checkbox" name="<?php echo esc_attr( $name ); ?>" value="1" <?php checked( ! empty( $val ) ); ?> />
-                                            <?php echo esc_html( $def['hint'] ?? '' ); ?>
-                                        </label>
-                                    <?php else : ?>
-                                        <input type="<?php echo esc_attr( $def['type'] ); ?>" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( (string) $val ); ?>" placeholder="<?php echo esc_attr( $def['placeholder'] ?? '' ); ?>" style="padding:6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px" />
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </details>
-                    <?php endforeach; ?>
-
-                    <div style="margin-top:16px;display:flex;gap:8px;align-items:center">
-                        <?php // v1.5.216.44 — type="button" not "submit" so we never accidentally submit the parent post-edit form ?>
-                        <button type="button" class="button button-primary" id="sb-schema-blocks-save">Save Schema Blocks</button>
-                        <span id="sb-schema-blocks-status" style="font-size:12px;color:#6b7280"></span>
-                    </div>
-                </div>
-
-                <script>
-                (function() {
-                    // v1.5.216.44 — bind to the Save button click directly, not form submit
-                    // (the wrapper is now a <div>, not a <form>). Walk every input + checkbox
-                    // inside the wrapper to build the payload, since FormData only works on forms.
-                    var wrapper = document.getElementById('sb-schema-blocks-form');
-                    var saveBtn = document.getElementById('sb-schema-blocks-save');
-                    if (!wrapper || !saveBtn) return;
-                    saveBtn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        var status = document.getElementById('sb-schema-blocks-status');
-                        saveBtn.disabled = true;
-                        status.textContent = 'Saving…';
-                        status.style.color = '#6b7280';
-
-                        // Collect inputs by name → reshape into { blocks: { product: {...}, ... } }
-                        var payload = { blocks: {} };
-                        var inputs = wrapper.querySelectorAll('input[name^="blocks["], select[name^="blocks["], textarea[name^="blocks["]');
-                        inputs.forEach(function(el) {
-                            var m = el.name.match(/^blocks\[(\w+)\]\[(\w+)\]$/);
-                            if (!m) return;
-                            if (!payload.blocks[m[1]]) payload.blocks[m[1]] = {};
-                            // Checkbox: write boolean only when checked, skip when not
-                            if (el.type === 'checkbox') {
-                                if (el.checked) payload.blocks[m[1]][m[2]] = '1';
-                            } else {
-                                payload.blocks[m[1]][m[2]] = el.value;
-                            }
-                        });
-
-                        fetch('<?php echo esc_url( rest_url( 'seobetter/v1/schema-blocks/' . $post->ID ) ); ?>', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-WP-Nonce': document.querySelector('[name="_sb_schema_blocks_nonce"]').value
-                            },
-                            body: JSON.stringify(payload)
-                        })
-                        .then(function(r) { return r.json(); })
-                        .then(function(data) {
-                            saveBtn.disabled = false;
-                            if (data && data.success) {
-                                status.textContent = '✓ Saved. Re-save the post to refresh the @graph.';
-                                status.style.color = '#059669';
-                            } else {
-                                status.textContent = (data && data.error) || 'Save failed.';
-                                status.style.color = '#dc2626';
-                            }
-                        })
-                        .catch(function() {
-                            saveBtn.disabled = false;
-                            status.textContent = 'Network error.';
-                            status.style.color = '#dc2626';
-                        });
-                    });
-                })();
-                </script>
-                <?php endif; ?>
-            </div>
+            <?php /* v1.5.216.62.28 — Schema Blocks tab content removed.
+                The 5 schema-data forms (Product / Event / LocalBusiness /
+                VacationRental / JobPosting) are now native Gutenberg blocks
+                in the inserter under the "SEOBetter" category. Pro+ users
+                get inline placement, live editor preview, and multiple
+                instances per post. The retired metabox-panel UI lived here.
+                Schema_Blocks_Manager::get_all() is still readable for
+                legacy posts; build_all_jsonld() reads from BOTH Gutenberg
+                blocks (preferred) and legacy meta (fallback) so customer
+                data saved via the old panel pre-v62.28 still works. */ ?>
 
             <!-- v1.5.216.62 — Freshness panel. Lazy-loads diagnostic from REST
                  on first open (avoids paying the GSC API call cost for every

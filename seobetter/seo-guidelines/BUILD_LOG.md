@@ -7,12 +7,111 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.27)
+> **Last updated:** 2026-05-03 (v1.5.216.62.28)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.28 — Schema Blocks: native Gutenberg blocks (metabox panel retired)
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audited the metabox "Schema Blocks" panel and pointed out that:
+- One block per type per post (storage limit)
+- No way to place a card mid-article (always prepended via `the_content`)
+- No editor preview — fill fields blind, save, view live page to check
+- Hidden in a footer metabox tab most users never click
+
+Decision: convert to native Gutenberg blocks, drop the panel entirely, Pro+ gate at registration.
+
+### Architecture
+
+Five new dynamic Gutenberg blocks — JS in editor for the form UI, PHP for both editor preview AND front-end render (single source of truth, editor preview pixel-matches published post):
+
+| Block name | Manager key | Inserter title |
+|---|---|---|
+| `seobetter/product` | product | Product (SEOBetter) |
+| `seobetter/event` | event | Event (SEOBetter) |
+| `seobetter/local-business` | localbusiness | Local Business (SEOBetter) |
+| `seobetter/vacation-rental` | vacationrental | Vacation Rental (SEOBetter) |
+| `seobetter/job-posting` | jobposting | Job Posting (SEOBetter) |
+
+All grouped under a new "SEOBetter" inserter category. Each block uses the SAME field schema as the retired metabox panel (`SEOBetter::schema_block_field_defs()`), so existing JSON-LD validation paths and required-field checks continue to work without modification.
+
+### Files added
+
+- **`assets/js/schema-blocks.js`** (~270 lines) — single bundled file with all 5 block registrations. Each block:
+  - Uses `wp.blocks.registerBlockType` with `apiVersion: 2`
+  - InspectorControls for sidebar form fields (TextControl / TextareaControl / SelectControl / ToggleControl per field type — mirrors metabox panel exactly)
+  - `wp.serverSideRender` for live editor preview (calls block's PHP render_callback)
+  - `save: () => null` (dynamic block, server-rendered)
+  - Placeholder shown in editor when required fields missing — no broken-card preview
+- **`includes/Schema_Blocks_Registry.php`** (NEW class) — boots the block registration:
+  - `register_category()` adds "SEOBetter" to the inserter
+  - `register_blocks()` calls `register_block_type()` per block (Pro+ gated — entire registration skipped on Free/Pro tier so blocks don't show up in the inserter at all)
+  - `enqueue_editor_assets()` enqueues schema-blocks.js with `wp-blocks`, `wp-block-editor`, `wp-element`, `wp-components`, `wp-i18n`, `wp-server-side-render` deps
+  - `render_block()` thin adapter → `Schema_Blocks_Manager::render_html()`
+  - `collect_blocks_from_post()` walks `parse_blocks(post_content)` recursively (handles nested blocks like Group/Columns containing a SEOBetter block as inner-block) and returns `[ ['type' => 'product', 'attrs' => [...]], ... ]` for `build_all_jsonld()`
+
+### Files modified
+
+- **`includes/Schema_Blocks_Manager.php`** — `build_all_jsonld()` rewritten as dual-source:
+  1. Walk Gutenberg blocks in post_content (preferred, multiple instances per type allowed)
+  2. Walk legacy `_seobetter_schema_blocks` post meta (read-only fallback for posts saved pre-v62.28)
+  3. Per-type dedup: when a Gutenberg block of type X is present, the legacy meta entry of type X is skipped (avoids duplicate @type nodes in @graph that Google flags)
+
+  All `build_*_jsonld()` and `render_*_card()` methods unchanged — they're still the single source of truth, called from both paths.
+
+- **`seobetter.php`**:
+  - New `SEOBETTER_PLUGIN_FILE` constant for `plugins_url()` resolution from inside Registry
+  - `__construct` calls `Schema_Blocks_Registry::boot()` (replaces the v62.24 `the_content` filter add)
+  - Removed `inject_schema_block_cards()` method (cards now render at the block-render layer, inline at user's chosen position, not prepended to post)
+  - Removed metabox tab nav button (`<button data-tab="schemablocks">…`)
+  - Removed metabox tab panel content (~160 lines: per-block `<details>` form + JS save handler that POSTed to the schema-blocks REST endpoint)
+
+  Legacy `Schema_Blocks_Manager::save_all()` / REST endpoint left in place as a defensive read-only path — non-functional without the metabox panel UI but harmless if a cached browser somehow hits it.
+
+### Why this fixes "all articles"
+
+- Block-render layer: every Gutenberg-rendered post automatically picks up the new render path. No regenerate, no migration, no per-post setup.
+- Legacy data: the dual-source `build_all_jsonld()` keeps emitting JSON-LD for posts saved via the retired panel — they don't lose schema after the panel disappears.
+- Universal: works for ALL 21 content types (no content-type branching in the block render or JSON-LD emission), ALL 60+ languages (cards render whatever the user typed), ALL 16 countries (address fields + business types are language-agnostic), ALL categories.
+
+### What you'll see
+
+1. Open any post in the block editor
+2. Click `+` → "SEOBetter" category → see the 5 blocks (only if you have Pro+ — Free/Pro tier doesn't see them at all)
+3. Insert e.g. "Local Business" → block placeholder appears with required-field hint
+4. Click into the block → InspectorControls open in the sidebar with all the fields
+5. Fill in name + address → block re-renders the styled card live in the editor
+6. Save and view post → same card appears inline at exactly the block's position
+7. Open browser dev tools → confirm JSON-LD in @graph
+
+### Verify
+
+```bash
+ls /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js
+ls /Users/ben/Documents/autoresearch/seobetter/includes/Schema_Blocks_Registry.php
+node --check /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js
+grep -n "Schema_Blocks_Registry::boot" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+grep -n "data-tab=\"schemablocks\"" /Users/ben/Documents/autoresearch/seobetter/seobetter.php  # should be empty
+grep -n "data-panel=\"schemablocks\"" /Users/ben/Documents/autoresearch/seobetter/seobetter.php # should be empty
+```
+
+### Doc co-updates
+
+- `structured-data.md` §4.X — Schema Blocks section rewritten for the Gutenberg-block model (block names, dual-source JSON-LD emission, Pro+ registration gate, editor-preview architecture).
+- `SEO-GEO-AI-GUIDELINES.md` §10.4 — synced.
+- `article_design.md` §5.15 — synced (cards now render inline as Gutenberg blocks rather than via `the_content` filter prepend).
+
+**Verified by user:** UNTESTED
 
 ---
 
