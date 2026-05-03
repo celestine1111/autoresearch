@@ -19,7 +19,7 @@
 ## v1.5.216.62.14 — Remove commercial pet sites from authority list + linkify spaces-stripped fallback + static whitelist cleanup
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `95b22c9`
 
 ### Why
 
