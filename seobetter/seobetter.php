@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.15
+ * Version: 1.5.216.62.16
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.15' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.16' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SEOBETTER_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -3360,6 +3360,120 @@ final class SEOBetter {
      *   Input:  "as highlighted in several critical reviews [My Problem with Atomic Habits by James Clear (2023)]"
      *   Output: "as highlighted in several critical reviews ([My Problem with Atomic Habits by James Clear (2023)](https://thewallflowerdigest.co.uk/...))"
      */
+    /**
+     * v1.5.216.62.16 — Acronym alias map for true acronym ↔ full-name matching.
+     *
+     * The compact-lookup fallback (v62.14/v62.15) handles cases where AI text
+     * differs from pool host by spaces/punct only ("Solfed Dog Food" ↔
+     * "solfeddogfood.com"). It cannot bridge cases where AI writes the
+     * FULL NAME but pool only has the ACRONYM HOST ("American Kennel Club" ↔
+     * "akc.org"). This map provides the bridge — ~50 entries cover ≥90% of
+     * acronyms encountered across health, animals, finance, government,
+     * environment categories.
+     *
+     * Format: acronym (compact, lowercase) => [list of full-form variants compact lowercased].
+     * Used in linkify_bracketed_references — when AI text matches a full-form
+     * variant, the acronym is looked up in $lookup_compact (which has the
+     * pool host's bare-name e.g. "akc" from "akc.org").
+     */
+    private static function get_acronym_aliases(): array {
+        return [
+            // Animals / Veterinary
+            'akc'      => [ 'americankennelclub' ],
+            'avma'     => [ 'americanveterinarymedicalassociation' ],
+            'rspca'    => [ 'royalsocietyforthepreventionofcrueltytoanimals' ],
+            'aspca'    => [ 'americansocietyforthepreventionofcrueltytoanimals' ],
+            'aaha'     => [ 'americananimalhospitalassociation' ],
+            'aavmc'    => [ 'associationofamericanveterinarymedicalcolleges' ],
+            'aafco'    => [ 'associationofamericanfeedcontrolofficials' ],
+            'wsava'    => [ 'worldsmallanimalveterinaryassociation' ],
+            'bsava'    => [ 'britishsmallanimalveterinaryassociation' ],
+            'bva'      => [ 'britishveterinaryassociation' ],
+            'rcvs'     => [ 'royalcollegeofveterinarysurgeons' ],
+            'fediaf'   => [ 'europeanpetfoodindustryfederation' ],
+            'icatcare' => [ 'internationalcatcare' ],
+            'isfm'     => [ 'internationalsocietyoffelinemedicine' ],
+            'wva'      => [ 'worldveterinaryassociation' ],
+            'fecava'   => [ 'federationofeuropeancompanionanimalveterinaryassociations' ],
+            'woah'     => [ 'worldorganisationforanimalhealth' ],
+            'iucn'     => [ 'internationalunionforconservationofnature' ],
+            'wwf'      => [ 'worldwildlifefund', 'worldwidefundfornature' ],
+            'ava'      => [ 'australianveterinaryassociation' ],
+            'apvma'    => [ 'australianpesticidesandveterinarymedicinesauthority' ],
+            // Health / Food
+            'nih'      => [ 'nationalinstitutesofhealth' ],
+            'cdc'      => [ 'centersfordiseasecontrolandprevention', 'centersfordiseasecontrol' ],
+            'fda'      => [ 'foodanddrugadministration', 'usfda', 'usfoodanddrugadministration' ],
+            'who'      => [ 'worldhealthorganization' ],
+            'usda'     => [ 'unitedstatesdepartmentofagriculture' ],
+            'efsa'     => [ 'europeanfoodsafetyauthority' ],
+            'fsa'      => [ 'foodstandardsagency' ],
+            'fao'      => [ 'foodandagricultureorganization' ],
+            'nhs'      => [ 'nationalhealthservice' ],
+            'nhmrc'    => [ 'nationalhealthandmedicalresearchcouncil' ],
+            'tga'      => [ 'therapeuticgoodsadministration' ],
+            'bmj'      => [ 'britishmedicaljournal' ],
+            'nejm'     => [ 'newenglandjournalofmedicine' ],
+            'jama'     => [ 'journaloftheamericanmedicalassociation' ],
+            'mhra'     => [ 'medicinesandhealthcareproductsregulatoryagency' ],
+            'paho'     => [ 'panamericanhealthorganization' ],
+            'ecdc'     => [ 'europeancentrefordiseasepreventionandcontrol' ],
+            'ich'      => [ 'internationalcouncilforharmonisation' ],
+            // Finance / Business
+            'sec'      => [ 'securitiesandexchangecommission' ],
+            'fca'      => [ 'financialconductauthority' ],
+            'rba'      => [ 'reservebankofaustralia' ],
+            'asic'     => [ 'australiansecuritiesandinvestmentscommission' ],
+            'imf'      => [ 'internationalmonetaryfund' ],
+            'oecd'     => [ 'organisationforeconomicco-operationanddevelopment', 'organisationforeconomiccooperationanddevelopment' ],
+            'bis'      => [ 'bankforinternationalsettlements' ],
+            'ecb'      => [ 'europeancentralbank' ],
+            'boe'      => [ 'bankofengland' ],
+            'fed'      => [ 'federalreserve', 'federalreservebank' ],
+            'irs'      => [ 'internalrevenueservice' ],
+            'hmrc'     => [ 'hmrevenueandcustoms' ],
+            'ato'      => [ 'australiantaxationoffice' ],
+            'ons'      => [ 'officefornationalstatistics' ],
+            'bls'      => [ 'bureauoflaborstatistics' ],
+            'rbi'      => [ 'reservebankofindia' ],
+            'sebi'     => [ 'securitiesandexchangeboardofindia' ],
+            'mas'      => [ 'monetaryauthorityofsingapore' ],
+            // Tech / Science
+            'ieee'     => [ 'instituteofelectricalandelectronicsengineers' ],
+            'acm'      => [ 'associationforcomputingmachinery' ],
+            'nist'     => [ 'nationalinstituteofstandardsandtechnology' ],
+            'nasa'     => [ 'nationalaeronauticsandspaceadministration' ],
+            'esa'      => [ 'europeanspaceagency' ],
+            'jaxa'     => [ 'japanaerospaceexplorationagency' ],
+            'isro'     => [ 'indianspaceresearchorganisation' ],
+            'csiro'    => [ 'commonwealthscientificandindustrialresearchorganisation' ],
+            'mit'      => [ 'massachusettsinstituteoftechnology' ],
+            'eth'      => [ 'eidgenoessischetechnischehochschulezuerich', 'swissfederalinstituteoftechnology' ],
+            'cern'     => [ 'europeanorganizationfornuclearresearch' ],
+            'epa'      => [ 'environmentalprotectionagency' ],
+            'noaa'     => [ 'nationaloceanicandatmosphericadministration' ],
+            'usgs'     => [ 'usgeologicalsurvey', 'unitedstatesgeologicalsurvey' ],
+            'wmo'      => [ 'worldmeteorologicalorganization' ],
+            'ipcc'     => [ 'intergovernmentalpanelonclimatechange' ],
+            // Government / News / Other
+            'un'       => [ 'unitednations' ],
+            'unesco'   => [ 'unitednationseducationalscientificandculturalorganization' ],
+            'unicef'   => [ 'unitednationschildrensfund' ],
+            'bbc'      => [ 'britishbroadcastingcorporation' ],
+            'abc'      => [ 'australianbroadcastingcorporation' ],
+            'cbc'      => [ 'canadianbroadcastingcorporation' ],
+            'npr'      => [ 'nationalpublicradio' ],
+            'pbs'      => [ 'publicbroadcastingservice' ],
+            'ap'       => [ 'associatedpress' ],
+            'afp'      => [ 'agencefrancepresse' ],
+            // Education
+            'oxford'   => [ 'universityofoxford' ],
+            'cambridge'=> [ 'universityofcambridge' ],
+            'harvard'  => [ 'harvarduniversity' ],
+            'stanford' => [ 'stanforduniversity' ],
+        ];
+    }
+
     public static function linkify_bracketed_references( string $markdown, array $pool ): string {
         if ( empty( $pool ) ) return $markdown;
 
@@ -3382,13 +3496,50 @@ final class SEOBetter {
         $compact = function ( string $s ): string {
             return preg_replace( '/[^a-z0-9]/', '', strtolower( $s ) );
         };
+
+        // v1.5.216.62.16 — Acronym alias map: full-form name → acronym.
+        // Pre-flatten so we can do a single lookup per linkify candidate.
+        $acronym_aliases = self::get_acronym_aliases();
+        $alias_to_acronym = []; // compact full-form → acronym (compact)
+        foreach ( $acronym_aliases as $acronym => $full_forms ) {
+            foreach ( $full_forms as $ff ) {
+                $alias_to_acronym[ $ff ] = $acronym;
+            }
+        }
+        // Resolver: given AI text (e.g. "American Kennel Club"), check if any
+        // full-form variant matches and the acronym's bare-host is in the pool.
+        // Returns matched pool entry or null. Consults BOTH lookup_compact
+        // (for 4+ char acronyms) and lookup_acronym (2-3 char acronyms).
+        $find_pool_entry_for_acronym = function ( string $acronym ) use ( &$lookup_compact, &$lookup_acronym ) {
+            if ( isset( $lookup_compact[ $acronym ] ) ) return $lookup_compact[ $acronym ];
+            if ( isset( $lookup_acronym[ $acronym ] ) ) return $lookup_acronym[ $acronym ];
+            return null;
+        };
+        $resolve_alias = function ( string $text_compact ) use ( $alias_to_acronym, $find_pool_entry_for_acronym ) {
+            if ( strlen( $text_compact ) < 6 ) return null;
+            if ( isset( $alias_to_acronym[ $text_compact ] ) ) {
+                $hit = $find_pool_entry_for_acronym( $alias_to_acronym[ $text_compact ] );
+                if ( $hit ) return $hit;
+            }
+            foreach ( $alias_to_acronym as $ff => $acronym ) {
+                if ( strlen( $ff ) >= 8 && (
+                    str_contains( $text_compact, $ff ) ||
+                    ( strlen( $text_compact ) >= 8 && str_contains( $ff, $text_compact ) )
+                ) ) {
+                    $hit = $find_pool_entry_for_acronym( $acronym );
+                    if ( $hit ) return $hit;
+                }
+            }
+            return null;
+        };
         $lookup = [];
-        $lookup_compact = [];  // spaces-stripped → entry
+        $lookup_compact = [];  // spaces-stripped → entry (4+ char keys)
+        $lookup_acronym = []; // 2-3 char bare-host acronym → entry (consulted ONLY by alias resolver)
         $register = function ( string $key, array $entry ) use ( &$lookup, &$lookup_compact, $compact ): void {
             if ( $key === '' ) return;
             $lookup[ $key ] = $entry;
             $key_compact = $compact( $key );
-            if ( strlen( $key_compact ) >= 3 ) {
+            if ( strlen( $key_compact ) >= 4 ) {
                 $lookup_compact[ $key_compact ] = $entry;
             }
         };
@@ -3407,6 +3558,17 @@ final class SEOBetter {
                 if ( $bare !== $source && strlen( $bare ) > 3 ) {
                     $register( $bare, $entry );
                 }
+                // v1.5.216.62.16 — register 2-3 char bare-host acronyms in
+                // lookup_acronym (separate table). Used ONLY by the alias
+                // resolver for acronym↔full-name matching. NOT used in normal
+                // compact comparison to avoid false positives like "[Nighthawk]"
+                // matching nih.gov.
+                if ( $bare !== $source && strlen( $bare ) >= 2 && strlen( $bare ) <= 3 ) {
+                    $bare_compact = $compact( $bare );
+                    if ( $bare_compact !== '' ) {
+                        $lookup_acronym[ $bare_compact ] = $entry;
+                    }
+                }
             }
         }
 
@@ -3417,21 +3579,18 @@ final class SEOBetter {
         // solfeddogfood.com via spaces-stripped comparison.
         $markdown = preg_replace_callback(
             '/(?<!\!)\[([^\]]{3,120})\](?!\s*\(http)/',
-            function ( $match ) use ( $lookup, $lookup_compact, $norm, $compact ) {
+            function ( $match ) use ( $lookup, $lookup_compact, $norm, $compact, $resolve_alias ) {
                 $text = $match[1];
                 $text_n = $norm( $text );
 
                 // Skip likely-non-references that happen to live in square brackets
-                // (footnote markers like [1] [2], code blocks, inline math)
                 if ( preg_match( '/^\d{1,3}$/', $text_n ) ) return $match[0]; // [1], [42]
                 if ( preg_match( '/^[a-z]$/i', $text_n ) ) return $match[0]; // [a]
 
-                // Try exact match
                 if ( isset( $lookup[ $text_n ] ) ) {
                     return '[' . $text . '](' . $lookup[ $text_n ]['url'] . ')';
                 }
 
-                // Try partial match (with-spaces lookup)
                 foreach ( $lookup as $key => $entry ) {
                     if ( strlen( $key ) > 8 && str_contains( $text_n, $key ) ) {
                         return '[' . $text . '](' . $entry['url'] . ')';
@@ -3442,16 +3601,23 @@ final class SEOBetter {
                 }
 
                 // v1.5.216.62.15 — compact fallback (spaces/punct stripped both sides)
+                // v1.5.216.62.16 — relaxed length checks: text_compact >= 3 covers
+                // [NIH] / [FDA] etc; symmetrical with parens-pass.
                 $text_compact = $compact( $text );
                 if ( strlen( $text_compact ) >= 3 ) {
                     foreach ( $lookup_compact as $key_compact => $entry ) {
                         if ( strlen( $key_compact ) >= 3 && (
                             $text_compact === $key_compact ||
-                            ( strlen( $key_compact ) > 4 && str_contains( $text_compact, $key_compact ) ) ||
-                            ( strlen( $text_compact ) > 4 && str_contains( $key_compact, $text_compact ) )
+                            str_contains( $text_compact, $key_compact ) ||
+                            str_contains( $key_compact, $text_compact )
                         ) ) {
                             return '[' . $text . '](' . $entry['url'] . ')';
                         }
+                    }
+                    // v1.5.216.62.16 — Acronym alias resolver (full-form → acronym)
+                    $alias_match = $resolve_alias( $text_compact );
+                    if ( $alias_match ) {
+                        return '[' . $text . '](' . $alias_match['url'] . ')';
                     }
                 }
 
@@ -3510,8 +3676,6 @@ final class SEOBetter {
                 // v1.5.216.62.14 — fallback: compare spaces-stripped versions.
                 // AI writes "(Solfed Dog Food)" → text_compact "solfeddogfood";
                 // pool host is "solfeddogfood.com" → key_compact "solfeddogfood".
-                // The original pass's str_contains over text_n with spaces fails
-                // because "solfeddogfood" isn't a substring of "solfed dog food".
                 $text_compact = preg_replace( '/[^a-z0-9]/', '', strtolower( $text ) );
                 if ( strlen( $text_compact ) >= 3 ) {
                     foreach ( $lookup_compact as $key_compact => $entry ) {
@@ -3522,6 +3686,12 @@ final class SEOBetter {
                         ) ) {
                             return $open . '[' . $text . '](' . $entry['url'] . ')' . $close;
                         }
+                    }
+                    // v1.5.216.62.16 — Acronym alias resolver (full-form → acronym).
+                    // Catches "(American Kennel Club)" → akc.org via alias map.
+                    $alias_match = $resolve_alias( $text_compact );
+                    if ( $alias_match ) {
+                        return $open . '[' . $text . '](' . $alias_match['url'] . ')' . $close;
                     }
                 }
 

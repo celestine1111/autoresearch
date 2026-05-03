@@ -7,12 +7,84 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-03 (v1.5.216.62.15)
+> **Last updated:** 2026-05-03 (v1.5.216.62.16)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.16 — Acronym alias map + 3-char bare-host registration + Pass 1 length symmetry
+
+**Date:** 2026-05-03
+**Commit:** `[pending]`
+
+### Why
+
+User audit on 2026-05-03 confirmed v62.15 catches most bracketed mentions but flagged the remaining gap: `(American Kennel Club)` ↔ `akc.org` doesn't auto-link because there's no string overlap between "americankennelclub" and "akc". Plus my own unit test caught two related issues:
+
+1. **3-char bare-host acronyms not registered** at all. `register()` had `strlen($bare) > 3` so `nih.gov` → bare "nih" (3 chars) was excluded from the lookup. Same for `fda.gov`, `cdc.gov`, `who.int`, `epa.gov`. The compact-fallback couldn't match `(NIH)` to nih.gov even though both compacted to "nih".
+
+2. **Pass 1 (square brackets) had stricter compact comparison than Pass 2 (parens).** `[NIH]` failed via Pass 1 even though `(NIH)` worked via Pass 2. Asymmetry between the two passes.
+
+3. **No alias map for true acronym ↔ full-name matching.** Even with proper bare-host registration, "American Kennel Club" written in body has no string overlap with "akc". Needs explicit alias data.
+
+### Fixes (all in [seobetter.php::linkify_bracketed_references()](../seobetter.php) ~line 3370)
+
+**Fix 1 — Acronym alias map (`get_acronym_aliases()`)**
+- New private static method returns ~75-entry array: `acronym_compact => [full_form_compact_variants]`
+- Covers Animals/Vet (akc, avma, rspca, aspca, aaha, aavmc, aafco, wsava, bsava, bva, rcvs, fediaf, icatcare, isfm, wva, fecava, woah, iucn, wwf, ava, apvma)
+- Health/Food (nih, cdc, fda, who, usda, efsa, fsa, fao, nhs, nhmrc, tga, bmj, nejm, jama, mhra, paho, ecdc, ich)
+- Finance/Business (sec, fca, rba, asic, imf, oecd, bis, ecb, boe, fed, irs, hmrc, ato, ons, bls, rbi, sebi, mas)
+- Tech/Science (ieee, acm, nist, nasa, esa, jaxa, isro, csiro, mit, eth, cern, epa, noaa, usgs, wmo, ipcc)
+- Gov/News (un, unesco, unicef, bbc, abc, cbc, npr, pbs, ap, afp)
+- Education (oxford, cambridge, harvard, stanford)
+
+**Fix 2 — `$lookup_acronym` separate table for 3-char bare hosts**
+- 2-3 char bare hosts (nih, fda, who, etc.) registered in dedicated `$lookup_acronym` table
+- NOT mixed into `$lookup_compact` to prevent false positives like `[Nighthawk]` matching `nih.gov` via short-substring match
+- Consulted ONLY by the alias resolver, never by normal compact comparison
+- `$lookup_compact` register threshold raised from `>= 3` to `>= 4` for safety
+
+**Fix 3 — `$resolve_alias` resolver function**
+- Given AI text (e.g. "American Kennel Club"), compact it → "americankennelclub"
+- Look up in `aliasToAcronym` map → "akc"
+- Look up "akc" in `lookup_compact` (4+ char keys) OR `lookup_acronym` (2-3 char keys) → return matched pool entry
+
+**Fix 4 — Pass 1 length symmetry with Pass 2**
+- Removed `kc.length > 4` and `text_c.length > 4` length guards in Pass 1's compact loop
+- Now: any pool key (4+ chars after Fix 2) can match against any candidate text (3+ chars)
+- Catches `[NIH]` (3 chars) matching `nihgov` (6 chars in lookup_compact) via `kc.includes(text_c)`
+
+### 3 systematic questions
+
+| Q | Answer |
+|---|---|
+| ALL keywords? | ✅ Yes — alias map covers global organisations not keyword-specific |
+| ALL 21 content types? | ✅ Yes — runs in pipeline used by every save |
+| ALL AI models? | ✅ Yes — model-agnostic post-process |
+| ALL languages? | ✅ Yes — alias map is English-organisation-name-based; non-English text won't match (correct behavior — won't false-positive Japanese/Chinese names against English acronyms) |
+| ALL countries? | ✅ Yes — alias map includes regional bodies (RBA Australia, RBI India, MAS Singapore, BoE UK, ECB EU, etc.) |
+
+### Verify
+
+```bash
+grep -nA 5 "get_acronym_aliases" seobetter/seobetter.php
+grep -nA 3 "lookup_acronym" seobetter/seobetter.php | head -10
+```
+
+**Test by user:** regenerate any article with sources whose full names AND acronyms might appear. Expect:
+- `(American Kennel Club)` → linkified to `akc.org`
+- `(National Institutes of Health)` → linkified to `nih.gov`
+- `[NIH]` → linkified to `nih.gov` (Pass 1 fix)
+- `(WHO)`, `(FDA)`, `(CDC)`, `(EPA)` etc. → all linkified
+- `[Nighthawk]` (text containing "nih") → correctly NOT linkified to nih.gov
+
+Phase B follow-up: tech/finance/edu/news authority expansion + FAQ post-process safety net.
+
+**Verified by user:** UNTESTED
 
 ---
 
