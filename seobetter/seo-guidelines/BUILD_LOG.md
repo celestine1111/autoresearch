@@ -19,7 +19,7 @@
 ## v1.5.216.62.62 — Source-quality URL filters: Reddit subreddit allowlist (~60 expert-moderated subs); LinkedIn /pulse-only; Medium publication-only; HN + Quora blocked
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `76a72d7`
 
 ### Why
 
