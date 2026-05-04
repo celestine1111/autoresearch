@@ -19,7 +19,7 @@
 ## v1.5.216.62.56 — Outline-padding safety net (deterministic guarantee that all template sections appear, even when AI ignores the SECTION COUNT CONTRACT)
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `e465af8`
 
 ### Why
 
