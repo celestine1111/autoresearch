@@ -7,12 +7,97 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.56)
+> **Last updated:** 2026-05-04 (v1.5.216.62.57)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.57 — Outline-padding v2 — content-aware missing-section detection (v62.56 was naive index-based and skipped The Objection while duplicating FAQ)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+v62.56 introduced outline padding to guarantee all template sections appear. User retest of T3 #3 Opinion on v62.56 returned IDENTICAL output to v62.55 — same 6 H2s in body, no The Objection, no Devil's Advocate frame. Diagnosis revealed the v62.56 padding was naive:
+
+```
+AI returned (6 entries):
+  [Key Takeaways, Hook & Thesis, Arg 1, Arg 2, Arg 3, FAQ]
+                                                      ↑ FAQ at slot 5
+
+v62.56 padded by index:
+  template[6..9] = [What This Means, FAQ, Conclusion+CTA, References]
+                                    ↑ FAQ duplicated, "The Objection" SKIPPED
+
+Result: [KT, Hook, A1, A2, A3, FAQ (AI),
+         What This Means, FAQ (DUPE), Conclusion, Refs]
+```
+
+The Objection (template index 5) was overwritten by AI's FAQ, then padding started at template index 6 = "What This Means". So The Objection was never added → Devil's Advocate frame never triggered.
+
+### What changed
+
+**Padding rewritten to content-aware "missing-section detection"** ([includes/Async_Generator.php::generate_outline()](seobetter/includes/Async_Generator.php))
+
+Replaced the naive index-based loop with: for each template section, check if any AI heading "covers" it via three matching strategies:
+
+1. **Direct substring match** — case-insensitive `str_contains` on the bare template name. Catches "Hook and Thesis: The Real Reason X" matching template "Hook and Thesis".
+2. **Synonym map** for known rephrasings AI commonly does:
+   - `FAQ` → `["faq", "frequently asked", "frequent question", "common question"]`
+   - `References` → `["reference", "source", "bibliograph", "further reading", "citation"]`
+   - `Conclusion and Call to Action` → `["conclusion", "call to action", "wrap up", "final thought", "in closing"]`
+   - `Pros and Cons` → `["pros and cons", "advantages and disadvantages"]`
+3. **Key-token match** — split template name on whitespace, find tokens ≥5 chars not in stopword list (`the`, `and`, `of`, `to`, etc.), match any of them in the heading blob. Catches "The Objection" matching any heading containing "objection".
+
+Append ONLY genuinely-missing template sections — no duplicates, no skipped sections, no order assumptions.
+
+Plus a guard for **meta-instruction template entries** that aren't literal H2 names — skip entries matching `/\d+\s*-\s*\d+|\d+\s+(topic|chapter|item|section|product|mini)/i` (catches blog_post's "3-5 topic sections", pillar_guide's "5-10 Chapter Sections", buying_guide's "Individual Product Mini-Reviews") OR longer than 60 chars. These describe COUNTS / KINDS of sections, not specific heading text.
+
+### Verification
+
+Simulated against the user's actual T3 #3 retest AI response:
+
+```
+AI returned: [Key Takeaways, Hook and Thesis: ..., Argument 1: ..., Argument 2: ..., Argument 3: ..., Frequently Asked Questions]
+
+For each template section:
+  match:  'Key Takeaways'             ← direct substring
+  match:  'Hook and Thesis'           ← direct substring
+  match:  'Argument 1'                ← direct substring
+  match:  'Argument 2'                ← direct substring
+  match:  'Argument 3'                ← direct substring
+  APPEND: 'The Objection'             ← key-token "objection" not in blob
+  APPEND: 'What This Means'           ← key-token "means" not in blob
+  match:  'FAQ'                       ← synonym "frequently asked" matches
+  APPEND: 'Conclusion and Call to Action'   ← synonym "conclusion" not in blob
+  APPEND: 'References'                ← synonym list none in blob
+
+Final 10-entry outline preserves AI's keyword-adapted titles for slots
+1-6 + appends 4 missing template sections in order.
+```
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.56 → 62.57
+- `seobetter/includes/Async_Generator.php::generate_outline()` — padding rewritten with `$section_matches` closure (substring + synonym + key-token), meta-instruction skip guard
+
+### Verify
+
+```
+grep -A 4 "v1.5.216.62.57 — Outline-padding safety net" seobetter/includes/Async_Generator.php
+grep -A 6 "synonyms = \[" seobetter/includes/Async_Generator.php
+```
+
+After upload + retest opinion at any word count ≥ 1100:
+- All 10 documented sections present (incl. **The Objection**, **What This Means**, **Conclusion and Call to Action**, **References**)
+- Devil's Advocate frame visible on The Objection (dashed border, sharp corners, monospace label)
+
+**Verified by user:** UNTESTED
 
 ---
 

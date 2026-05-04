@@ -1223,39 +1223,90 @@ class Async_Generator {
             }
         }
 
-        // v1.5.216.62.56 — Outline-padding safety net. Pre-fix the prompt-
-        // level SECTION COUNT CONTRACT (v62.51) explicitly told the AI
-        // "MUST output EXACTLY N H2s" but the AI was statistically
-        // non-compliant — user retest of T3 #3 Opinion at 1100w returned
-        // only 6 H2s when the opinion template lists 10 sections, so
-        // The Objection / What This Means / Conclusion+CTA / References
-        // were silently dropped from every opinion article (and the
-        // v62.55 Devil's Advocate frame couldn't trigger because no
-        // Objection H2 was ever generated).
+        // v1.5.216.62.57 — Outline-padding safety net (v2 — content-aware).
         //
-        // Fix: when AI returns fewer headings than the template lists,
-        // pad the missing slots with the template's verbatim section
-        // names (parenthetical-hint cleaned). Deterministic guarantee
-        // that the outline always has enough H2s for every required
-        // section. Universal across all 21 content types — the prose
-        // template's section list is the authoritative source.
+        // Pre-fix-fix the v62.56 padding appended template[i..N] starting
+        // at index = count($headings). For an AI response that included
+        // FAQ at position 5 (i.e. AI returned [KT, Hook, A1, A2, A3, FAQ]
+        // instead of [KT, Hook, A1, A2, A3, The Objection, ...]), the
+        // index-based padding wrote template[6..9] = [What This Means,
+        // FAQ, Conclusion, References] — which DUPLICATED FAQ and
+        // skipped The Objection entirely. User-reported on T3 #3
+        // v62.56 retest: same 6/10 sections as v62.55, plus the Devil's
+        // Advocate frame still couldn't trigger because The Objection
+        // was never added.
         //
-        // The padded names use the template form (e.g. "The Objection",
-        // "What This Means", "Conclusion and Call to Action",
-        // "References") which is exactly what generate_section() prompts
-        // need to recognize the section's intent and the v62.55 Devil's
-        // Advocate frame matches /^the\s+objection\b/i to trigger.
+        // Fix: replace index-based padding with content-aware
+        // missing-section detection. For each template section, check
+        // if any AI heading "covers" it (substring match on the bare
+        // template name OR on a 5+ char key token OR via the synonym
+        // map for FAQ / References / Conclusion which AI commonly
+        // rephrases). Append ONLY the genuinely-missing template
+        // sections. No duplicates, no skipped sections, no order
+        // assumptions.
         if ( ! empty( $section_count_hint ) && count( $headings ) < $section_count_hint ) {
             $template_sections = array_values( array_filter( array_map( 'trim',
                 explode( ',', (string) ( $prose['sections'] ?? '' ) ) ) ) );
-            // Strip parenthetical hints like "Lede (who/what/when/where/why)"
-            // → "Lede" so the heading text itself is clean.
             $template_clean = array_map( function ( $s ) {
                 return trim( preg_replace( '/\s*\([^)]*\)\s*/', ' ', $s ) );
             }, $template_sections );
-            for ( $i = count( $headings ); $i < $section_count_hint; $i++ ) {
-                if ( isset( $template_clean[ $i ] ) && $template_clean[ $i ] !== '' ) {
-                    $headings[] = $template_clean[ $i ];
+
+            // Synonym map — AI commonly rephrases these template
+            // section names. Adding a tested synonym list catches
+            // those without false-positives.
+            $synonyms = [
+                'FAQ'                            => [ 'faq', 'frequently asked', 'frequent question', 'common question' ],
+                'References'                     => [ 'reference', 'source', 'bibliograph', 'further reading', 'citation' ],
+                'Conclusion and Call to Action'  => [ 'conclusion', 'call to action', 'wrap up', 'final thought', 'in closing' ],
+                'Conclusion'                     => [ 'conclusion', 'wrap up', 'final thought' ],
+                'Pros and Cons'                  => [ 'pros and cons', 'advantages and disadvantages', 'pros & cons' ],
+            ];
+
+            $heading_blob = strtolower( implode( ' ||| ', $headings ) );
+
+            $section_matches = function ( $template_section ) use ( $heading_blob, $synonyms ) {
+                $name_lc = strtolower( trim( $template_section ) );
+                if ( $name_lc === '' ) return true; // empty entry — treat as covered
+                // Direct substring match
+                if ( $heading_blob !== '' && str_contains( $heading_blob, $name_lc ) ) return true;
+                // Synonym list (case-insensitive)
+                foreach ( $synonyms as $canonical => $variants ) {
+                    if ( strtolower( $canonical ) === $name_lc ) {
+                        foreach ( $variants as $v ) {
+                            if ( str_contains( $heading_blob, strtolower( $v ) ) ) return true;
+                        }
+                    }
+                }
+                // Key-token match (any 5+ char content word)
+                $stopwords = [ 'the','and','a','an','of','to','for','in','on','is','this','that','your','our','my','what','how','why','when','where','which','who' ];
+                $tokens = preg_split( '/[\s\-:]+/', $name_lc );
+                if ( is_array( $tokens ) ) {
+                    foreach ( $tokens as $tok ) {
+                        if ( strlen( $tok ) >= 5 && ! in_array( $tok, $stopwords, true ) && str_contains( $heading_blob, $tok ) ) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
+
+            foreach ( $template_clean as $tmpl ) {
+                // Skip meta-instruction entries that aren't literal H2 names.
+                // Examples: blog_post's "3-5 topic sections with H2 headings",
+                // pillar_guide's "5-10 Chapter Sections", buying_guide's
+                // "Individual Product Mini-Reviews each with H2". These
+                // describe COUNTS / KINDS of sections, not specific heading
+                // texts. Detect by numerical-range / "N items" pattern OR by
+                // length (a real H2 name is usually < 50 chars; meta
+                // descriptions are longer).
+                if ( preg_match( '/\d+\s*-\s*\d+|\d+\s+(topic|chapter|item|section|product|mini)/i', $tmpl ) ) {
+                    continue;
+                }
+                if ( strlen( $tmpl ) > 60 ) {
+                    continue;
+                }
+                if ( ! $section_matches( $tmpl ) ) {
+                    $headings[] = $tmpl;
                 }
             }
         }
