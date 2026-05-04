@@ -486,12 +486,26 @@ Return ONLY the JSON per §4 schema. The "tweets" array contains exactly one ent
   //      event even if something else is on top, last-resort defense
   await dismissModals(page);
 
+  // 2026-05-04 — use typeIntoCompose + submitReply (the proven reply-path
+  // helpers) instead of typeHuman + single-selector click.
+  //
+  // typeHuman uses raw page.keyboard.type which drifts when X re-renders
+  // mid-typing — focus moves off the textarea, characters land nowhere,
+  // tweet stays empty, submit button stays disabled.
+  //
+  // typeIntoCompose binds pressSequentially to the locator so focus can't
+  // drift, then submitReply tries tweetButtonInline → tweetButton →
+  // Ctrl+Enter so we hit whichever submit affordance the current X UI
+  // variant exposes (compose modal uses tweetButtonInline; full-page
+  // /compose/post historically used tweetButton).
   const compose = page.locator('div[data-testid="tweetTextarea_0"]').first();
-  await compose.click({ force: true, timeout: 15000 });
-  await jitter(400, 1000);
-  await typeHuman(page, tweet.text);
+  await typeIntoCompose(compose, tweet.text);
   await jitter(1500, 3000);
-  await page.locator('button[data-testid="tweetButton"]').first().click({ force: true });
+  try {
+    await submitReply(page);
+  } catch (err) {
+    throw new Error(err.message + await debugReplyFailure(page, `actionPost`));
+  }
   await jitter(3000, 5000);
 
   bumpDailyCount('post');
