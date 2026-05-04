@@ -19,7 +19,7 @@
 ## v1.5.216.62.36 — FIX: Schema Block date / datetime-local fields not propagating to React state
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `0b8816e`
 
 ### Why
 
