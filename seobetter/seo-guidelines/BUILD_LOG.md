@@ -7,12 +7,100 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.52)
+> **Last updated:** 2026-05-04 (v1.5.216.62.53)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.53 — Ban inline bolding everywhere (4-layer defense): SEO md rule + 3 prompt sites cleaned + universal anti-bold rule + server-side strip
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on T3 #3 Opinion v62.52 retest:
+
+> "Why is it bolding random text in the articles? It shouldn't do this in any article it has no purpose, its a flag that it is AI generated. Confirm it is in seo.md and confirm humanizer is installed on generation"
+
+Audit of the published article showed 5 bolded fragments in body content:
+1. "Why AI content moderation is broken" (focus keyword bolded — from intro_rule prompt instruction)
+2. "AI content moderation is broken at its core, not just at the margins…" (pull-quote — from opinion guidance instruction)
+3. "Nearly two decades of experience…" (another pull-quote — from opinion guidance)
+4. "A large language model (LLM) is a neural network…" (term definition emphasis — AI random)
+5. "Volume is the enemy: as the number of posts increases…" (topic-sentence emphasis — AI random)
+
+Three of five were sourced from explicit prompt instructions (focus-keyword bolding for SEO, pull-quote bolding for opinion + personal_essay). Two were AI-spontaneous random emphasis. Per [SEO-GEO-AI-GUIDELINES.md §4B "Random bolding"](seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md), inline bolding is a documented AI tell — but the row only banned "every key term bolded" and explicitly *allowed* the focus keyword bolded once. The user wants stricter: zero inline emphasis bolds, only structural list-section labels (**Pros:** / **Cons:** etc.).
+
+### Confirmation: humanizer IS running on every generation
+
+[GEO_Analyzer.php:129](seobetter/includes/GEO_Analyzer.php) — `check_humanizer( $text, $word_count )` fires as part of `analyze()` for every published article. Contributes 4% weight to GEO score. Detects 7 banned word categories + 8 banned patterns per §4B. Source-of-truth is the `BANNED_WORDS_TIER_1` / `BANNED_WORDS_TIER_2` / `BANNED_PATTERNS` constants in `GEO_Analyzer`.
+
+### What changed (4-layer defense)
+
+**Layer 1 — SEO-GEO-AI-GUIDELINES.md §4B "Random bolding" row** ([SEO-GEO-AI-GUIDELINES.md](seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md))
+
+Old: *"Excessive bold — bold primary keyword once only"*
+
+New: *"Random bolding (v1.5.216.62.53 — strict): No bold for emphasis anywhere in body content. The ONLY allowed bold is a list section label at start of a line ending with a colon — `**Pros:**`, `**Cons:**`, `**Prerequisites:**`, `**What You'll Need:**`. No bold on terms, definitions, focus keywords, topic sentences, or pull quotes. Random bolding is a tell that content is AI-generated."*
+
+**Layer 2 — three prompt sites cleaned of explicit bold instructions** ([Async_Generator.php](seobetter/includes/Async_Generator.php))
+
+- Opinion template guidance — removed *"Pull out 1-2 sentences from the thesis or conclusion as candidate pull quotes (bold them with **)"*. Replaced with *"NO INLINE BOLD anywhere in the body — pull-quote sentences should stand on their own without ** markup; the formatter will style them via CSS if pull-quote markup is added later."*
+- Personal Essay template guidance — same change to its pull-quote instruction.
+- Per-section intro rule (`generate_section()` line 1462) — removed *"Bold the keyword once: **{$keyword}**"*. Comment notes that SEO plugins check for keyword PRESENCE not bold formatting; plain-text mention satisfies the SEO check without the AI-tell signal.
+
+**Layer 3 — universal anti-bold rule appended to shared rules block**
+
+```
+BOLDING: Do NOT use bold (** in markdown or <strong>) for emphasis ANYWHERE
+in the article body. No bolding terms, definitions, focus keywords, topic
+sentences, or pull quotes. The ONLY allowed bold is a list section label at
+start of a line ending with a colon: **Pros:**, **Cons:**, **Prerequisites:**,
+**What You Will Need:**. Bolding random text is a tell that content is
+AI-generated.
+```
+
+Applied to all 21 content types, all 38+ languages. Sits next to the existing HUMANIZER rule.
+
+**Layer 4 — server-side `<strong>` strip in `assemble_final()`**
+
+After Content_Formatter renders markdown to HTML, a regex callback walks every `<strong>...</strong>` tag:
+- If inner text is ≤32 chars and ends with a colon → keep (it's a structural label like "Pros:", "Cons:", "Prerequisites:")
+- Otherwise unwrap the tag, leaving inner content as plain text
+
+Universal — runs on every generation regardless of content type or language. Defense in depth: even if the AI ignores the prompt-level rule, the rendered HTML never lands with inline emphasis bolds. The label pattern is language-agnostic (structural shape, not word match).
+
+### H1 note
+
+User's v62.52 retest article still showed 2 H1s. The v62.51 H1→H2 demotion regex IS in place ([Async_Generator.php:2866](seobetter/includes/Async_Generator.php#L2866)) and runs after `Content_Formatter::format()` for every new generation. Existing posts generated before v62.51 keep their baked-in body H1 — the demotion runs at generation time, not at render time. New posts generated post-v62.51 should have only ONE H1 (the theme's post_title render).
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.52 → 62.53
+- `seobetter/includes/Async_Generator.php`:
+  - opinion guidance string — pull-quote bolding removed
+  - personal_essay guidance string — pull-quote bolding removed
+  - `generate_section()` intro_rule (line 1462) — keyword bolding removed
+  - `$shared` rules block — new BOLDING rule appended after HUMANIZER
+  - `assemble_final()` — new `<strong>` strip safety net (after the v62.51 H1 demotion, before `enforce_heading_language()`)
+- `seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §4B "Excessive bold" row tightened to strict-no-bold rule
+
+### Verify
+
+```
+grep -A 2 "BOLDING:" seobetter/includes/Async_Generator.php
+grep -B 1 -A 2 "v1.5.216.62.53 — Server-side inline-bold strip" seobetter/includes/Async_Generator.php
+grep -A 2 "Random bolding (v1.5.216.62.53" seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md
+```
+
+After upload + retest of any article in any language: zero inline `<strong>` tags in body content except structural list labels (**Pros:** / **Cons:** etc.).
+
+**Verified by user:** UNTESTED
 
 ---
 

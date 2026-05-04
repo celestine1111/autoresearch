@@ -410,7 +410,7 @@ High-priority suggestion appears in the Analyze & Improve panel when score < 70,
 | Generic endings | "the future looks bright" | state a specific next step |
 | Challenges formula | "Despite challenges... continues to thrive" | state the specific challenge and response |
 | Synonym cycling | "protagonist / main character / central figure / hero" | pick one term and reuse it |
-| Excessive bold | "**every** **key** **term** bolded" | bold primary keyword once only |
+| Random bolding (v1.5.216.62.53 — strict) | "**every** **key** **term** bolded", a bolded topic sentence, a bolded definition, a bolded pull quote | **No bold for emphasis anywhere in body content.** The ONLY allowed bold is a list section label at start of a line ending with a colon — `**Pros:**`, `**Cons:**`, `**Prerequisites:**`, `**What You'll Need:**`. No bold on terms, definitions, focus keywords, topic sentences, or pull quotes. Random bolding is a tell that content is AI-generated. |
 | Fragmented headers | heading followed by one-line restatement | start with real content |
 
 ### How to Write Naturally
