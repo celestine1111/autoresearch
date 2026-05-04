@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.40)
+> **Last updated:** 2026-05-04 (v1.5.216.62.41)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.41 — FIX: URL normalization for user-typed organizer / offers / hiring-org URLs
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User testing the Job Posting block on staging typed `seobetter.com` (no protocol) into the company URL field. The JSON-LD output rendered `"sameAs": "seobetter.com"` — Schema.org and downstream consumers (Google rich results, LLMs that index URL fields) expect a fully-qualified URL with `https://`. A bare domain isn't a URL.
+
+The same gotcha applies to every user-typed URL field across the 5 Schema Blocks: Event organizer URL, Event offers URL, Job Posting hiring-org URL. Image URLs come from the WP media-library picker so they're already fully-qualified.
+
+### What changed
+
+New helper `Schema_Blocks_Manager::normalize_url()` ([includes/Schema_Blocks_Manager.php](seobetter/includes/Schema_Blocks_Manager.php)):
+
+```
+private static function normalize_url( string $url ): string {
+    $url = trim( $url );
+    if ( $url === '' ) return '';
+    if ( ! preg_match( '#^https?://#i', $url ) ) {
+        $url = 'https://' . ltrim( $url, '/' );
+    }
+    return $url;
+}
+```
+
+Applied at every user-typed URL inlet point in the JSON-LD builders:
+
+- `build_event_jsonld()`: `organizer.url`, `offers.url`
+- `build_jobposting_jsonld()`: `hiringOrganization.sameAs`
+
+Empty inputs return empty strings; callers already gate on truthy values before merging into the node, so empty URLs are still skipped (no `"url": "https://"` artifacts).
+
+Doesn't validate URL plausibility — `notarealurl` becomes `https://notarealurl`. The helper only fixes the missing-protocol gotcha.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.40 → 62.41
+- `seobetter/includes/Schema_Blocks_Manager.php` — new `normalize_url()` helper after `iso_datetime()`; applied in `build_event_jsonld()` and `build_jobposting_jsonld()`
+
+### Verify
+
+```
+grep -n "normalize_url" seobetter/includes/Schema_Blocks_Manager.php
+```
+
+After upload + retest on the dog raw-food article: `hiringOrganization.sameAs` should now be `https://seobetter.com` instead of bare `seobetter.com`.
+
+**Verified by user:** UNTESTED
 
 ---
 

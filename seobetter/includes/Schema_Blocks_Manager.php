@@ -367,11 +367,11 @@ class Schema_Blocks_Manager {
 
         if ( ! empty( $b['organizer_name'] ) ) {
             $organizer = [ '@type' => 'Organization', 'name' => $b['organizer_name'] ];
-            if ( ! empty( $b['organizer_url'] ) ) $organizer['url'] = $b['organizer_url'];
+            if ( ! empty( $b['organizer_url'] ) ) $organizer['url'] = self::normalize_url( $b['organizer_url'] );
             $node['organizer'] = $organizer;
         }
         if ( ! empty( $b['offers_url'] ) ) {
-            $offers = [ '@type' => 'Offer', 'url' => $b['offers_url'] ];
+            $offers = [ '@type' => 'Offer', 'url' => self::normalize_url( $b['offers_url'] ) ];
             if ( ! empty( $b['offers_price'] ) )    $offers['price'] = $b['offers_price'];
             if ( ! empty( $b['offers_currency'] ) ) $offers['priceCurrency'] = $b['offers_currency'];
             $node['offers'] = $offers;
@@ -483,7 +483,7 @@ class Schema_Blocks_Manager {
             ],
         ];
         if ( ! empty( $b['hiring_organization_url'] ) ) {
-            $node['hiringOrganization']['sameAs'] = $b['hiring_organization_url'];
+            $node['hiringOrganization']['sameAs'] = self::normalize_url( $b['hiring_organization_url'] );
         }
         if ( ! empty( $b['valid_through'] ) )   $node['validThrough'] = self::iso_datetime( $b['valid_through'] );
         if ( ! empty( $b['employment_type'] ) ) $node['employmentType'] = $b['employment_type'];
@@ -531,6 +531,35 @@ class Schema_Blocks_Manager {
     private static function iso_datetime( string $input ): string {
         $ts = strtotime( $input );
         return $ts ? gmdate( 'c', $ts ) : '';
+    }
+
+    /**
+     * Normalize a user-typed URL.
+     *
+     * v1.5.216.62.41 — users typing brand names like "seobetter.com" or
+     * "www.example.com" produced JSON-LD where a URL field was a bare
+     * domain. Schema.org Validator and downstream consumers expect a
+     * fully-qualified URL with protocol; missing https:// is the most
+     * common data-entry error in URL fields. Two-step normalization:
+     *
+     *   1. Trim whitespace.
+     *   2. If the value doesn't already start with http:// or https://,
+     *      prepend "https://" so the wire format is always valid.
+     *
+     * Empty input returns an empty string (callers gate on truthy values
+     * before merging the URL into the JSON-LD node, so the empty-string
+     * sentinel preserves existing behavior). Doesn't reject obviously
+     * invalid URLs — `notarealurl` becomes `https://notarealurl`, which
+     * is the user's problem; this helper only fixes the missing-protocol
+     * gotcha.
+     */
+    private static function normalize_url( string $url ): string {
+        $url = trim( $url );
+        if ( $url === '' ) return '';
+        if ( ! preg_match( '#^https?://#i', $url ) ) {
+            $url = 'https://' . ltrim( $url, '/' );
+        }
+        return $url;
     }
 
     // ================================================================
