@@ -19,7 +19,7 @@
 ## v1.5.216.62.52 — Per-content-type word-count minimums realigned to §10.1 low bound (5 types bumped); opinion Arg 3 made required
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `767a212`
 
 ### Why
 
