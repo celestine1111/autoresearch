@@ -815,7 +815,63 @@ CSS;
                                 $output[] = '<h2 class="wp-block-heading has-text-color" style="color:' . esc_attr( $hex ) . '">' . $text . '</h2>';
                                 $output[] = '<!-- /wp:heading -->';
                             }
+                        } elseif ( $is_opinion && preg_match( '/^the\s+objection\b/i', trim( $text ) ) ) {
+                            // v1.5.216.62.59 — Opinion "Devil's Advocate" frame.
+                            // (Moved inside the level===2 chain — the v62.55
+                            // placement after the level===2 branch was unreachable
+                            // because the outer if(level===2) already handled the
+                            // H2 with the default-accent rendering.)
+                            //
+                            // Close any prior objection box (defensive).
+                            if ( $in_objection_box ) {
+                                $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                                $in_objection_box = false;
+                            }
+                            // Emit the H2 (no accent color — let the framed
+                            // wrapper do the visual work). Schema H2 extraction
+                            // and SECTION COUNT CONTRACT still see this heading.
+                            $output[] = '<!-- wp:heading -->';
+                            $output[] = "<h2 class=\"wp-block-heading\">" . $text . "</h2>";
+                            $output[] = '<!-- /wp:heading -->';
+                            // Open the framed wrapper. Distinctive design:
+                            //  - dashed 1px border (no other callout uses dashed)
+                            //  - 0 border-radius (sharp corners — every other
+                            //    callout uses 6-12px radius)
+                            //  - monospace label in uppercase letterspacing
+                            //    (only tech_article uses mono and only for code)
+                            //  - faint warm cream bg #fefdfb
+                            //  - slate-700 ⚖ scales SVG inline with label
+                            $scales_svg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21"/><path d="M5 8h14"/><path d="M5 8l-3 6h6z"/><path d="M19 8l3 6h-6z"/><path d="M2 14a3 3 0 0 0 6 0"/><path d="M16 14a3 3 0 0 0 6 0"/></svg>';
+                            $mono_stack = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace";
+                            $output[] = "<!-- wp:html -->\n"
+                                . '<div style="border:1px dashed #9ca3af !important;border-radius:0 !important;'
+                                . 'background:#fefdfb !important;padding:1.5em 1.75em !important;margin:1.5em 0 2em !important;'
+                                . 'color:#374151 !important">'
+                                . '<div style="display:flex !important;align-items:center !important;gap:10px !important;'
+                                . 'padding-bottom:0.75em !important;margin-bottom:1em !important;'
+                                . 'border-bottom:1px dashed #9ca3af !important">'
+                                . $scales_svg
+                                . '<span style="font-family:' . esc_attr( $mono_stack ) . ' !important;'
+                                . 'font-size:0.78em !important;font-weight:700 !important;'
+                                . 'text-transform:uppercase !important;letter-spacing:0.18em !important;'
+                                . 'color:#1f2937 !important">Devil\'s Advocate</span>'
+                                . '<span style="font-family:' . esc_attr( $mono_stack ) . ' !important;'
+                                . 'font-size:0.72em !important;color:#6b7280 !important;letter-spacing:0.05em !important">'
+                                . '— steelmanned counter-view, then my response</span>'
+                                . "</div>\n<!-- /wp:html -->";
+                            $in_objection_box = true;
                         } else {
+                            // v1.5.216.62.59 — Close Devil's Advocate frame at
+                            // the next H2 if it's not another Objection. Mirror
+                            // of the pattern in the level !== 2 else branch
+                            // below; needed here because the Devil's Advocate
+                            // frame opens INSIDE the level===2 branch and any
+                            // following non-Objection H2 will land in this
+                            // standard-accent else, not in the level !== 2 path.
+                            if ( $in_objection_box ) {
+                                $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                                $in_objection_box = false;
+                            }
                             // All other content types — standard accent color heading
                             $hex = $accent;
                             $output[] = '<!-- wp:heading {"style":{"color":{"text":"' . esc_attr( $hex ) . '"}}} -->';
@@ -826,49 +882,6 @@ CSS;
                         $output[] = '<!-- wp:heading {"level":1} -->';
                         $output[] = "<h1 class=\"wp-block-heading\">{$text}</h1>";
                         $output[] = '<!-- /wp:heading -->';
-                    } elseif ( $is_opinion && $level === 2 && preg_match( '/^the\s+objection\b/i', trim( $text ) ) ) {
-                        // v1.5.216.62.55 — Opinion "Devil's Advocate" frame.
-                        // Close any prior objection box (defensive — shouldn't
-                        // happen since prose template only has one Objection
-                        // section, but the same H2-close pattern as Q/A).
-                        if ( $in_objection_box ) {
-                            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
-                            $in_objection_box = false;
-                        }
-                        // Emit an H2 that the page-outline / Schema generator
-                        // can still see (skipping the H2 entirely would break
-                        // the SECTION COUNT CONTRACT and cause schema H2
-                        // extraction to miss this section).
-                        $output[] = '<!-- wp:heading -->';
-                        $output[] = "<h2 class=\"wp-block-heading\">" . $text . "</h2>";
-                        $output[] = '<!-- /wp:heading -->';
-                        // Open the framed wrapper. Distinctive design:
-                        //  - dashed 1px border (no other callout uses dashed)
-                        //  - 0 border-radius (sharp corners — every other
-                        //    callout uses 6-12px radius)
-                        //  - monospace label in uppercase letterspacing
-                        //    (only tech_article uses mono and only for code)
-                        //  - faint warm cream bg #fefdfb
-                        //  - slate-700 ⚖ scales SVG inline with label
-                        $scales_svg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21"/><path d="M5 8h14"/><path d="M5 8l-3 6h6z"/><path d="M19 8l3 6h-6z"/><path d="M2 14a3 3 0 0 0 6 0"/><path d="M16 14a3 3 0 0 0 6 0"/></svg>';
-                        $mono_stack = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace";
-                        $output[] = "<!-- wp:html -->\n"
-                            . '<div style="border:1px dashed #9ca3af !important;border-radius:0 !important;'
-                            . 'background:#fefdfb !important;padding:1.5em 1.75em !important;margin:1.5em 0 2em !important;'
-                            . 'color:#374151 !important">'
-                            . '<div style="display:flex !important;align-items:center !important;gap:10px !important;'
-                            . 'padding-bottom:0.75em !important;margin-bottom:1em !important;'
-                            . 'border-bottom:1px dashed #9ca3af !important">'
-                            . $scales_svg
-                            . '<span style="font-family:' . esc_attr( $mono_stack ) . ' !important;'
-                            . 'font-size:0.78em !important;font-weight:700 !important;'
-                            . 'text-transform:uppercase !important;letter-spacing:0.18em !important;'
-                            . 'color:#1f2937 !important">Devil\'s Advocate</span>'
-                            . '<span style="font-family:' . esc_attr( $mono_stack ) . ' !important;'
-                            . 'font-size:0.72em !important;color:#6b7280 !important;letter-spacing:0.05em !important">'
-                            . '— steelmanned counter-view, then my response</span>'
-                            . "</div>\n<!-- /wp:html -->";
-                        $in_objection_box = true;
                     } elseif ( $is_interview && $level === 3 && preg_match( '/\?\s*$/', $text ) ) {
                         // v1.5.166 — Interview Q&A: H3 questions get a styled Q card
                         // Close previous answer block if open

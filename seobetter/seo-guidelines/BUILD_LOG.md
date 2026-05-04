@@ -7,12 +7,75 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.58)
+> **Last updated:** 2026-05-04 (v1.5.216.62.59)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.59 — FIX v62.55 Devil's Advocate detection branch was unreachable (placed after outer if(level===2) which already consumed the H2)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User retest of T3 #3 Opinion on v62.58: ✅ all 10 sections now present (the v62.58 truncate_to_target fix landed). But ❌ The Objection H2 still rendered with the standard accent color, no Devil's Advocate frame, no dashed border, no `DEVIL'S ADVOCATE` label.
+
+Root cause: the v62.55 detection branch was placed AFTER an unreachable position in the `case 'heading':` switch. The structure was:
+
+```php
+case 'heading':
+    if ( $level === 2 ) {
+        // ... handles ALL H2s including emit ...
+    } elseif ( $level === 1 ) { ... }
+    elseif ( $is_opinion && $level === 2 && objection regex ) { ← UNREACHABLE
+        // Devil's Advocate frame
+    } elseif ( $is_interview && $level === 3 && ... ) { ... }
+```
+
+The outer `if ( $level === 2 )` branch already handled every H2 (including emitting it with the standard accent color), so the `elseif ( $is_opinion && $level === 2 && ... )` after it could never run.
+
+### What changed
+
+**Detection branch moved INSIDE the level===2 chain** ([Content_Formatter.php](seobetter/includes/Content_Formatter.php))
+
+New structure:
+
+```php
+if ( $level === 2 ) {
+    if ( $is_white_paper ) {
+        // white paper section numbering / executive summary
+    } elseif ( $is_opinion && preg_match( '/^the\s+objection\b/i', trim( $text ) ) ) {
+        // ✅ Devil's Advocate frame — now reachable
+    } else {
+        // close Devil's Advocate frame if open + emit standard accent H2
+    }
+}
+```
+
+The `else` branch (standard accent) also picks up the close-at-next-H2 logic so the framed wrapper closes when "What This Means" / "FAQ" / etc. follow The Objection.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.58 → 62.59
+- `seobetter/includes/Content_Formatter.php`:
+  - Devil's Advocate detection moved into `if ( $level === 2 )` branch as elseif before the standard-accent else
+  - Standard-accent else branch picks up the `$in_objection_box` close pattern
+
+### Verify
+
+```
+grep -B 1 -A 2 "v1.5.216.62.59 — Opinion" seobetter/includes/Content_Formatter.php
+grep -B 1 -A 2 "v1.5.216.62.59 — Close Devil" seobetter/includes/Content_Formatter.php
+```
+
+After upload + retest opinion: The Objection H2 should render WITHOUT the standard purple accent color, followed by the framed wrapper (`border:1px dashed #9ca3af`, `border-radius:0`, `DEVIL'S ADVOCATE` monospace label, ⚖ scales SVG, dashed divider).
+
+**Verified by user:** UNTESTED
 
 ---
 
