@@ -7,12 +7,84 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.45)
+> **Last updated:** 2026-05-04 (v1.5.216.62.46)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.46 — Employment / Career / Workplace authority taxonomy fully expanded (~50 global domains + AU/US/GB/CA regional layers)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User retest of T3 #1 with v62.45 (third retest) succeeded — Expert Quotes pipeline now finds quotes (gallup.com cited 6 times in the published article, score 86, "this topic" leak gone). User then asked: *"can you update career workplace category with authoritative sites for reference… research and follow guide for external links."*
+
+The v62.44 employment list was 17 domains — enough to unblock the pipeline but not comprehensive. Per [external-links-policy.md §10](seobetter/seo-guidelines/external-links-policy.md), authoritative-source coverage maps to: government regulators, university research bodies, professional associations, international bodies, peer-reviewed databases, workplace-research polling, mental-health bodies. Wider coverage = more chances Tavily / Sonar find a citable authority sentence for any given employment-related keyword (productivity, remote work, hiring, burnout, salary, training, leadership, etc.).
+
+### Sources researched (May 2026)
+
+- [ILO World Employment & Social Outlook 2026](https://www.ilo.org/publications/flagship-reports/employment-and-social-trends-2026) — top-tier global labour market data
+- [BLS Employment Projections + CES + OES](https://www.bls.gov/) — primary US labour stats
+- [OECD Employment Outlook](https://www.oecd.org/) + Eurofound + EU-OSHA — EU/OECD reference
+- [Sage Journals Organizational Psychology Review](https://journals.sagepub.com/home/opr) — peer-reviewed I-O psych
+- [SIOP-SHRM White Papers (Society for Industrial-Organizational Psychology)](https://www.siop.org/) — academic-practitioner partnership
+- [HBR](https://hbr.org/) + [MIT Sloan Management Review](https://sloanreview.mit.edu/) + Cornell ILR + Wharton + INSEAD knowledge bases — university research
+- CIPD (UK), AHRI (Australia), HRPA (Canada) — professional associations
+- Gallup State of the Global Workplace + Pew Research workplace polls — survey data
+- NBER (National Bureau of Economic Research) — labour economics working papers
+- APA / BPS / Mind UK — mental health authority bodies
+
+### What changed
+
+**1. Global `employment` authority list expanded 17 → ~52 domains** ([includes/Content_Injector.php::get_authority_domains()](seobetter/includes/Content_Injector.php))
+
+7 categories per the policy doc structure:
+
+1. **Government / labor stats** — bls.gov, dol.gov, osha.gov, eeoc.gov, census.gov, cdc.gov, nih.gov, ons.gov.uk, gov.uk, hse.gov.uk, ec.europa.eu, eurofound.europa.eu, osha.europa.eu, abs.gov.au, fairwork.gov.au, safeworkaustralia.gov.au, statcan.gc.ca
+2. **International bodies** — ilo.org, oecd.org, weforum.org, worldbank.org, imf.org, who.int, unesco.org
+3. **University research / business school knowledge** — hbr.org, hbswk.hbs.edu, sloanreview.mit.edu, knowledge.wharton.upenn.edu, knowledge.insead.edu, ilr.cornell.edu, said.ox.ac.uk, jbs.cam.ac.uk
+4. **Professional associations** — shrm.org, siop.org, cipd.co.uk, ahri.com.au, hrpa.ca, td.org, worldatwork.org
+5. **Workplace research / polling / consulting** — gallup.com, pewresearch.org, mckinsey.com, deloitte.com, pwc.com, kpmg.com, bcg.com, nber.org
+6. **Mental health / psychology bodies** — apa.org, bps.org.uk, mind.org.uk
+7. **Peer-reviewed databases / journals** — jstor.org, sciencedirect.com, springer.com, sagepub.com, tandfonline.com, wiley.com, academic.oup.com, cambridge.org, emerald.com, researchgate.net, ssrn.com, arxiv.org, nature.com
+
+**2. Country-specific `employment` overlays (AU / US / GB / CA)**
+
+Same `get_authority_domains()` — regional `country => domain => domains` map gains an `employment` entry per country, layered on top of the global list per the existing pattern.
+
+- **AU:** abs.gov.au, fairwork.gov.au, safeworkaustralia.gov.au, ahri.com.au, productivitycommission.gov.au, jobsearch.gov.au, employment.gov.au, abc.net.au, afr.com
+- **US:** bls.gov, dol.gov, osha.gov, eeoc.gov, census.gov, ilr.cornell.edu, hbswk.hbs.edu, shrm.org, siop.org
+- **GB:** ons.gov.uk, gov.uk, hse.gov.uk, cipd.co.uk, bps.org.uk, mind.org.uk, said.ox.ac.uk, jbs.cam.ac.uk, bbc.co.uk, theguardian.com, ft.com
+- **CA:** statcan.gc.ca, canada.ca, cic.gc.ca, hrpa.ca, cbc.ca, globeandmail.com
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.45 → 62.46
+- `seobetter/includes/Content_Injector.php`:
+  - global `employment` entry in the category-keyed authority map (now ~52 domains, 7 categories)
+  - country-specific `employment` overlays added under AU / US / GB / CA blocks
+
+### Verify
+
+```
+grep -A 3 "// v1.5.216.62.46 — AU employment" seobetter/includes/Content_Injector.php
+grep -A 3 "// v1.5.216.62.46 — US employment" seobetter/includes/Content_Injector.php
+grep -A 3 "// v1.5.216.62.46 — UK employment" seobetter/includes/Content_Injector.php
+grep -A 3 "// v1.5.216.62.46 — CA employment" seobetter/includes/Content_Injector.php
+grep -c "'employment' =>" seobetter/includes/Content_Injector.php   # should be 5 (1 global + 4 regional)
+```
+
+After upload + retest:
+- Workplace / productivity / hiring / training / leadership / burnout articles should pull quotes from a wider mix of authority domains (BLS, ONS, ILO, OECD, Gallup, Pew, HBR, MIT Sloan, SHRM, SIOP, CIPD, AHRI, HRPA, NBER, peer-reviewed journals).
+- AU-targeted employment articles should preferentially cite ABS / Fair Work / Safe Work / AHRI; UK-targeted should preferentially cite ONS / CIPD / HSE / BPS; etc.
+
+**Verified by user:** UNTESTED
 
 ---
 

@@ -1798,19 +1798,52 @@ Return ONLY the Markdown table, nothing else.";
                 'ed.gov', 'ukri.org', 'unesco.org',
             ],
             // v1.5.216.62.44 — Employment / Career / Workplace.
-            // The Business category is B2B / corporate-strategy oriented (HBR,
-            // McKinsey, Bloomberg). Employment-related topics (remote work,
-            // career advice, productivity, workplace wellness, hiring,
-            // workplace mental health) need a different authority list:
-            // labor statistics agencies, workplace research bodies, peer-
-            // reviewed psych/management journals, labor economics outlets.
+            // v1.5.216.62.46 — full taxonomy expansion (~50 domains) per
+            // user research request. Categories follow the structure in
+            // external-links-policy.md §10:
+            //   1) Government / labor stats agencies
+            //   2) International bodies
+            //   3) University research / business school knowledge
+            //   4) Professional associations
+            //   5) Workplace research / polling / consulting
+            //   6) Mental health / psychology bodies
+            //   7) Peer-reviewed databases / journals
+            // Country-specific employment domains (AU/GB/US/CA) live in the
+            // regional section below, layered on top of this global list.
             'employment' => [
-                'bls.gov', 'oecd.org', 'ilo.org',
+                // 1) Government / labor stats — US
+                'bls.gov', 'dol.gov', 'osha.gov', 'eeoc.gov', 'census.gov',
+                'cdc.gov', 'nih.gov',  // NIOSH / NIMH / NIEHS covered as subdomains
+                // 1) Government / labor stats — UK / EU
+                'ons.gov.uk', 'gov.uk', 'hse.gov.uk',
+                'ec.europa.eu', 'eurofound.europa.eu', 'osha.europa.eu',
+                // 1) Government / labor stats — AU / CA
+                'abs.gov.au', 'fairwork.gov.au', 'safeworkaustralia.gov.au',
+                'statcan.gc.ca',
+                // 2) International bodies
+                'ilo.org', 'oecd.org', 'weforum.org', 'worldbank.org',
+                'imf.org', 'who.int', 'unesco.org',
+                // 3) University research / business school knowledge
+                'hbr.org', 'hbswk.hbs.edu', 'sloanreview.mit.edu',
+                'knowledge.wharton.upenn.edu', 'knowledge.insead.edu',
+                'ilr.cornell.edu', 'said.ox.ac.uk', 'jbs.cam.ac.uk',
+                // 4) Professional associations (HR / management / I-O psych)
+                'shrm.org', 'siop.org', 'cipd.co.uk',
+                'ahri.com.au', 'hrpa.ca',
+                'td.org', 'worldatwork.org',
+                // 5) Workplace research / polling / consulting
                 'gallup.com', 'pewresearch.org',
-                'apa.org', 'shrm.org',
-                'hbr.org', 'sloanreview.mit.edu', 'mckinsey.com',
-                'who.int', 'cdc.gov',
+                'mckinsey.com', 'deloitte.com', 'pwc.com', 'kpmg.com', 'bcg.com',
+                'nber.org',
+                // 6) Mental health / psychology bodies
+                'apa.org', 'bps.org.uk', 'mind.org.uk',
+                // 7) Peer-reviewed databases / journals
                 'jstor.org', 'sciencedirect.com', 'springer.com',
+                'sagepub.com', 'tandfonline.com', 'wiley.com',
+                'academic.oup.com', 'cambridge.org',
+                'emerald.com',
+                'researchgate.net', 'ssrn.com', 'arxiv.org', 'nature.com',
+                // Brand
                 'mindiam.com', 'seobetter.com',
             ],
             // v1.5.216.62.17 — added top trade outlets + national academies
@@ -1976,6 +2009,13 @@ Return ONLY the Markdown table, nothing else.";
                 'government' => [
                     'aph.gov.au', 'pm.gov.au', 'abs.gov.au', 'abc.net.au',
                 ],
+                // v1.5.216.62.46 — AU employment authorities
+                'employment' => [
+                    'abs.gov.au', 'fairwork.gov.au', 'safeworkaustralia.gov.au',
+                    'ahri.com.au', 'productivitycommission.gov.au',
+                    'jobsearch.gov.au', 'employment.gov.au',
+                    'abc.net.au', 'afr.com',
+                ],
             ],
             'US' => [
                 // v1.5.216.62.12 — added USDA APHIS, AAHA hospital accreditor,
@@ -2020,6 +2060,12 @@ Return ONLY the Markdown table, nothing else.";
                 'education' => [
                     'ed.gov', 'harvard.edu', 'mit.edu', 'stanford.edu',
                 ],
+                // v1.5.216.62.46 — US employment authorities
+                'employment' => [
+                    'bls.gov', 'dol.gov', 'osha.gov', 'eeoc.gov', 'census.gov',
+                    'ilr.cornell.edu', 'hbswk.hbs.edu',
+                    'shrm.org', 'siop.org',
+                ],
             ],
             'GB' => [
                 // v1.5.216.62.12 — added DEFRA, RCVS, BSAVA, accredited vet schools,
@@ -2056,6 +2102,13 @@ Return ONLY the Markdown table, nothing else.";
                 'government' => [
                     'gov.uk', 'parliament.uk', 'bbc.co.uk',
                 ],
+                // v1.5.216.62.46 — UK employment authorities
+                'employment' => [
+                    'ons.gov.uk', 'gov.uk', 'hse.gov.uk',
+                    'cipd.co.uk', 'bps.org.uk', 'mind.org.uk',
+                    'said.ox.ac.uk', 'jbs.cam.ac.uk',
+                    'bbc.co.uk', 'theguardian.com', 'ft.com',
+                ],
             ],
             'CA' => [
                 'animals' => [
@@ -2077,6 +2130,12 @@ Return ONLY the Markdown table, nothing else.";
                 ],
                 'news' => [
                     'cbc.ca', 'globalnews.ca', 'thestar.com', 'globeandmail.com',
+                ],
+                // v1.5.216.62.46 — CA employment authorities
+                'employment' => [
+                    'statcan.gc.ca', 'canada.ca', 'cic.gc.ca',
+                    'hrpa.ca',
+                    'cbc.ca', 'globeandmail.com',
                 ],
             ],
             'NZ' => [
