@@ -19,7 +19,7 @@
 ## v1.5.216.62.38 — UX: LocalBusiness Schema Block — 96-type dropdown, day-grid hours, OpenStreetMap coordinate lookup
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `bf4d4e9`
 
 ### Why
 
