@@ -416,13 +416,26 @@ class Schema_Blocks_Manager {
         return $node;
     }
 
-    /** VacationRental — uses LodgingBusiness type with vacation-specific fields */
+    /**
+     * VacationRental — Schema.org subclass of Accommodation.
+     *
+     * v1.5.216.62.40 — @type changed from `["LodgingBusiness", "VacationRental"]`
+     * to just `"VacationRental"`. The two parent classes were semantically
+     * incompatible: VacationRental inherits from Accommodation (Place →
+     * Accommodation), whereas LodgingBusiness inherits from
+     * LocalBusiness (Place → Organization). Properties like `occupancy`,
+     * `numberOfRooms`, and `amenityFeature` are only defined on
+     * Accommodation — Schema.org Validator warned "occupancy is not
+     * recognised for an object of type LodgingBusiness". Dropping
+     * LodgingBusiness keeps every existing field valid and matches
+     * Google's documented VacationRental rich-result spec.
+     */
     private static function build_vacationrental_jsonld( array $b ): ?array {
         if ( empty( $b['name'] ) ) return null;
         if ( empty( $b['street_address'] ) && empty( $b['locality'] ) ) return null;
 
         $node = [
-            '@type' => [ 'LodgingBusiness', 'VacationRental' ],
+            '@type' => 'VacationRental',
             'name'  => $b['name'],
         ];
         if ( ! empty( $b['description'] ) ) $node['description'] = $b['description'];

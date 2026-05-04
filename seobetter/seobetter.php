@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.39
+ * Version: 1.5.216.62.40
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.39' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.40' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -950,6 +950,48 @@ final class SEOBetter {
                     ];
                 }
             }
+        }
+
+        // v1.5.216.62.40 — Schema Blocks (Pro+) emit their JSON-LD as
+        // inline `<script type="application/ld+json">` tags in the post's
+        // rendered HTML, not via the article-level @graph. Walk the
+        // post's parsed blocks and add a rich-types entry for each
+        // SEOBetter Schema Block instance so the sidebar surfaces them
+        // in the Rich Results Preview list alongside the article schema.
+        $sb_block_map = [
+            'seobetter/product'         => [ 'type' => 'Product',         'label' => 'Product card' ],
+            'seobetter/event'           => [ 'type' => 'Event',           'label' => 'Event card' ],
+            'seobetter/local-business'  => [ 'type' => 'LocalBusiness',   'label' => 'Local Business card' ],
+            'seobetter/vacation-rental' => [ 'type' => 'VacationRental',  'label' => 'Vacation Rental card' ],
+            'seobetter/job-posting'     => [ 'type' => 'JobPosting',      'label' => 'Job Posting card' ],
+        ];
+        if ( function_exists( 'parse_blocks' ) ) {
+            $sb_blocks = parse_blocks( $post->post_content ?: '' );
+            $walk = function ( $blocks ) use ( &$walk, &$result, $sb_block_map ) {
+                foreach ( $blocks as $block ) {
+                    $bn = $block['blockName'] ?? '';
+                    if ( $bn && isset( $sb_block_map[ $bn ] ) ) {
+                        $attrs  = $block['attrs'] ?? [];
+                        $title  = $attrs['name'] ?? $attrs['title'] ?? '';
+                        $detail = $title ? wp_trim_words( wp_strip_all_tags( $title ), 6 ) : '';
+                        // For LocalBusiness, prefer the human-readable
+                        // business_type label (Restaurant, Plumber, etc.)
+                        // since "LocalBusiness" alone is generic.
+                        if ( $bn === 'seobetter/local-business' && ! empty( $attrs['business_type'] ) ) {
+                            $detail = trim( ( $detail ? $detail . ' — ' : '' ) . str_replace( '_', ' ', $attrs['business_type'] ) );
+                        }
+                        $result['rich_preview']['rich_types'][] = [
+                            'type'   => $sb_block_map[ $bn ]['type'],
+                            'label'  => $sb_block_map[ $bn ]['label'],
+                            'detail' => $detail,
+                        ];
+                    }
+                    if ( ! empty( $block['innerBlocks'] ) ) {
+                        $walk( $block['innerBlocks'] );
+                    }
+                }
+            };
+            $walk( $sb_blocks );
         }
 
         // v1.5.216.62.26 — Schema Impact Estimate stats removed.

@@ -7,12 +7,55 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.39)
+> **Last updated:** 2026-05-04 (v1.5.216.62.40)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.40 — FIX VacationRental @type warning; FEATURE Schema Blocks shown in Rich Results Preview tab
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+Two issues from user testing the v62.38 Vacation Rental block on staging:
+
+1. **Schema.org Validator warning:** "The property `occupancy` is not recognised by the schema (e.g. schema.org) for an object of type LodgingBusiness." Same warning would apply to `numberOfRooms` and `amenityFeature`. Cause: the v62.38 build emitted `@type: ["LodgingBusiness", "VacationRental"]`. These two parent classes are semantically incompatible — `VacationRental` inherits from `Accommodation` (Place → Accommodation), where `occupancy`/`numberOfRooms`/`amenityFeature` are defined. `LodgingBusiness` inherits from `LocalBusiness` (Place → Organization), where they aren't.
+
+2. **Schema Blocks invisible in the SEOBetter Rich Results Preview tab.** The sidebar's Rich Results Preview lists active rich-result types detected from the article-level `@graph` (Recipe, FAQ, Review, Breadcrumb, ItemList, Speakable). Schema Blocks emit their JSON-LD as inline `<script type="application/ld+json">` tags in the post's rendered HTML, so they were never picked up — the user could insert a LocalBusiness or VacationRental block and the sidebar would still show only the article schemas.
+
+### What changed
+
+**1. Drop LodgingBusiness from VacationRental @type** ([includes/Schema_Blocks_Manager.php::build_vacationrental_jsonld()](seobetter/includes/Schema_Blocks_Manager.php))
+
+`@type` now `'VacationRental'` (single string). This is the bare Schema.org type, properly inheriting Accommodation properties. Matches Google's documented VacationRental rich-result spec. Every existing field stays valid: `occupancy`, `numberOfRooms`, `amenityFeature`, `petsAllowed`, `priceRange`.
+
+**2. Schema Blocks added to Rich Results Preview detection** ([seobetter.php in the rich_preview population block, after the @graph loop](seobetter/seobetter.php))
+
+Walks `parse_blocks($post->post_content)` recursively (including innerBlocks). When it encounters one of the 5 SEOBetter Schema Block names — `seobetter/product`, `seobetter/event`, `seobetter/local-business`, `seobetter/vacation-rental`, `seobetter/job-posting` — adds a corresponding `rich_types` entry: "Product card", "Event card", "Local Business card", "Vacation Rental card", "Job Posting card". Detail field is populated from the block's `name` / `title` attribute (truncated to 6 words). For LocalBusiness, the `business_type` value is appended to the detail so the sidebar shows e.g. "My Café — Restaurant" instead of just "My Café".
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.39 → 62.40; Schema Block detection inside the `$result['rich_preview']` population block
+- `seobetter/includes/Schema_Blocks_Manager.php::build_vacationrental_jsonld()` — `@type` changed to `'VacationRental'` (drops `LodgingBusiness`)
+
+### Verify
+
+```
+grep -A 5 "VacationRental — Schema.org subclass of Accommodation" seobetter/includes/Schema_Blocks_Manager.php
+grep -n "sb_block_map" seobetter/seobetter.php
+```
+
+After upload + retest:
+- Validator: insert a Vacation Rental block, save, paste URL into validator.schema.org — `occupancy` warning should be gone.
+- Sidebar: any post with a Schema Block should show a corresponding "[Type] card" entry in the Rich Results Preview list.
+
+**Verified by user:** UNTESTED
 
 ---
 
