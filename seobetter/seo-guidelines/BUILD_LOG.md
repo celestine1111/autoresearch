@@ -19,7 +19,7 @@
 ## v1.5.216.62.57 — Outline-padding v2 — content-aware missing-section detection (v62.56 was naive index-based and skipped The Objection while duplicating FAQ)
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `eaab918`
 
 ### Why
 
