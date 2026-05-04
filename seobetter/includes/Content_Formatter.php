@@ -843,9 +843,19 @@ CSS;
                             //  - slate-700 ⚖ scales SVG inline with label
                             $scales_svg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21"/><path d="M5 8h14"/><path d="M5 8l-3 6h6z"/><path d="M19 8l3 6h-6z"/><path d="M2 14a3 3 0 0 0 6 0"/><path d="M16 14a3 3 0 0 0 6 0"/></svg>';
                             $mono_stack = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace";
+                            // v1.5.216.62.60 — center the framed wrapper within the
+                            // content area + responsive width across all WordPress theme
+                            // template sizes. Pattern matches the Opinion disclosure bar
+                            // (margin:0 auto + max-width:100%) so the frame fits any
+                            // theme's content-area width (narrow 700px columns, wide
+                            // 1200px templates, RTL wrappers, etc.) and stays
+                            // horizontally centered. Inner content remains
+                            // left-anchored per the user's "always on the left for this
+                            // one" requirement.
                             $output[] = "<!-- wp:html -->\n"
                                 . '<div style="border:1px dashed #9ca3af !important;border-radius:0 !important;'
-                                . 'background:#fefdfb !important;padding:1.5em 1.75em !important;margin:1.5em 0 2em !important;'
+                                . 'background:#fefdfb !important;padding:1.5em 1.75em !important;'
+                                . 'margin:1.5em auto 2em !important;max-width:100% !important;'
                                 . 'color:#374151 !important">'
                                 . '<div style="display:flex !important;align-items:center !important;gap:10px !important;'
                                 . 'padding-bottom:0.75em !important;margin-bottom:1em !important;'

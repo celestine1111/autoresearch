@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.59)
+> **Last updated:** 2026-05-04 (v1.5.216.62.60)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.60 — Center Devil's Advocate frame in content area; article-marketing.md research expansion (WP-native AI plugin tier + per-article generation settings)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+Two unrelated items bundled in one ship:
+
+**1. Devil's Advocate frame centering.** User retest of v62.59 confirmed the frame renders, but it was anchored to the left edge of the content area instead of centered. Pre-fix CSS: `margin:1.5em 0 2em` (no auto for left/right). Looked good in narrow themes but in wider templates the frame hugged the left rail.
+
+User's requirement: *"you just need to centre it"* + *"it should be adjusted for all different template sizes on wordpress but always on the left for this one"* — meaning frame WRAPPER centers responsively, content INSIDE the wrapper stays left-anchored. Pattern already used by the Opinion disclosure bar (`margin:0 auto 20px !important;max-width:100% !important`).
+
+**2. article-marketing.md research expansion.** User asked: *"research the top AI content generator plugins for wordpress then find extrapolate keywords to write posts about, with the correct article settings and update article-marketing.md"*. Existing doc covered SaaS players (Surfer/Frase/Jasper/Scalenut/Koala/NeuronWriter) + SEO incumbents (Yoast/RankMath/AIOSEO/SEOPress) but missed the **WP-native AI plugin tier** — the most direct competitors. Sources: GetGenie WP.org listing (80K+ active installs), Bertha AI, AI Engine.
+
+### What changed
+
+**1. `Content_Formatter.php` — Devil's Advocate centering**
+
+```diff
+- margin:1.5em 0 2em !important;
++ margin:1.5em auto 2em !important;max-width:100% !important;
+```
+
+Mirrors the Opinion disclosure bar pattern. Frame wrapper auto-centers within the parent content area; inner header (⚖ + label) stays left-anchored via the existing `display:flex; align-items:center` flow. Responsive across all WP theme content widths.
+
+**2. `article-marketing.md` — research expansion**
+
+- New **Section E** in the Competitor Traffic Map: 5 articles targeting WP-native AI plugin competitors (GetGenie alternatives / GetGenie vs SEOBetter / AI Engine WP alternative / Bertha AI alternatives / Best WP AI plugin no subscription)
+- New **WP-native plugin keyword set** in Keyword Targets — 10 commercial keywords (`getgenie alternative`, `ai engine wordpress alternative`, `bertha ai alternative`, `wordpress ai plugin no subscription`, etc.)
+- New **Per-article SEOBetter generation settings** table covering all 25 articles (1-25): explicit `content_type` / `length` / `country` / `language` / `category` per article, derived from §10.1 word ranges + v62.52 minimums
+- **Editorial calendar extended** 12→16 weeks: weeks 1-7 unchanged (wedge informational), weeks 8-12 front-load the 5 new WP-native plugin articles (lower DA than Surfer/Jasper, closer to install conversion), weeks 13-16 keep the original SaaS-comparison content. Reasoning section explains why WP-native articles take priority.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.59 → 62.60
+- `seobetter/includes/Content_Formatter.php` — Devil's Advocate margin/max-width fix
+- `seobetter/seo-guidelines/article-marketing.md` — Section E (5 articles), WP-native keyword set (10), per-article generation settings table (25 articles), updated 16-week editorial calendar
+
+### Verify
+
+```
+grep -A 3 "v1.5.216.62.60 — center the framed wrapper" seobetter/includes/Content_Formatter.php
+grep -A 5 "E. Native WordPress AI-plugin competitors" seobetter/seo-guidelines/article-marketing.md
+```
+
+After upload + retest opinion: Devil's Advocate frame should center horizontally in any theme's content area; inner ⚖ + DEVIL'S ADVOCATE label and dashed divider remain left-anchored.
+
+**Verified by user:** UNTESTED (centering); article-marketing.md updates are docs-only, no testing needed.
 
 ---
 
