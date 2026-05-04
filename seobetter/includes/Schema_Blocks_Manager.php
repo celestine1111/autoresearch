@@ -862,58 +862,181 @@ class Schema_Blocks_Manager {
      * "FoodEstablishment" into a readable label for the card header.
      */
     private static function humanize_business_type( string $type ): string {
+        // v1.5.216.62.38 — extended from 50 → 96 entries to match the
+        // expanded business_type dropdown in assets/js/schema-blocks.js
+        // DEFS.localbusiness. Card header shows a friendly label; stored
+        // value remains the bare Schema.org token (preserves JSON-LD).
         $map = [
+            // General
             'LocalBusiness'      => 'Local Business',
+            'ProfessionalService'=> 'Professional Service',
+
+            // Food & drink
             'Restaurant'         => 'Restaurant',
+            'FastFoodRestaurant' => 'Fast-Food Restaurant',
             'Cafe'               => 'Café',
+            'CafeOrCoffeeShop'   => 'Café',
             'BarOrPub'           => 'Bar / Pub',
+            'Bakery'             => 'Bakery',
+            'IceCreamShop'       => 'Ice Cream Shop',
+            'Brewery'            => 'Brewery',
+            'Winery'             => 'Winery',
+            'Distillery'         => 'Distillery',
+            'FoodEstablishment'  => 'Food Establishment',
+
+            // Lodging
             'Hotel'              => 'Hotel',
-            'LodgingBusiness'    => 'Lodging',
+            'Motel'              => 'Motel',
             'BedAndBreakfast'    => 'Bed & Breakfast',
             'Hostel'             => 'Hostel',
             'Resort'             => 'Resort',
-            'FoodEstablishment'  => 'Food Establishment',
-            'Bakery'             => 'Bakery',
-            'Brewery'            => 'Brewery',
-            'Winery'             => 'Winery',
+            'SkiResort'          => 'Ski Resort',
+            'Campground'         => 'Campground',
+            'RVPark'             => 'RV Park',
+            'LodgingBusiness'    => 'Lodging',
+
+            // Stores / retail
             'Store'              => 'Store',
             'ClothingStore'      => 'Clothing Store',
-            'GroceryStore'       => 'Grocery',
-            'BookStore'          => 'Bookstore',
-            'HardwareStore'      => 'Hardware Store',
+            'MensClothingStore'  => "Men's Clothing",
+            'ShoeStore'          => 'Shoe Store',
             'JewelryStore'       => 'Jeweller',
+            'GroceryStore'       => 'Grocery',
+            'ConvenienceStore'   => 'Convenience Store',
+            'LiquorStore'        => 'Liquor Store',
+            'Florist'            => 'Florist',
+            'BookStore'          => 'Bookstore',
+            'MusicStore'         => 'Music Store',
+            'HobbyShop'          => 'Hobby Shop',
+            'ToyStore'           => 'Toy Store',
+            'SportingGoodsStore' => 'Sporting Goods',
+            'BikeStore'          => 'Bike Store',
             'PetStore'           => 'Pet Store',
+            'ElectronicsStore'   => 'Electronics Store',
+            'ComputerStore'      => 'Computer Store',
+            'MobilePhoneStore'   => 'Mobile-Phone Store',
+            'OfficeEquipmentStore'=> 'Office Equipment',
+            'FurnitureStore'     => 'Furniture Store',
+            'HomeGoodsStore'     => 'Home Goods',
+            'HardwareStore'      => 'Hardware Store',
+            'GardenStore'        => 'Garden Centre',
+            'DepartmentStore'    => 'Department Store',
+            'OutletStore'        => 'Outlet Store',
+            'WholesaleStore'     => 'Wholesale Store',
+            'PawnShop'           => 'Pawn Shop',
+            'TireShop'           => 'Tire Shop',
+            'AutoPartsStore'     => 'Auto Parts',
             'ShoppingCenter'     => 'Shopping Centre',
-            'AutoDealer'         => 'Auto Dealer',
-            'AutoRepair'         => 'Auto Repair',
-            'GasStation'         => 'Gas Station',
-            'BankOrCreditUnion'  => 'Bank',
-            'AutomatedTeller'    => 'ATM',
-            'RealEstateAgent'    => 'Real Estate Agent',
-            'TravelAgency'       => 'Travel Agency',
-            'Dentist'            => 'Dentist',
-            'Physician'          => 'Doctor',
+
+            // Health
             'Hospital'           => 'Hospital',
+            'MedicalClinic'      => 'Medical Clinic',
+            'Physician'          => 'Doctor',
+            'Dentist'            => 'Dentist',
             'Pharmacy'           => 'Pharmacy',
+            'Optician'           => 'Optician',
             'VeterinaryCare'     => 'Veterinary Care',
+
+            // Beauty
             'BeautySalon'        => 'Beauty Salon',
             'HairSalon'          => 'Hair Salon',
             'NailSalon'          => 'Nail Salon',
             'DaySpa'             => 'Spa',
             'HealthClub'         => 'Gym',
-            'SportsClub'         => 'Sports Club',
-            'Library'            => 'Library',
-            'MovieTheater'       => 'Cinema',
-            'Museum'             => 'Museum',
-            'Park'               => 'Park',
-            'TouristAttraction'  => 'Tourist Attraction',
+            'TattooParlor'       => 'Tattoo Parlour',
+
+            // Auto
+            'AutoDealer'         => 'Auto Dealer',
+            'AutoRepair'         => 'Auto Repair',
+            'AutoBodyShop'       => 'Auto Body Shop',
+            'AutoRental'         => 'Auto Rental',
+            'AutoWash'           => 'Car Wash',
+            'GasStation'         => 'Gas Station',
+            'MotorcycleDealer'   => 'Motorcycle Dealer',
+            'MotorcycleRepair'   => 'Motorcycle Repair',
+
+            // Home services
             'Plumber'            => 'Plumber',
             'Electrician'        => 'Electrician',
+            'HVACBusiness'       => 'HVAC',
             'HousePainter'       => 'House Painter',
+            'RoofingContractor'  => 'Roofing Contractor',
+            'GeneralContractor'  => 'General Contractor',
             'Locksmith'          => 'Locksmith',
             'MovingCompany'      => 'Moving Company',
-            'ChildCare'          => 'Childcare',
+
+            // Financial / legal
+            'BankOrCreditUnion'  => 'Bank',
+            'AutomatedTeller'    => 'ATM',
+            'AccountingService'  => 'Accounting Service',
+            'InsuranceAgency'    => 'Insurance Agency',
+            'FinancialService'   => 'Financial Service',
+            'Attorney'           => 'Attorney',
+            'Notary'             => 'Notary',
+            'LegalService'       => 'Legal Service',
+
+            // Travel / real estate
+            'TravelAgency'       => 'Travel Agency',
+            'TouristInformationCenter' => 'Tourist Information Centre',
+            'RealEstateAgent'    => 'Real Estate Agent',
+
+            // Sports & recreation
+            'BowlingAlley'       => 'Bowling Alley',
+            'GolfCourse'         => 'Golf Course',
+            'SportsClub'         => 'Sports Club',
+            'StadiumOrArena'     => 'Stadium / Arena',
+            'TennisComplex'      => 'Tennis Complex',
+            'PublicSwimmingPool' => 'Swimming Pool',
+            'ExerciseGym'        => 'Exercise Gym',
+
+            // Entertainment
+            'MovieTheater'       => 'Cinema',
+            'AmusementPark'      => 'Amusement Park',
+            'ArtGallery'         => 'Art Gallery',
+            'Casino'             => 'Casino',
+            'ComedyClub'         => 'Comedy Club',
+            'NightClub'          => 'Night Club',
+            'EntertainmentBusiness' => 'Entertainment',
+
+            // Civic
+            'Library'            => 'Library',
+            'Museum'             => 'Museum',
+            'TouristAttraction'  => 'Tourist Attraction',
+            'GovernmentOffice'   => 'Government Office',
+            'PostOffice'         => 'Post Office',
+            'FireStation'        => 'Fire Station',
+            'PoliceStation'      => 'Police Station',
+            'EmergencyService'   => 'Emergency Service',
+            'AnimalShelter'      => 'Animal Shelter',
+            'RecyclingCenter'    => 'Recycling Centre',
+            'PlaceOfWorship'     => 'Place of Worship',
+            'Church'             => 'Church',
+            'Mosque'             => 'Mosque',
+            'Synagogue'          => 'Synagogue',
+            'HinduTemple'        => 'Hindu Temple',
+            'BuddhistTemple'     => 'Buddhist Temple',
+            'CatholicChurch'     => 'Catholic Church',
+            'Cemetery'           => 'Cemetery',
+            'FuneralParlor'      => 'Funeral Parlour',
+            'Park'               => 'Park',
+
+            // Education
             'School'             => 'School',
+            'Preschool'          => 'Preschool',
+            'ElementarySchool'   => 'Elementary School',
+            'MiddleSchool'       => 'Middle School',
+            'HighSchool'         => 'High School',
+            'CollegeOrUniversity'=> 'College / University',
+            'ChildCare'          => 'Childcare',
+
+            // Other
+            'EmploymentAgency'   => 'Employment Agency',
+            'DryCleaningOrLaundry'=> 'Dry Cleaning / Laundry',
+            'SelfStorage'        => 'Self Storage',
+            'InternetCafe'       => 'Internet Café',
+            'RadioStation'       => 'Radio Station',
+            'TelevisionStation'  => 'Television Station',
+            'ArchiveOrganization'=> 'Archive Organisation',
         ];
         return $map[ $type ] ?? str_replace( '_', ' ', ucfirst( $type ) );
     }

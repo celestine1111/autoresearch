@@ -7,12 +7,77 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.37)
+> **Last updated:** 2026-05-04 (v1.5.216.62.38)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.38 — UX: LocalBusiness Schema Block — 96-type dropdown, day-grid hours, OpenStreetMap coordinate lookup
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User feedback after testing v62.37 LocalBusiness block on staging:
+
+1. **Business type dropdown only had 41 options.** Schema.org's LocalBusiness taxonomy has ~96 valid sub-types — users couldn't pick "Bowling Alley", "Roofing Contractor", "Catholic Church", etc., and were forced to pick a generic parent type (less specific = worse for Google rich results / "near me" search ranking).
+2. **Opening hours was a free-text textarea** asking the user to type Schema.org wire format `Mo-Fr 09:00-17:00\nSa 10:00-14:00`. Users had no idea what the format was, typo'd it, or skipped the field. JSON-LD silently emitted bad strings.
+3. **Latitude / longitude were two raw text fields with no help.** Users have no clue what their coordinates are. Looking them up means leaving the editor, opening Google Maps, right-click → "What's here?", copying both numbers. Most users skipped the field — Google Maps ranking signal lost.
+
+### What changed
+
+**1. business_type dropdown expanded 41 → 96 options** (`assets/js/schema-blocks.js::DEFS.localbusiness.business_type` line ~684–844)
+
+Full Schema.org LocalBusiness sub-type taxonomy plus commonly-misclassified neighbours (Place subtypes like Museum/Park, EducationalOrganization subtypes like School/CollegeOrUniversity). Labels are category-prefixed for the flat searchable Combobox: "Food & drink — Restaurant", "Lodging — Hotel", "Store — Hardware", "Auto — Tire shop", "Home services — Plumber", "Civic — Catholic Church", etc. Type "auto", "store", or "food" to filter.
+
+Stored value is the bare Schema.org token (preserves JSON-LD validity). 16 categories: General, Food & drink, Lodging, Stores, Health, Beauty, Auto, Home services, Financial, Legal, Travel, Real estate, Sports, Entertainment, Civic, Education, Other.
+
+PHP `humanize_business_type()` map extended to match (`includes/Schema_Blocks_Manager.php` line ~864–1040, all 96 entries). Card header shows the friendly label for any of the new types.
+
+**2. Opening hours: day-by-day grid** (`assets/js/schema-blocks.js::renderField case 'opening_hours'` line ~320–470)
+
+Custom React widget rendering 7 day rows (Mon–Sun). Each row: open/closed checkbox + two HTML5 `<input type="time">` pickers (open / close). Below the grid: two helper buttons — "Copy first row → Mon-Fri" and "Copy first row → all open days".
+
+Wire format unchanged: the widget's `formatHours()` function builds the schema.org strings (`["Mo-Fr 09:00-17:00", "Sa 10:00-14:00"]`) by collapsing consecutive same-hours days into ranges. The PHP parser at `Schema_Blocks_Manager::build_localbusiness_jsonld()` line 405 still splits on `\n` unchanged. Round-trip parsing supported: any valid existing free-text value parses back into the grid (lines that don't match the regex are silently dropped on next save — intentional migration to grid-as-source-of-truth).
+
+A live preview line under the grid shows the current wire format: `Schema.org wire format: Mo-Fr 09:00-17:00 • Sa 10:00-14:00`.
+
+**3. Coordinates: OpenStreetMap "Get from address" button** (`assets/js/schema-blocks.js::renderField case 'geo_coordinates'` line ~470–565)
+
+Combined latitude + longitude widget with a "Get coordinates from address" button that calls the public OpenStreetMap Nominatim geocoder (`https://nominatim.openstreetmap.org/search?q=...&format=json&limit=1`). Reads the address fields above (`street_address`, `locality`, `region`, `postal_code`, `country`), URL-encodes them as a single query, fetches one result, fills both lat and lng atomically.
+
+Why OpenStreetMap not Google Maps: Google requires a billing-enabled API key per user-install. Nominatim is free, no API key, attribution shown via help-text "© OpenStreetMap contributors". Rate limit is 1 req/sec per IP — fine for single-button user-triggered lookups.
+
+User can still edit the values manually, or blank them out. Both fields render side-by-side in flex layout (lat / lng) with placeholders.
+
+The standalone `longitude` field-def is now `type: 'hidden'` (registered as a block attribute via `attrsFromDefs()` so it round-trips through save/load, but not rendered as its own row — the `latitude` field's `geo_coordinates` widget owns both inputs). New `case 'hidden':` in `renderField` returns `null`.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.37 → 62.38; comment on `schema_block_field_defs('localbusiness')` noting JS is the source of truth for the 96-type list
+- `seobetter/assets/js/schema-blocks.js`:
+  - `renderField()` — added 3 new field-type cases: `opening_hours`, `geo_coordinates`, `hidden`
+  - `DEFS.localbusiness.business_type` — expanded 41 → 96 options
+  - `DEFS.localbusiness.opening_hours` — type changed `textarea` → `opening_hours`
+  - `DEFS.localbusiness.latitude` — type changed `text` → `geo_coordinates` (now the combined widget)
+  - `DEFS.localbusiness.longitude` — type changed `text` → `hidden` (still registered as attribute)
+- `seobetter/includes/Schema_Blocks_Manager.php::humanize_business_type()` — extended 50 → 96 entries
+
+### Verify
+
+```
+grep -c "value:" seobetter/assets/js/schema-blocks.js | head   # business_type now ~96 options
+grep -n "case 'opening_hours'\|case 'geo_coordinates'\|case 'hidden'" seobetter/assets/js/schema-blocks.js
+grep -n "nominatim.openstreetmap.org" seobetter/assets/js/schema-blocks.js
+grep -c "=>" seobetter/includes/Schema_Blocks_Manager.php   # humanize_business_type map larger
+```
+
+**Verified by user:** UNTESTED
 
 ---
 

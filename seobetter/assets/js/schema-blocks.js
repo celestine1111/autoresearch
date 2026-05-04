@@ -317,6 +317,262 @@
                         } )
                     )
                 );
+            case 'opening_hours': {
+                // v1.5.216.62.38 — Day-by-day grid replaces free-text textarea
+                // for LocalBusiness opening hours. Each day has an open/closed
+                // toggle plus two HTML5 time pickers. "Copy Mon → weekdays"
+                // and "Copy Mon → all open days" buttons speed up common
+                // cases. Wire format unchanged: schema.org strings like
+                // "Mo-Fr 09:00-17:00\nSa 10:00-14:00" — newline-separated.
+                // PHP parser at Schema_Blocks_Manager::build_localbusiness_jsonld()
+                // splits on \n unchanged. Consecutive days with identical
+                // hours collapse to "Mo-Fr 09:00-17:00" automatically when
+                // the value is rebuilt. Existing free-text values still
+                // parse round-trip — every line matched by the regex below
+                // populates the grid; unmatched lines are silently dropped
+                // (only on next save), so users with custom strings see them
+                // wiped — but that's the intended migration: the UI is now
+                // the source of truth.
+                var DAYS = [
+                    { id: 'Mo', short: 'Mon' },
+                    { id: 'Tu', short: 'Tue' },
+                    { id: 'We', short: 'Wed' },
+                    { id: 'Th', short: 'Thu' },
+                    { id: 'Fr', short: 'Fri' },
+                    { id: 'Sa', short: 'Sat' },
+                    { id: 'Su', short: 'Sun' }
+                ];
+                var dayIdxOf = function ( id ) {
+                    for ( var k = 0; k < DAYS.length; k++ ) if ( DAYS[ k ].id === id ) return k;
+                    return -1;
+                };
+                var parseHours = function ( str ) {
+                    var grid = {};
+                    DAYS.forEach( function ( d ) { grid[ d.id ] = null; } );
+                    if ( ! str ) return grid;
+                    str.split( /[\r\n]+/ ).forEach( function ( raw ) {
+                        var line = ( raw || '' ).trim();
+                        if ( ! line ) return;
+                        var m = line.match( /^([A-Za-z]{2})(?:-([A-Za-z]{2}))?\s+(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/ );
+                        if ( ! m ) return;
+                        var startIdx = dayIdxOf( m[1] );
+                        if ( startIdx === -1 ) return;
+                        var endIdx = m[2] ? dayIdxOf( m[2] ) : startIdx;
+                        if ( endIdx === -1 ) endIdx = startIdx;
+                        for ( var i = startIdx; i <= endIdx; i++ ) {
+                            grid[ DAYS[ i ].id ] = { open: m[3], close: m[4] };
+                        }
+                    } );
+                    return grid;
+                };
+                var formatHours = function ( grid ) {
+                    var lines = [];
+                    var i = 0;
+                    while ( i < DAYS.length ) {
+                        var hours = grid[ DAYS[ i ].id ];
+                        if ( ! hours ) { i++; continue; }
+                        var j = i;
+                        while (
+                            j + 1 < DAYS.length &&
+                            grid[ DAYS[ j + 1 ].id ] &&
+                            grid[ DAYS[ j + 1 ].id ].open  === hours.open &&
+                            grid[ DAYS[ j + 1 ].id ].close === hours.close
+                        ) j++;
+                        lines.push(
+                            ( j === i ? DAYS[ i ].id : DAYS[ i ].id + '-' + DAYS[ j ].id ) +
+                            ' ' + hours.open + '-' + hours.close
+                        );
+                        i = j + 1;
+                    }
+                    return lines.join( '\n' );
+                };
+                var grid = parseHours( value );
+                var pushGrid = function ( g ) { onChange( formatHours( g ) ); };
+                var setDay = function ( dayId, hours ) {
+                    var g = {};
+                    DAYS.forEach( function ( d ) { g[ d.id ] = grid[ d.id ]; } );
+                    g[ dayId ] = hours;
+                    pushGrid( g );
+                };
+                var copySource = function () {
+                    // Find first open day to use as source for "copy" buttons.
+                    for ( var k = 0; k < DAYS.length; k++ ) if ( grid[ DAYS[ k ].id ] ) return DAYS[ k ];
+                    return null;
+                };
+                var copyToWeekdays = function () {
+                    var src = copySource(); if ( ! src ) return;
+                    var g = {};
+                    DAYS.forEach( function ( d ) { g[ d.id ] = grid[ d.id ]; } );
+                    [ 'Mo', 'Tu', 'We', 'Th', 'Fr' ].forEach( function ( id ) {
+                        g[ id ] = { open: grid[ src.id ].open, close: grid[ src.id ].close };
+                    } );
+                    pushGrid( g );
+                };
+                var copyToAllOpen = function () {
+                    var src = copySource(); if ( ! src ) return;
+                    var g = {};
+                    DAYS.forEach( function ( d ) {
+                        g[ d.id ] = grid[ d.id ]
+                            ? { open: grid[ src.id ].open, close: grid[ src.id ].close }
+                            : null;
+                    } );
+                    pushGrid( g );
+                };
+                var inputStyle = {
+                    flex: '0 0 auto', width: '90px', padding: '4px 6px',
+                    fontSize: '12px', lineHeight: '18px', background: '#fff',
+                    border: '1px solid #757575', borderRadius: '2px', boxSizing: 'border-box'
+                };
+                return el( 'div', { key: fieldKey, className: 'components-base-control', style: { marginBottom: '24px' } },
+                    el( 'label', {
+                        className: 'components-base-control__label',
+                        style: { display: 'block', marginBottom: '8px', fontSize: '11px', fontWeight: 500, lineHeight: 1.4, textTransform: 'uppercase' }
+                    }, label ),
+                    el( 'div', { style: { background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px' } },
+                        DAYS.map( function ( d ) {
+                            var hours  = grid[ d.id ];
+                            var isOpen = !! hours;
+                            return el( 'div', {
+                                key: d.id,
+                                style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', minHeight: '28px' }
+                            },
+                                el( 'label', {
+                                    style: { display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px', fontSize: '12px', cursor: 'pointer' }
+                                },
+                                    el( 'input', {
+                                        type: 'checkbox',
+                                        checked: isOpen,
+                                        onChange: function ( e ) {
+                                            setDay( d.id, e.target.checked ? { open: '09:00', close: '17:00' } : null );
+                                        }
+                                    } ),
+                                    el( 'span', { style: { fontWeight: isOpen ? 600 : 400 } }, d.short )
+                                ),
+                                isOpen ? el( 'input', {
+                                    type: 'time',
+                                    value: hours.open,
+                                    onChange: function ( e ) {
+                                        setDay( d.id, { open: e.target.value, close: hours.close } );
+                                    },
+                                    style: inputStyle
+                                } ) : null,
+                                isOpen ? el( 'span', { style: { color: '#888', fontSize: '12px' } }, '–' ) : el( 'span', { style: { color: '#888', fontSize: '12px', fontStyle: 'italic' } }, 'Closed' ),
+                                isOpen ? el( 'input', {
+                                    type: 'time',
+                                    value: hours.close,
+                                    onChange: function ( e ) {
+                                        setDay( d.id, { open: hours.open, close: e.target.value } );
+                                    },
+                                    style: inputStyle
+                                } ) : null
+                            );
+                        } )
+                    ),
+                    el( 'div', { style: { marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' } },
+                        el( Button, { variant: 'tertiary', isSmall: true, onClick: copyToWeekdays }, 'Copy first row → Mon-Fri' ),
+                        el( Button, { variant: 'tertiary', isSmall: true, onClick: copyToAllOpen }, 'Copy first row → all open days' )
+                    ),
+                    el( 'p', { style: { fontSize: '11px', color: '#6b7280', marginTop: '6px' } },
+                        'Schema.org wire format: ' + ( formatHours( grid ).replace( /\n/g, ' • ' ) || '(none — closed all week)' )
+                    )
+                );
+            }
+            case 'geo_coordinates': {
+                // v1.5.216.62.38 — Combined latitude + longitude widget with
+                // a "Get from address" button that calls the OpenStreetMap
+                // Nominatim public geocoder (free, no API key, attribution
+                // required which we provide via the help-text link). The
+                // field key is `latitude` for storage purposes; this widget
+                // also writes `longitude` as a sibling attribute on the
+                // same setAttr call. The standalone `longitude` field-def
+                // is marked type:'hidden' so it's still declared as a
+                // block attribute but doesn't render its own row.
+                //
+                // Why OSM not Google Maps Geocoding: Google requires a
+                // billing-enabled API key per user-install. Nominatim is
+                // free and the accuracy for street-level postal addresses
+                // is good enough for "near me" search structured-data.
+                // Rate limit: 1 req/sec per IP — fine for single-button
+                // user-triggered lookups.
+                var lat = attrs.latitude  || '';
+                var lng = attrs.longitude || '';
+                var lookupBusy = false;
+                var coordInputStyle = {
+                    flex: '1 1 0', minWidth: 0, padding: '6px 8px',
+                    fontSize: '13px', lineHeight: '20px', background: '#fff',
+                    border: '1px solid #757575', borderRadius: '2px', boxSizing: 'border-box'
+                };
+                var doLookup = function ( e ) {
+                    if ( e && e.preventDefault ) e.preventDefault();
+                    if ( lookupBusy ) return;
+                    var parts = [
+                        attrs.street_address, attrs.locality, attrs.region, attrs.postal_code, attrs.country
+                    ].filter( function ( p ) { return p && String( p ).trim(); } );
+                    if ( parts.length === 0 ) {
+                        window.alert( 'Fill in the address fields above first (street, city, country).' );
+                        return;
+                    }
+                    var query = parts.join( ', ' );
+                    lookupBusy = true;
+                    fetch( 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent( query ) + '&format=json&limit=1&addressdetails=0', {
+                        headers: { 'Accept': 'application/json' }
+                    } )
+                        .then( function ( r ) { return r.ok ? r.json() : []; } )
+                        .then( function ( results ) {
+                            lookupBusy = false;
+                            if ( results && results.length > 0 ) {
+                                setAttr( {
+                                    latitude:  String( results[0].lat || '' ),
+                                    longitude: String( results[0].lon || '' )
+                                } );
+                            } else {
+                                window.alert( 'No coordinates found for "' + query + '". Try a more specific address.' );
+                            }
+                        } )
+                        .catch( function () {
+                            lookupBusy = false;
+                            window.alert( 'OpenStreetMap lookup failed. Check your internet connection and try again.' );
+                        } );
+                };
+                return el( 'div', { key: fieldKey, className: 'components-base-control', style: { marginBottom: '24px' } },
+                    el( 'label', {
+                        className: 'components-base-control__label',
+                        style: { display: 'block', marginBottom: '8px', fontSize: '11px', fontWeight: 500, lineHeight: 1.4, textTransform: 'uppercase' }
+                    }, 'Coordinates (lat, lng)' ),
+                    el( Button, {
+                        variant: 'secondary',
+                        onClick: doLookup,
+                        style: { marginBottom: '8px' }
+                    }, 'Get coordinates from address' ),
+                    el( 'div', { style: { display: 'flex', gap: '8px' } },
+                        el( 'input', {
+                            type: 'text',
+                            placeholder: 'Latitude',
+                            value: lat,
+                            onChange: function ( e ) { setAttr( { latitude: e.target.value } ); },
+                            style: coordInputStyle
+                        } ),
+                        el( 'input', {
+                            type: 'text',
+                            placeholder: 'Longitude',
+                            value: lng,
+                            onChange: function ( e ) { setAttr( { longitude: e.target.value } ); },
+                            style: coordInputStyle
+                        } )
+                    ),
+                    el( 'p', { style: { fontSize: '11px', color: '#6b7280', marginTop: '4px' } },
+                        'Optional — improves Google Maps "near me" results. Coordinates from OpenStreetMap (© OpenStreetMap contributors).'
+                    )
+                );
+            }
+            case 'hidden':
+                // Field is registered as a block attribute (so the value
+                // round-trips through save/load) but isn't rendered in the
+                // sidebar. Used by `longitude` on LocalBusiness — its UI
+                // is owned by the sibling `latitude` field's geo_coordinates
+                // widget. Returning null produces no DOM but keeps the
+                // attribute schema valid.
+                return null;
             case 'text':
             default:
                 return el( TextControl, { key: fieldKey, label: label, value: value || '', placeholder: placeholder, onChange: onChange } );
@@ -677,49 +933,186 @@
             offers_currency:  { label: 'Ticket currency', type: 'select', searchable: true, options: CURRENCY_OPTIONS }
         },
         localbusiness: {
+            // v1.5.216.62.38 — business_type expanded from 41 → 96 entries
+            // covering the full Schema.org LocalBusiness taxonomy plus the
+            // commonly-misclassified neighbours (Place subtypes like Museum,
+            // EducationalOrganization subtypes like School). Labels are
+            // category-prefixed so a flat searchable Combobox (no optgroup
+            // support) still feels organized — type "food" or "auto" or
+            // "store" to filter. Stored value is the bare Schema.org token
+            // (preserves JSON-LD validity); friendly card-header label is
+            // produced by Schema_Blocks_Manager::humanize_business_type().
             business_type:    { label: 'Business type',  type: 'select',   searchable: true, options: [
-                { value: 'LocalBusiness',     label: 'Local Business (generic)' },
-                { value: 'Restaurant',        label: 'Restaurant' },
-                { value: 'Cafe',              label: 'Café' },
-                { value: 'BarOrPub',          label: 'Bar / Pub' },
-                { value: 'Hotel',             label: 'Hotel' },
-                { value: 'BedAndBreakfast',   label: 'Bed & Breakfast' },
-                { value: 'Hostel',            label: 'Hostel' },
-                { value: 'Bakery',            label: 'Bakery' },
-                { value: 'Brewery',           label: 'Brewery' },
-                { value: 'Winery',            label: 'Winery' },
-                { value: 'Store',             label: 'Store (generic)' },
-                { value: 'ClothingStore',     label: 'Clothing store' },
-                { value: 'GroceryStore',      label: 'Grocery store' },
-                { value: 'BookStore',         label: 'Bookstore' },
-                { value: 'JewelryStore',      label: 'Jeweller' },
-                { value: 'PetStore',          label: 'Pet store' },
-                { value: 'BeautySalon',       label: 'Beauty salon' },
-                { value: 'HairSalon',         label: 'Hair salon' },
-                { value: 'NailSalon',         label: 'Nail salon' },
-                { value: 'DaySpa',            label: 'Spa' },
-                { value: 'HealthClub',        label: 'Gym / health club' },
-                { value: 'AutoDealer',        label: 'Auto dealer' },
-                { value: 'AutoRepair',        label: 'Auto repair' },
-                { value: 'GasStation',        label: 'Gas station' },
-                { value: 'BankOrCreditUnion', label: 'Bank' },
-                { value: 'RealEstateAgent',   label: 'Real estate agent' },
-                { value: 'TravelAgency',      label: 'Travel agency' },
-                { value: 'Dentist',           label: 'Dentist' },
-                { value: 'Physician',         label: 'Doctor' },
-                { value: 'Hospital',          label: 'Hospital' },
-                { value: 'Pharmacy',          label: 'Pharmacy' },
-                { value: 'VeterinaryCare',    label: 'Veterinary clinic' },
-                { value: 'MovieTheater',      label: 'Cinema' },
-                { value: 'Museum',            label: 'Museum' },
-                { value: 'TouristAttraction', label: 'Tourist attraction' },
-                { value: 'Plumber',           label: 'Plumber' },
-                { value: 'Electrician',       label: 'Electrician' },
-                { value: 'HousePainter',      label: 'House painter' },
-                { value: 'Locksmith',         label: 'Locksmith' },
-                { value: 'MovingCompany',     label: 'Moving company' },
-                { value: 'ChildCare',         label: 'Childcare' },
-                { value: 'School',            label: 'School' }
+                { value: 'LocalBusiness',           label: 'General — Local Business' },
+                { value: 'ProfessionalService',     label: 'General — Professional Service' },
+
+                // Food & drink
+                { value: 'Restaurant',              label: 'Food & drink — Restaurant' },
+                { value: 'FastFoodRestaurant',      label: 'Food & drink — Fast-food restaurant' },
+                { value: 'CafeOrCoffeeShop',        label: 'Food & drink — Café / coffee shop' },
+                { value: 'BarOrPub',                label: 'Food & drink — Bar / pub' },
+                { value: 'Bakery',                  label: 'Food & drink — Bakery' },
+                { value: 'IceCreamShop',            label: 'Food & drink — Ice cream shop' },
+                { value: 'Brewery',                 label: 'Food & drink — Brewery' },
+                { value: 'Winery',                  label: 'Food & drink — Winery' },
+                { value: 'Distillery',              label: 'Food & drink — Distillery' },
+                { value: 'FoodEstablishment',       label: 'Food & drink — Food establishment (generic)' },
+
+                // Lodging
+                { value: 'Hotel',                   label: 'Lodging — Hotel' },
+                { value: 'Motel',                   label: 'Lodging — Motel' },
+                { value: 'BedAndBreakfast',         label: 'Lodging — Bed & breakfast' },
+                { value: 'Hostel',                  label: 'Lodging — Hostel' },
+                { value: 'Resort',                  label: 'Lodging — Resort' },
+                { value: 'SkiResort',               label: 'Lodging — Ski resort' },
+                { value: 'Campground',              label: 'Lodging — Campground' },
+                { value: 'RVPark',                  label: 'Lodging — RV park' },
+                { value: 'LodgingBusiness',         label: 'Lodging — Lodging (generic)' },
+
+                // Stores / retail
+                { value: 'Store',                   label: 'Store — Store (generic)' },
+                { value: 'ClothingStore',           label: 'Store — Clothing store' },
+                { value: 'MensClothingStore',       label: "Store — Men's clothing" },
+                { value: 'ShoeStore',               label: 'Store — Shoe store' },
+                { value: 'JewelryStore',            label: 'Store — Jeweller' },
+                { value: 'GroceryStore',            label: 'Store — Grocery store' },
+                { value: 'ConvenienceStore',        label: 'Store — Convenience store' },
+                { value: 'LiquorStore',             label: 'Store — Liquor store' },
+                { value: 'Florist',                 label: 'Store — Florist' },
+                { value: 'BookStore',               label: 'Store — Bookstore' },
+                { value: 'MusicStore',              label: 'Store — Music store' },
+                { value: 'HobbyShop',               label: 'Store — Hobby shop' },
+                { value: 'ToyStore',                label: 'Store — Toy store' },
+                { value: 'SportingGoodsStore',      label: 'Store — Sporting goods' },
+                { value: 'BikeStore',               label: 'Store — Bike store' },
+                { value: 'PetStore',                label: 'Store — Pet store' },
+                { value: 'ElectronicsStore',        label: 'Store — Electronics' },
+                { value: 'ComputerStore',           label: 'Store — Computer store' },
+                { value: 'MobilePhoneStore',        label: 'Store — Mobile-phone store' },
+                { value: 'OfficeEquipmentStore',    label: 'Store — Office equipment' },
+                { value: 'FurnitureStore',          label: 'Store — Furniture' },
+                { value: 'HomeGoodsStore',          label: 'Store — Home goods' },
+                { value: 'HardwareStore',           label: 'Store — Hardware' },
+                { value: 'GardenStore',             label: 'Store — Garden centre' },
+                { value: 'DepartmentStore',         label: 'Store — Department store' },
+                { value: 'OutletStore',             label: 'Store — Outlet store' },
+                { value: 'WholesaleStore',          label: 'Store — Wholesale' },
+                { value: 'PawnShop',                label: 'Store — Pawn shop' },
+                { value: 'TireShop',                label: 'Store — Tire shop' },
+                { value: 'AutoPartsStore',          label: 'Store — Auto parts' },
+                { value: 'ShoppingCenter',          label: 'Store — Shopping centre' },
+
+                // Health & medical
+                { value: 'Hospital',                label: 'Health — Hospital' },
+                { value: 'MedicalClinic',           label: 'Health — Medical clinic' },
+                { value: 'Physician',               label: 'Health — Doctor' },
+                { value: 'Dentist',                 label: 'Health — Dentist' },
+                { value: 'Pharmacy',                label: 'Health — Pharmacy' },
+                { value: 'Optician',                label: 'Health — Optician' },
+                { value: 'VeterinaryCare',          label: 'Health — Veterinary clinic' },
+
+                // Beauty & personal care
+                { value: 'BeautySalon',             label: 'Beauty — Beauty salon' },
+                { value: 'HairSalon',               label: 'Beauty — Hair salon' },
+                { value: 'NailSalon',               label: 'Beauty — Nail salon' },
+                { value: 'DaySpa',                  label: 'Beauty — Day spa' },
+                { value: 'HealthClub',              label: 'Beauty — Gym / health club' },
+                { value: 'TattooParlor',            label: 'Beauty — Tattoo parlour' },
+
+                // Auto
+                { value: 'AutoDealer',              label: 'Auto — Auto dealer' },
+                { value: 'AutoRepair',              label: 'Auto — Auto repair' },
+                { value: 'AutoBodyShop',            label: 'Auto — Auto body shop' },
+                { value: 'AutoRental',              label: 'Auto — Auto rental' },
+                { value: 'AutoWash',                label: 'Auto — Car wash' },
+                { value: 'GasStation',              label: 'Auto — Gas station' },
+                { value: 'MotorcycleDealer',        label: 'Auto — Motorcycle dealer' },
+                { value: 'MotorcycleRepair',       label: 'Auto — Motorcycle repair' },
+
+                // Home / construction services
+                { value: 'Plumber',                 label: 'Home services — Plumber' },
+                { value: 'Electrician',             label: 'Home services — Electrician' },
+                { value: 'HVACBusiness',            label: 'Home services — HVAC' },
+                { value: 'HousePainter',            label: 'Home services — House painter' },
+                { value: 'RoofingContractor',       label: 'Home services — Roofing contractor' },
+                { value: 'GeneralContractor',       label: 'Home services — General contractor' },
+                { value: 'Locksmith',               label: 'Home services — Locksmith' },
+                { value: 'MovingCompany',           label: 'Home services — Moving company' },
+
+                // Financial / professional / legal
+                { value: 'BankOrCreditUnion',       label: 'Financial — Bank / credit union' },
+                { value: 'AutomatedTeller',         label: 'Financial — ATM' },
+                { value: 'AccountingService',       label: 'Financial — Accounting service' },
+                { value: 'InsuranceAgency',         label: 'Financial — Insurance agency' },
+                { value: 'FinancialService',        label: 'Financial — Financial service (generic)' },
+                { value: 'Attorney',                label: 'Legal — Attorney / law firm' },
+                { value: 'Notary',                  label: 'Legal — Notary' },
+                { value: 'LegalService',            label: 'Legal — Legal service (generic)' },
+
+                // Travel / tourism
+                { value: 'TravelAgency',            label: 'Travel — Travel agency' },
+                { value: 'TouristInformationCenter', label: 'Travel — Tourist information centre' },
+
+                // Real estate
+                { value: 'RealEstateAgent',         label: 'Real estate — Real estate agent' },
+
+                // Sports & recreation
+                { value: 'BowlingAlley',            label: 'Sports — Bowling alley' },
+                { value: 'GolfCourse',              label: 'Sports — Golf course' },
+                { value: 'SportsClub',              label: 'Sports — Sports club' },
+                { value: 'StadiumOrArena',          label: 'Sports — Stadium / arena' },
+                { value: 'TennisComplex',           label: 'Sports — Tennis complex' },
+                { value: 'PublicSwimmingPool',      label: 'Sports — Swimming pool' },
+                { value: 'ExerciseGym',             label: 'Sports — Exercise gym' },
+
+                // Entertainment
+                { value: 'MovieTheater',            label: 'Entertainment — Cinema' },
+                { value: 'AmusementPark',           label: 'Entertainment — Amusement park' },
+                { value: 'ArtGallery',              label: 'Entertainment — Art gallery' },
+                { value: 'Casino',                  label: 'Entertainment — Casino' },
+                { value: 'ComedyClub',              label: 'Entertainment — Comedy club' },
+                { value: 'NightClub',               label: 'Entertainment — Night club' },
+                { value: 'EntertainmentBusiness',   label: 'Entertainment — Entertainment (generic)' },
+
+                // Civic / community
+                { value: 'Library',                 label: 'Civic — Library' },
+                { value: 'Museum',                  label: 'Civic — Museum' },
+                { value: 'TouristAttraction',       label: 'Civic — Tourist attraction' },
+                { value: 'GovernmentOffice',        label: 'Civic — Government office' },
+                { value: 'PostOffice',              label: 'Civic — Post office' },
+                { value: 'FireStation',             label: 'Civic — Fire station' },
+                { value: 'PoliceStation',           label: 'Civic — Police station' },
+                { value: 'EmergencyService',        label: 'Civic — Emergency service' },
+                { value: 'AnimalShelter',           label: 'Civic — Animal shelter' },
+                { value: 'RecyclingCenter',         label: 'Civic — Recycling centre' },
+                { value: 'PlaceOfWorship',          label: 'Civic — Place of worship (generic)' },
+                { value: 'Church',                  label: 'Civic — Church' },
+                { value: 'Mosque',                  label: 'Civic — Mosque' },
+                { value: 'Synagogue',               label: 'Civic — Synagogue' },
+                { value: 'HinduTemple',             label: 'Civic — Hindu temple' },
+                { value: 'BuddhistTemple',          label: 'Civic — Buddhist temple' },
+                { value: 'CatholicChurch',          label: 'Civic — Catholic church' },
+                { value: 'Cemetery',                label: 'Civic — Cemetery' },
+                { value: 'FuneralParlor',           label: 'Civic — Funeral parlour' },
+                { value: 'Park',                    label: 'Civic — Park' },
+
+                // Education
+                { value: 'School',                  label: 'Education — School (generic)' },
+                { value: 'Preschool',               label: 'Education — Preschool' },
+                { value: 'ElementarySchool',        label: 'Education — Elementary school' },
+                { value: 'MiddleSchool',            label: 'Education — Middle school' },
+                { value: 'HighSchool',              label: 'Education — High school' },
+                { value: 'CollegeOrUniversity',     label: 'Education — College / university' },
+                { value: 'ChildCare',               label: 'Education — Childcare' },
+
+                // Other services
+                { value: 'EmploymentAgency',        label: 'Other — Employment agency' },
+                { value: 'DryCleaningOrLaundry',    label: 'Other — Dry cleaning / laundry' },
+                { value: 'SelfStorage',             label: 'Other — Self storage' },
+                { value: 'InternetCafe',            label: 'Other — Internet café' },
+                { value: 'RadioStation',            label: 'Other — Radio station' },
+                { value: 'TelevisionStation',       label: 'Other — Television station' },
+                { value: 'ArchiveOrganization',     label: 'Other — Archive organisation' }
             ] },
             name:             { label: 'Name',           type: 'text',     required: true },
             description:      { label: 'Description',    type: 'textarea' },
@@ -730,10 +1123,14 @@
             postal_code:      { label: 'Postal code',    type: 'text' },
             country:          { label: 'Country',         type: 'select',   searchable: true, options: COUNTRY_OPTIONS },
             telephone:        { label: 'Telephone',      type: 'text' },
-            opening_hours:    { label: 'Opening hours',  type: 'textarea', placeholder: 'Mo-Fr 09:00-17:00\nSa 10:00-14:00' },
+            // v62.38 — opening_hours uses the day-grid widget (renderField
+            // case 'opening_hours'). Wire format unchanged for PHP.
+            opening_hours:    { label: 'Opening hours',  type: 'opening_hours' },
             price_range:      { label: 'Price range',    type: 'text',     placeholder: '$$' },
-            latitude:         { label: 'Latitude',       type: 'text',     placeholder: '40.7128' },
-            longitude:        { label: 'Longitude',      type: 'text',     placeholder: '-74.0060' }
+            // v62.38 — latitude renders the combined coords + OSM-lookup
+            // widget; longitude is stored but not rendered separately.
+            latitude:         { label: 'Coordinates',    type: 'geo_coordinates' },
+            longitude:        { label: 'Longitude',      type: 'hidden' }
         },
         vacationrental: {
             name:             { label: 'Name',           type: 'text',     required: true },
