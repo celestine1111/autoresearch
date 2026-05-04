@@ -7,12 +7,86 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.35)
+> **Last updated:** 2026-05-04 (v1.5.216.62.36)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.36 — FIX: Schema Block date / datetime-local fields not propagating to React state
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+T6 smoke test continued. After v62.35 (PHP/JS field-defs alignment), user retested Event block: still no preview. Reported the InspectorControls Notice was showing "Required: Start" even after they tried to fill in the Start datetime field.
+
+### Diagnosis
+
+Root cause was deeper than the field-defs mismatch. `wp.components.TextControl` with HTML5 `type="datetime-local"` (and `type="date"`) renders the picker but the `onChange` wrapper does not reliably propagate the picked value back to the block's React state. So `attrs.start_date` stays empty regardless of what the user picks → missingRequired check sees it as still empty → "Required: Start" Notice persists → ServerSideRender stays in placeholder mode → no preview, no front-end card.
+
+This is a known intermittent issue with TextControl + HTML5 input types beyond the basics (`text`, `number`, `url`, `email`). WP's TextControl wrapper assumes string-input semantics that the date/time picker breaks.
+
+Same bug affects Job Posting block's `date_posted` and `valid_through` fields (also `type: 'date'`) — those would have failed identically once tested.
+
+### Fix
+
+Replaced `TextControl` with a raw HTML5 `<input>` for both `date` and `datetime-local` types. Wrapped in a div styled to match WP's `components-base-control` shell so it visually fits with the other fields. The native browser picker fires standard `change` events that we wire directly to `onChange( e.target.value )` — clean React state propagation, no wrapper interference.
+
+```js
+// Before (broken):
+case 'datetime-local':
+    return el( TextControl, { type: 'datetime-local', ... } );
+
+// After (works):
+case 'date':
+case 'datetime-local':
+    return el( 'div', { className: 'components-base-control', ... },
+        el( 'div', { className: 'components-base-control__field' },
+            el( 'label', { ... }, label ),
+            el( 'input', {
+                type: def.type,
+                value: value || '',
+                onChange: function ( e ) { onChange( e.target.value ); },
+                style: { ...WP-matching styles... }
+            } )
+        )
+    );
+```
+
+### Why this passes the 3 systematic questions
+
+1. **All keywords?** ✅ Pure UI fix, no keyword logic.
+2. **All 21 content types?** ✅ Schema Blocks are blocks, not content types — fix applies regardless of which post type the block is inserted into.
+3. **All AI models?** ✅ JS-only fix, no model dependency.
+
+### What this also fixes (bonus)
+
+- Job Posting `date_posted` (was previously broken for the same reason — only nobody had tested it yet)
+- Job Posting `valid_through` (same)
+
+### Verify
+
+```bash
+grep -c "case 'date':" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # expect 1 (merged with datetime-local)
+grep -c "case 'datetime-local':" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # expect 1
+node --check /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # syntax clean
+```
+
+### Test plan for user
+
+1. Upload v62.36 to staging
+2. Hard-refresh editor (`Cmd+Shift+R`) to bust JS cache
+3. Insert Event block → fill Name → click Start field → native datetime picker opens
+4. Pick a future datetime → preview should now render the styled card
+5. Save + view published post → card renders inline
+6. Same flow for Job Posting (date_posted, valid_through)
+
+**Verified by user:** UNTESTED
 
 ---
 

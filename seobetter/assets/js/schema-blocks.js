@@ -181,9 +181,43 @@
             case 'number':
                 return el( TextControl, { key: fieldKey, type: 'number', label: label, value: value || '', placeholder: placeholder, onChange: onChange } );
             case 'date':
-                return el( TextControl, { key: fieldKey, type: 'date', label: label, value: value || '', onChange: onChange } );
             case 'datetime-local':
-                return el( TextControl, { key: fieldKey, type: 'datetime-local', label: label, value: value || '', onChange: onChange } );
+                // 2026-05-04 — bypass TextControl for date / datetime-local.
+                // wp.components.TextControl renders these HTML5 input types
+                // but its onChange wrapper is unreliable for them — picker
+                // shows, value never propagates to React state. User reported
+                // Event block "Required: Start" warning persisting even
+                // after picking a Start datetime. Same affects Job Posting
+                // date_posted / valid_through.
+                //
+                // Fix: render a raw <input> so the native browser picker
+                // fires `change` events that we wire directly to onChange
+                // via e.target.value. Style matches WP's TextControl
+                // visually so the field doesn't look out of place.
+                return el( 'div', { key: fieldKey, className: 'components-base-control', style: { marginBottom: '24px' } },
+                    el( 'div', { className: 'components-base-control__field' },
+                        el( 'label', {
+                            className: 'components-base-control__label',
+                            style: { display: 'block', marginBottom: '8px', fontSize: '11px', fontWeight: 500, lineHeight: 1.4, textTransform: 'uppercase' }
+                        }, label ),
+                        el( 'input', {
+                            type: def.type,
+                            value: value || '',
+                            onChange: function ( e ) { onChange( e.target.value ); },
+                            style: {
+                                display: 'block',
+                                width: '100%',
+                                padding: '6px 8px',
+                                fontSize: '13px',
+                                lineHeight: '20px',
+                                background: '#fff',
+                                border: '1px solid #757575',
+                                borderRadius: '2px',
+                                boxSizing: 'border-box'
+                            }
+                        } )
+                    )
+                );
             case 'url':
                 return el( TextControl, { key: fieldKey, type: 'url', label: label, value: value || '', placeholder: placeholder, onChange: onChange } );
             case 'image':
