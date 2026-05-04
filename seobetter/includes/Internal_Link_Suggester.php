@@ -152,6 +152,22 @@ class Internal_Link_Suggester {
 
     /**
      * Extract meaningful words/phrases from text.
+     *
+     * v1.5.216.62.34 — fixed infinite loop bug.
+     *
+     * Pre-fix the for-loop re-evaluated `count($results)` every iteration
+     * AFTER mutating $results inside the body. Each iteration added 1
+     * entry to $results AND incremented $i by 1, so the gap between $i
+     * and count($results)-1 stayed at exactly 1 forever. Result: the
+     * loop never terminated, PHP hit memory_limit (128M-256M default)
+     * partway through, the request silently crashed, and the Pro+
+     * suggester returned no suggestions to the UI. User-reported as
+     * "Internal Links suggester doesn't return suggestions".
+     *
+     * Fix: snapshot the single-word count BEFORE the loop starts so
+     * the bound is fixed at the original word count, not the growing
+     * results array. The loop now generates exactly N-1 bigram phrases
+     * (where N = original single-word count) and terminates cleanly.
      */
     private function extract_meaningful_words( string $text ): array {
         $words = array_filter(
@@ -161,8 +177,11 @@ class Internal_Link_Suggester {
 
         $results = array_values( $words );
 
-        // Add 2-word phrases
-        for ( $i = 0; $i < count( $results ) - 1; $i++ ) {
+        // Add 2-word phrases — snapshot the single-word count so the loop
+        // bound doesn't drift as $results grows inside the body. (v62.34
+        // bug fix — see method docblock.)
+        $single_word_count = count( $results );
+        for ( $i = 0; $i < $single_word_count - 1; $i++ ) {
             $results[] = $results[ $i ] . ' ' . $results[ $i + 1 ];
         }
 

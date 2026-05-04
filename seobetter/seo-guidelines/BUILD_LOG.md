@@ -7,12 +7,81 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.33)
+> **Last updated:** 2026-05-04 (v1.5.216.62.34)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.34 — FIX: Internal Links Pro+ suggester infinite loop
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+Day 1 of the 3-week sell-ready test gate. User reported the Pro+ Internal Links suggester at `?page=seobetter-internal-links&tab=suggester` selects a post but returns no suggestions. Orphan tab works fine. Bug was therefore in the suggester-specific code path, not the orphan scanner.
+
+### Diagnosis
+
+Read [`Internal_Link_Suggester::extract_meaningful_words()`](seobetter/includes/Internal_Link_Suggester.php#L156) line by line. Found an infinite loop:
+
+```php
+// Pre-fix:
+for ( $i = 0; $i < count( $results ) - 1; $i++ ) {
+    $results[] = $results[ $i ] . ' ' . $results[ $i + 1 ];
+}
+```
+
+`count( $results )` is re-evaluated every iteration. The loop body adds 1 entry to `$results` AND `$i` increments by 1. So the gap between `$i` and `count($results) - 1` stays at exactly 1 forever:
+
+| Iter | $i | count | bound (count-1) | condition $i < bound |
+|---|---|---|---|---|
+| 0 | 0 | 4 | 3 | 0 < 3 ✓ |
+| 1 | 1 | 5 | 4 | 1 < 4 ✓ |
+| 2 | 2 | 6 | 5 | 2 < 5 ✓ |
+| N | N | 4+N | 3+N | N < 3+N ✓ (always) |
+
+**Loop never terminates.** PHP eventually hits `memory_limit` (128M-256M default), the request silently crashes mid-execution, and the suggester returns no result to the UI. The user sees an empty suggestions table → "doesn't return suggestions".
+
+The orphan tab works because `find_orphan_posts()` doesn't call `extract_meaningful_words()` — it scans `<a href>` patterns directly.
+
+### Fix
+
+Snapshot the single-word count BEFORE the loop:
+
+```php
+// Post-fix:
+$single_word_count = count( $results );
+for ( $i = 0; $i < $single_word_count - 1; $i++ ) {
+    $results[] = $results[ $i ] . ' ' . $results[ $i + 1 ];
+}
+```
+
+Loop bound is now fixed at the original word count, not the growing results array. Generates exactly N-1 bigram phrases (N = original single-word count) and terminates cleanly. Method docblock updated with the bug history so future maintainers know why the snapshot matters.
+
+### Why this passes the 3 systematic questions
+
+1. **All keywords?** ✅ Loop-bound snapshot. No keyword-specific logic.
+2. **All 21 content types?** ✅ `extract_meaningful_words` is content-type agnostic.
+3. **All AI models?** ✅ Pure PHP, no model dependency.
+
+### Verify
+
+```bash
+grep -n "single_word_count" /Users/ben/Documents/autoresearch/seobetter/includes/Internal_Link_Suggester.php
+# Expected: 2 matches (the snapshot + the loop bound)
+
+# Functional test:
+# 1. Open admin.php?page=seobetter-internal-links&tab=suggester
+# 2. Pick the dog raw food how-to article (or any post with siblings on the site)
+# 3. Suggestions table should now populate
+```
+
+**Verified by user:** UNTESTED — Day 1 test gate task T1 awaiting on-site retest.
 
 ---
 
