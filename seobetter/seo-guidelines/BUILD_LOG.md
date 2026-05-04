@@ -7,12 +7,79 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.54)
+> **Last updated:** 2026-05-04 (v1.5.216.62.55)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.55 — Opinion "Devil's Advocate" frame on The Objection — visually distinct from every existing callout pattern in the codebase
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User requested distinctive styling for the Opinion content type that maps to a structural element of the §3.1A HYBRID profile, with two constraints: *"completely different from other article styling"* and *"no drop caps ever"* (saved as `feedback_no_drop_caps.md` user-memory).
+
+Audit of existing callout patterns to ensure no overlap:
+
+| Pattern | Used by |
+|---|---|
+| Solid colored bg + left-border accent + 6-12px radius | Key Takeaways, Tip, Note, Warning, Pros, Cons |
+| Q/A circular badge + green/gray cards | Interview |
+| Dark traffic-light header on `<pre>` | Tech Article code blocks |
+| Dark slate header strip + light body | White Paper Executive Summary |
+| Round pills / "Our Pick" badges | Buying Guide |
+| Oversized typographic ❝ + gradient bg + italic text | Existing Opinion `<blockquote>` pull-quote |
+| Purple VS badge between columns | Comparison |
+| Drop caps | Personal Essay only — **banned** for any new type per user preference |
+
+The Devil's Advocate frame is built from primitives that overlap zero of these.
+
+### What changed
+
+**Content_Formatter.php — new "Devil's Advocate" frame for opinion `## The Objection`** ([Content_Formatter.php](seobetter/includes/Content_Formatter.php))
+
+When `content_type === 'opinion'` AND a level-2 heading text matches `/^the\s+objection\b/i`:
+
+1. Emit the H2 normally (so Schema H2 extraction + SECTION COUNT CONTRACT are unaffected).
+2. Open a custom framed wrapper with:
+   - Border: **1px dashed `#9ca3af`** (no other type uses dashed borders)
+   - Border-radius: **0** (sharp corners — every other callout uses 6-12px radius)
+   - Background: faint warm cream `#fefdfb`
+   - Header strip with inline ⚖ scales-of-justice SVG + uppercase letter-spaced label `DEVIL'S ADVOCATE` in monospace stack (only Tech Article uses mono, and only for code) + smaller secondary text "— steelmanned counter-view, then my response" in slate-500
+   - Dashed slate divider under the header
+   - Padding: `1.5em 1.75em`
+3. The section's paragraphs render normally inside the frame (no italic body, no font swap — keeps it readable; the dashed-sharp-monospace frame does the visual differentiation work).
+4. Wrapper closes at the next H2 (mirrors the `in_qa_answer` Q/A pattern) and at end-of-loop in case Objection is the last section.
+
+State tracked via new `$in_objection_box` boolean alongside `$is_opinion = ($options['content_type'] ?? '') === 'opinion'`. Other content types: zero impact.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.54 → 62.55
+- `seobetter/includes/Content_Formatter.php`:
+  - new `$is_opinion` / `$in_objection_box` state next to existing `is_interview` / `is_white_paper` / `is_essay` blocks
+  - new heading-handling branch matching `/^the\s+objection\b/i` (emits H2, opens framed wrapper)
+  - close wrapper at any non-Objection H2 (parallel to Q/A close)
+  - close wrapper at end-of-loop (parallel to `in_exec_summary` / `is_essay` end-of-loop close)
+- `seobetter/seo-guidelines/article_design.md` — opinion row in §11 table extended to document the new frame
+- `~/.claude/projects/-Users-ben-Documents-autoresearch/memory/feedback_no_drop_caps.md` — saved user-memory rule for future styling proposals
+
+### Verify
+
+```
+grep -A 4 "v1.5.216.62.55 — Opinion .Devil.s Advocate. frame" seobetter/includes/Content_Formatter.php
+grep -A 2 "in_objection_box" seobetter/includes/Content_Formatter.php
+```
+
+Manual test: regenerate any opinion article (1100w+ floor enforced by v62.52), inspect the page source. The H2 "The Objection" should be followed by a `<!-- wp:html -->` block opening a div with `border:1px dashed #9ca3af`, `border-radius:0`, the monospace `DEVIL'S ADVOCATE` label + ⚖ SVG, and closed at the next H2.
+
+**Verified by user:** UNTESTED
 
 ---
 

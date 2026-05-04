@@ -662,6 +662,20 @@ CSS;
         $wp_section_num  = 0; // auto-incrementing section counter for formal numbering
         $in_exec_summary = false; // true after Executive Summary heading, until next H2
 
+        // v1.5.216.62.55 — Opinion "Devil's Advocate" framed-section state.
+        // When content_type === 'opinion' and an H2 begins with "the
+        // objection" (the §3.1A HYBRID steelman+refute section), the body
+        // paragraphs that follow render inside a dashed-border / sharp-corner
+        // frame that's visually distinct from every other callout pattern in
+        // the codebase (Key Takeaways / Tip / Note / Warning use solid
+        // left-border + colored bg + radius; Pros/Cons use solid green/red;
+        // Interview uses Q/A circular badges; Tech uses dark code blocks;
+        // White Paper uses dark-slate header strip). This frame is uniquely
+        // dashed + sharp + monospace-labelled. Closes automatically at the
+        // next H2 or end of sections.
+        $is_opinion        = ( $options['content_type'] ?? '' ) === 'opinion';
+        $in_objection_box  = false;
+
         // v1.5.192 — Opinion styling state: replaces the plain blockquote
         // with a dramatic editorial pull-quote (large italic, red accent bar,
         // oversized leading quotation mark) for all quotes in op-ed articles.
@@ -812,6 +826,49 @@ CSS;
                         $output[] = '<!-- wp:heading {"level":1} -->';
                         $output[] = "<h1 class=\"wp-block-heading\">{$text}</h1>";
                         $output[] = '<!-- /wp:heading -->';
+                    } elseif ( $is_opinion && $level === 2 && preg_match( '/^the\s+objection\b/i', trim( $text ) ) ) {
+                        // v1.5.216.62.55 — Opinion "Devil's Advocate" frame.
+                        // Close any prior objection box (defensive — shouldn't
+                        // happen since prose template only has one Objection
+                        // section, but the same H2-close pattern as Q/A).
+                        if ( $in_objection_box ) {
+                            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                            $in_objection_box = false;
+                        }
+                        // Emit an H2 that the page-outline / Schema generator
+                        // can still see (skipping the H2 entirely would break
+                        // the SECTION COUNT CONTRACT and cause schema H2
+                        // extraction to miss this section).
+                        $output[] = '<!-- wp:heading -->';
+                        $output[] = "<h2 class=\"wp-block-heading\">" . $text . "</h2>";
+                        $output[] = '<!-- /wp:heading -->';
+                        // Open the framed wrapper. Distinctive design:
+                        //  - dashed 1px border (no other callout uses dashed)
+                        //  - 0 border-radius (sharp corners — every other
+                        //    callout uses 6-12px radius)
+                        //  - monospace label in uppercase letterspacing
+                        //    (only tech_article uses mono and only for code)
+                        //  - faint warm cream bg #fefdfb
+                        //  - slate-700 ⚖ scales SVG inline with label
+                        $scales_svg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21"/><path d="M5 8h14"/><path d="M5 8l-3 6h6z"/><path d="M19 8l3 6h-6z"/><path d="M2 14a3 3 0 0 0 6 0"/><path d="M16 14a3 3 0 0 0 6 0"/></svg>';
+                        $mono_stack = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace";
+                        $output[] = "<!-- wp:html -->\n"
+                            . '<div style="border:1px dashed #9ca3af !important;border-radius:0 !important;'
+                            . 'background:#fefdfb !important;padding:1.5em 1.75em !important;margin:1.5em 0 2em !important;'
+                            . 'color:#374151 !important">'
+                            . '<div style="display:flex !important;align-items:center !important;gap:10px !important;'
+                            . 'padding-bottom:0.75em !important;margin-bottom:1em !important;'
+                            . 'border-bottom:1px dashed #9ca3af !important">'
+                            . $scales_svg
+                            . '<span style="font-family:' . esc_attr( $mono_stack ) . ' !important;'
+                            . 'font-size:0.78em !important;font-weight:700 !important;'
+                            . 'text-transform:uppercase !important;letter-spacing:0.18em !important;'
+                            . 'color:#1f2937 !important">Devil\'s Advocate</span>'
+                            . '<span style="font-family:' . esc_attr( $mono_stack ) . ' !important;'
+                            . 'font-size:0.72em !important;color:#6b7280 !important;letter-spacing:0.05em !important">'
+                            . '— steelmanned counter-view, then my response</span>'
+                            . "</div>\n<!-- /wp:html -->";
+                        $in_objection_box = true;
                     } elseif ( $is_interview && $level === 3 && preg_match( '/\?\s*$/', $text ) ) {
                         // v1.5.166 — Interview Q&A: H3 questions get a styled Q card
                         // Close previous answer block if open
@@ -849,6 +906,13 @@ CSS;
                         if ( $in_qa_answer && $level === 3 ) {
                             $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
                             $in_qa_answer = false;
+                        }
+                        // v1.5.216.62.55 — Close opinion Devil's Advocate
+                        // frame at any non-Objection H2 (it wraps just one
+                        // section).
+                        if ( $in_objection_box && $level === 2 ) {
+                            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+                            $in_objection_box = false;
                         }
                         $output[] = "<!-- wp:heading {\"level\":{$level}} -->";
                         $output[] = "<h{$level} class=\"wp-block-heading\">{$text}</h{$level}>";
@@ -1357,6 +1421,15 @@ CSS;
         // v1.5.177 — Close any open Executive Summary box
         if ( $in_exec_summary ) {
             $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+        }
+
+        // v1.5.216.62.55 — Close opinion Devil's Advocate frame if the
+        // Objection was the LAST section in the article (no following H2
+        // to trigger close). Mirrors the in_qa_answer / in_exec_summary
+        // / is_essay end-of-loop close patterns.
+        if ( $in_objection_box ) {
+            $output[] = "<!-- wp:html -->\n</div>\n<!-- /wp:html -->";
+            $in_objection_box = false;
         }
 
         // v1.5.201 — Close the Personal Essay literary wrapper before the
