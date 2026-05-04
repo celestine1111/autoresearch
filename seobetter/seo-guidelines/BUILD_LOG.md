@@ -19,7 +19,7 @@
 ## v1.5.216.62.47 — FIX §3.1A drifts (news_article / live_blog / interview templates) + content-type-aware headline formulas
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `ffafac5`
 
 ### Why
 
