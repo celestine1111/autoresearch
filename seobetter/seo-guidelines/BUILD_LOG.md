@@ -19,7 +19,7 @@
 ## v1.5.216.62.37 — UX: Schema Block datetime-local split into date + time pickers, time auto-defaults to 09:00
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `720dfca`
 
 ### Why
 
