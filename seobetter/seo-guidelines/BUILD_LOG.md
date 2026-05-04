@@ -19,7 +19,7 @@
 ## v1.5.216.62.43 — FIX: FAQ JSON-LD missing from @graph; VacationRental "Invalid parameter(s): attributes" after save+refresh
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `3858034`
 
 ### Why
 
