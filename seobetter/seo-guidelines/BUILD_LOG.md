@@ -19,7 +19,7 @@
 ## v1.5.216.62.50 — FIX: meta title / description / OG / Twitter truncation cuts mid-word — word-boundary cut universal across all 6 callers, all languages
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `fbd27a0`
 
 ### Why
 
