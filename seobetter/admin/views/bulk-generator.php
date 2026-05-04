@@ -246,6 +246,7 @@ $has_action_scheduler = SEOBetter\Bulk_Generator::has_action_scheduler();
                             <option value="currency">Currency &amp; Forex</option>
                             <option value="ecommerce">Ecommerce</option>
                             <option value="education">Education</option>
+                            <option value="employment">Employment, Career &amp; Workplace</option>
                             <option value="entertainment">Entertainment &amp; Movies</option>
                             <option value="environment">Environment &amp; Climate</option>
                             <option value="finance">Finance &amp; Economics</option>

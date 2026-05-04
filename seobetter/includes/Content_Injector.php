@@ -361,7 +361,15 @@ class Content_Injector {
         // v1.5.113 — Shared filters for ALL quote sources.
         // Substantive filter (blocks marketing taglines), e-commerce filter (blocks product listings),
         // junk filter (blocks giveaways/cookies). These protect against bad quotes from any source.
-        $substantive_re = '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|support|reduce|provide|design|feature|material|quality|comfort|protect|treat|condition|symptom|avoid|consider|choose|suitable|essential|option|compare|test|review|evaluat|measure|perform|assess|durabl|withstand|orthoped|joint|muscle|weight|pressure|temperature|waterproof|washable)\b/i';
+        // v1.5.216.62.44 — added productivity / workplace / career / wellness
+        // / business-strategy / finance / tech / education / news vocabulary so
+        // articles outside the original pet-product domain (where this regex
+        // first ships) can find substantive quotes. Pre-fix a "morning routine
+        // for remote workers" article matched zero quote sentences because the
+        // regex only knew pet-product / health vocabulary. Pre-fix users had
+        // to pick a category whose vocabulary overlapped (Health/Veterinary)
+        // even when topical fit was wrong.
+        $substantive_re = '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|support|reduce|provide|design|feature|material|quality|comfort|protect|treat|condition|symptom|avoid|consider|choose|suitable|essential|option|compare|test|review|evaluat|measure|perform|assess|durabl|withstand|orthoped|joint|muscle|weight|pressure|temperature|waterproof|washable|productiv|focus|habit|wellness|wellbeing|workplace|burnout|stress|engagement|motivation|workflow|efficien|career|hire|employ|salary|wages|management|leadership|workforce|remote|hybrid|economi|market|invest|growth|revenue|profit|trend|consumer|user|customer|technolog|softwar|platform|algorithm|polic|regulat|govern|election|vote|reform|sustain|climate|emission|energy|innovat|teach|learn|skill|train|develop|cogniti|behav|wellbeing)\b/i';
         $ecommerce_re = '/[\$€£¥]\s*\d|regular\s*price|sale\s*price|add\s*to\s*cart|buy\s*now|free\s*shipping|in\s*stock|out\s*of\s*stock|shop\s*now|view\s*product|checkout|coupon|discount\s*code|promo\s*code/i';
         $junk_re = '/april fool|challenge|giveaway|prize|contest|no.*recall|not.*recall|cookie|privacy|subscribe/i';
 
@@ -1788,6 +1796,22 @@ Return ONLY the Markdown table, nothing else.";
                 'edutopia.org', 'chronicle.com',
                 'harvard.edu', 'mit.edu', 'stanford.edu', 'ox.ac.uk', 'cam.ac.uk',
                 'ed.gov', 'ukri.org', 'unesco.org',
+            ],
+            // v1.5.216.62.44 — Employment / Career / Workplace.
+            // The Business category is B2B / corporate-strategy oriented (HBR,
+            // McKinsey, Bloomberg). Employment-related topics (remote work,
+            // career advice, productivity, workplace wellness, hiring,
+            // workplace mental health) need a different authority list:
+            // labor statistics agencies, workplace research bodies, peer-
+            // reviewed psych/management journals, labor economics outlets.
+            'employment' => [
+                'bls.gov', 'oecd.org', 'ilo.org',
+                'gallup.com', 'pewresearch.org',
+                'apa.org', 'shrm.org',
+                'hbr.org', 'sloanreview.mit.edu', 'mckinsey.com',
+                'who.int', 'cdc.gov',
+                'jstor.org', 'sciencedirect.com', 'springer.com',
+                'mindiam.com', 'seobetter.com',
             ],
             // v1.5.216.62.17 — added top trade outlets + national academies
             'entertainment' => [

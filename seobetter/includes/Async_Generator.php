@@ -2144,11 +2144,31 @@ class Async_Generator {
                         // v1.5.172 — Context-aware keyword replacement.
                         // Old: replaced keyword with "this" → created "the this" artifacts.
                         // New: if preceded by "the/a/an", replace whole phrase including article.
+                        //
+                        // v1.5.216.62.44 — fix grammatically-broken "this topic"
+                        // leak. Pre-fix the article+keyword regex required the
+                        // article (the/a/an) to be IMMEDIATELY before the keyword,
+                        // missing common patterns like "a real morning routine
+                        // for remote workers" or "the typical X" where one or
+                        // more adjectives sit between the article and keyword.
+                        // The bare-keyword fallback then replaced "morning
+                        // routine for remote workers" with "this topic",
+                        // producing artefacts like:
+                        //   "Ever wonder what a real this topic feels like?"
+                        // (User-reported on the morning-routine-for-remote-workers
+                        // article, v62.43.) The leak corrupted body, FAQ, and
+                        // schema description (all built from same content).
+                        //
+                        // Fix: (a) widen article+keyword regex to capture up to
+                        // 3 adjective tokens between article and keyword so
+                        // "a real morning routine for remote workers" → "it";
+                        // (b) drop the bare-keyword "this topic" fallback —
+                        // higher density is better than ungrammatical prose.
                         $kw_escaped = preg_quote( $keyword, '/' );
                         $count_art = 0;
                         if ( $is_english ) {
                             $line_new = preg_replace(
-                                '/\b(the|a|an)\s+' . $kw_escaped . '\b/i',
+                                '/\b(the|a|an)\s+(?:[a-z]+\s+){0,3}' . $kw_escaped . '\b/i',
                                 'it',
                                 $lines[ $i ],
                                 1,
@@ -2156,19 +2176,19 @@ class Async_Generator {
                             );
                             if ( $count_art > 0 ) {
                                 $lines[ $i ] = $line_new;
+                                $replaced++;
                             }
                         }
-                        if ( $count_art === 0 ) {
-                            // No article prefix (or non-English) — replace
-                            // keyword alone with the localized "this topic".
-                            $lines[ $i ] = preg_replace(
-                                '/\b' . $kw_escaped . '\b/i',
-                                $this_topic_phrase,
-                                $lines[ $i ],
-                                1
-                            );
-                        }
-                        $replaced++;
+                        // No article prefix (or non-English) — leave the line
+                        // alone. The bare-keyword "this topic" replacement was
+                        // removed in v62.44 because it produced ungrammatical
+                        // sentences ("A real this topic..."). The Princeton
+                        // GEO bonus from quotes/citations/stats more than
+                        // offsets a slightly elevated keyword density, and
+                        // good prose beats threshold compliance every time.
+                        // The $this_topic_phrase i18n table remains in place
+                        // for any future caller that needs a localized
+                        // pronoun phrase under different conditions.
                     }
                 }
 

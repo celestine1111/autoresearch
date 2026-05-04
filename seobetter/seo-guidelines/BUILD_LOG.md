@@ -7,12 +7,101 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.43)
+> **Last updated:** 2026-05-04 (v1.5.216.62.44)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.44 — FIX "this topic" placeholder leak; ADD Employment / Career / Workplace category; expand quote-substantive vocab
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+Three issues from running T3 #1 (Blog Post: "morning routine for remote workers"):
+
+**1. "this topic" leaked into rendered prose, schema description, and FAQ answers.**
+
+The keyword-density reducer in `Async_Generator::adjust_keyword_density()` (line ~2070) tries to demote excess keyword mentions when density > 2.5%. Logic was:
+1. Match `(the|a|an)\s+keyword` → replace with `it` ✅ grammatical
+2. Else replace bare `keyword` → with `this topic` ❌ ungrammatical when adjective sits between article and keyword
+
+User-reported example on the morning-routine article — body, FAQ answers, ImageObject name, AND schema description all read:
+
+> "Ever wonder what a real **this topic** feels like?"
+> "A structured **this topic** usually starts with..."
+> "Detailed **this topic** breakdown with pricing and specifications" (image alt)
+
+Pre-fix the article+keyword regex required the article to be IMMEDIATELY before the keyword, missing common patterns like "**a real** morning routine for remote workers" or "**the typical** X". The bare-keyword fallback then replaced "morning routine for remote workers" with "this topic", producing "A real this topic" — broken.
+
+**2. No Employment / Career / Workplace category.**
+
+User had to pick `Business` for a "morning routine for remote workers" article. The Business category targets B2B / corporate-strategy authority domains (HBR, McKinsey, Bloomberg, FT) — none of which write about employee morning routines. Tavily search restricted to those domains returned 0 results, leading to "Tavily raw=0" in the Expert Quotes diagnostic.
+
+**3. Substantive-quote regex was pet-product-vocabulary biased.**
+
+The `$substantive_re` quote-validation regex in `Content_Injector::inject_quotes()` was originally tuned for pet-product / health domains: words like `veterinar`, `nutriti`, `allerg`, `formul`, `orthoped`, `waterproof`, `washable`. For productivity / business / tech / news / finance topics, even if Tavily DID return relevant pages, the substantive filter rejected every extracted sentence because none contained pet-vocabulary words. Effective effect: quote pool empty for any non-pet topic.
+
+### What changed
+
+**1. Async_Generator.php — keyword-density reducer hardened**
+
+- Article+keyword regex widened to `(the|a|an)\s+(?:[a-z]+\s+){0,3}keyword` — captures up to 3 adjective tokens between the article and the keyword. "a real morning routine for remote workers" → "it" now works.
+- Bare-keyword "this topic" fallback **removed**. When the article+keyword regex doesn't match, the line is left intact. Higher density is acceptable; broken prose is not.
+- The `$this_topic_i18n` table stays in place for any future caller that needs a localized pronoun phrase under different conditions.
+
+**2. content-generator.php / bulk-generator.php / content-brief.php — Employment category**
+
+`<option value="employment">Employment, Career & Workplace</option>` added to all three category dropdowns (between Education and Entertainment to keep alphabetical-ish ordering). Per the comment in content-generator.php line 514, the three lists must stay identical.
+
+**3. Content_Injector.php — `employment` authority domains + expanded substantive regex**
+
+New `employment` entry in `get_authority_domains()`:
+
+```php
+'employment' => [
+    'bls.gov', 'oecd.org', 'ilo.org',
+    'gallup.com', 'pewresearch.org',
+    'apa.org', 'shrm.org',
+    'hbr.org', 'sloanreview.mit.edu', 'mckinsey.com',
+    'who.int', 'cdc.gov',
+    'jstor.org', 'sciencedirect.com', 'springer.com',
+    'mindiam.com', 'seobetter.com',
+],
+```
+
+Mix of: labor statistics agencies (BLS, OECD, ILO), workplace research bodies (Gallup, Pew, APA, SHRM), management journals (HBR, MIT Sloan, McKinsey), public health (WHO, CDC) for workplace wellness topics, and peer-reviewed databases (JSTOR, ScienceDirect, Springer). All non-commercial.
+
+`$substantive_re` regex extended with productivity / workplace / business / tech / news / finance / education / sustainability vocabulary so quotes from those domains pass the filter. ~50 new word-stems added.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.43 → 62.44
+- `seobetter/includes/Async_Generator.php` — `adjust_keyword_density()` density reducer fixed
+- `seobetter/admin/views/content-generator.php` — Employment option
+- `seobetter/admin/views/bulk-generator.php` — Employment option
+- `seobetter/admin/views/content-brief.php` — Employment option
+- `seobetter/includes/Content_Injector.php` — `employment` authority domains + expanded `$substantive_re`
+
+### Verify
+
+```
+grep -n "morning routine for remote workers\|0,3.*kw_escaped" seobetter/includes/Async_Generator.php
+grep -n "value=\"employment\"" seobetter/admin/views/{content-generator,bulk-generator,content-brief}.php
+grep -A 8 "'employment' =>" seobetter/includes/Content_Injector.php
+```
+
+After upload + retest:
+- Regenerate the morning-routine article — body should no longer contain "this topic" placeholders; schema description should show real prose; FAQ answers should be grammatical.
+- Employment category should appear in all 3 category dropdowns.
+- For employment-topic articles, Expert Quotes diagnostic should now find non-zero quotes from BLS / Gallup / APA / etc.
+
+**Verified by user:** UNTESTED
 
 ---
 
