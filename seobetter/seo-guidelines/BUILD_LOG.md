@@ -19,7 +19,7 @@
 ## v1.5.216.62.51 — FIX: double H1 universal; opinion section drift (6 of 10 sections shipped → all sections now); image-array 3-dupe collapsed to single URL
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `3168d8a`
 
 ### Why
 
