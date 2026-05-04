@@ -19,7 +19,7 @@
 ## v1.5.216.62.55 — Opinion "Devil's Advocate" frame on The Objection — visually distinct from every existing callout pattern in the codebase
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `99fa6c5`
 
 ### Why
 
