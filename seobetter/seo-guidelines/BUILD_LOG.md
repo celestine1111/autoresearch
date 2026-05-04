@@ -19,7 +19,7 @@
 ## v1.5.216.62.34 — FIX: Internal Links Pro+ suggester infinite loop
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `232d05e`
 
 ### Why
 
