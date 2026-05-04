@@ -7,12 +7,60 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.38)
+> **Last updated:** 2026-05-04 (v1.5.216.62.39)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.39 — FIX: LocalBusiness opening-hours grid overflowed sidebar; Get Directions resolved coords to wrong business name
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+Two issues surfaced as soon as the user tested v62.38 LocalBusiness on staging:
+
+1. **Opening-hours grid rows overflowed the right edge of the WP block-editor sidebar.** The sidebar is ~280 px wide. The v62.38 row was day-label (90 px) + open-time (90 px) + dash + close-time (90 px) + 24 px of gaps = ~304 px. The second time picker was clipped or pushed off-screen.
+
+2. **"Get Directions" button on the rendered card opened Google Maps with the destination labelled "Christian Adam, Darlinghurst NSW 2010" instead of the actual street address "50 William St, Darlinghurst NSW 2010".** The directions URL was passing `destination=<lat>,<lng>` whenever coordinates existed (v62.38 OSM lookup populates them), and Google Maps reverse-geocoded the pair to whatever POI it had indexed at those coordinates — frequently a different business name than the one the user typed.
+
+### What changed
+
+**1. Tightened opening-hours row to fit ~280 px sidebar** ([assets/js/schema-blocks.js::renderField case 'opening_hours'](seobetter/assets/js/schema-blocks.js))
+
+- Day-toggle column 90 px → 56 px (just "Mon" + checkbox)
+- Time inputs 90 px → 72 px
+- Container padding 8 px → 6 px
+- Row gap 8 px → 4 px
+- Font sizes 12/12 → 12/11
+
+Worst-case row width now ≈ 56 + 72 + 8 + 72 + 12 = 220 px — comfortable margin inside a 280 px sidebar.
+
+**2. Get Directions URL prefers address string over lat/lng** ([includes/Schema_Blocks_Manager.php::build_maps_directions_url()](seobetter/includes/Schema_Blocks_Manager.php))
+
+Priority flipped: build the destination from `street_address, locality, region, postal_code, country` first, fall back to `lat,lng` only when no address fields are filled. Google Maps then forward-geocodes the address text the user typed and the destination card matches what's on the page card.
+
+The Maps URL API for `dir/?api=1` doesn't accept raw lat/lng as a separate parameter (only `destination_place_id` which requires a Google Place ID we don't have), so the address-text approach is the cleanest fix without adding a Places API dependency.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.38 → 62.39
+- `seobetter/assets/js/schema-blocks.js` — `renderField` case `opening_hours` row sizing
+- `seobetter/includes/Schema_Blocks_Manager.php::build_maps_directions_url()` — priority flipped
+
+### Verify
+
+```
+grep -n "flex: '0 0 56px'\|width: '72px'" seobetter/assets/js/schema-blocks.js
+grep -A 8 "build_maps_directions_url" seobetter/includes/Schema_Blocks_Manager.php | head -20
+```
+
+**Verified by user:** UNTESTED
 
 ---
 

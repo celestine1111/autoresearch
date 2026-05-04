@@ -418,9 +418,13 @@
                     } );
                     pushGrid( g );
                 };
+                // v62.39 — sidebar fit: WP block-editor sidebar is ~280px
+                // wide. Tightened sizes so the row never overflows: day
+                // toggle 56px, time inputs 72px, gap 4px, container padding
+                // 6px. Total worst-case row width ≈ 56 + 72 + 8 + 72 + 12 = 220px.
                 var inputStyle = {
-                    flex: '0 0 auto', width: '90px', padding: '4px 6px',
-                    fontSize: '12px', lineHeight: '18px', background: '#fff',
+                    flex: '0 0 auto', width: '72px', padding: '3px 4px',
+                    fontSize: '11px', lineHeight: '16px', background: '#fff',
                     border: '1px solid #757575', borderRadius: '2px', boxSizing: 'border-box'
                 };
                 return el( 'div', { key: fieldKey, className: 'components-base-control', style: { marginBottom: '24px' } },
@@ -428,20 +432,21 @@
                         className: 'components-base-control__label',
                         style: { display: 'block', marginBottom: '8px', fontSize: '11px', fontWeight: 500, lineHeight: 1.4, textTransform: 'uppercase' }
                     }, label ),
-                    el( 'div', { style: { background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px' } },
+                    el( 'div', { style: { background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '6px' } },
                         DAYS.map( function ( d ) {
                             var hours  = grid[ d.id ];
                             var isOpen = !! hours;
                             return el( 'div', {
                                 key: d.id,
-                                style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', minHeight: '28px' }
+                                style: { display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px', minHeight: '26px' }
                             },
                                 el( 'label', {
-                                    style: { display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px', fontSize: '12px', cursor: 'pointer' }
+                                    style: { display: 'flex', alignItems: 'center', gap: '4px', flex: '0 0 56px', fontSize: '12px', cursor: 'pointer' }
                                 },
                                     el( 'input', {
                                         type: 'checkbox',
                                         checked: isOpen,
+                                        style: { margin: 0 },
                                         onChange: function ( e ) {
                                             setDay( d.id, e.target.checked ? { open: '09:00', close: '17:00' } : null );
                                         }
@@ -456,7 +461,7 @@
                                     },
                                     style: inputStyle
                                 } ) : null,
-                                isOpen ? el( 'span', { style: { color: '#888', fontSize: '12px' } }, '–' ) : el( 'span', { style: { color: '#888', fontSize: '12px', fontStyle: 'italic' } }, 'Closed' ),
+                                isOpen ? el( 'span', { style: { color: '#888', fontSize: '11px' } }, '–' ) : el( 'span', { style: { color: '#888', fontSize: '11px', fontStyle: 'italic', marginLeft: '4px' } }, 'Closed' ),
                                 isOpen ? el( 'input', {
                                     type: 'time',
                                     value: hours.close,

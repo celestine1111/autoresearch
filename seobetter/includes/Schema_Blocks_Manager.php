@@ -837,13 +837,26 @@ class Schema_Blocks_Manager {
     }
 
     /**
-     * Helper — build a Google Maps directions URL from either lat/lng (preferred)
-     * or address string fallback.
+     * Helper — build a Google Maps directions URL.
+     *
+     * v1.5.216.62.39 — preference flipped: street address wins over lat/lng.
+     *
+     * Pre-fix the URL passed `destination=<lat>,<lng>` whenever coordinates
+     * existed. Google Maps reverse-geocodes that pair to whatever POI it has
+     * indexed at those coordinates — frequently a different business name
+     * than the one we want to show. User-reported example: a business at
+     * 50 William St, Darlinghurst with OSM-resolved coordinates rendered
+     * the destination as "Christian Adam, Darlinghurst NSW 2010" (a
+     * different business sharing the same coords on Google's index)
+     * instead of "50 William St, Darlinghurst NSW 2010".
+     *
+     * Fix: pass the address string as `destination` so Google forward-geocodes
+     * it and shows the address text the user typed. Lat/lng still narrows
+     * the result via the optional `destination_place_id` companion — but
+     * Maps URL API doesn't accept raw lat/lng, so coordinates are now a
+     * fallback only (used when no address is filled in).
      */
     private static function build_maps_directions_url( array $b ): string {
-        if ( ! empty( $b['latitude'] ) && ! empty( $b['longitude'] ) ) {
-            return 'https://www.google.com/maps/dir/?api=1&destination=' . rawurlencode( $b['latitude'] . ',' . $b['longitude'] );
-        }
         $parts = array_filter( [
             $b['street_address'] ?? '',
             $b['locality'] ?? '',
@@ -853,6 +866,9 @@ class Schema_Blocks_Manager {
         ] );
         if ( ! empty( $parts ) ) {
             return 'https://www.google.com/maps/dir/?api=1&destination=' . rawurlencode( implode( ', ', $parts ) );
+        }
+        if ( ! empty( $b['latitude'] ) && ! empty( $b['longitude'] ) ) {
+            return 'https://www.google.com/maps/dir/?api=1&destination=' . rawurlencode( $b['latitude'] . ',' . $b['longitude'] );
         }
         return '';
     }
