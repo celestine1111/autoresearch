@@ -76,7 +76,7 @@ After upload + retest:
 - Schema validator on a post with a FAQ block should now show `FAQPage` with the user's `Question` array.
 - Sidebar Rich Results Preview should list "FAQ card (N questions)".
 
-**Verified by user:** UNTESTED
+**Verified by user:** ✅ Verified 2026-05-04 — both bugs fixed, retest passed.
 
 ---
 
@@ -159,7 +159,7 @@ grep -n "seobetter/faq" seobetter/seobetter.php seobetter/includes/Schema_Blocks
 
 Manual test path: insert "FAQ (SEOBetter)" block; add 3 Q&A pairs; save + view post; paste URL into validator.schema.org → expect `FAQPage` with 3 `Question` entries each with `acceptedAnswer/Answer/text`. Front-end card should show `<details>` accordion that expands on click. Sidebar Rich Results Preview should list "FAQ card (3 questions)".
 
-**Verified by user:** UNTESTED
+**Verified by user:** ✅ Verified 2026-05-04 (with v62.43 follow-up fix for the @graph merge bug).
 
 ---
 
@@ -211,7 +211,7 @@ grep -n "normalize_url" seobetter/includes/Schema_Blocks_Manager.php
 
 After upload + retest on the dog raw-food article: `hiringOrganization.sameAs` should now be `https://seobetter.com` instead of bare `seobetter.com`.
 
-**Verified by user:** UNTESTED
+**Verified by user:** ✅ Verified 2026-05-04.
 
 ---
 
@@ -254,7 +254,7 @@ After upload + retest:
 - Validator: insert a Vacation Rental block, save, paste URL into validator.schema.org — `occupancy` warning should be gone.
 - Sidebar: any post with a Schema Block should show a corresponding "[Type] card" entry in the Rich Results Preview list.
 
-**Verified by user:** UNTESTED
+**Verified by user:** ✅ Verified 2026-05-04 — `occupancy` warning gone after VacationRental @type fix; sidebar lists each block.
 
 ---
 
