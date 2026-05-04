@@ -7,12 +7,100 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.50)
+> **Last updated:** 2026-05-04 (v1.5.216.62.51)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.51 — FIX: double H1 universal; opinion section drift (6 of 10 sections shipped → all sections now); image-array 3-dupe collapsed to single URL
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+Three issues from T3 #3 Opinion retest, user requested all be fixed before moving to T3 #4:
+
+1. **Double H1.** WordPress theme renders `post_title` as the page H1; the AI was also emitting an `# H1` inside the article body. Result: two H1s on the page, breaking the SEO single-H1 rule per [§9 of SEO-GEO-AI-GUIDELINES.md](seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md). Universal across all 21 content types because the AI prompt never explicitly forbade body-H1s.
+
+2. **Opinion section drift — 6 of 10 documented sections shipped.** The Opinion prose template at [Async_Generator.php:880](seobetter/includes/Async_Generator.php) lists 10 sections (Key Takeaways, Hook & Thesis, Args 1/2/3, The Objection, What This Means, FAQ, Conclusion + CTA, References). User-tested 1000-word article emitted only the first 6 (stops after "The Objection"). Cause: `generate_outline()` calculated `$content_sections = 3` for 1000-word inputs, then `$num_sections = 3 + 3 = 6`. The AI was told the section count via word-count formula instead of via the explicit template list, so genre-override types with longer section lists got truncated.
+
+3. **Image-array 3-dupe.** Article-level schema (`BlogPosting`, `NewsArticle`, `OpinionNewsArticle`, `Article`, `HowTo`, `Review`) was emitting `image: [$thumbnail, $thumbnail, $thumbnail]` — three identical URLs. Pattern was added in v62.19 for "richer carousel + Discover surfaces" but Google's docs explicitly state the 3-element array is for **3 distinct aspect ratios** (1:1, 4:3, 16:9). 3 identical URLs provides zero semantic value over a single URL.
+
+### What changed
+
+**1. Heading-level rule in shared prompt block (universal, all 21 types, all languages, all countries)** ([includes/Async_Generator.php::get_prose_template](seobetter/includes/Async_Generator.php))
+
+New leading rule in the `$shared` rules block (appended to every content-type's guidance):
+
+> "HEADING LEVELS: Use ONLY H2 (## in markdown) for top-level section headings, and H3 (###) for sub-sections. NEVER emit a single # (H1) anywhere in the article body — the WordPress theme renders the post title as the page H1. A second H1 in the body is an SEO violation."
+
+Plus a **server-side safety net** in `assemble_final()` post-process that walks the rendered HTML and demotes any leaked `<h1>...</h1>` to `<h2>...</h2>` via regex. Cheap, fail-graceful, defense-in-depth across every locale.
+
+**2. Section-count contract in outline prompt** ([includes/Async_Generator.php::generate_outline()](seobetter/includes/Async_Generator.php))
+
+Outline prompt now derives `$section_count_hint` directly from the comma-separated list in the prose template's `sections` field:
+
+```php
+$section_count_hint = max( 3, count( array_filter( array_map( 'trim',
+    explode( ',', $section_list_raw ) ) ) ) );
+```
+
+…and instructs the AI:
+
+> "SECTION COUNT CONTRACT (HARD): The REQUIRED SECTIONS list above contains N distinct sections. Your outline MUST output EXACTLY N numbered H2 headings — one for each section in the order given. Do NOT merge sections, drop sections, compress two into one, or skip any. If a section name has a parenthetical hint (e.g. \"Lede (who/what/when/where/why)\"), the parenthetical is guidance for the section's content, not part of the heading text — emit only the heading word(s). Word budget per section = total / N; some sections will be shorter than others — that's fine."
+
+This applies to all 21 content types. Genre-override types with longer section lists (Opinion 10, Press Release 5, Personal Essay 5, Recipe variable, Interview 5) now emit ALL listed sections regardless of word-count formula. Default-profile types (blog_post, listicle, etc.) emit their template-listed sections too.
+
+**3. Image-array collapsed to single URL** ([includes/Schema_Generator.php](seobetter/includes/Schema_Generator.php))
+
+3 callers updated:
+- BlogPosting / NewsArticle / OpinionNewsArticle / Article builder (line ~710)
+- HowTo builder (line ~1111, mapped to Article anyway since Google deprecated HowTo)
+- Review builder (line ~1617)
+
+All now emit `'image' => $thumbnail` (single URL string). Recipe builders (lines 1215 + 1363) intentionally keep the 3-element array — Google's Recipe rich result spec actively prefers it.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.50 → 62.51
+- `seobetter/includes/Async_Generator.php`:
+  - new HEADING LEVELS rule prepended to `$shared` rules block
+  - server-side H1→H2 demotion regex pass in `assemble_final()`
+  - outline prompt SECTION COUNT CONTRACT clause + `$section_count_hint` calculation
+- `seobetter/includes/Schema_Generator.php` — 3 image-array sites flipped to single-URL string
+
+### Coverage / scope
+
+| Fix | Article types covered | Languages covered | Countries covered |
+|---|---|---|---|
+| H1 demotion (prompt + safety net) | All 21 | All 38+ | All |
+| Section-count contract | All 21 (outline path) | All 38+ | All |
+| Single-URL image | All except Recipe | All | All |
+
+### Open observations from T3 #3 (still deferred — opinion-genre tradeoff)
+
+- Readability grade 11.9 on Opinion content — argumentative voice is genre-naturally academic; adding a "shorter sentences" override to opinion specifically would conflict with its rhetorical structure. The shared READABILITY rule (grade 6-8 target, sentences ≤20 words) is already in the prompt; opinion just doesn't meet it because of genre.
+- Tables missing on Opinion — opinion content rarely has organic tables; forcing one would produce awkward output. The shared TABLE rule already requests one; opinion can comply when topical (e.g. "Common arguments vs counterarguments" table) but not always.
+
+### Verify
+
+```
+grep -A 3 "HEADING LEVELS:" seobetter/includes/Async_Generator.php
+grep -A 3 "SECTION COUNT CONTRACT" seobetter/includes/Async_Generator.php
+grep -B 1 "v1.5.216.62.51 — single-URL image" seobetter/includes/Schema_Generator.php
+```
+
+After upload + retest:
+- All articles: only ONE H1 on the page (the post_title rendered by theme)
+- Opinion at 1000 words: all 10 sections present (Key Takeaways → Hook & Thesis → Args → Objection → **What This Means → FAQ → Conclusion + CTA → References**)
+- Schema validator: `image` is a single URL string for non-Recipe types (cleaner, no apparent 3-dupe)
+
+**Verified by user:** UNTESTED
 
 ---
 

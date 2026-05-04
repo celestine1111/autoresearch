@@ -914,6 +914,16 @@ class Async_Generator {
         // These produce articles that score 80+ on first generation without
         // needing a second optimization pass.
         $shared = ' CRITICAL RULES FOR ALL TYPES:'
+            // v1.5.216.62.51 — Heading levels (universal across all 21 content
+            // types, all languages, all countries). Pre-fix the AI emitted a
+            // body-level H1 in addition to the WordPress theme's post_title H1
+            // — user-reported on the Opinion article ("Why AI Content Moderation
+            // Is Broken" rendered as a second H1 below the post_title). Two H1s
+            // on a page is an SEO hierarchy violation. Per §9 of the
+            // SEO-GEO-AI-GUIDELINES, exactly ONE H1 per page; section headings
+            // are H2; sub-sections H3. Theme always renders post_title as H1,
+            // so the AI must never emit `#` (markdown H1) anywhere in the body.
+            . ' HEADING LEVELS: Use ONLY H2 (## in markdown) for top-level section headings, and H3 (###) for sub-sections. NEVER emit a single # (H1) anywhere in the article body — the WordPress theme renders the post title as the page H1. A second H1 in the body is an SEO violation.'
             // Readability (grade 6-8 target)
             . ' READABILITY: Write at grade 6-8 reading level. Use short sentences (15-20 words max). Use simple words — "use" not "utilize", "help" not "facilitate", "show" not "demonstrate". Break long paragraphs into 2-3 sentences. No academic jargon unless the content type requires it.'
             // Section structure
@@ -1129,13 +1139,31 @@ class Async_Generator {
                 $brief_for_outline = "\n\nCOMPETITOR H2 PATTERNS (seen in top Google results — use as OPTIONAL hints, the REQUIRED SECTIONS above are mandatory):\n" . implode( "\n", $h2_lines ) . "\n";
             }
 
+            // v1.5.216.62.51 — Count the explicit sections in the prose
+            // template's sections list so the outline AI is told exactly
+            // how many H2s to emit. Pre-fix the AI used $total_words to
+            // estimate section count and routinely produced 6 H2s for a
+            // 1000-word article even when the template listed 10 (Opinion's
+            // Key Takeaways / Hook & Thesis / 3 Args / Objection / What This
+            // Means / FAQ / Conclusion+CTA / References — the last 4 were
+            // dropped). User-reported on the Opinion article retest.
+            // The split-on-comma is robust against parenthetical hints
+            // (e.g. "Lede (who/what/when/where/why)" stays as one section).
+            $section_list_raw = (string) ( $prose['sections'] ?? '' );
+            $section_count_hint = max( 3, count( array_filter( array_map( 'trim', explode( ',', $section_list_raw ) ) ) ) );
+
             $prompt = "Create an article outline for: \"{$keyword}\"\n{$kw_context}\n\n{$intent_guidance}\n{$tone_guidance}\n\nCONTENT TYPE: {$content_type}\nREQUIRED SECTIONS: {$prose['sections']}\nGUIDANCE: {$prose['guidance']}{$brief_for_outline}\n\nCURRENT YEAR: {$year}. If any heading references a year, use {$year}.\nTarget audience: {$audience}\nDomain: " . ( $options['domain'] ?? 'general' ) . "{$country_context}\n\nRequirements:\n"
                 . "- Follow the REQUIRED SECTIONS structure above — use those as your H2 headings\n"
                 . "- Adapt the section names to fit the specific keyword naturally\n"
                 . "- KEYWORD IN HEADINGS: At least {$min_kw_headings} of the H2 headings MUST contain the exact phrase \"{$keyword}\" or a very close variant. SEO plugins check this — headings without the keyword get flagged.\n"
                 . $table_instruction
                 . "- Make headings sound natural, not like SEO templates\n"
-                . "- Target word count: {$total_words} words\n\n"
+                . "- Target word count: {$total_words} words\n"
+                // v1.5.216.62.51 — explicit section-count contract so genre-
+                // override types (opinion / press_release / personal_essay /
+                // recipe / interview / etc.) emit ALL listed sections rather
+                // than collapsing to ~6 based on word count.
+                . "- SECTION COUNT CONTRACT (HARD): The REQUIRED SECTIONS list above contains {$section_count_hint} distinct sections. Your outline MUST output EXACTLY {$section_count_hint} numbered H2 headings — one for each section in the order given. Do NOT merge sections, drop sections, compress two into one, or skip any. If a section name has a parenthetical hint (e.g. \"Lede (who/what/when/where/why)\"), the parenthetical is guidance for the section's content, not part of the heading text — emit only the heading word(s). Word budget per section = total / {$section_count_hint}; some sections will be shorter than others — that's fine.\n\n"
                 . "Return ONLY the numbered list of H2 headings, one per line. No explanations.";
         }
 
@@ -2792,6 +2820,17 @@ class Async_Generator {
             // v1.5.192 — thread language for RTL wrapper (ar, he, fa, ur, etc.)
             'language'     => $options['language'] ?? 'en',
         ] );
+
+        // v1.5.216.62.51 — Server-side double-H1 safety net. Catches the
+        // case where the AI's prompt-level rule "never emit H1 in body"
+        // was statistically violated. Walks the rendered HTML, demotes
+        // every <h1>...</h1> in the body to <h2>...</h2> so the page
+        // ends up with exactly one H1 (the WordPress theme's post_title
+        // render). Universal across all 21 content types and all
+        // languages — the AI behaviour we're guarding against is the
+        // same in every locale. Cheap regex pass; fail-graceful (returns
+        // input unchanged on any unexpected condition).
+        $html = preg_replace( '#<h1\b([^>]*)>(.*?)</h1>#is', '<h2$1>$2</h2>', $html ) ?: $html;
 
         // v1.5.212.2 — Server-side heading-language guard. Catches the case
         // where the AI prompt's "no English headings in non-English articles"

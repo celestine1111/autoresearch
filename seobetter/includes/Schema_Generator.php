@@ -706,8 +706,17 @@ class Schema_Generator {
         ];
 
         if ( $thumbnail ) {
-            // v1.5.216.62.19 — schema-audit Bug 6: 3-array image for richer carousel + Discover surfaces
-            $schema['image'] = [ $thumbnail, $thumbnail, $thumbnail ];
+            // v1.5.216.62.51 — emit a single image URL (string) instead of
+            // a 3-element array of the same URL repeated. The v62.19
+            // 3-dupe pattern was added for "richer carousel / Discover
+            // surfaces" but 3 IDENTICAL URLs provides zero semantic value
+            // over a single URL — Google's docs explicitly state the
+            // multi-image array is for 3 DISTINCT aspect ratios (1:1,
+            // 4:3, 16:9). Without real cropping at upload time we can't
+            // produce 3 distinct ratios, so the cleaner single-URL form
+            // wins. Recipe types continue to emit a 3-element array
+            // because Google's Recipe rich result actively uses it.
+            $schema['image'] = $thumbnail;
         }
 
         // v1.5.118 — Speakable for voice assistants (US English, news/blog content)
@@ -1107,8 +1116,9 @@ class Schema_Generator {
         ];
 
         if ( $thumbnail ) {
-            // v1.5.216.62.19 — schema-audit Bug 6: 3-array image for richer carousel + Discover surfaces
-            $schema['image'] = [ $thumbnail, $thumbnail, $thumbnail ];
+            // v1.5.216.62.51 — single-URL image (see BlogPosting/NewsArticle
+            // builder above for full reasoning).
+            $schema['image'] = $thumbnail;
         }
 
         return $schema;
@@ -1614,7 +1624,8 @@ class Schema_Generator {
         ];
 
         if ( $thumbnail ) {
-            $schema['image'] = [ $thumbnail, $thumbnail, $thumbnail ];
+            // v1.5.216.62.51 — single-URL image for Review (was 3-dupe array).
+            $schema['image'] = $thumbnail;
         }
 
         // ── Extract rating ONLY if present in content ──
