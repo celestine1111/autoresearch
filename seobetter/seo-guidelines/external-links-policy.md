@@ -450,12 +450,15 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 - `europepmc.org`, `ebi.ac.uk`, `www.ebi.ac.uk`
 - `openalex.org`, `api.openalex.org`
 
-**Social discussion sources (added v1.5.16)** — always-on free fetchers that contribute trending discussions and citable posts to every article
+**Social discussion sources (originally added v1.5.16, scope reduced v1.5.216.62.61)**
 
-- `bsky.app`, `bsky.social` — Bluesky public posts
-- `mastodon.social` — Mastodon public statuses (largest instance)
-- `dev.to` — DEV.to tech articles
-- `lemmy.world` — Lemmy federated reddit-alternative posts
+- `dev.to` — DEV.to tech articles. **Retained** because DEV.to posts function more like curated tutorial publications than personal social feeds; tech articles do legitimately cite DEV.to for code-walkthrough content.
+
+**REMOVED v1.5.216.62.61** — the following were originally added in v1.5.16 as "trending discussion sources" but produced E-E-A-T-weakening citations to personal social-media posts (e.g. user-reported on the AI-content-moderation Opinion article: 4 inline citations to a single `kcox105.bsky.social` user post). Personal social posts are not authoritative sources for SEO / opinion / educational article citations and violate §2's "every claim traceable to a real source" rule. Removed from `seobetter.php::get_trusted_domain_whitelist()`:
+
+- ~~`bsky.app`, `bsky.social`~~ — Bluesky personal posts (removed)
+- ~~`mastodon.social`~~ — Mastodon personal statuses (removed)
+- ~~`lemmy.world`~~ — Lemmy community posts (removed)
 
 **OSM Places — anti-hallucination local business grounding (added v1.5.23, expanded to waterfall in v1.5.24)** — fetches real local businesses via a 5-tier provider waterfall (OSM → Wikidata → Foursquare → HERE → Google Places). Fixes the "fake Italian gelato shops" hallucination bug for any small city globally.
 

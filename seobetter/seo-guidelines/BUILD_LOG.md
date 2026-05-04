@@ -7,12 +7,65 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.60)
+> **Last updated:** 2026-05-04 (v1.5.216.62.61)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.61 — Remove Bluesky / Mastodon / Lemmy from trusted-citation whitelist (personal social posts aren't authoritative E-E-A-T sources)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on the Opinion-on-AI-content-moderation retest: the article emitted 4 inline citations to a SINGLE Bluesky user's personal post (`kcox105.bsky.social/post/3lm57fifgjc24`) — anchor text "God, no wonder why Instagram is so damn broken…". Personal social-media posts are not authoritative E-E-A-T sources and citing them as inline references for SEO / opinion / educational articles weakens trust signals.
+
+The whitelist entries were added in v1.5.16 with a "trending discussion sources" use case in mind (provide topical-conversation context). In practice the citation pool surfaced them as PRIMARY sources, not context.
+
+[external-links-policy.md §2](seobetter/seo-guidelines/external-links-policy.md): *"the only hyperlinks that reach a published article are URLs that were retrieved from a real keyword-targeted web search before the AI started writing, verified to contain keyword-relevant content"*. A `bsky.app/profile/.../post/X` URL technically satisfies the search-retrieval rule but fails the substantive-source rule that §2 implies.
+
+### What changed
+
+**`seobetter.php::get_trusted_domain_whitelist()` — 4 social-source entries removed** ([seobetter.php](seobetter/seobetter.php))
+
+Removed:
+- `bsky.app`, `bsky.social` — Bluesky personal posts
+- `mastodon.social` — Mastodon personal statuses
+- `lemmy.world` — Lemmy community posts
+
+**Retained:**
+- `dev.to` — functions more like a curated tutorial publication than a social feed; tech articles legitimately cite DEV.to for code walkthroughs.
+
+In-place v1.5.216.62.61 comment block in the whitelist documents the rationale. Personal social posts now fail Pass 2 (allow-list check) in `validate_outbound_links()` — the link-validator strips them from rendered prose.
+
+**`external-links-policy.md` §10 — corresponding doc update**
+
+The "Social discussion sources (added v1.5.16)" subsection now lists only `dev.to` (retained) plus a strikethrough block documenting the v62.61 removal of `bsky.app` / `bsky.social` / `mastodon.social` / `lemmy.world` and the rationale.
+
+### Note on `linkedin.com` / `medium.com` / `news.ycombinator.com`
+
+The same article also cited LinkedIn pulse / Medium / Hacker News URLs. Those are NOT in the explicit whitelist — they're passing through the dynamic citation pool from research providers (Tavily / Sonar / etc.). Tightening the pool's authority filter to drop those is a separate scope change requiring per-content-type rules (LinkedIn personal articles ≠ LinkedIn editorial articles; Medium has both junk and high-quality publications). Deferred — flag if user reports follow-up issues.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.60 → 62.61; whitelist `bsky.app` / `bsky.social` / `mastodon.social` / `lemmy.world` removed; `dev.to` retained with rationale
+- `seobetter/seo-guidelines/external-links-policy.md` — §10 social-discussion subsection updated to match
+
+### Verify
+
+```
+grep -n "bsky.app\|mastodon.social\|lemmy.world" seobetter/seobetter.php
+grep -A 3 "REMOVED v1.5.216.62.61" seobetter/seo-guidelines/external-links-policy.md
+```
+
+After upload + retest of any Opinion / educational article: zero outbound links to bsky.app, bsky.social, mastodon.social, or lemmy.world. dev.to remains citable for tech-tutorial content where appropriate.
+
+**Verified by user:** UNTESTED
 
 ---
 
