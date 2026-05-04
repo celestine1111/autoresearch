@@ -404,6 +404,24 @@ async function debugReplyFailure(page, context) {
 async function actionPost(page, systemPrompt) {
   if (getDailyCount('post') >= CAPS.post) return `skipped: post cap (${CAPS.post}) reached`;
 
+  // 2026-05-04 — added post dedup memory.
+  //
+  // Pre-fix: actionPost had NO memory of past posts. The userPrompt was
+  // ~6 lines + the same 74KB agent-prompt.md as system context every
+  // call. Gemini saw identical context every time and tended toward
+  // similar outputs (especially pillar_1 which is 60% of posts —
+  // recurring stats like "Perplexity cited Wikipedia 1.8M times").
+  //
+  // Fix: keep a rolling window of the last 30 successful posts on
+  // disk. Inject the most recent 15 into the userPrompt as an explicit
+  // anti-list ("DO NOT repeat any of these facts, stats, framings or
+  // angles"). 30 stored / 15 in-prompt is the right tradeoff: enough
+  // context to prevent obvious repetition without bloating the prompt
+  // (each post averages ~250 chars, so 15 × 250 = 3.75KB extra context
+  // — negligible vs the 74KB system prompt).
+  const recentPosts = loadState('recent-posts', []);
+  const antiList = recentPosts.slice(-15).map((p, i) => `${i + 1}. ${p}`).join('\n');
+
   const userPrompt = `MODE: original_post
 
 CONTEXT:
@@ -411,6 +429,12 @@ CONTEXT:
 - Pre-launch mode is active per §1A — never link to seobetter.com, never paste the form URL.
 - Pick one content pillar by weighted random: 60% pillar_1 (ai_search_insights), 25% pillar_2 (plugin_tactics), 10% pillar_3 (build_in_public), 5% pillar_4 (spicy_take).
 - Length: ≤ 270 characters. No links. No hashtags. Lead with a specific number, name, or fact.
+
+ANTI-REPETITION (CRITICAL):
+You have already posted these — DO NOT repeat any of these facts, stats, brand names, framings, or angles. Pick a DIFFERENT angle even within the same pillar:
+${antiList || '(no prior posts yet — anything goes for this first one)'}
+
+If your first draft uses any fact / stat / brand / framing already in the list above, discard it and try a fresh angle. Variety is more important than picking the "perfect" stat.
 
 Return ONLY the JSON per §4 schema. The "tweets" array contains exactly one entry.`;
 
@@ -432,6 +456,13 @@ Return ONLY the JSON per §4 schema. The "tweets" array contains exactly one ent
   await jitter(3000, 5000);
 
   bumpDailyCount('post');
+
+  // Persist this post into the rolling 30-window so future ticks see
+  // it in the anti-list. Trim oldest entries beyond the 30 cap.
+  recentPosts.push(tweet.text);
+  while (recentPosts.length > 30) recentPosts.shift();
+  saveState('recent-posts', recentPosts);
+
   return `✓ posted [${tweet.pillar || '?'}]: ${tweet.text.substring(0, 120)}`;
 }
 
