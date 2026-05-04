@@ -19,7 +19,7 @@
 ## v1.5.216.62.58 — ROOT CAUSE: truncate_to_target() was killing late §3.1A sections after assembly. v62.51-v62.57 outline fixes were correct; the truncator silently dropped them.
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `4b3b521`
 
 ### Why
 
