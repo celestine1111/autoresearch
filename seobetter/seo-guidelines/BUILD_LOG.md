@@ -7,12 +7,101 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.47)
+> **Last updated:** 2026-05-04 (v1.5.216.62.48)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.48 — FIX v62.47 regression: AI emitted formula description as headline text
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User retest of T3 #2 with v62.47 surfaced a regression — the AI literally emitted my formula description as the published headline:
+
+> "Keyword: australian rba interest rate decision may 2026 reported—Who, What, When, Where & Why"
+
+(URL slug `keyword-australian-rba-interest-rate-decision-may-2026-reported-who-what-when-where-why`. Score 84.)
+
+Cause: v62.47 introduced per-genre formula tables containing parenthetical pattern descriptions like:
+
+```php
+'news_article' => [
+    "{$kw} reported (subject + active verb past tense + 5 Ws)",
+    ...
+]
+```
+
+The AI saw the prompt instruction containing `australian rba interest rate decision may 2026 reported (subject + active verb past tense + 5 Ws)` and treated the parenthetical "(subject + active verb past tense + 5 Ws)" as TEXT to emit, not as a pattern description. So the headline came out:
+
+> "Keyword: australian rba interest rate decision may 2026 reported—Who, What, When, Where & Why"
+
+Where:
+- "Keyword:" was likely picked up from `Generate exactly 5 headline variations for an article about: "{$keyword_for_prompt}"` in the prompt
+- "(Who, What, When, Where, Why)" was the AI's literalization of "(5 Ws)"
+
+The body of the article was OK (correct §3.1A structure with no Key Takeaways, inverted pyramid headings) — only the headline broke.
+
+### What changed
+
+**1. Reverted v62.47's per-genre formula tables.** Restored the original 5 formulas (Number / How-to / Question / Power-words / Current-year) which the AI consistently reads as a pattern (clear "+" delimiters, label tokens like Number/Benefit) and never literal-emits.
+
+**2. Added a CONTENT-TYPE GUARDRAIL clause AFTER the standard formulas** ([includes/AI_Content_Generator.php::headline_genre_guardrail()](seobetter/includes/AI_Content_Generator.php))
+
+For genre-override types (news_article, press_release, opinion, personal_essay, recipe, live_blog, interview) the guardrail tells the AI:
+- Which of the 5 standard formulas to AVOID for this genre
+- 1-2 CONCRETE EXAMPLE headlines (real strings using the actual keyword) — not pattern descriptions
+- Genre-specific framing rules (active verbs for news, ban words for press releases, first-person for opinion, etc.)
+
+For §3.1-default types the guardrail is empty — the standard formulas already work.
+
+**3. Added an explicit ANTI-LEAK RULE in the prompt:**
+
+> "ANTI-LEAK RULE — the actual published headline must NOT contain pattern descriptions, parenthetical hints, or formula labels. Words like '(subject + active verb)', '(5 Ws)', '(Who, What, When, Where, Why)', 'Keyword:', or any text resembling a template description must NEVER appear in the output. The output is just the headline itself."
+
+This is a defensive guardrail against future template-description leaks.
+
+### Note on SEO plugin meta-tag integration
+
+User asked: "does insertion on all major seo plugins now work?" Confirmed by code audit:
+
+[seobetter.php:2920-2987](seobetter/seobetter.php) writes meta title / meta description / focus keyword / OG title-description-image / Twitter title-description-image / canonical URL into all 4 major SEO plugins, gated on plugin presence:
+
+| Plugin | Detection | Fields written |
+|---|---|---|
+| Yoast SEO | `defined('WPSEO_VERSION')` | `_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `_yoast_wpseo_focuskw`, `_yoast_wpseo_opengraph-*`, `_yoast_wpseo_twitter-*`, `_yoast_wpseo_canonical` |
+| Rank Math | `class_exists('RankMath')` | `rank_math_title`, `rank_math_description`, `rank_math_focus_keyword`, `rank_math_facebook_*`, `rank_math_twitter_*`, `rank_math_canonical_url` |
+| SEOPress | `function_exists('seopress_init')` | `_seopress_titles_title`, `_seopress_titles_desc`, `_seopress_analysis_target_kw`, `_seopress_social_*`, `_seopress_robots_canonical` |
+| AIOSEO | `defined('AIOSEO_VERSION')` | Full push including `wp_aioseo_posts` table row + `_aioseo_canonical_url` post meta fallback |
+
+Source-of-truth post meta `_seobetter_meta_title` / `_seobetter_meta_description` is always written; the 4 plugin-specific writes mirror those values. The current test site (`srv1608940.hstgr.cloud`) appears to have NO SEO plugin installed — that's why the front-end HTML has no `<meta name="description">` / `<meta property="og:title">` etc. Install any of the 4 plugins and SEOBetter will populate it.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.47 → 62.48
+- `seobetter/includes/AI_Content_Generator.php`:
+  - reverted v62.47's `headline_formulas_for_type()` (renamed/replaced with `headline_genre_guardrail()`)
+  - prompt restored to original 5 formulas + new ANTI-LEAK RULE + appended genre guardrail clause for genre-override types
+
+### Verify
+
+```
+grep -A 4 "ANTI-LEAK RULE" seobetter/includes/AI_Content_Generator.php
+grep -n "headline_genre_guardrail" seobetter/includes/AI_Content_Generator.php
+```
+
+After upload + retest of T3 #2:
+- Headline should report the event with active verbs (e.g. "RBA Holds Cash Rate at 4.10% in May 2026 Decision") — NOT "Keyword: australian rba interest rate decision may 2026 reported—Who, What, When, Where & Why".
+- URL slug should be a clean SEO slug — NOT `keyword-australian-rba-...-who-what-when-where-why`.
+- §3.1A template (no Key Takeaways for news_article) should still hold from v62.47.
+
+**Verified by user:** UNTESTED
 
 ---
 

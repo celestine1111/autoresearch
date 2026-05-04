@@ -154,20 +154,27 @@ class AI_Content_Generator {
             $lang_clause = "\n\nLANGUAGE: Write all 5 headlines ENTIRELY in {$lang_name}. Every word except the exact keyword phrase must be in {$lang_name}. Do NOT wrap a {$lang_name} keyword in English connector phrases like \"How to Find X: The Ultimate Guide\" — a {$lang_name} headline uses {$lang_name} connector phrases (e.g. Korean would use '{$lang_name}-appropriate wording' rather than 'How to Find X'). Use the five formulas below but express each formula in {$lang_name}.";
         }
 
-        // v1.5.216.62.47 — content-type-aware headline formulas. Pre-fix
-        // every content type was offered the same 5 formulas (Number /
-        // How-to / Question / Power-words / Current-year), regardless of
-        // genre. User reported on RBA news article: keyword was the
-        // event "australian rba interest rate decision may 2026" but the
-        // AI picked formula #2 (How-to + keyword) and emitted "How-to
-        // Prepare for the australian rba interest rate decision may
-        // 2026" — a how-to-style headline on a news_article body. News
-        // headlines should report events (subject + active verb + 5 Ws),
-        // not instruct readers. Per-genre formula tables now route news,
-        // recipe, opinion, personal_essay, press_release, and live_blog
-        // away from the how-to / question / power-words shapes. Other
-        // types keep the original 5 formulas.
-        $formula_block = self::headline_formulas_for_type( $content_type, $keyword_for_prompt );
+        // v1.5.216.62.48 — REVERT v62.47 per-genre formula table.
+        //
+        // v62.47 introduced per-genre formulas like
+        //   "{$kw} reported (subject + active verb past tense + 5 Ws)"
+        // The AI took the parenthetical "(subject + active verb past tense
+        // + 5 Ws)" as TEXT to emit, not as a pattern description, and
+        // generated the headline:
+        //   "Keyword: australian rba interest rate decision may 2026
+        //    reported—Who, What, When, Where & Why"
+        // (User-reported regression on the RBA-rate retest.)
+        //
+        // v62.48 fix: keep the proven original 5 formulas (Number / How-to
+        // / Question / Power-words / Current-year) which never had the
+        // literal-emit problem — they use clear "+" delimiters with token
+        // labels (Number/Benefit/etc) the AI consistently reads as a
+        // pattern. Add a CONTENT-TYPE GUARDRAIL clause AFTER the formulas
+        // that steers genre-mismatched framings away (e.g. for
+        // news_article, replace How-to framing with event-report framing).
+        // Adds an explicit anti-leak rule banning parenthetical pattern
+        // descriptions in the output.
+        $genre_guardrail = self::headline_genre_guardrail( $content_type, $keyword_for_prompt );
 
         $prompt = "Generate exactly 5 headline variations for an article about: \"{$keyword_for_prompt}\"{$context}{$lang_clause}
 
@@ -178,7 +185,12 @@ Rules:
 2. The keyword \"{$keyword_for_prompt}\" must appear in ALL 5 headlines
 3. Front-load the keyword (put it in the first half of the headline) in at least 3 of 5
 4. Use different headline formulas:
-{$formula_block}
+   - #1: Number + \"{$keyword_for_prompt}\" + Benefit
+   - #2: How-to + \"{$keyword_for_prompt}\"
+   - #3: Question + \"{$keyword_for_prompt}\"
+   - #4: \"{$keyword_for_prompt}\" + Power words
+   - #5: \"{$keyword_for_prompt}\" + Current year
+5. ANTI-LEAK RULE — the actual published headline must NOT contain pattern descriptions, parenthetical hints, or formula labels. Words like \"(subject + active verb)\", \"(5 Ws)\", \"(Who, What, When, Where, Why)\", \"Keyword:\", or any text resembling a template description must NEVER appear in the output. The output is just the headline itself.{$genre_guardrail}
 
 Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
 
@@ -237,102 +249,63 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
     }
 
     /**
-     * v1.5.216.62.47 — Per-content-type headline formula tables.
+     * v1.5.216.62.48 — Per-content-type headline genre guardrail.
      *
-     * Returns the 5-formula bullet block injected into the headline prompt.
-     * Default 5 formulas (number / how-to / question / power-words / year)
-     * are kept for the 14 content types that follow §3.1's default profile.
-     * Genre-override types (news_article, opinion, recipe, personal_essay,
-     * press_release, live_blog, interview) get a tailored 5-formula table
-     * that matches genre convention — so the AI never picks "How-to + keyword"
-     * for a news event headline, never picks "Question + keyword" for a
-     * recipe, etc.
+     * Appended AFTER the standard 5-formula block in the headline prompt.
+     * For genre-override content types (news_article, press_release,
+     * opinion, personal_essay, recipe, live_blog, interview) the guardrail
+     * tells the AI which of the 5 formulas to AVOID and gives 1-2 concrete
+     * example headlines (real strings, not pattern descriptions). For
+     * §3.1-default content types the guardrail is empty — the standard
+     * formulas already work.
      *
-     * Each table returns a 5-line bulleted string ready to drop into the
-     * prompt. Indentation and bullet style match the original prompt.
+     * Why guardrail-after-formula instead of replacing-the-formula:
+     * v1.5.216.62.47 tried per-genre formula tables that contained
+     * parenthetical pattern descriptions like "(subject + active verb +
+     * 5 Ws)". The AI emitted the descriptions verbatim as headline text,
+     * producing headlines like "Keyword: australian rba interest rate
+     * decision may 2026 reported—Who, What, When, Where & Why". The
+     * guardrail-after approach keeps the proven formulas (Number /
+     * How-to / Question / Power-words / Year) which the AI handles
+     * cleanly, then overrides genre-mismatched formulas via plain English
+     * instruction with concrete example headlines.
      */
-    private static function headline_formulas_for_type( string $content_type, string $kw ): string {
-        $tables = [
-            // News: event reporting — subject + active verb + 5 Ws.
-            // No how-to, no question framing. AP-style headline patterns.
-            'news_article' => [
-                "{$kw} reported (subject + active verb past tense + 5 Ws)",
-                "{$kw}: numbers/facts (specific stat or % change)",
-                "{$kw} as [event consequence or context]",
-                "{$kw}: official source said (quote-led news lede)",
-                "{$kw} — Month YYYY (dateline + headline)",
-            ],
-            // Press release — corporate announcement, active verb, no cliché words.
-            'press_release' => [
-                "Company announces {$kw} (active verb)",
-                "Company launches {$kw}: [specific feature/number]",
-                "Company reports {$kw} for Month YYYY",
-                "{$kw}: Company introduces [thing]",
-                "{$kw}: Company unveils [milestone]",
-            ],
-            // Opinion — provocative thesis, never neutral reporting.
-            'opinion' => [
-                "Why {$kw} (provocative thesis)",
-                "{$kw} is broken — and here is why (claim-led)",
-                "The case for/against {$kw} (argument framing)",
-                "{$kw}: [counter-intuitive claim] (steelman style)",
-                "{$kw}: stop doing X / start doing Y (CTA)",
-            ],
-            // Personal essay — concrete moment / question / image.
-            'personal_essay' => [
-                "The day I {$kw} (concrete-moment opener)",
-                "What {$kw} taught me about [larger truth]",
-                "{$kw}: a year/decade/lesson in [N words]",
-                "Why {$kw} still matters (reflective)",
-                "{$kw} — and the question I am still asking (open-ended)",
-            ],
-            // Recipe — action verb + dish + qualifier.
-            'recipe' => [
-                "How to make {$kw} (imperative)",
-                "Easy {$kw} recipe (qualifier + recipe)",
-                "{$kw}: minute-by-minute (cooking time hook)",
-                "{$kw} — N ingredients, N minutes (constraint hook)",
-                "Best {$kw} for [season/diet] (target audience)",
-            ],
-            // Live blog — coverage / live / updates framing.
-            'live_blog' => [
-                "{$kw} live updates (rolling coverage)",
-                "{$kw}: live blog — Month DD (date-stamped)",
-                "{$kw} as it happened (real-time framing)",
-                "{$kw} — minute by minute (timeline hook)",
-                "Live: {$kw} (lede prefix)",
-            ],
-            // Interview — name + role + topic.
-            'interview' => [
-                "[Name] on {$kw}: an interview (subject-led)",
-                "How [Name] thinks about {$kw} (perspective)",
-                "[Name] explains {$kw} (Q&A framing)",
-                "{$kw}: a conversation with [Name]",
-                "[Name] on {$kw}: [pull quote] (quote-led)",
-            ],
+    private static function headline_genre_guardrail( string $content_type, string $kw ): string {
+        $year = wp_date( 'Y' );
+        $guardrails = [
+            'news_article' => "\n\nGENRE GUARDRAIL (news_article — this article reports an EVENT, not how-to advice):\n"
+                . "  • Skip formula #2 (How-to). Replace with an event-report framing instead — \"{$kw}: [Active verb past tense] [Number/Result]\".\n"
+                . "  • Skip formula #3 (Question). Replace with a quote-led news lede — e.g. \"{$kw}: [Source] [verb] [claim]\".\n"
+                . "  • Use ACTIVE VERBS in past tense (held, cut, hiked, paused, announced, ruled, said).\n"
+                . "  • Concrete example for keyword \"{$kw}\": \"{$kw}: Rate Held at 4.10% in {$year}\". Note: this is a REAL HEADLINE, not a description — emit text like this, not pattern labels.",
+            'press_release' => "\n\nGENRE GUARDRAIL (press_release — corporate announcement aiming for media pickup):\n"
+                . "  • Use active announce verbs: announces, launches, reports, introduces, reveals.\n"
+                . "  • BAN words anywhere in the headline: groundbreaking, disruptor, revolutionary, game-changing, industry-leading, unique, innovative, breaking, exclusive, best-in-class, cutting-edge, world-class, unleash, unveil.\n"
+                . "  • Skip formula #3 (Question — journalists ignore Q-headlines).\n"
+                . "  • Concrete example for keyword \"{$kw}\": \"Company X Announces {$kw} for {$year}\".",
+            'opinion' => "\n\nGENRE GUARDRAIL (opinion / op-ed — provocative thesis, never neutral reporting):\n"
+                . "  • Use first-person or claim-led framings: \"Why\", \"The case for/against\", \"Stop doing X\", \"X is broken\".\n"
+                . "  • Skip formula #1 (Number) — too neutral; opinion needs a stance.\n"
+                . "  • Concrete example for keyword \"{$kw}\": \"Why {$kw} Is Broken\" or \"The Case Against {$kw}\".",
+            'personal_essay' => "\n\nGENRE GUARDRAIL (personal_essay — first-person literary, concrete moments):\n"
+                . "  • Use concrete-moment framings: \"The day I…\", \"What X taught me…\", \"Why X still matters\".\n"
+                . "  • Skip formulas #1 (Number) and #4 (Power words) — both feel listicle, not literary.\n"
+                . "  • Concrete example for keyword \"{$kw}\": \"What {$kw} Taught Me\" or \"The Year of {$kw}\".",
+            'recipe' => "\n\nGENRE GUARDRAIL (recipe — action verb + dish + qualifier):\n"
+                . "  • Use cooking framings: \"How to make…\", \"Easy X recipe\", \"Quick X in N minutes\", \"Best X for [season/diet]\".\n"
+                . "  • Skip formula #3 (Question — recipes answer \"how\", not \"why\").\n"
+                . "  • Concrete example for keyword \"{$kw}\": \"Easy {$kw} Recipe ({$year})\" or \"How to Make {$kw} in 30 Minutes\".",
+            'live_blog' => "\n\nGENRE GUARDRAIL (live_blog — real-time coverage):\n"
+                . "  • Use coverage framings: \"X live updates\", \"X: live blog — Month DD\", \"X as it happened\".\n"
+                . "  • Skip formulas #2 (How-to) and #3 (Question) — neither fits real-time event coverage.\n"
+                . "  • Concrete example for keyword \"{$kw}\": \"{$kw}: Live Updates\" or \"{$kw} As It Happened\".",
+            'interview' => "\n\nGENRE GUARDRAIL (interview — name + role + topic):\n"
+                . "  • Use subject-led framings: \"[Name] on X\", \"How [Name] thinks about X\", \"[Name] explains X\".\n"
+                . "  • Skip formulas #1 (Number), #2 (How-to), #4 (Power words) — interview headlines lead with the subject.\n"
+                . "  • Concrete example for keyword \"{$kw}\": \"[Name] on {$kw}\" or \"A Conversation with [Name] about {$kw}\".",
         ];
 
-        if ( isset( $tables[ $content_type ] ) ) {
-            $formulas = $tables[ $content_type ];
-        } else {
-            // Default profile (14 of 21 content types): blog_post, how_to,
-            // listicle, review, comparison, buying_guide, pillar_guide,
-            // case_study, faq_page, tech_article, white_paper,
-            // scholarly_article, glossary_definition, sponsored.
-            $formulas = [
-                "Number + \"{$kw}\" + Benefit",
-                "How-to + \"{$kw}\"",
-                "Question + \"{$kw}\"",
-                "\"{$kw}\" + Power words",
-                "\"{$kw}\" + Current year",
-            ];
-        }
-
-        $out = '';
-        foreach ( $formulas as $i => $f ) {
-            $out .= '   - #' . ( $i + 1 ) . ": {$f}\n";
-        }
-        return rtrim( $out, "\n" );
+        return $guardrails[ $content_type ] ?? '';
     }
 
     /**
