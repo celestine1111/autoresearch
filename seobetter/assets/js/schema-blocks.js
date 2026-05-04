@@ -578,6 +578,119 @@
                 // widget. Returning null produces no DOM but keeps the
                 // attribute schema valid.
                 return null;
+            case 'qa_list': {
+                // v1.5.216.62.42 — variable-length list of Q&A pairs for
+                // the FAQ block. Stored as a JSON-encoded string in the
+                // `questions` attribute (Gutenberg block attributes must
+                // be scalars; structured data round-trips via JSON).
+                //
+                // UI: rows of [question text input, answer textarea, ↑↓
+                // reorder, × remove]. "+ Add question" button at the
+                // bottom adds an empty pair. Empty list shows a single
+                // empty row to invite first input.
+                //
+                // Wire format consumed by Schema_Blocks_Manager::
+                // build_faq_jsonld() and render_faq_card() — both call
+                // decode_faq_pairs() to JSON-decode and tolerate empty
+                // / malformed input.
+                var pairs = [];
+                if ( typeof value === 'string' && value !== '' ) {
+                    try {
+                        var parsed = JSON.parse( value );
+                        if ( Array.isArray( parsed ) ) {
+                            pairs = parsed.map( function ( p ) {
+                                return p && typeof p === 'object'
+                                    ? { q: String( p.q || '' ), a: String( p.a || '' ) }
+                                    : { q: '', a: '' };
+                            } );
+                        }
+                    } catch ( e ) { /* corrupt JSON — start fresh */ }
+                }
+                if ( pairs.length === 0 ) {
+                    pairs = [ { q: '', a: '' } ];
+                }
+                var pushPairs = function ( newPairs ) {
+                    onChange( JSON.stringify( newPairs ) );
+                };
+                var setPair = function ( idx, key, val ) {
+                    var copy = pairs.map( function ( p ) { return { q: p.q, a: p.a }; } );
+                    if ( ! copy[ idx ] ) return;
+                    copy[ idx ][ key ] = val;
+                    pushPairs( copy );
+                };
+                var removePair = function ( idx ) {
+                    var copy = pairs.filter( function ( _, i ) { return i !== idx; } );
+                    if ( copy.length === 0 ) copy.push( { q: '', a: '' } );
+                    pushPairs( copy );
+                };
+                var addPair = function () {
+                    var copy = pairs.map( function ( p ) { return { q: p.q, a: p.a }; } );
+                    copy.push( { q: '', a: '' } );
+                    pushPairs( copy );
+                };
+                var movePair = function ( idx, dir ) {
+                    var to = idx + dir;
+                    if ( to < 0 || to >= pairs.length ) return;
+                    var copy = pairs.map( function ( p ) { return { q: p.q, a: p.a }; } );
+                    var tmp  = copy[ idx ];
+                    copy[ idx ] = copy[ to ];
+                    copy[ to ]  = tmp;
+                    pushPairs( copy );
+                };
+                var qaInputStyle = {
+                    width: '100%', padding: '6px 8px',
+                    fontSize: '13px', lineHeight: '20px', background: '#fff',
+                    border: '1px solid #757575', borderRadius: '2px',
+                    boxSizing: 'border-box', fontFamily: 'inherit'
+                };
+                var validCount = pairs.filter( function ( p ) { return p.q.trim() !== '' && p.a.trim() !== ''; } ).length;
+                return el( 'div', { key: fieldKey, className: 'components-base-control', style: { marginBottom: '24px' } },
+                    el( 'label', {
+                        className: 'components-base-control__label',
+                        style: { display: 'block', marginBottom: '8px', fontSize: '11px', fontWeight: 500, lineHeight: 1.4, textTransform: 'uppercase' }
+                    }, label ),
+                    pairs.map( function ( pair, idx ) {
+                        return el( 'div', {
+                            key: idx,
+                            style: { background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', marginBottom: '8px' }
+                        },
+                            el( 'div', { style: { display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' } },
+                                el( 'span', { style: { fontSize: '11px', fontWeight: 600, color: '#64748b', flex: '1' } },
+                                    'Question ' + ( idx + 1 )
+                                ),
+                                el( Button, { variant: 'tertiary', isSmall: true, disabled: idx === 0,
+                                    onClick: function () { movePair( idx, -1 ); } }, '↑' ),
+                                el( Button, { variant: 'tertiary', isSmall: true, disabled: idx === pairs.length - 1,
+                                    onClick: function () { movePair( idx, 1 ); } }, '↓' ),
+                                el( Button, { variant: 'tertiary', isSmall: true, isDestructive: true,
+                                    onClick: function () { removePair( idx ); } }, '×' )
+                            ),
+                            el( 'input', {
+                                type: 'text',
+                                placeholder: 'Question',
+                                value: pair.q,
+                                onChange: function ( e ) { setPair( idx, 'q', e.target.value ); },
+                                style: Object.assign( {}, qaInputStyle, { marginBottom: '6px', fontWeight: 600 } )
+                            } ),
+                            el( 'textarea', {
+                                placeholder: 'Answer',
+                                value: pair.a,
+                                onChange: function ( e ) { setPair( idx, 'a', e.target.value ); },
+                                rows: 3,
+                                style: qaInputStyle
+                            } )
+                        );
+                    } ),
+                    el( Button, {
+                        variant: 'secondary',
+                        onClick: addPair,
+                        style: { width: '100%', justifyContent: 'center' }
+                    }, '+ Add question' ),
+                    el( 'p', { style: { fontSize: '11px', color: '#6b7280', marginTop: '6px' } },
+                        validCount + ' valid pair' + ( validCount === 1 ? '' : 's' ) + '. Both question and answer must be filled.'
+                    )
+                );
+            }
             case 'text':
             default:
                 return el( TextControl, { key: fieldKey, label: label, value: value || '', placeholder: placeholder, onChange: onChange } );
@@ -1184,6 +1297,21 @@
                 { value: 'MONTH', label: 'Per month' },
                 { value: 'YEAR',  label: 'Per year' }
             ] }
+        },
+        // v1.5.216.62.42 — FAQ Schema Block (FAQPage). Variable-length
+        // list of Q&A pairs stored as a JSON-encoded string in the
+        // `questions` attribute. The qa_list field-type renderer owns
+        // the editor UX (add/remove/reorder buttons + live count).
+        faq: {
+            heading:    { label: 'FAQ heading',  type: 'text', placeholder: 'Frequently Asked Questions' },
+            // questions is required for valid schema, but the missingRequired
+            // check operates on raw attribute strings — once the user adds any
+            // pair (even empty) the JSON-encoded value becomes non-empty so
+            // the simple emptiness check would false-positive. Marking
+            // not-required defers the gate to ServerSideRender's empty path
+            // (build_faq_jsonld returns null when no valid pair exists →
+            // render_faq_card returns '' → EmptyResponsePlaceholder).
+            questions:  { label: 'Questions',    type: 'qa_list' }
         }
     };
 
@@ -1196,7 +1324,8 @@
         { name: 'seobetter/event',           title: 'Event (SEOBetter)',           icon: 'calendar-alt', keywords: [ 'event', 'tickets', 'schema' ],          fields: DEFS.event },
         { name: 'seobetter/local-business',  title: 'Local Business (SEOBetter)',  icon: 'location',     keywords: [ 'local', 'business', 'address', 'schema' ], fields: DEFS.localbusiness },
         { name: 'seobetter/vacation-rental', title: 'Vacation Rental (SEOBetter)', icon: 'palmtree',     keywords: [ 'rental', 'vacation', 'schema' ],        fields: DEFS.vacationrental },
-        { name: 'seobetter/job-posting',     title: 'Job Posting (SEOBetter)',     icon: 'businessman',  keywords: [ 'job', 'career', 'hiring', 'schema' ],   fields: DEFS.jobposting }
+        { name: 'seobetter/job-posting',     title: 'Job Posting (SEOBetter)',     icon: 'businessman',  keywords: [ 'job', 'career', 'hiring', 'schema' ],   fields: DEFS.jobposting },
+        { name: 'seobetter/faq',             title: 'FAQ (SEOBetter)',             icon: 'editor-help',  keywords: [ 'faq', 'questions', 'qa', 'schema' ],    fields: DEFS.faq }
     ];
 
     BLOCKS.forEach( function ( b ) {

@@ -40,17 +40,43 @@
 
 Cloud articles will be re-introduced as a goodwill bonus (~3/mo) once Pro MRR comfortably covers infra costs — see §7 Phase 5 (post-AppSumo).
 
-**What's free (BYOK-powered):**
-- ✅ **Unlimited articles via BYOK** — user provides their own OpenAI / Anthropic / OpenRouter / Gemini / Groq key. They pay their provider directly (~$0.01–$0.08 per article depending on model). Zero marginal cost to us.
-- ✅ Full GEO Analyzer (score ring + rubric breakdown — runs locally, zero cost)
-- ✅ Full schema generation: Article + Recipe + Organization + Person + BreadcrumbList + FAQPage (when applicable)
+**What's free (BYOK-powered) — list rewritten 2026-05-04 to match shipped reality:**
+
+*Generation:*
+- ✅ **Unlimited articles via BYOK** — user provides their own OpenAI / Anthropic / OpenRouter / Gemini / Groq / Ollama key. They pay their provider directly (~$0.01–$0.08 per article depending on model). Zero marginal cost to us.
 - ✅ 3 content types: Blog Post, How-To Guide, Listicle
 - ✅ 1 AI provider connection at a time (BYOK)
-- ✅ OpenStreetMap places only (Tier 1 of the Places waterfall)
+- ✅ Country localization for 6 EN-speaking countries: US, UK, AU, CA, NZ, IE (regional context, citation patterns, spelling)
+
+*Schema (basic):*
+- ✅ Article + FAQPage + BreadcrumbList — auto-emitted on every article. (Recipe / Organization / Person / advanced schema = Pro per §3)
+
+*Scoring & analysis:*
+- ✅ GEO Analyzer (full rubric — runs locally, zero cost)
+- ✅ **SEOBetter Score 0-100 composite** (single-number psychological anchor — `Score_Composite.php`)
+- ✅ Headline Analyzer in editor sidebar (real-time scoring, expanded lexicons v62.27)
+
+*Research stack:*
+- ✅ OpenStreetMap places (Tier 1 of the Places waterfall)
 - ✅ Pexels stock images via SEOBetter Cloud free pool (no Pexels key needed — costs the owner $0 via Pexels free tier 20K/mo)
 - ✅ Jina Reader fallback for web research (free, no key)
 - ✅ Auto-suggest secondary + LSI keywords (Google Suggest + Wikipedia + Reddit — all free)
 - ✅ Humanizer banned-word check (runs locally)
+
+*Editor / dashboard:*
+- ✅ Rich Results validation preview in metabox (read-only, 13 honest tiles per v62.25)
+- ✅ Yoast / RankMath / AIOSEO / SEOPress meta sync — title, description, OG, Twitter Card
+- ✅ Canonical URL sync to all 4 SEO plugins
+- ✅ AI Featured Image generator — basic 1 provider (Pollinations, free); advanced (Gemini Image, 7 style presets) is Pro
+
+*Site-wide tools:*
+- ✅ GSC connect + view dashboard (clicks / impressions / queries / position)
+- ✅ Internal Links — orphan-pages report (suggester is Pro+)
+- ✅ Freshness inventory — age-based only (GSC-driven decay + position drift is Pro+)
+- ✅ AI Crawler Access audit (robots.txt scan for GPTBot / ClaudeBot / PerplexityBot / Bingbot / etc. with one-click fix)
+- ✅ Basic `/llms.txt` endpoint (latest 20 posts, citation guidance, transient cache 24h)
+
+*Branding:*
 - ✅ "Powered by SEOBetter" footer link (removable in Pro)
 
 **What requires Pro (the upgrade story):**
@@ -87,23 +113,30 @@ Compare to old "5 free Cloud articles/mo" model:
 
 **Target customer:** solo bloggers, small site owners, DIY SEO operators running 1 WordPress site.
 
-**What's unlocked over Free:**
-- All 21 content types (vs 3 on Free)
-- Multilingual generation (60+ languages — vs Free English-only)
-- Country localization (80+ countries — vs Free 6 EN-speaking)
-- Full 5-tier Places waterfall: Perplexity Sonar Pro → OSM → Foursquare → HERE → Google Places
-- AI Featured Image generation with brand colors (Pollinations / Gemini 2.5 Flash Image)
-- Brave Search API integration (real web citations in References section)
-- AIOSEO full schema sync (Yoast + RankMath + SEOPress get meta sync at Free; AIOSEO full schema is Pro)
-- All advanced schema (LocalBusiness, HowTo, ItemList, Recipe Article wrapper, Speakable, citation[], TechArticle, ScholarlyArticle)
-- Auto-detect schemas (Product, Event, VideoObject, Course, etc.)
-- Inline citations as clickable markdown links (via Citation Pool)
-- 5 Schema Blocks (Product / Event / LocalBusiness / Vacation Rental / Job Posting)
-- Brand Voice profile (1 voice — sample-post enforcement + banned-phrase regex)
-- AI Citation Tracker — 1 prompt × 4 engines × weekly (THE wedge — every paid tier gets it, scaled by tier)
-- Priority support (48h response)
-- Remove "Powered by SEOBetter" footer
-- 1 site license
+**What's unlocked over Free (status as of 2026-05-04 — ✅ at-launch / 🔜 30-day-post-launch / 📋 Phase 5+):**
+
+*At launch (✅):*
+- ✅ All 21 content types (vs 3 on Free)
+- ✅ Multilingual generation (60+ languages — vs Free English-only)
+- ✅ Country localization (80+ countries — vs Free 6 EN-speaking)
+- ✅ Full 5-tier Places waterfall: Perplexity Sonar Pro → OSM → Foursquare → HERE → Google Places
+- ✅ AI Featured Image generation with brand colors — full 7 style presets, multiple providers (Pollinations / Gemini 2.5 Flash Image / Nano Banana via OpenRouter)
+- ✅ Brave Search API integration (real web citations in References section)
+- ✅ AIOSEO full schema sync (Yoast + RankMath + SEOPress get meta sync at Free; AIOSEO full schema is Pro)
+- ✅ All advanced schema (LocalBusiness, ItemList, Recipe Article wrapper, Speakable, citation[], TechArticle, ScholarlyArticle). Note: HowTo dropped — Google deprecated the rich result Sept 2023, how_to content type now maps to `Article`.
+- ✅ Auto-detect schemas (Product, Event, VideoObject across 21 platforms incl. Rumble + Bilibili + Dailymotion + TikTok, Course, etc.)
+- ✅ Inline citations as clickable markdown links (via Citation Pool)
+- ✅ 6 Schema Blocks (Product / Event / LocalBusiness / Vacation Rental / Job Posting / FAQ) as native Gutenberg blocks (v62.28-62.42 — searchable currency/country dropdowns, MediaUpload picker, in-block Save Post button, day-grid opening hours + OSM coordinate lookup on LocalBusiness, variable-length Q&A list on FAQ)
+- ✅ Brand Voice profile (1 voice — sample-post enforcement + banned-phrase regex). Pipeline shipped; UI completeness pending verification in test gate.
+- ✅ Priority support (48h response)
+- ✅ Remove "Powered by SEOBetter" footer
+- ✅ 1 site license
+
+*30 days post-launch (🔜):*
+- 🔜 **AI Citation Tracker — 1 prompt × 4 engines × weekly** — THE wedge feature. Build cost: 2-3 weeks. Marketing copy at launch: *"Coming Q3 2026 — included in your tier from launch day; we'll email you when it ships."* Don't burn revenue runway building it pre-launch; ship as the FIRST post-revenue feature in v1.5.217. (See `pro-features-ideas.md` §3 Phase 1 build status.)
+
+*Phase 5+ (📋 — not at launch, no marketing copy):*
+- 📋 None at Pro tier for Phase 5+ — every other Pro tier feature is at-launch ✅ or 🔜 within 30 days.
 
 **What stays at Free:** BYOK unlimited generation, basic schema (Article + FAQPage + BreadcrumbList) for the 3 free content types, GEO Analyzer + SEOBetter Score 0-100, GSC connect + view, Pexels images, OSM places, Internal Links orphan-pages report, age-based Freshness report, all SEO plugin meta sync (title + description + OG + canonical).
 
@@ -128,16 +161,22 @@ Compare to old "5 free Cloud articles/mo" model:
 
 **Target customer:** power solopreneur / freelance writer running 2-3 sites — captures the gap between Pro (1 site) and Agency (10 sites + 5 seats). Without Pro+, this segment overpays (buying 2-3 × Pro = $78-117/mo) or churns onto Agency overkill.
 
-**What's unlocked over Pro:**
-- **3 sites** (vs 1)
-- **100 Cloud articles/mo** (vs 50)
-- **3 Brand Voice profiles** (vs 1) — power solopreneurs run different voices for different niches
-- **GSC-driven Freshness inventory** — uses GSC click decay + position drift for smart refresh prioritization (vs basic age-based on Pro)
-- **Internal Links editor sidebar suggester** (5 suggestions/post — Link Whisper-style)
-- **WooCommerce Category Intros** (5/site lifetime — Phase 5+ Pro add-on)
-- **AI Citation Tracker — 5 prompts × 4 engines × weekly** (vs 1 prompt on Pro)
-- **Content Brief generator unlimited** (vs Pro 3/mo)
-- **Content Refresher** for stale articles (Pro doesn't get this)
+**What's unlocked over Pro (status as of 2026-05-04):**
+
+*At launch (✅):*
+- ✅ **3 sites** (vs 1)
+- ✅ **100 Cloud articles/mo** (vs 50)
+- ✅ **3 Brand Voice profiles** (vs 1) — power solopreneurs run different voices for different niches
+- ✅ **GSC-driven Freshness inventory** — GSC click decay + position drift + striking-distance + top-queries diagnostic. Editor sidebar mirrors metabox panel. (v1.5.216.54)
+- ✅ **Internal Links editor sidebar suggester** (5 suggestions/post — Link Whisper-style). Status: built but bug — user reports it doesn't return suggestions. **Fix scheduled Day 1 of Phase 1 test gate (T1).**
+- ✅ **Content Brief generator unlimited** (vs Pro 3/mo)
+- ✅ **Content Refresher** "Why?" diagnostic + Editor sidebar (non-destructive — clipboard-only micro-actions)
+
+*30 days post-launch (🔜):*
+- 🔜 **AI Citation Tracker — 5 prompts × 4 engines × weekly** (vs 1 on Pro) — same Q3 2026 ship as Pro tier; Pro+ scales the prompt allowance.
+
+*Phase 5+ (📋 — not at launch, marketing copy says nothing about these for Pro+):*
+- 📋 ~~WooCommerce Category Intros~~ — Phase 5+ Pro add-on, not a Pro+ tier feature. Removed from Pro+ inclusion list. Will ship as a separate WooCommerce Pro add-on bundle.
 
 **Cloud generation:** 100 Cloud articles/month using cheap config (gpt-4.1-mini extractions ~$0.013/article). Overage at $0.50/article. BYOK users (own API key) get unlimited and don't consume Cloud quota.
 
@@ -157,22 +196,30 @@ Compare to old "5 free Cloud articles/mo" model:
 
 **Target customer:** freelance SEOs, content agencies, multi-site operators managing client WordPress sites.
 
-**What's unlocked over Pro+:**
-- **10 site licenses** (vs 3 on Pro+)
-- **5 team seats** (vs 1) — agency staff each get a login
-- **250 Cloud articles/mo** (vs 100 on Pro+)
-- **Bulk CSV import** — 50/day cap, GEO floor 40 (rejected if below), default to draft, never auto-publish without explicit per-row `status=publish`. UX layer on existing `Async_Generator`.
-- **AI Citation Tracker scaled to 25 prompts × 4 engines × weekly** (vs Pro+ 5 prompts)
-- **Brand Voice unlimited + per-language** (vs Pro+ 3 voices)
-- **Internal Links unlimited + auto-linking rules** (vs Pro+ 5 suggestions/post)
-- **WooCommerce: unlimited Category Intros + Product Description Rewriter** (Pro+ only gets 5/site lifetime intros)
-- **Cannibalization detector** — flag when two articles target the same keyword
-- **Refresh-brief generator** — side-by-side diff suggestions for stale articles (humans approve, no auto-rewrite)
-- **GSC Indexing API integration** — request indexing on save (Pro+ doesn't have)
-- **White-label (basic)** — replace logo, hide "Powered by" footer, custom email sender. Premium WL (custom domain + full UI rebrand + whitelisted email) is a separate $99/mo add-on.
-- **API access** — programmatically trigger article generation from n8n / Zapier / custom scripts
-- **Custom prompt templates** per content type (save house style prompts)
-- **Priority support 24h SLA + onboarding call** (first month)
+**What's unlocked over Pro+ (status as of 2026-05-04):**
+
+*At launch (✅):*
+- ✅ **10 site licenses** (vs 3 on Pro+)
+- ✅ **5 team seats** (vs 1) — agency staff each get a login. Freemius handles seat management; verify in Phase 1 test gate.
+- ✅ **250 Cloud articles/mo** (vs 100 on Pro+)
+- ✅ **Bulk CSV import** — 50/day cap, GEO floor 40 (rejected if below), default to draft, never auto-publish without explicit per-row `status=publish`. UX layer on existing `Async_Generator`. Presets save/load supported. (`Bulk_Generator.php` shipped.)
+- ✅ **Brand Voice unlimited + per-language** (vs Pro+ 3 voices) — pipeline shipped; per-language verification in Phase 1 test gate.
+- ✅ **Priority support 24h SLA + onboarding call** (first month). Operational, not code.
+
+*30 days post-launch (🔜) — Phase 2 (Freemius) + first 30 days post-launch:*
+- 🔜 **AI Citation Tracker — 25 prompts × 4 engines × weekly** (vs Pro+ 5) — same Q3 2026 ship; Agency scales prompt allowance.
+- 🔜 **White-label basic** — replace logo, hide "Powered by" footer, custom email sender. ~3 days build during Phase 2 (Freemius weeks). Premium WL ($99/mo add-on) deferred to Phase 5+.
+- 🔜 **API access** — programmatically trigger article generation from n8n / Zapier / custom scripts. ~3 days build during Phase 2.
+
+*Phase 5+ (📋 — NOT at launch; marketing copy at launch removes these from Agency tier):*
+- 📋 ~~Internal Links unlimited + auto-linking rules (Link Whisper-style)~~ — Phase 5+
+- 📋 ~~WooCommerce Category Intros + Product Description Rewriter~~ — Phase 5+ as separate WooCommerce Pro add-on
+- 📋 ~~Cannibalization detector~~ — Phase 5+
+- 📋 ~~Refresh-brief generator (side-by-side diff suggestions for stale articles)~~ — Phase 5+. Locked-NO on auto-rewrite per `pro-features-ideas.md` §7.
+- 📋 ~~GSC Indexing API integration~~ — Phase 5+
+- 📋 ~~Custom prompt templates per content type~~ — Phase 5+
+
+**Marketing copy at launch:** Agency tier shows the ✅ + 🔜 features only. The 📋 features do NOT appear in the at-launch Agency tier comparison grid; they may appear on a separate "Roadmap" or "Coming soon" page. Promising features the codebase doesn't have damages trust if customers buy expecting them and find them missing.
 
 **Cloud generation included:** 250 articles/month bundled across all 10 sites (pooled, not per-site). Cheap config default (~$0.013/article); premium config (Sonnet/Opus content) opt-in via Cloud Credit packs. Overage at $0.40/article (67% margin on overage — Agency rate, slight discount vs Pro overage to incentivize tier upgrade).
 
@@ -286,11 +333,20 @@ The financial logic:
 
 **Goal:** prove willingness-to-pay BEFORE listing publicly. Target $400-$1,500 MRR with 20-30 beta users.
 
-**Pricing for beta:**
-- $99/year ("Founder pricing — locked forever, never raises")
-- Or $49 for 6 months
-- Includes lifetime grandfathered Pro access
-- 50% off normal price ($349/yr) = explicit discount in exchange for testimonial + feedback
+**Pricing for beta (clarified 2026-05-04 — RECURRING annual, not one-time lifetime):**
+- **$99/year recurring**, billed annually. Locked at $99/year forever — when regular Pro pricing rises (now $349/yr, may go higher), founder customers stay at $99/yr as long as they remain subscribed.
+- Or **$49 for 6 months** (single-period trial; converts to $99/yr recurring after period 1 unless cancelled)
+- **NOT a one-time "lifetime" deal.** Lifetime deals are exclusively the AppSumo LTD product (Phase 3) — never offered to founders. The word "lifetime" must NOT appear in any founder-tier marketing copy.
+- "Grandfathered" applies to the **price**, not the access — i.e. the founder's $99/yr rate is grandfathered against future price hikes. Their access lasts as long as they keep paying.
+- 50% off normal price ($349/yr) = explicit discount in exchange for testimonial + feedback. The $250/yr they save × 20 founders = $5,000/yr "marketing budget" that buys testimonials → AppSumo case studies → WP.org credibility.
+- **Honest founder copy:** *"$99/year recurring. Locked at this price forever — when we raise prices to $349/yr or higher, you stay at $99/yr as long as you keep your subscription active. Renews annually until you cancel."*
+
+**Margin per founder (recurring annual, see §3 unit economics):**
+- BYOK founder (own API key): ~$93/yr profit (~94% margin)
+- Cloud founder, light usage (5-15 articles/mo): ~$80/yr profit (~80% margin)
+- Cloud founder maxing 50 articles/mo: ~$19/yr profit (thin but positive)
+- Cloud founder over 50/mo: triggers $0.50/article overage (74% margin on overage — protects revenue from runaway use)
+- Average expected mix at 20 founders: ~$60-70/founder/yr direct profit, plus indirect leverage (testimonials → AppSumo $15-20K LTD payout → WP.org listing)
 
 **Distribution channels (no Twitter network required — see §7B First-20-Users Playbook below):**
 - WordPress Facebook groups (free)
@@ -395,7 +451,7 @@ The answer: you don't need Twitter. Here are 8 proven channels for solo WordPres
   - "WordPress Bloggers Community" (50K+, target audience)
   - "WP & SEO" (15K+, SEO-aware)
   - "WordPress Speed Up Group" (10K+, performance-focused)
-- **Approach:** don't pitch immediately. Spend 1 week answering 5-10 questions in each group. THEN post a "I'm building X for $99/yr lifetime founder pricing — looking for 20 beta testers, here's a 2-min demo video" post.
+- **Approach:** don't pitch immediately. Spend 1 week answering 5-10 questions in each group. THEN post a "I'm building X — looking for 20 beta testers at founder pricing $99/yr (locked at this rate forever — regular price will be $349/yr). Here's a 2-min demo video" post.
 - **Expected:** 5-10 paying users per active group across 2 weeks of soft engagement.
 - **Cost:** $0.
 
@@ -406,10 +462,11 @@ The answer: you don't need Twitter. Here are 8 proven channels for solo WordPres
 - **Expected:** 3-8 paying users per post if positioned right.
 - **Cost:** $0.
 
-### Channel 3: Cold email to existing SEO bloggers (offer free Pro in exchange for review)
+### Channel 3: Cold email to existing SEO bloggers (offer free 12-month Pro in exchange for review)
 - **Targets:** find 50-100 SEO/blogging YouTube creators or bloggers with ≤5K followers (smaller audience = more responsive). Use "AI SEO" / "ChatGPT SEO" / "GEO optimization" search terms.
-- **Email template:**
-  > Hi {name}, I'm a solo founder building SEOBetter — a WordPress plugin that writes articles AI engines (Perplexity, ChatGPT) actually cite. I'm offering free lifetime Pro access ($349/yr value) to 20 SEO content creators in exchange for: (a) honest 5-min trial, (b) one tweet/post if you like it, (c) optional 60-second testimonial. No catch, no commitment beyond trying it. Reply if interested and I'll send your license key. — Ben
+- **Email template (clarified 2026-05-04 — 12-month comp, NOT lifetime):**
+  > Hi {name}, I'm a solo founder building SEOBetter — a WordPress plugin that writes articles AI engines (Perplexity, ChatGPT) actually cite. I'm offering a **free 12-month Pro account ($349 value)** to 20 SEO content creators in exchange for: (a) honest 5-min trial, (b) one tweet/post if you like it, (c) optional 60-second testimonial. After 12 months, you can renew at founder pricing ($99/yr, locked at this rate forever) or let it lapse — your call. No catch, no commitment beyond trying it. Reply if interested and I'll send your license key. — Ben
+- **Why 12-month not lifetime:** every lifetime comp = ongoing API + infra cost forever. 12-month gives reviewers real value (long enough to publish + benefit from tooling) without saddling Ben with permanent overhead per comped account. Renewal at founder pricing keeps the relationship alive at break-even.
 - **Expected:** 5-15 reviewers from 100 emails (5-15% reply rate).
 - **Cost:** $0 + 100 email outreach time (~3 hours).
 
@@ -421,7 +478,7 @@ The answer: you don't need Twitter. Here are 8 proven channels for solo WordPres
 
 ### Channel 5: Paid Reddit ads ($50-100 budget)
 - **Best subreddits to target:** r/SEO, r/Entrepreneur, r/Blogging, r/Marketing
-- **Ad copy:** "AI articles your readers see in ChatGPT/Perplexity. WordPress plugin. $99/yr lifetime founder pricing → first 20 only."
+- **Ad copy:** "AI articles your readers see in ChatGPT/Perplexity. WordPress plugin. $99/yr founder pricing — locked at this rate forever (regular price $349/yr). First 20 only."
 - **Expected:** at $0.50 CPC, $50 = 100 visitors → 2-5 paying users.
 - **Cost:** $50-100.
 

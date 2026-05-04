@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.41
+ * Version: 1.5.216.62.42
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.41' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.42' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -964,6 +964,7 @@ final class SEOBetter {
             'seobetter/local-business'  => [ 'type' => 'LocalBusiness',   'label' => 'Local Business card' ],
             'seobetter/vacation-rental' => [ 'type' => 'VacationRental',  'label' => 'Vacation Rental card' ],
             'seobetter/job-posting'     => [ 'type' => 'JobPosting',      'label' => 'Job Posting card' ],
+            'seobetter/faq'             => [ 'type' => 'FAQPage',         'label' => 'FAQ card' ],
         ];
         if ( function_exists( 'parse_blocks' ) ) {
             $sb_blocks = parse_blocks( $post->post_content ?: '' );
@@ -979,6 +980,14 @@ final class SEOBetter {
                         // since "LocalBusiness" alone is generic.
                         if ( $bn === 'seobetter/local-business' && ! empty( $attrs['business_type'] ) ) {
                             $detail = trim( ( $detail ? $detail . ' — ' : '' ) . str_replace( '_', ' ', $attrs['business_type'] ) );
+                        }
+                        // For FAQ blocks, neither name nor title exists —
+                        // surface the question count instead so the user
+                        // sees "FAQ card (5 questions)" in the sidebar.
+                        if ( $bn === 'seobetter/faq' ) {
+                            $qa_decoded = is_string( $attrs['questions'] ?? '' ) ? json_decode( $attrs['questions'], true ) : [];
+                            $qa_count   = is_array( $qa_decoded ) ? count( $qa_decoded ) : 0;
+                            $detail = $qa_count . ' question' . ( $qa_count === 1 ? '' : 's' );
                         }
                         $result['rich_preview']['rich_types'][] = [
                             'type'   => $sb_block_map[ $bn ]['type'],
@@ -5195,6 +5204,15 @@ final class SEOBetter {
                     'salary_max'              => [ 'label' => 'Max salary',           'type' => 'text' ],
                     'salary_currency'         => [ 'label' => 'Currency',             'type' => 'text',     'placeholder' => 'USD' ],
                     'salary_unit'             => [ 'label' => 'Salary unit',          'type' => 'select',   'options' => [ 'HOUR', 'DAY', 'WEEK', 'MONTH', 'YEAR' ] ],
+                ];
+            case 'faq':
+                // v1.5.216.62.42 — FAQ Schema Block (FAQPage). The
+                // `questions` field is stored as a JSON-encoded array
+                // of {q,a} pairs; the JS DEFS owns the editor UX
+                // (variable-length list with add/remove buttons).
+                return [
+                    'heading'    => [ 'label' => 'FAQ heading',  'type' => 'text', 'placeholder' => 'Frequently Asked Questions' ],
+                    'questions'  => [ 'label' => 'Questions',    'type' => 'qa_list' ],
                 ];
         }
         return [];

@@ -7,12 +7,95 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.41)
+> **Last updated:** 2026-05-04 (v1.5.216.62.42)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.42 — FEATURE: 6th Schema Block — FAQ (FAQPage)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+Schema Block Pro+ suite was 5 blocks (Product, Event, LocalBusiness, VacationRental, JobPosting). Adding FAQ closes the most common manual-schema gap: users wanting to add Q&A schema to landing pages, product pages, sales pages — anywhere outside the AI-generated article pipeline.
+
+Strategic value:
+- **Google rich result:** restricted to gov/health since Aug 2023 (`developers.google.com/search/blog/2023/08/howto-faq-changes`), so this block does NOT primarily target Google FAQ rich results for non-gov sites.
+- **LLM citation gold:** per `llm-visibility-strategy.md §3`, Q&A blocks are the single most extractable format for Perplexity, Claude, ChatGPT — they cite Q&A pairs verbatim from FAQ schema.
+- **Bing / Yandex / regional engines:** still serve FAQ rich result tiles, including in markets where SEOBetter has high traction (CN, RU, KR, JP).
+- **AI Overviews voice readout:** FAQ is the most voice-native format; speakable detection in Schema_Generator already prefers FAQ Q&A pairs.
+
+### Schema spec — required + recommended fields
+
+Researched against Schema.org and Google's current docs (May 2026):
+
+- **`@type: FAQPage`** — single string, not an array (FAQPage is a `WebPage` subtype but Google's spec treats it as the bare type).
+- **`mainEntity`** (REQUIRED) — array of `Question` nodes. Each:
+  - `@type: Question`
+  - `name` (REQUIRED) — full question text
+  - `acceptedAnswer` (REQUIRED) — single `Answer` object:
+    - `@type: Answer`
+    - `text` (REQUIRED) — full answer text
+- **`inLanguage`** (recommended) — BCP-47. FAQPage is in the project's `INLANGUAGE_ACCEPTED_TYPES` whitelist per `structured-data.md §4 Universal`. The builder injects from `get_locale()` fallback to `'en'`.
+
+**Why FAQPage and not QAPage:** QAPage is for community Q&A (forum-style: ONE question per page, multiple `suggestedAnswer[]`, requires `answerCount`). Our use case is editor-curated FAQ — multiple Q&A pairs per page with a single accepted answer each → FAQPage is the right shape.
+
+**Google content-quality rule:** the Q&A text must be visible on the page. The card render emits a `<details>/<summary>` accordion so each question is always rendered into the DOM (collapsed-by-default but not display:none-hidden), satisfying the visibility rule and giving zero-JS expand on click.
+
+### What changed
+
+**1. New PHP builder + card renderer** ([includes/Schema_Blocks_Manager.php](seobetter/includes/Schema_Blocks_Manager.php))
+
+- `BLOCK_TYPES` extended to 6 entries: `[…'faq']`. License gate stays on `schema_blocks_5` cap (cap renamed conceptually to "the schema block suite", but cap key kept identical so existing licenses are unaffected).
+- New field-type `qa_list` in `sanitize_block()`: JSON-decode → sanitize each `{q,a}` pair (`sanitize_text_field` for question, `wp_kses_post` for answer to allow inline HTML), drop empty pairs, re-encode.
+- `build_faq_jsonld()` — emits `FAQPage → mainEntity[Question{name, acceptedAnswer{Answer{text}}}]`. Returns `null` if zero valid pairs (fail-closed; never emit empty FAQPage).
+- `decode_faq_pairs()` helper — tolerates either JSON string or pre-decoded array.
+- `render_faq_card()` — `<details>` accordion with question count badge in the header, accent yellow theme matching the existing card aesthetic.
+- `build_jsonld()` and `render_html()` dispatchers updated.
+
+**2. Block registration** ([includes/Schema_Blocks_Registry.php](seobetter/includes/Schema_Blocks_Registry.php))
+
+`seobetter/faq` added to the block-name → manager-key map.
+
+**3. PHP field-defs + Rich Results detection** ([seobetter.php](seobetter/seobetter.php))
+
+- `schema_block_field_defs('faq')` returns `heading` + `questions` so the registry knows the attribute keys.
+- `$sb_block_map` extended with `seobetter/faq` → `FAQPage / FAQ card`. Detail line shows `5 questions` count by JSON-decoding the `questions` attribute.
+
+**4. JS DEFS + qa_list field-type renderer + block registration** ([assets/js/schema-blocks.js](seobetter/assets/js/schema-blocks.js))
+
+- `DEFS.faq = { heading: 'text', questions: 'qa_list' }`
+- New `case 'qa_list'` in `renderField()`: variable-length list of Q&A row cards. Each row: question count label + ↑/↓ reorder buttons + × remove button + question text input + answer textarea. Bottom: `+ Add question` button + live valid-pair count helper text.
+- Wire format: `JSON.stringify([{q, a}, …])` written to the `questions` attribute on every change.
+- `BLOCKS` array extended: `seobetter/faq` with the `editor-help` (?) icon and keywords `[faq, questions, qa, schema]`.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.41 → 62.42; `schema_block_field_defs('faq')`; `$sb_block_map` + walk's FAQ-specific detail extraction
+- `seobetter/includes/Schema_Blocks_Manager.php` — `BLOCK_TYPES` 5 → 6; new `qa_list` sanitization case; `build_faq_jsonld()`, `decode_faq_pairs()`, `render_faq_card()`; dispatcher updates
+- `seobetter/includes/Schema_Blocks_Registry.php` — `seobetter/faq` added to `$blocks` map
+- `seobetter/assets/js/schema-blocks.js` — `DEFS.faq`; `qa_list` field-type case in `renderField()`; `BLOCKS` array extended
+- `seobetter/seo-guidelines/structured-data.md` — §4 FAQPage section updated to reflect that FAQ is now also available as a manual Schema Block
+- `seobetter/seo-guidelines/pro-plan-pricing.md` — Pro+ tier list updated: "5 Schema Blocks" → "6 Schema Blocks (incl. FAQ)"
+
+### Verify
+
+```
+grep -n "case 'faq':" seobetter/includes/Schema_Blocks_Manager.php
+grep -n "build_faq_jsonld\|render_faq_card\|decode_faq_pairs" seobetter/includes/Schema_Blocks_Manager.php
+grep -n "qa_list" seobetter/assets/js/schema-blocks.js
+grep -n "seobetter/faq" seobetter/seobetter.php seobetter/includes/Schema_Blocks_Registry.php seobetter/assets/js/schema-blocks.js
+```
+
+Manual test path: insert "FAQ (SEOBetter)" block; add 3 Q&A pairs; save + view post; paste URL into validator.schema.org → expect `FAQPage` with 3 `Question` entries each with `acceptedAnswer/Answer/text`. Front-end card should show `<details>` accordion that expands on click. Sidebar Rich Results Preview should list "FAQ card (3 questions)".
+
+**Verified by user:** UNTESTED
 
 ---
 

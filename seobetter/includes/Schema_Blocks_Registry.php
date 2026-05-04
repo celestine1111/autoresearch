@@ -104,6 +104,7 @@ class Schema_Blocks_Registry {
             'seobetter/local-business'  => 'localbusiness',
             'seobetter/vacation-rental' => 'vacationrental',
             'seobetter/job-posting'     => 'jobposting',
+            'seobetter/faq'             => 'faq',
         ];
 
         foreach ( $blocks as $block_name => $manager_key ) {

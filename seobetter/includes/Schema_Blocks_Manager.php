@@ -40,10 +40,14 @@ class Schema_Blocks_Manager {
     private const META_KEY = '_seobetter_schema_blocks';
 
     /**
-     * The 5 supported block types — keep in sync with structured-data.md §4
+     * The 6 supported block types — keep in sync with structured-data.md §4
      * and Schema_Generator's auto-detect counterparts.
+     *
+     * v1.5.216.62.42 — FAQ added (FAQPage schema). Sixth block, but the
+     * Pro+ License_Manager capability stays named `schema_blocks_5` for
+     * compatibility with existing licenses; the cap now gates 6 blocks.
      */
-    public const BLOCK_TYPES = [ 'product', 'event', 'localbusiness', 'vacationrental', 'jobposting' ];
+    public const BLOCK_TYPES = [ 'product', 'event', 'localbusiness', 'vacationrental', 'jobposting', 'faq' ];
 
     /**
      * Get all schema blocks for a post. Returns array keyed by block type;
@@ -186,6 +190,13 @@ class Schema_Blocks_Manager {
                 'salary_currency'         => 'text',
                 'salary_unit'             => 'select',  // HOUR / DAY / WEEK / MONTH / YEAR
             ],
+            'faq' => [
+                // questions is a JSON-encoded array of { q: string, a: string }
+                // pairs. Stored as a string because Gutenberg block attributes
+                // are scalars; JS encodes/decodes, PHP json_decodes on render.
+                'heading'    => 'text',
+                'questions'  => 'qa_list',
+            ],
         ];
 
         $schema = $field_map[ $type ] ?? [];
@@ -214,6 +225,23 @@ class Schema_Blocks_Manager {
                     $clean[ $field ] = (string) $val !== '' && strtotime( (string) $val ) !== false
                         ? sanitize_text_field( (string) $val )
                         : '';
+                    break;
+                case 'qa_list':
+                    // FAQ block — questions stored as JSON-encoded
+                    // [{q,a}, …]. Decode, sanitize each pair, re-encode.
+                    // Reject malformed input by falling back to empty list.
+                    $decoded = is_string( $val ) ? json_decode( $val, true ) : ( is_array( $val ) ? $val : [] );
+                    $pairs = [];
+                    if ( is_array( $decoded ) ) {
+                        foreach ( $decoded as $pair ) {
+                            if ( ! is_array( $pair ) ) continue;
+                            $q = sanitize_text_field( (string) ( $pair['q'] ?? '' ) );
+                            $a = wp_kses_post( (string) ( $pair['a'] ?? '' ) );
+                            if ( $q === '' && $a === '' ) continue;
+                            $pairs[] = [ 'q' => $q, 'a' => $a ];
+                        }
+                    }
+                    $clean[ $field ] = wp_json_encode( $pairs );
                     break;
                 default:
                     $clean[ $field ] = sanitize_text_field( (string) $val );
@@ -302,6 +330,7 @@ class Schema_Blocks_Manager {
             case 'localbusiness':   return self::build_localbusiness_jsonld( $b );
             case 'vacationrental':  return self::build_vacationrental_jsonld( $b );
             case 'jobposting':      return self::build_jobposting_jsonld( $b );
+            case 'faq':             return self::build_faq_jsonld( $b );
         }
         return null;
     }
@@ -516,6 +545,80 @@ class Schema_Blocks_Manager {
     }
 
     /**
+     * FAQPage — Schema.org spec + Google Rich Results requirements.
+     *
+     * Required:
+     *   - mainEntity → array of Question
+     *   - Question.name (full question text)
+     *   - Question.acceptedAnswer → Answer with text (full answer text)
+     *
+     * Recommended:
+     *   - inLanguage on the FAQPage (FAQPage is in the
+     *     INLANGUAGE_ACCEPTED_TYPES whitelist per structured-data.md §4)
+     *
+     * Google rich-result note (Aug 2023): the FAQ rich result is now
+     * restricted to government/health authoritative sites. Schema is
+     * still valuable for LLM citations (Perplexity/ChatGPT/Claude all
+     * cite Q&A blocks aggressively per llm-visibility-strategy.md §3)
+     * and Bing/Yandex still serve the FAQ rich result.
+     *
+     * Use case is FAQPage not QAPage: FAQPage is for editor-curated
+     * Q&A with a single answer per question; QAPage is for community
+     * Q&A pages (forum-style) with answerCount + suggestedAnswer[].
+     *
+     * Returns null if there are zero valid Q&A pairs (no schema is
+     * better than empty FAQPage with no mainEntity).
+     */
+    private static function build_faq_jsonld( array $b ): ?array {
+        $pairs = self::decode_faq_pairs( $b['questions'] ?? '' );
+        if ( empty( $pairs ) ) return null;
+
+        $main_entity = [];
+        foreach ( $pairs as $pair ) {
+            $q = trim( (string) ( $pair['q'] ?? '' ) );
+            $a = trim( (string) ( $pair['a'] ?? '' ) );
+            if ( $q === '' || $a === '' ) continue; // both required by Google
+            $main_entity[] = [
+                '@type'          => 'Question',
+                'name'           => $q,
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text'  => $a,
+                ],
+            ];
+        }
+        if ( empty( $main_entity ) ) return null;
+
+        $node = [
+            '@type'      => 'FAQPage',
+            'mainEntity' => $main_entity,
+        ];
+
+        // Optional inLanguage — fall back to site locale if no per-post
+        // language is set. Schema_Generator's @graph post-processor would
+        // also inject this since FAQPage is in the accepted-types
+        // whitelist, but we include it in the builder so the block emits
+        // valid schema even outside the article-schema merge pipeline.
+        $locale = function_exists( 'get_locale' ) ? str_replace( '_', '-', get_locale() ) : 'en';
+        $node['inLanguage'] = $locale ?: 'en';
+
+        return $node;
+    }
+
+    /**
+     * Decode the JSON-encoded qa_list field into a sanitized array of
+     * { q, a } pairs. Tolerates either a JSON string or a pre-decoded
+     * array (in case the caller already decoded it).
+     */
+    private static function decode_faq_pairs( $raw ): array {
+        if ( is_array( $raw ) ) return array_values( array_filter( $raw, 'is_array' ) );
+        if ( ! is_string( $raw ) || $raw === '' ) return [];
+        $decoded = json_decode( $raw, true );
+        if ( ! is_array( $decoded ) ) return [];
+        return array_values( array_filter( $decoded, 'is_array' ) );
+    }
+
+    /**
      * Coerce a date input into ISO 8601 date (YYYY-MM-DD). Returns
      * empty string if the input doesn't parse.
      */
@@ -610,6 +713,7 @@ class Schema_Blocks_Manager {
             case 'localbusiness':   return self::render_localbusiness_card( $b );
             case 'vacationrental':  return self::render_vacationrental_card( $b );
             case 'jobposting':      return self::render_jobposting_card( $b );
+            case 'faq':             return self::render_faq_card( $b );
         }
         return '';
     }
@@ -846,6 +950,57 @@ class Schema_Blocks_Manager {
         if ( $url !== '' ) {
             $html .= '<a href="' . $url . '" target="_blank" rel="noopener" style="display:inline-block;background:#0369a1 !important;color:#fff !important;text-decoration:none;padding:8px 16px;border-radius:8px;font-size:0.9em;font-weight:600">Apply →</a>';
         }
+        $html .= '</div>';
+        return $html;
+    }
+
+    /**
+     * FAQ card. Renders the heading + a list of <details> elements so the
+     * Q&A content is always visible to crawlers (Google's content-quality
+     * rule: FAQ schema content must be visible on the page) and clickable
+     * to expand on the front end. Each Q is the <summary>, A is the body.
+     *
+     * Returns empty string when there are no valid pairs (mirrors the
+     * fail-closed JSON-LD path).
+     */
+    private static function render_faq_card( array $b ): string {
+        $pairs = self::decode_faq_pairs( $b['questions'] ?? '' );
+        if ( empty( $pairs ) ) return '';
+
+        $valid = [];
+        foreach ( $pairs as $pair ) {
+            $q = trim( (string) ( $pair['q'] ?? '' ) );
+            $a = trim( (string) ( $pair['a'] ?? '' ) );
+            if ( $q === '' || $a === '' ) continue;
+            $valid[] = [ 'q' => $q, 'a' => $a ];
+        }
+        if ( empty( $valid ) ) return '';
+
+        $heading = ! empty( $b['heading'] ) ? esc_html( $b['heading'] ) : 'Frequently Asked Questions';
+
+        $html  = '<div class="sb-faq-card" style="border:1px solid #e5e7eb;border-radius:12px;padding:1.25em 1.5em;margin:1.5em 0;background:#ffffff !important;color:#1e293b !important;line-height:1.65;box-shadow:0 1px 3px rgba(0,0,0,0.04)">';
+        // Header
+        $html .= '<div style="display:flex;align-items:center;gap:0.75em;margin-bottom:0.75em;flex-wrap:wrap">';
+        $html .= '<span style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:#fef3c7;color:#92400e !important;font-size:1.1em;flex-shrink:0">❓</span>';
+        $html .= '<div style="flex:1;min-width:0">';
+        $html .= '<div style="font-size:1.15em;font-weight:700;color:#0f172a !important;line-height:1.3">' . $heading . '</div>';
+        $html .= '<div style="font-size:0.8em;color:#64748b !important;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-top:2px">' . count( $valid ) . ' question' . ( count( $valid ) === 1 ? '' : 's' ) . '</div>';
+        $html .= '</div>';
+        $html .= '</div>';
+
+        // Q&A list (native <details> for accessibility + zero-JS expand/collapse)
+        foreach ( $valid as $pair ) {
+            $html .= '<details style="border-top:1px solid #f1f5f9;padding:0.85em 0">';
+            $html .= '<summary style="cursor:pointer;list-style:none;font-weight:600;color:#0f172a !important;font-size:1em;display:flex;align-items:flex-start;gap:0.5em">';
+            $html .= '<span style="color:#0369a1 !important;flex-shrink:0;font-weight:700">Q.</span>';
+            $html .= '<span style="flex:1">' . esc_html( $pair['q'] ) . '</span>';
+            $html .= '</summary>';
+            $html .= '<div style="margin-top:0.5em;padding-left:1.4em;color:#334155 !important;font-size:0.95em">';
+            $html .= wp_kses_post( wpautop( $pair['a'] ) );
+            $html .= '</div>';
+            $html .= '</details>';
+        }
+
         $html .= '</div>';
         return $html;
     }

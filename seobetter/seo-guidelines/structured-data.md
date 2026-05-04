@@ -305,8 +305,10 @@ When `citation[]` is populated (Opinion, Press Release, Personal Essay, and any 
 
 ### FAQPage
 **Required:** `mainEntity` (array of Question/Answer)
-**Note:** Rich results only for government/health authority sites. Schema still valid for semantics.
+**Note:** Rich results only for government/health authority sites. Schema still valid for semantics — and high-value for LLM citations (Perplexity/ChatGPT/Claude cite Q&A pairs verbatim) plus Bing/Yandex/regional engines that still serve the FAQ rich result.
 **v1.5.210 enrichment:** when `content_type === 'faq_page'` (FAQPage is the primary @type, not a secondary section), `Schema_Generator::generate_faq_schema()` now injects `speakable.cssSelector: [h1, h2 + p, h3 + p]` so voice assistants read the Q&A pairs. FAQ is the most voice-native content type — the highest-value voice-read format. Not injected when FAQPage is secondary (blog post / how-to / etc.) since the primary schema's own Speakable handles those.
+
+**v1.5.216.62.42 — FAQ Schema Block (manual, Pro+):** FAQPage is now also available as a manual Schema Block (`seobetter/faq`) for any page outside the AI article pipeline — landing pages, sales pages, product pages. UI is a variable-length list of `{question, answer}` pairs (`qa_list` field-type) with add/remove/reorder buttons. Wire format: JSON-encoded string in the `questions` attribute. `Schema_Blocks_Manager::build_faq_jsonld()` emits `FAQPage{mainEntity:[Question{name, acceptedAnswer{Answer{text}}}]}` exactly per the Schema.org + Google spec; `inLanguage` set from `get_locale()`. Card render uses `<details>/<summary>` accordion so the Q&A text is always in the DOM (Google's content-visibility rule satisfied) with zero-JS expand on click. Returns null when zero valid pairs (fail-closed). 6th block in the Pro+ Schema Block suite alongside Product, Event, LocalBusiness, VacationRental, JobPosting.
 
 ### HowTo — DEPRECATED
 **Status:** Google removed HowTo rich results September 14, 2023.
