@@ -1639,9 +1639,16 @@ class Async_Generator {
         }
 
         // v1.5.61 — truncate if over target
+        // v1.5.216.62.58 — pass content_type so truncate_to_target can
+        // protect ALL §3.1A-required sections (not just KT / FAQ / Refs).
+        // Without the content_type, the truncator dropped The Objection /
+        // What This Means / Conclusion+CTA from the end of opinion
+        // articles even when the outline correctly contained them — which
+        // is what made every Opinion retest from v62.51 through v62.57
+        // ship 6 of 10 sections regardless of outline-padding fixes.
         $target_words = (int) ( $job['options']['word_count'] ?? 0 );
         if ( $target_words > 0 ) {
-            $md = self::truncate_to_target( $md, $target_words );
+            $md = self::truncate_to_target( $md, $target_words, $job['options']['content_type'] ?? '' );
         }
 
         return $md;
@@ -1653,7 +1660,7 @@ class Async_Generator {
      * sections (Key Takeaways at the top, FAQ + References at the bottom).
      * Truncates content sections from the END of the content area first.
      */
-    private static function truncate_to_target( string $markdown, int $target_words ): string {
+    private static function truncate_to_target( string $markdown, int $target_words, string $content_type = '' ): string {
         // v1.5.63 — tightened from 1.15× to 1.10×. Live test landed at
         // 1940 words on a 1500 target (29% overshoot). Previous hard cap
         // of 1.15× = 1725 which was still 15% over the user's explicit
@@ -1684,8 +1691,44 @@ class Async_Generator {
             ];
         }
 
-        // Identify structural sections that must never be truncated
-        $protected_headings = '/key\s*takeaway|faq|frequently|reference|quick\s*comparison|at\s*a\s*glance/i';
+        // v1.5.216.62.58 — Identify structural sections that must never be
+        // truncated. Pre-fix the protected regex covered only the §3.1
+        // default profile's structural anchors (Key Takeaways, FAQ,
+        // References, Quick Comparison Table) — which meant the truncator
+        // happily killed §3.1A genre-override sections (The Objection,
+        // What This Means, Conclusion+CTA, Background Context, Nut Graf,
+        // Central Event, Reflection, Resolution, Media Contact, Key
+        // Highlights, About the Company, Short Bio, etc.) from the end of
+        // articles when the AI overshot the word target. User-reported on
+        // T3 #3 Opinion: every retest from v62.51 → v62.57 shipped 6 of
+        // 10 sections because Opinion's last 3-4 sections were getting
+        // truncated AFTER my outline-padding fixed the outline. The
+        // outline was right; the truncator was wrong.
+        //
+        // Fix: pull every NON-META section name from the prose template
+        // (when content_type is provided) and dynamically build a per-type
+        // protected pattern that covers ALL of that template's section
+        // names. Plus the universal fallback regex for the default-profile
+        // structural anchors.
+        $universal_protected = '/key\s*takeaway|faq|frequently|reference|quick\s*comparison|at\s*a\s*glance/i';
+        $template_protected_alts = [];
+        if ( $content_type !== '' ) {
+            $tmpl = self::get_prose_template( $content_type );
+            $tmpl_sections = array_filter( array_map( 'trim',
+                explode( ',', (string) ( $tmpl['sections'] ?? '' ) ) ) );
+            foreach ( $tmpl_sections as $s ) {
+                $clean = trim( preg_replace( '/\s*\([^)]*\)\s*/', ' ', $s ) );
+                // Skip meta-instruction template entries.
+                if ( preg_match( '/\d+\s*-\s*\d+|\d+\s+(topic|chapter|item|section|product|mini)/i', $clean ) ) {
+                    continue;
+                }
+                if ( $clean === '' || strlen( $clean ) > 60 ) continue;
+                $template_protected_alts[] = preg_quote( $clean, '/' );
+            }
+        }
+        $protected_headings = empty( $template_protected_alts )
+            ? $universal_protected
+            : '/(' . implode( '|', $template_protected_alts ) . ')|' . trim( $universal_protected, '/i' ) . '/i';
 
         // Walk from the end, trimming body content of non-protected sections
         // one paragraph at a time until we're under the hard cap.

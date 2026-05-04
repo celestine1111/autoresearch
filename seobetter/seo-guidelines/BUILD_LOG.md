@@ -7,12 +7,77 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.57)
+> **Last updated:** 2026-05-04 (v1.5.216.62.58)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.58 — ROOT CAUSE: truncate_to_target() was killing late §3.1A sections after assembly. v62.51-v62.57 outline fixes were correct; the truncator silently dropped them.
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User's T3 #3 Opinion retest on v62.57 returned IDENTICAL output to every prior retest (v62.51, v62.55, v62.56) — same 6 of 10 H2s, no The Objection, no Devil's Advocate frame. User expressed frustration: *"its exactlythe same! im not testing it again"*.
+
+Multi-version diagnosis exonerated each prior layer:
+- v62.51 SECTION COUNT CONTRACT in outline prompt → AI sometimes ignored it
+- v62.54 num_sections = max(formula, template_count) → loop ran 10 iterations correctly
+- v62.56 outline padding → was naive index-based, fixed in v62.57
+- v62.57 content-aware padding → Python simulation against the user's actual AI response confirmed it produces 10 valid headings
+
+So the outline WAS correct. The 10 section_N steps WERE running. Each section's content WAS generating. But the article only ever showed 6 sections.
+
+**Root cause:** [`Async_Generator::truncate_to_target()`](seobetter/includes/Async_Generator.php) at line 1656 runs AFTER assembly when the article overshoots `target_words × 1.10`. It walks sections from the END dropping paragraphs to fit the cap. The PROTECTED-from-truncation regex was scoped to §3.1 default-profile structural anchors only:
+
+```
+/key\s*takeaway|faq|frequently|reference|quick\s*comparison|at\s*a\s*glance/i
+```
+
+Every §3.1A genre-override section was UNPROTECTED. Opinion's "The Objection" / "What This Means" / "Conclusion and Call to Action" sat at the END of the assembled article, and the truncator dropped them first to hit the word cap. By the time the article reached the page, only the first 6 sections survived.
+
+This was the silent killer underneath 7 layered fixes. The outline was always right; the truncator was always wrong.
+
+### What changed
+
+**`truncate_to_target()` now accepts `$content_type` and dynamically builds a protected-headings regex from the prose template's section list** ([Async_Generator.php](seobetter/includes/Async_Generator.php)).
+
+For each non-meta entry in the template's `sections` field, the section name is `preg_quote`d and added to the protected alternation. Plus the universal fallback regex for §3.1 default-profile anchors stays as a safety net.
+
+For opinion: protected sections become `(Key Takeaways|Hook and Thesis|Argument 1|Argument 2|Argument 3|The Objection|What This Means|FAQ|Conclusion and Call to Action|References)` — every section in the prose template list. The truncator now CANNOT drop any of them. If the article overshoots word target, it stays at full structural integrity over the soft word target.
+
+This trade aligns with [§10.1 word ranges](seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md) — those give ranges (e.g. opinion 800-1400, sweet 900-1100), not point targets. Better to land at 1500-2000w with all 10 sections than 1100w with 6.
+
+Caller in `assemble_markdown()` updated to pass `$job['options']['content_type']` so truncate_to_target has the type context.
+
+Default-profile types (blog_post, listicle, how_to, etc.) get a stronger protected list too — every section their template names is protected. They'll overshoot less aggressively because their templates are shorter, but they're still safe.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.57 → 62.58
+- `seobetter/includes/Async_Generator.php`:
+  - `truncate_to_target()` signature gains `$content_type = ''` param
+  - protected-headings regex now built dynamically from prose template's section list (with preg_quote + meta-instruction skip + length guard)
+  - `assemble_markdown()` passes `$job['options']['content_type']` to the truncate call
+
+### Verify
+
+```
+grep -B 2 -A 12 "v1.5.216.62.58 — Identify structural sections" seobetter/includes/Async_Generator.php
+grep -n "truncate_to_target.*content_type" seobetter/includes/Async_Generator.php
+```
+
+After upload + retest opinion at any word count ≥ 1100:
+- All 10 documented sections present (Key Takeaways, Hook & Thesis, Args 1/2/3, **The Objection**, **What This Means**, FAQ, **Conclusion and Call to Action**, **References**)
+- Devil's Advocate frame (v62.55) visible on The Objection — dashed border, sharp corners, monospace `DEVIL'S ADVOCATE` label, ⚖ scales SVG
+- Article may be 1.5-2× the selected word count to fit all sections — that's the new tradeoff
+
+**Verified by user:** UNTESTED
 
 ---
 
