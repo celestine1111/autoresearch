@@ -19,7 +19,7 @@
 ## v1.5.216.62.48 — FIX v62.47 regression: AI emitted formula description as headline text
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `d758411`
 
 ### Why
 
