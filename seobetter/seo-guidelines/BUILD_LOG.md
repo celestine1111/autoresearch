@@ -7,12 +7,84 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.46)
+> **Last updated:** 2026-05-04 (v1.5.216.62.47)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.47 — FIX §3.1A drifts (news_article / live_blog / interview templates) + content-type-aware headline formulas
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+T3 #2 News Article retest ("australian rba interest rate decision may 2026") surfaced two distinct drifts between the prose templates / headline generator and the documented [SEO-GEO-AI-GUIDELINES.md §3.1A genre-override profiles](seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md#L168):
+
+**1. Headline drift — News article got a how-to headline.**
+
+Published article had H1 "How-to Prepare for the australian rba interest rate decision may 2026" — a how-to-style headline on a news_article body that should report an event. Cause: `AI_Content_Generator::generate_headlines()` offered the AI a fixed 5-formula table (Number / **How-to** / Question / Power-words / Current-year) regardless of content_type. AI dutifully picked formula #2 (How-to + keyword), and the keyword "australian rba interest rate decision may 2026" + how-to formula = the observed broken headline. News headlines should report events (subject + active verb + 5 Ws), not instruct readers.
+
+**2. §3.1A template drifts — Key Takeaways / FAQ / References emitted where genre says "no".**
+
+Audited the prose templates in `Async_Generator::get_prose_template()` against §3.1A's 7 genre-override profiles. Three drifts found:
+
+| Type | §3.1A says | Pre-fix template | Drift |
+|---|---|---|---|
+| `news_article` | NO Key Takeaways (inverted pyramid only) | "Key Takeaways, Lede, ..." | ❌ |
+| `live_blog` | NO Key Takeaways/FAQ/static References | "What We Are Covering, Timestamped Updates, FAQ, References" | ❌ |
+| `interview` | NO separate FAQ (Q&A IS body), KEEPS References | "Key Takeaways, ... Q&A Pairs, ... FAQ, References" | ❌ |
+
+The other §3.1A types (`opinion` HYBRID, `press_release`, `personal_essay`, `recipe`) were already template-correct. Drift impact: AI emitted these sections because the template told it to — even though `GEO_Analyzer::analyze()` already SKIPS the corresponding scoring checks (BLUF/freshness/section-openings) for these types per §6 (returns 100 for skipped). So removing the sections costs zero score and fixes genre authenticity.
+
+### What changed
+
+**1. Per-content-type headline formulas** ([includes/AI_Content_Generator.php::generate_headlines() + headline_formulas_for_type()](seobetter/includes/AI_Content_Generator.php))
+
+`generate_headlines()` now accepts a 4th `$content_type` parameter (default `'blog_post'`). The formula bullet block is built by a new `headline_formulas_for_type()` helper — per-genre tables for `news_article`, `press_release`, `opinion`, `personal_essay`, `recipe`, `live_blog`, `interview`. Default 5 formulas kept for the 14 §3.1-default types (blog_post, how_to, listicle, review, comparison, buying_guide, pillar_guide, case_study, faq_page, tech_article, white_paper, scholarly_article, glossary_definition, sponsored).
+
+Genre-specific examples (each table emits 5 lines into the prompt):
+
+- **news_article:** "subject + active verb past tense + 5 Ws" / "{kw}: numbers/facts" / "{kw} as [event consequence]" / "{kw}: official source said" / "{kw} — Month YYYY"
+- **press_release:** "Company announces {kw}" / "Company launches {kw}: [feature/number]" / "Company reports {kw} for Month YYYY" / "Company introduces…" / "Company unveils…"
+- **opinion:** "Why {kw} (provocative thesis)" / "{kw} is broken — and here is why" / "The case for/against {kw}" / "{kw}: counter-intuitive claim" / "{kw}: stop X / start Y"
+- **personal_essay:** "The day I {kw}" / "What {kw} taught me about [larger truth]" / etc.
+- **recipe:** "How to make {kw}" / "Easy {kw} recipe" / "{kw}: minute-by-minute" / "{kw} — N ingredients, N minutes" / "Best {kw} for [season/diet]"
+- **live_blog:** "{kw} live updates" / "{kw}: live blog — Month DD" / "{kw} as it happened" / etc.
+- **interview:** "[Name] on {kw}: an interview" / "How [Name] thinks about {kw}" / etc.
+
+`Async_Generator` was updated at line 579 to thread `$options['content_type']` into the `generate_headlines()` call.
+
+**2. §3.1A template fixes** ([includes/Async_Generator.php::get_prose_template()](seobetter/includes/Async_Generator.php))
+
+- `news_article` — Key Takeaways removed. Sections now `Lede (5 Ws first 25 words), Nut Graf, Supporting Details, Background Context, What Happens Next, FAQ, References`. Guidance reinforces "report an event (subject + active verb + 5 Ws), do NOT use How-to / Guide / Tips framings — those belong to how_to / blog_post types."
+- `live_blog` — FAQ + References removed. Sections now just `What We Are Covering, Timestamped Updates (latest first, format: HH:MM — [update text])`. Guidance says cite sources INLINE within update entries, not in a static H2.
+- `interview` — Key Takeaways + separate FAQ removed. Sections now `Introduction, Short Bio, Q&A Pairs (5-10), Closing Thoughts, References`. Guidance: "Do NOT add a separate FAQ section — the entire article IS the Q&A. No Key Takeaways box (the bio + first Q frame the piece)."
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.46 → 62.47
+- `seobetter/includes/AI_Content_Generator.php` — `generate_headlines()` accepts `$content_type`; new `headline_formulas_for_type()` helper with 7 per-genre tables
+- `seobetter/includes/Async_Generator.php` — `news_article` / `live_blog` / `interview` prose templates §3.1A-corrected; `generate_headlines()` call threads `$options['content_type']`
+
+### Verify
+
+```
+grep -A 4 "v1.5.216.62.47 — §3.1A genre-override compliance fix" seobetter/includes/Async_Generator.php
+grep -n "headline_formulas_for_type" seobetter/includes/AI_Content_Generator.php
+```
+
+After upload + retest of T3 #2:
+- News article headline should report the event ("RBA Holds Cash Rate at 4.10% in May 2026 Decision" or similar), not "How-to Prepare for…".
+- News article body should NOT have a Key Takeaways H2.
+- Live blog should NOT have FAQ / References H2s.
+- Interview should NOT have Key Takeaways / separate FAQ; Q&A pairs ARE the body.
+
+**Verified by user:** UNTESTED
 
 ---
 

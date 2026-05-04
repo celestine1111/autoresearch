@@ -112,7 +112,7 @@ class AI_Content_Generator {
      * is supported (46 languages, single source of truth shared with
      * Async_Generator::get_system_prompt).
      */
-    public function generate_headlines( string $keyword, string $article_text = '', string $language = 'en' ): array {
+    public function generate_headlines( string $keyword, string $article_text = '', string $language = 'en', string $content_type = 'blog_post' ): array {
         // v1.5.206d-fix7.1 — single source of truth for BCP-47 → human name.
         // Guarantees AI_Content_Generator and Async_Generator see the same
         // language-name table, so all 46 supported languages produce matching
@@ -154,6 +154,21 @@ class AI_Content_Generator {
             $lang_clause = "\n\nLANGUAGE: Write all 5 headlines ENTIRELY in {$lang_name}. Every word except the exact keyword phrase must be in {$lang_name}. Do NOT wrap a {$lang_name} keyword in English connector phrases like \"How to Find X: The Ultimate Guide\" — a {$lang_name} headline uses {$lang_name} connector phrases (e.g. Korean would use '{$lang_name}-appropriate wording' rather than 'How to Find X'). Use the five formulas below but express each formula in {$lang_name}.";
         }
 
+        // v1.5.216.62.47 — content-type-aware headline formulas. Pre-fix
+        // every content type was offered the same 5 formulas (Number /
+        // How-to / Question / Power-words / Current-year), regardless of
+        // genre. User reported on RBA news article: keyword was the
+        // event "australian rba interest rate decision may 2026" but the
+        // AI picked formula #2 (How-to + keyword) and emitted "How-to
+        // Prepare for the australian rba interest rate decision may
+        // 2026" — a how-to-style headline on a news_article body. News
+        // headlines should report events (subject + active verb + 5 Ws),
+        // not instruct readers. Per-genre formula tables now route news,
+        // recipe, opinion, personal_essay, press_release, and live_blog
+        // away from the how-to / question / power-words shapes. Other
+        // types keep the original 5 formulas.
+        $formula_block = self::headline_formulas_for_type( $content_type, $keyword_for_prompt );
+
         $prompt = "Generate exactly 5 headline variations for an article about: \"{$keyword_for_prompt}\"{$context}{$lang_clause}
 
 CRITICAL RULE: Every single headline MUST contain the exact phrase \"{$keyword_for_prompt}\" — no exceptions. If the keyword is multiple words, include ALL words.
@@ -163,11 +178,7 @@ Rules:
 2. The keyword \"{$keyword_for_prompt}\" must appear in ALL 5 headlines
 3. Front-load the keyword (put it in the first half of the headline) in at least 3 of 5
 4. Use different headline formulas:
-   - #1: Number + \"{$keyword_for_prompt}\" + Benefit
-   - #2: How-to + \"{$keyword_for_prompt}\"
-   - #3: Question + \"{$keyword_for_prompt}\"
-   - #4: \"{$keyword_for_prompt}\" + Power words
-   - #5: \"{$keyword_for_prompt}\" + Current year
+{$formula_block}
 
 Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
 
@@ -223,6 +234,105 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
         }
 
         return array_slice( $headlines, 0, 5 );
+    }
+
+    /**
+     * v1.5.216.62.47 — Per-content-type headline formula tables.
+     *
+     * Returns the 5-formula bullet block injected into the headline prompt.
+     * Default 5 formulas (number / how-to / question / power-words / year)
+     * are kept for the 14 content types that follow §3.1's default profile.
+     * Genre-override types (news_article, opinion, recipe, personal_essay,
+     * press_release, live_blog, interview) get a tailored 5-formula table
+     * that matches genre convention — so the AI never picks "How-to + keyword"
+     * for a news event headline, never picks "Question + keyword" for a
+     * recipe, etc.
+     *
+     * Each table returns a 5-line bulleted string ready to drop into the
+     * prompt. Indentation and bullet style match the original prompt.
+     */
+    private static function headline_formulas_for_type( string $content_type, string $kw ): string {
+        $tables = [
+            // News: event reporting — subject + active verb + 5 Ws.
+            // No how-to, no question framing. AP-style headline patterns.
+            'news_article' => [
+                "{$kw} reported (subject + active verb past tense + 5 Ws)",
+                "{$kw}: numbers/facts (specific stat or % change)",
+                "{$kw} as [event consequence or context]",
+                "{$kw}: official source said (quote-led news lede)",
+                "{$kw} — Month YYYY (dateline + headline)",
+            ],
+            // Press release — corporate announcement, active verb, no cliché words.
+            'press_release' => [
+                "Company announces {$kw} (active verb)",
+                "Company launches {$kw}: [specific feature/number]",
+                "Company reports {$kw} for Month YYYY",
+                "{$kw}: Company introduces [thing]",
+                "{$kw}: Company unveils [milestone]",
+            ],
+            // Opinion — provocative thesis, never neutral reporting.
+            'opinion' => [
+                "Why {$kw} (provocative thesis)",
+                "{$kw} is broken — and here is why (claim-led)",
+                "The case for/against {$kw} (argument framing)",
+                "{$kw}: [counter-intuitive claim] (steelman style)",
+                "{$kw}: stop doing X / start doing Y (CTA)",
+            ],
+            // Personal essay — concrete moment / question / image.
+            'personal_essay' => [
+                "The day I {$kw} (concrete-moment opener)",
+                "What {$kw} taught me about [larger truth]",
+                "{$kw}: a year/decade/lesson in [N words]",
+                "Why {$kw} still matters (reflective)",
+                "{$kw} — and the question I am still asking (open-ended)",
+            ],
+            // Recipe — action verb + dish + qualifier.
+            'recipe' => [
+                "How to make {$kw} (imperative)",
+                "Easy {$kw} recipe (qualifier + recipe)",
+                "{$kw}: minute-by-minute (cooking time hook)",
+                "{$kw} — N ingredients, N minutes (constraint hook)",
+                "Best {$kw} for [season/diet] (target audience)",
+            ],
+            // Live blog — coverage / live / updates framing.
+            'live_blog' => [
+                "{$kw} live updates (rolling coverage)",
+                "{$kw}: live blog — Month DD (date-stamped)",
+                "{$kw} as it happened (real-time framing)",
+                "{$kw} — minute by minute (timeline hook)",
+                "Live: {$kw} (lede prefix)",
+            ],
+            // Interview — name + role + topic.
+            'interview' => [
+                "[Name] on {$kw}: an interview (subject-led)",
+                "How [Name] thinks about {$kw} (perspective)",
+                "[Name] explains {$kw} (Q&A framing)",
+                "{$kw}: a conversation with [Name]",
+                "[Name] on {$kw}: [pull quote] (quote-led)",
+            ],
+        ];
+
+        if ( isset( $tables[ $content_type ] ) ) {
+            $formulas = $tables[ $content_type ];
+        } else {
+            // Default profile (14 of 21 content types): blog_post, how_to,
+            // listicle, review, comparison, buying_guide, pillar_guide,
+            // case_study, faq_page, tech_article, white_paper,
+            // scholarly_article, glossary_definition, sponsored.
+            $formulas = [
+                "Number + \"{$kw}\" + Benefit",
+                "How-to + \"{$kw}\"",
+                "Question + \"{$kw}\"",
+                "\"{$kw}\" + Power words",
+                "\"{$kw}\" + Current year",
+            ];
+        }
+
+        $out = '';
+        foreach ( $formulas as $i => $f ) {
+            $out .= '   - #' . ( $i + 1 ) . ": {$f}\n";
+        }
+        return rtrim( $out, "\n" );
     }
 
     /**
