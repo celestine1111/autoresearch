@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.34
+ * Version: 1.5.216.62.35
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.34' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.35' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -5071,14 +5071,23 @@ final class SEOBetter {
                     'rating_count' => [ 'label' => 'Review count',  'type' => 'number',   'placeholder' => '128' ],
                 ];
             case 'event':
+                // v1.5.216.62.35 — aligned with JS DEFS (assets/js/schema-blocks.js):
+                //   - Added `image_url` (was missing from PHP, present in JS).
+                //     Without it Gutenberg's REST validator may have rejected
+                //     blocks with image_url set, causing ServerSideRender to
+                //     fail silently (no preview / no front-end card render).
+                //   - Removed `required: true` from `location_name` (was stale
+                //     from pre-v62.31 — PHP render_event_card only requires
+                //     name + start_date, not location_name).
                 return [
                     'name'             => [ 'label' => 'Name',           'type' => 'text',     'required' => true ],
                     'description'      => [ 'label' => 'Description',    'type' => 'textarea' ],
+                    'image_url'        => [ 'label' => 'Image URL',      'type' => 'url' ],
                     'start_date'       => [ 'label' => 'Start',          'type' => 'datetime-local', 'required' => true ],
                     'end_date'         => [ 'label' => 'End',            'type' => 'datetime-local' ],
                     'event_status'     => [ 'label' => 'Status',         'type' => 'select',   'options' => [ 'EventScheduled', 'EventPostponed', 'EventCancelled', 'EventMovedOnline', 'EventRescheduled' ] ],
                     'attendance_mode'  => [ 'label' => 'Mode',           'type' => 'select',   'options' => [ 'OfflineEventAttendanceMode', 'OnlineEventAttendanceMode', 'MixedEventAttendanceMode' ] ],
-                    'location_name'    => [ 'label' => 'Location name',  'type' => 'text',     'required' => true ],
+                    'location_name'    => [ 'label' => 'Location name',  'type' => 'text' ],
                     'location_address' => [ 'label' => 'Location addr',  'type' => 'textarea' ],
                     'organizer_name'   => [ 'label' => 'Organizer',      'type' => 'text' ],
                     'organizer_url'    => [ 'label' => 'Organizer URL',  'type' => 'url' ],

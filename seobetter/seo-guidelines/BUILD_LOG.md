@@ -7,12 +7,75 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.34)
+> **Last updated:** 2026-05-04 (v1.5.216.62.35)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.35 — FIX: Event Schema Block field-defs alignment
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+T6 smoke test in progress. User reported: Product block ✅ works. **Event block does not preview in editor and does not show on front-end.**
+
+### Diagnosis
+
+PHP `SEOBetter::schema_block_field_defs('event')` was out of sync with the JS DEFS in `assets/js/schema-blocks.js`:
+
+1. **PHP missing `image_url`** — JS DEFS includes it (added v62.31 alongside Product/LocalBusiness/VacationRental). When Gutenberg's editor sends block attributes via ServerSideRender, `image_url` wasn't in the registered block schema → REST validator drops it (silently or with error depending on WP version) → ServerSideRender shows nothing → no editor preview. On post-save, similar attribute-validation drift breaks the front-end render.
+
+2. **PHP `location_name` still marked required: true** — stale from before v62.31. PHP `Schema_Blocks_Manager::render_event_card()` only requires `name + start_date`, not `location_name`. The required flag itself doesn't break anything (only used for hint display) but signals architectural drift between PHP/JS truth sources.
+
+### Fix
+
+`SEOBetter::schema_block_field_defs('event')` updated to match JS DEFS exactly:
+- Added `image_url` field (type `url`)
+- Removed `required: true` from `location_name`
+
+Inline comment block at the case branch documents the alignment so future drift is caught at code-review time.
+
+### Why this matches the 3 systematic questions
+
+1. **All keywords?** ✅ Field schema fix; no keyword logic.
+2. **All 21 content types?** ✅ Event Schema Block is a Pro+ block, not a content type. Same fix applies regardless of which post type the block is inserted into.
+3. **All AI models?** ✅ Pure WP REST + Gutenberg fix.
+
+### Verify
+
+```bash
+grep -n "'image_url'" /Users/ben/Documents/autoresearch/seobetter/seobetter.php | head -3
+# Expected: image_url appears in product, event, localbusiness, vacationrental field_defs
+# Pre-fix only product/localbusiness/vacationrental had it; event was missing.
+
+grep -n "'location_name'" /Users/ben/Documents/autoresearch/seobetter/seobetter.php
+# Expected: 'location_name' => [ 'label' => 'Location name', 'type' => 'text' ]
+# Pre-fix had: 'required' => true
+```
+
+### Test plan for user
+
+1. Upload v62.35 to staging
+2. Open WP admin → Add new post
+3. Insert Event (SEOBetter) block from inserter
+4. Fill in: Name = "Test Event", Start = (any future datetime)
+5. **Editor should now show the styled card preview** (📅 icon + Name + When)
+6. Save + view published post → card should render inline
+7. Validate JSON-LD in [validator.schema.org](https://validator.schema.org/) — `@type: Event` with `startDate`
+
+If still broken — open browser console (F12) before clicking Insert, paste any errors. Likely candidates: REST 400 on `/wp/v2/block-renderer/seobetter/event` OR schema validation warning.
+
+### Related — http://schema.org URLs in user's Product block output
+
+User reported Product schema shows `availability: http://schema.org/InStock` (legacy http:// instead of canonical https://). Confirmed by `grep -rnE "http://schema\.org" /Users/ben/Documents/autoresearch/seobetter/`: zero matches in our codebase. Our `Schema_Blocks_Manager::build_product_jsonld()` uses `'https://schema.org/' . $availability` (line 330). The http:// URLs are coming from a SEPARATE schema generator on the test site — almost certainly AIOSEO / Yoast / RankMath also injecting Product schema in legacy format alongside ours. Not our bug. Diagnostic for user: count `<script type="application/ld+json">` blocks on the published page (1 = ours, http:// is somehow our bug; 2+ = another plugin doubling up).
+
+**Verified by user:** UNTESTED
 
 ---
 
