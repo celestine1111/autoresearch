@@ -19,7 +19,7 @@
 ## v1.5.216.62.46 — Employment / Career / Workplace authority taxonomy fully expanded (~50 global domains + AU/US/GB/CA regional layers)
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `e2bfca2`
 
 ### Why
 
