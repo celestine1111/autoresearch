@@ -60,7 +60,7 @@ grep -n "flex: '0 0 56px'\|width: '72px'" seobetter/assets/js/schema-blocks.js
 grep -A 8 "build_maps_directions_url" seobetter/includes/Schema_Blocks_Manager.php | head -20
 ```
 
-**Verified by user:** UNTESTED
+**Verified by user:** ✅ Verified 2026-05-04 — sidebar fits, Get Directions opens with the typed street address.
 
 ---
 
@@ -125,7 +125,7 @@ grep -n "nominatim.openstreetmap.org" seobetter/assets/js/schema-blocks.js
 grep -c "=>" seobetter/includes/Schema_Blocks_Manager.php   # humanize_business_type map larger
 ```
 
-**Verified by user:** UNTESTED
+**Verified by user:** ✅ Verified 2026-05-04 — 96-type dropdown, day-grid hours and OSM coordinate lookup all work end-to-end. (Layout overflow + directions reverse-geocoding bugs found and fixed in v62.39.)
 
 ---
 
