@@ -19,7 +19,7 @@
 ## v1.5.216.62.39 — FIX: LocalBusiness opening-hours grid overflowed sidebar; Get Directions resolved coords to wrong business name
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `e4bc8ac`
 
 ### Why
 
