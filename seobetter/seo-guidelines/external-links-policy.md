@@ -460,6 +460,37 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 - ~~`mastodon.social`~~ — Mastodon personal statuses (removed)
 - ~~`lemmy.world`~~ — Lemmy community posts (removed)
 
+**Source-quality URL filters (added v1.5.216.62.62)** — applied as hard-fail rules in `validate_outbound_links()::filter_link()`, BEFORE the citation-pool-membership check. URLs that fail these patterns are stripped regardless of pool membership. Per [Princeton GEO §1 (arxiv 2311.09735)](https://arxiv.org/abs/2311.09735), citation quality strongly correlates with whether the citing article gets picked up by AI search engines.
+
+The affected hosts pass through the citation pool because Tavily / Sonar return them in keyword-targeted free-text search results — they're not in the static whitelist but pool-membership bypasses the whitelist gate. v62.62 adds URL-pattern filters to drop the non-authoritative URL shapes within these hosts while keeping the editorial / heavily-moderated layer.
+
+**Reddit — subreddit allowlist (~60 subs).** Allow only `reddit.com/r/{ALLOWED_SUB}/comments/...` URLs. Block all other Reddit URLs (user profiles, sub landing pages, search, non-allowlisted subs). Sources for the allowlist:
+
+- Q&A heavily moderated (expert flair / citations required): `askhistorians`, `askscience`, `askacademia`, `askvet`, `askdocs`, `askculinary`, `askhr`, `ask_lawyers`, `askmusicianship`, `explainlikeimfive`, `changemyview`. Source: [r/AskHistorians Wikipedia](https://en.wikipedia.org/wiki/R/AskHistorians) confirms academic-grade moderation; [r/AskDocs JMIR study](https://infodemiology.jmir.org/2025/1/e56116) confirms verified-physician flair system.
+- Domain professional: `medicine`, `medicalstudent`, `legaladvice`, `personalfinance` (CFP flairs), `investing`, `financialindependence`, `bogleheads`, `economics`, `entrepreneur`, `smallbusiness`, `startups`, `marketing`, `ecommerce`, `shopify`, `woocommerce`, `professors`, `teachers`, `gradschool`, `cscareerquestions`.
+- Tech / science / engineering: `science` (peer-review-style mod), `machinelearning`, `datascience`, `statistics`, `physics`, `biology`, `chemistry`, `compsci`, `algorithms`, `programming`, `webdev`, `wordpress`, `seo`, `cybersecurity`, `sysadmin`, `devops`, `javascript`, `python`, `reactjs`.
+- Other expert-moderated: `musictheory`, `books`, `literature`, `climatechange`, `environment`, `sustainability`, `foodscience`, `transit`, `urbanplanning`, `aviation`, `meteorology`, `gamedev`, `indiedev`, `design`, `architecture`, `cryptotechnology` (anti-shilling moderation), `ethereum`, `backpacking`, `onebag`, `moviedetails` (fact-checked).
+
+**Explicitly excluded (trash):** `askreddit`, `showerthoughts`, `unpopularopinion`, general humor/meme subs, fan-driven entertainment subs, partisan political subs, `bitcoin` / `cryptocurrency` (shilling-prone), `news` / `worldnews` (partisan), most general subs without stated moderation rules. The allowlist is closed — anything not on it is blocked by default.
+
+**LinkedIn — pulse-only filter.** Allow only `linkedin.com/pulse/<title-with-author-slug>` paths (editorial articles by named authors). Block:
+- `linkedin.com/posts/<id>` — personal feed posts
+- `linkedin.com/feed/...` — feed pages
+- `linkedin.com/in/X/recent-activity` — personal activity
+- `linkedin.com/groups/...` — group discussions
+
+Pulse maintains an editorial veneer via author bylines; legitimately editorial content from named authors (Lenny Rachitsky, MIT Sloan contributors, HBR contributors) lives there.
+
+**Medium — publication-only filter.** Block:
+- `medium.com/@<username>/...` — personal stories
+- `medium.com/<title>-<hash>` (no publication slug) — personal stories without `/@` prefix
+
+Allow only `medium.com/<publication>/<title>-<hash>` — publication paths (Stratechery, MIT Press, Lenny's Newsletter, etc.).
+
+**Hacker News — blocked entirely.** `news.ycombinator.com` returns nothing. Quality varies wildly within the same site (1500-point Pragmatic Engineer threads next to 3-comment shitposts) and without HN's Algolia API for points/karma scoring (extra HTTP call per quote = slow + rate-limited), the filter can't tell them apart. Better to skip than mis-cite.
+
+**Quora — blocked entirely.** `quora.com`. User answers without expert verification — same risk profile as personal social posts.
+
 **OSM Places — anti-hallucination local business grounding (added v1.5.23, expanded to waterfall in v1.5.24)** — fetches real local businesses via a 5-tier provider waterfall (OSM → Wikidata → Foursquare → HERE → Google Places). Fixes the "fake Italian gelato shops" hallucination bug for any small city globally.
 
 **v1.5.23 — Tier 1 (OSM, always on, no API key):**

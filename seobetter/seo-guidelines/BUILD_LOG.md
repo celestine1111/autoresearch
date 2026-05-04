@@ -7,12 +7,76 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.61)
+> **Last updated:** 2026-05-04 (v1.5.216.62.62)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.62 — Source-quality URL filters: Reddit subreddit allowlist (~60 expert-moderated subs); LinkedIn /pulse-only; Medium publication-only; HN + Quora blocked
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User on the v62.61 follow-up: *"linkedin, medium and ycombinator could have high quality content but also like you said self promotional.. im not sure how to filter out trash to quality on that. whatever is the best option for GEO, AI SEO, LLM citations to get traffic to the article, and search AI citations.. whats your thoughts"* + *"i think some reddit threads can be ok"*.
+
+Per [Princeton GEO §1 (arxiv 2311.09735)](https://arxiv.org/abs/2311.09735), citation quality strongly correlates with whether AI search engines pick up the citing article. An article that cites BLS.gov + HBR + r/AskHistorians reads as researched; an article that cites random Bluesky + Medium @user + HN shitpost reads as informal opinion. So filtering matters not just for E-E-A-T — it directly affects whether OUR articles get picked up by Claude / ChatGPT search / Perplexity / AI Overviews.
+
+v62.61 stripped Bluesky/Mastodon/Lemmy from the static whitelist. But Reddit, LinkedIn, Medium, Hacker News, and Quora pass through the dynamic citation pool from Tavily/Sonar free-text search — pool-membership bypasses the static-whitelist gate.
+
+### What changed
+
+**`validate_outbound_links()::filter_link()` — new "Source-quality URL filters" hard-fail block** ([seobetter.php](seobetter/seobetter.php))
+
+Inserted after the bare-homepage check, BEFORE the citation-pool-membership check (so these run as hard-fail rules regardless of pool membership). Five domain filters:
+
+**1. Reddit — subreddit allowlist (~60 expert-moderated subs)**
+
+Allow only `reddit.com/r/{ALLOWED_SUB}/comments/...` URLs. Drop user profiles, sub landing pages, search, and non-allowlisted subs. Allowlist organized by category:
+
+- **Q&A heavily moderated** — `askhistorians` ([Wikipedia confirms academic-grade moderation](https://en.wikipedia.org/wiki/R/AskHistorians)), `askscience` (expert flair), `askacademia`, `askvet`, `askdocs` ([JMIR confirms verified-physician flair system](https://infodemiology.jmir.org/2025/1/e56116)), `askculinary` (chef flair), `askhr`, `ask_lawyers`, `askmusicianship`, `explainlikeimfive`, `changemyview`
+- **Domain professional** — `medicine`, `medicalstudent`, `legaladvice`, `personalfinance` (CFP flairs), `investing`, `financialindependence`, `bogleheads`, `economics`, `entrepreneur`, `smallbusiness`, `startups`, `marketing`, `ecommerce`, `shopify`, `woocommerce`, `professors`, `teachers`, `gradschool`, `cscareerquestions`
+- **Tech / science / engineering** — `science`, `machinelearning`, `datascience`, `statistics`, `physics`, `biology`, `chemistry`, `compsci`, `algorithms`, `programming`, `webdev`, `wordpress`, `seo`, `cybersecurity`, `sysadmin`, `devops`, `javascript`, `python`, `reactjs`
+- **Other expert-moderated** — `musictheory`, `books`, `literature`, `climatechange`, `environment`, `sustainability`, `foodscience`, `transit`, `urbanplanning`, `aviation`, `meteorology`, `gamedev`, `indiedev`, `design`, `architecture`, `cryptotechnology`, `ethereum`, `backpacking`, `onebag`, `moviedetails`
+
+**Explicitly excluded (trash):** `askreddit`, `showerthoughts`, `unpopularopinion`, general humor/meme subs, fan-driven entertainment subs, partisan political subs, `bitcoin` / `cryptocurrency` (shilling-prone), `news` / `worldnews` (partisan), most general subs without stated moderation rules. **Allowlist is closed — anything not on it is blocked.**
+
+**2. LinkedIn — `/pulse/`-only filter**
+
+Allow only `linkedin.com/pulse/<title-with-author-slug>` (editorial layer). Block `/posts/<id>`, `/feed/`, `/in/X/recent-activity`, `/groups/...`. Pulse maintains an editorial veneer via author bylines.
+
+**3. Medium — publication-only filter**
+
+Block `medium.com/@<username>/...` (personal stories) AND bare `medium.com/<title>-<hash>` paths without a publication slug. Allow only `medium.com/<publication>/<title-hash>` (Stratechery, MIT Press, Lenny's Newsletter, etc.).
+
+**4. Hacker News — blocked entirely**
+
+`news.ycombinator.com` returns nothing. Quality varies wildly within HN (1500-point staff-pick threads next to 3-comment shitposts) and without HN's Algolia API for points/karma scoring (extra HTTP call per quote = slow + rate-limited), the filter can't tell them apart. Better to skip than mis-cite.
+
+**5. Quora — blocked entirely**
+
+User answers without expert verification — same risk profile as personal social posts.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.61 → 62.62; new "Source-quality URL filters" block in `validate_outbound_links()::filter_link()`
+- `seobetter/seo-guidelines/external-links-policy.md` — §10 expanded with the v62.62 filter rules (Reddit allowlist + per-host URL-shape filters + HN/Quora block)
+
+### Verify
+
+```
+grep -A 8 "v1.5.216.62.62 — Source-quality URL filters" seobetter/seobetter.php
+grep -A 12 "Source-quality URL filters .added v1.5.216.62.62" seobetter/seo-guidelines/external-links-policy.md
+```
+
+After upload + retest of any opinion / educational article: bibliography contains zero URLs from `bsky.app`, `mastodon.social`, `lemmy.world`, `news.ycombinator.com`, `quora.com`, non-allowlisted subreddits, LinkedIn personal feeds, or Medium @username personal stories. Heavily-moderated subreddits + LinkedIn /pulse + Medium publications still flow through normally.
+
+**Verified by user:** UNTESTED
 
 ---
 
