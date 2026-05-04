@@ -19,7 +19,7 @@
 ## v1.5.216.62.61 — Remove Bluesky / Mastodon / Lemmy from trusted-citation whitelist (personal social posts aren't authoritative E-E-A-T sources)
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `a98e2fd`
 
 ### Why
 
