@@ -19,7 +19,7 @@
 ## v1.5.216.62.45 — FIX inner Tavily-extraction substantive regex still pet-only; preserve sentence-start capital in "it" replacement
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `01f4d6e`
 
 ### Why
 
