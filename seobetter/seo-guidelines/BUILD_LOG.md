@@ -19,7 +19,7 @@
 ## v1.5.216.62.60 — Center Devil's Advocate frame in content area; article-marketing.md research expansion (WP-native AI plugin tier + per-article generation settings)
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `e8cc49c`
 
 ### Why
 
