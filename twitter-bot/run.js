@@ -361,6 +361,26 @@ async function typeHuman(page, text) {
   }
 }
 
+// 2026-05-04 — best-effort modal dismissal. Twitter's compose page (and
+// occasionally other paths) shows premium-upsell modals, account-
+// verification prompts, anti-bot masks, etc. that layer above the
+// compose textarea via <div id="layers"> and intercept clicks. This
+// helper presses Escape + clicks an empty area to clear the most
+// common overlay shapes BEFORE the action attempts its real click.
+//
+// All operations wrapped in try/catch — a missing key handler or a
+// no-op click is fine, we just want to clear what's clearable then
+// proceed. The downstream click uses { force: true } as a last-resort
+// defense for overlays this helper can't dismiss.
+async function dismissModals(page) {
+  try { await page.keyboard.press('Escape'); } catch {}
+  await jitter(300, 600);
+  try { await page.mouse.click(50, 50); } catch {}
+  await jitter(300, 600);
+  try { await page.keyboard.press('Escape'); } catch {}
+  await jitter(300, 500);
+}
+
 // More reliable than page.keyboard.type for X's contenteditable compose box —
 // pressSequentially is bound to the locator so focus can't drift away.
 async function typeIntoCompose(compose, text) {
@@ -447,12 +467,31 @@ Return ONLY the JSON per §4 schema. The "tweets" array contains exactly one ent
 
   await page.goto('https://x.com/compose/post', { waitUntil: 'domcontentloaded' });
   await jitter(2000, 4000);
+
+  // v1.0.x — dismiss any popover/modal that may layer above the compose
+  // textarea. Twitter's /compose/post URL increasingly shows overlays:
+  // "Subscribe to X Premium" upsells, account-verification prompts,
+  // anti-bot challenge masks, etc. They render into <div id="layers">
+  // and intercept pointer events on the textarea below them. Without
+  // dismissing them first the click hits the mask, never the textarea,
+  // and the action times out after 30s (seen in production 2026-05-04
+  // — Twitter showed a `<div data-testid="mask">` overlay only to the
+  // bot's session, not to the user's Firefox).
+  //
+  // Three-pronged dismissal:
+  //   1. Press Escape — closes most non-blocking modals
+  //   2. Click outside the modal area — clears stuck overlays that
+  //      ignore Escape (some upsells)
+  //   3. Compose click uses force: true — Playwright fires the click
+  //      event even if something else is on top, last-resort defense
+  await dismissModals(page);
+
   const compose = page.locator('div[data-testid="tweetTextarea_0"]').first();
-  await compose.click();
+  await compose.click({ force: true, timeout: 15000 });
   await jitter(400, 1000);
   await typeHuman(page, tweet.text);
   await jitter(1500, 3000);
-  await page.locator('button[data-testid="tweetButton"]').first().click();
+  await page.locator('button[data-testid="tweetButton"]').first().click({ force: true });
   await jitter(3000, 5000);
 
   bumpDailyCount('post');
@@ -532,7 +571,8 @@ Return ONLY the JSON per §4 schema. The "tweets" array has one entry per scored
   await page.goto(pick.in_reply_to, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('article[data-testid="tweet"]', { timeout: 15000 });
   await jitter(2000, 4000);
-  await page.locator('button[data-testid="reply"]').first().click();
+  await dismissModals(page);  // 2026-05-04 — same modal-overlay defense as actionPost
+  await page.locator('button[data-testid="reply"]').first().click({ force: true });
   await page.waitForSelector('div[data-testid="tweetTextarea_0"]', { timeout: 10000 });
   await jitter(1500, 3000);
   const compose = page.locator('div[data-testid="tweetTextarea_0"]').first();
@@ -614,7 +654,8 @@ Return ONLY JSON per §4 schema.`;
   await page.goto(pick.url, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('article[data-testid="tweet"]', { timeout: 15000 });
   await jitter(2000, 4000);
-  await page.locator('button[data-testid="reply"]').first().click();
+  await dismissModals(page);  // 2026-05-04 — same modal-overlay defense as actionPost
+  await page.locator('button[data-testid="reply"]').first().click({ force: true });
   await page.waitForSelector('div[data-testid="tweetTextarea_0"]', { timeout: 10000 });
   await jitter(1500, 3000);
   const compose = page.locator('div[data-testid="tweetTextarea_0"]').first();
