@@ -19,7 +19,7 @@
 ## v1.5.216.62.49 — UX: keyword display-formatting (Title Case / Sentence Case / unchanged) — universal across all 21 content types, all countries, all languages
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `cde227a`
 
 ### Why
 
