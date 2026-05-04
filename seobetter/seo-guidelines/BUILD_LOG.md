@@ -19,7 +19,7 @@
 ## v1.5.216.62.53 — Ban inline bolding everywhere (4-layer defense): SEO md rule + 3 prompt sites cleaned + universal anti-bold rule + server-side strip
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `f13b585`
 
 ### Why
 
