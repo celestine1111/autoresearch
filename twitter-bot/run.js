@@ -756,13 +756,26 @@ function pickAction() {
   // Daily metrics push at 00:00–01:00 UTC (~7-8 PM ET)
   if (hourUTC === 0 && getDailyCount('metrics') === 0) return 'metrics';
 
-  // Weighted random — bias HEAVY toward replies (user request: more search + replies)
+  // Weighted random — bias HEAVY toward replies + EN dominance for the
+  // first 30 days of activity to prevent profile-language-mismatch flags.
+  //
+  // 2026-05-04 — Twitter killed the bot session ~7 minutes after a burst
+  // of 2 Chinese (zh) replies. Account is older but has thin recent
+  // activity (161 followers / 303 following) so Twitter's classifier
+  // treats it as low-trust. EN-default profile + sudden Chinese replies
+  // = "compromised account?" flag. Same risk applies to any sudden
+  // language shift from the profile language.
+  //
+  // Mix tightened: EN gets 65% (was 45%), multilingual drops to 15% (was
+  // 35%). Total reply share unchanged (80%). Once the account passes
+  // 30 days of consistent activity + climbs above 500 followers,
+  // multilingual can scale back up to 35%.
   const r = Math.random();
-  if (r < 0.45) return 'reply_en';      // 45%
-  if (r < 0.80) return 'reply_multi';   // 35%
-  if (r < 0.90) return 'mentions';      // 10%
-  if (r < 0.97) return 'likes';         //  7%
-  return 'post';                         //  3%
+  if (r < 0.65) return 'reply_en';      // 65%  (was 45% — EN-dominant during trust-building period)
+  if (r < 0.80) return 'reply_multi';   // 15%  (was 35% — drop multilingual until account earns trust)
+  if (r < 0.90) return 'mentions';      // 10%  (unchanged)
+  if (r < 0.97) return 'likes';         //  7%  (unchanged)
+  return 'post';                         //  3%  (unchanged)
 }
 
 // =============================================================================
