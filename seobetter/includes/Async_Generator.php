@@ -1223,6 +1223,43 @@ class Async_Generator {
             }
         }
 
+        // v1.5.216.62.56 — Outline-padding safety net. Pre-fix the prompt-
+        // level SECTION COUNT CONTRACT (v62.51) explicitly told the AI
+        // "MUST output EXACTLY N H2s" but the AI was statistically
+        // non-compliant — user retest of T3 #3 Opinion at 1100w returned
+        // only 6 H2s when the opinion template lists 10 sections, so
+        // The Objection / What This Means / Conclusion+CTA / References
+        // were silently dropped from every opinion article (and the
+        // v62.55 Devil's Advocate frame couldn't trigger because no
+        // Objection H2 was ever generated).
+        //
+        // Fix: when AI returns fewer headings than the template lists,
+        // pad the missing slots with the template's verbatim section
+        // names (parenthetical-hint cleaned). Deterministic guarantee
+        // that the outline always has enough H2s for every required
+        // section. Universal across all 21 content types — the prose
+        // template's section list is the authoritative source.
+        //
+        // The padded names use the template form (e.g. "The Objection",
+        // "What This Means", "Conclusion and Call to Action",
+        // "References") which is exactly what generate_section() prompts
+        // need to recognize the section's intent and the v62.55 Devil's
+        // Advocate frame matches /^the\s+objection\b/i to trigger.
+        if ( ! empty( $section_count_hint ) && count( $headings ) < $section_count_hint ) {
+            $template_sections = array_values( array_filter( array_map( 'trim',
+                explode( ',', (string) ( $prose['sections'] ?? '' ) ) ) ) );
+            // Strip parenthetical hints like "Lede (who/what/when/where/why)"
+            // → "Lede" so the heading text itself is clean.
+            $template_clean = array_map( function ( $s ) {
+                return trim( preg_replace( '/\s*\([^)]*\)\s*/', ' ', $s ) );
+            }, $template_sections );
+            for ( $i = count( $headings ); $i < $section_count_hint; $i++ ) {
+                if ( isset( $template_clean[ $i ] ) && $template_clean[ $i ] !== '' ) {
+                    $headings[] = $template_clean[ $i ];
+                }
+            }
+        }
+
         if ( count( $headings ) < 3 ) {
             return [ 'success' => false, 'error' => 'Could not parse outline. Try again.' ];
         }

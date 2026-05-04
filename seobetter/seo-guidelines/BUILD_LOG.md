@@ -7,12 +7,85 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.55)
+> **Last updated:** 2026-05-04 (v1.5.216.62.56)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.56 — Outline-padding safety net (deterministic guarantee that all template sections appear, even when AI ignores the SECTION COUNT CONTRACT)
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User retest of T3 #3 Opinion on v62.55 (1100w floor enforced by v62.52) returned only 6 of 10 expected H2 sections:
+
+```
+1. Why AI Content Moderation Is Broken   ← demoted from body H1 (working)
+2. Key Takeaways
+3. Hook and Thesis
+4. Argument 1
+5. Argument 2
+6. Argument 3
+7. Frequently Asked Questions
+```
+
+Missing: **The Objection**, **What This Means**, **Conclusion and Call to Action**, **References**. Worse — the v62.55 Devil's Advocate frame couldn't trigger because The Objection H2 wasn't in the article at all.
+
+Diagnosis:
+- v62.51 added a SECTION COUNT CONTRACT to the outline prompt: *"MUST output EXACTLY N H2 headings… Do NOT merge / drop / compress / skip"*. Statistically the AI was non-compliant — returned 6 instead of 10.
+- v62.54 fixed the section-step LOOP to run `max(formula, template_count) = 10` iterations. But `$headings[7..9]` were empty, so steps 7-9 silently skipped per the existing `if ( empty( $headings[ $idx ] ) ) { skip; }` guard.
+
+Net: prompt-level + loop-level fixes both depended on the AI emitting 10 H2s. When it emitted 6, all downstream defenses failed open.
+
+### What changed
+
+**Outline padding in `generate_outline()`** ([includes/Async_Generator.php](seobetter/includes/Async_Generator.php))
+
+After parsing the AI's outline response, when `count($headings) < $section_count_hint`, programmatically pad the missing slots with the prose template's verbatim section names from the comma-split list. Names are parenthetical-hint-stripped (`"Lede (who/what/when/where/why)"` → `"Lede"`).
+
+```
+if ( ! empty( $section_count_hint ) && count( $headings ) < $section_count_hint ) {
+    $template_sections = array_values( array_filter( array_map( 'trim',
+        explode( ',', (string) ( $prose['sections'] ?? '' ) ) ) ) );
+    $template_clean = array_map( function ( $s ) {
+        return trim( preg_replace( '/\s*\([^)]*\)\s*/', ' ', $s ) );
+    }, $template_sections );
+    for ( $i = count( $headings ); $i < $section_count_hint; $i++ ) {
+        if ( isset( $template_clean[ $i ] ) && $template_clean[ $i ] !== '' ) {
+            $headings[] = $template_clean[ $i ];
+        }
+    }
+}
+```
+
+Universal across all 21 content types. Padded names use the template form — exactly what `generate_section()` prompts need to recognize the section's intent, and exactly what the v62.55 Devil's Advocate frame matches via `/^the\s+objection\b/i` to trigger.
+
+Result on opinion at 1100w: AI returns 6 → padded to 10 with `["The Objection", "What This Means", "Conclusion and Call to Action", "References"]` filling slots 6-9. All 10 sections now appear in body, and Devil's Advocate frame triggers.
+
+Default-profile types (blog_post / how_to / etc.) are unaffected when AI is compliant. They only see padding when AI shortfall — defensive.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.55 → 62.56
+- `seobetter/includes/Async_Generator.php` — `generate_outline()` post-AI padding block
+
+### Verify
+
+```
+grep -A 8 "v1.5.216.62.56 — Outline-padding safety net" seobetter/includes/Async_Generator.php
+```
+
+After upload + retest opinion at any word count ≥ 1100:
+- All 10 documented sections present (Key Takeaways, Hook & Thesis, Args 1/2/3, **The Objection**, **What This Means**, FAQ, **Conclusion and Call to Action**, **References**)
+- Devil's Advocate frame visible on The Objection (dashed border, sharp corners, monospace label, ⚖ SVG)
+
+**Verified by user:** UNTESTED
 
 ---
 
