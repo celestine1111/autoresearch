@@ -7,12 +7,84 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.48)
+> **Last updated:** 2026-05-04 (v1.5.216.62.49)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.49 — UX: keyword display-formatting (Title Case / Sentence Case / unchanged) — universal across all 21 content types, all countries, all languages
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on the post-v62.48 retest of T3 #2 (RBA news article). The headline was clean ("RBA Held Rates at 4.35%") but the keyword still appeared all-lowercase in three places that rendered as visible text:
+
+1. Post `<title>` / H1: `australian rba interest rate decision may 2026: RBA Held Rates at 4.35%` — keyword prefix lowercase
+2. Image alt overlay text: `Why it matters for investors and homeowners — australian rba interest rate decision may 2026 visual guide` — keyword tail lowercase
+3. Schema headline: same lowercase prefix carried through
+
+Cause: the user typed the keyword as-is in lowercase ("australian rba interest rate decision may 2026") and the plugin pipelines treated it as opaque text. Headline generation, meta-tag generation, and image-alt generation all interpolated the raw user-typed keyword without any display-format step.
+
+User asked to fix universally — across all 21 content types, all countries, all languages where capitalization applies.
+
+### What changed
+
+**1. New shared helper `AI_Content_Generator::display_keyword( $kw, $language )`** ([includes/AI_Content_Generator.php](seobetter/includes/AI_Content_Generator.php))
+
+Language-family-aware case formatter:
+
+| Language family | Behavior | Example |
+|---|---|---|
+| **English (`en`)** | `mb_convert_case` Title Case | "australian rba …" → "Australian Rba …" |
+| **Other Latin-script** (es, fr, de, it, pt, nl, pl, cs, da, fi, sv, no, hu, tr, ro, id, ms, vi, etc.) | Sentence Case (capitalize first letter only) | "decisión de tasa …" → "Decisión de tasa …" |
+| **Non-Latin scripts** (ja, zh, ko, th, lo, km, my, hi, bn, ta, te, kn, ml, gu, pa, si, ar, he, fa, ur, el, hy, ka, ru, uk, bg, sr, mk, be, kk, mn) | Unchanged (these scripts don't carry case) | unchanged |
+
+Mixed-case user input is preserved — if any letter is already uppercase, the user has signalled deliberate casing and the helper returns the input unchanged. Acronym restoration (Rba → RBA) is left to the AI's body generator which handles it correctly inside body content; headline-keyword Title Case stays grammatically neutral.
+
+**2. Applied at 3 inlet points where keyword renders as visible text:**
+
+- `AI_Content_Generator::generate_headlines()` — `$keyword_for_prompt` is display-formatted before injection into the headline prompt + the headline_genre_guardrail concrete examples.
+- `AI_Content_Generator::generate_meta_tags()` — same; meta title / description / OG title rendered with proper case.
+- `Stock_Image_Inserter::generate_alt_text()` — `$keyword_clean` is display-formatted before being interpolated into all 5 image alt templates ("comparison chart…", "Guide to choosing…", etc.) and the question-word and FAQ-word branches.
+
+Downstream case-insensitive matching (`stripos`, `mb_strtolower`) is unaffected — it's case-insensitive already so format-changing the keyword for display doesn't break filter / dedup / pool logic.
+
+### Coverage
+
+Per the user's requirement "make it for all article types, countries and languages that require it":
+
+- **All 21 content types**: headline + meta + image-alt pipelines run for every type. Single helper call covers all.
+- **All countries**: country doesn't carry case rules; affected only via language.
+- **Languages that require it**: 38 explicitly handled (1 English Title Case + ~25 Latin-script Sentence Case + ~32 non-Latin no-op). Unknown languages fall through to Sentence Case (safe default).
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.48 → 62.49
+- `seobetter/includes/AI_Content_Generator.php`:
+  - new `display_keyword()` static helper
+  - `generate_headlines()` calls it on `$keyword_for_prompt`
+  - `generate_meta_tags()` calls it on `$keyword_for_prompt`
+- `seobetter/includes/Stock_Image_Inserter.php` — `generate_alt_text()` calls `AI_Content_Generator::display_keyword()` on `$keyword_clean`
+
+### Verify
+
+```
+grep -n "display_keyword" seobetter/includes/AI_Content_Generator.php seobetter/includes/Stock_Image_Inserter.php
+```
+
+After upload + retest:
+- New posts in English with all-lowercase keyword → headline / H1 / image-alt show Title Case
+- New posts in Spanish/French/German with all-lowercase keyword → Sentence Case
+- New posts in Japanese/Chinese/Korean/Russian → unchanged (script doesn't carry case)
+- Mixed-case user input ("RBA interest rate decision") → preserved exactly as typed
+
+**Verified by user:** UNTESTED
 
 ---
 

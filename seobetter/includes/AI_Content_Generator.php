@@ -140,6 +140,18 @@ class AI_Content_Generator {
             }
         }
 
+        // v1.5.216.62.49 — display-format the keyword (Title Case for
+        // English, Sentence Case for other Latin-script, unchanged for
+        // non-Latin scripts). See display_keyword() docblock for the
+        // language-family handling. User-reported on the RBA news article:
+        // an all-lowercase user-typed keyword propagated into the H1
+        // post_title ("australian rba interest rate decision may 2026:
+        // RBA Held Rates at 4.35%") and image alt text. Title-casing here
+        // fixes both since the AI is asked to include the keyword
+        // verbatim in headlines, and Stock_Image_Inserter calls the same
+        // display_keyword() helper. Mixed-case user input is preserved.
+        $keyword_for_prompt = self::display_keyword( $keyword_for_prompt, $language );
+
         $context = $article_text ? "\n\nArticle summary: " . substr( $article_text, 0, 300 ) : '';
 
         // v1.5.206d-fix7 — universal language clause. For English articles the
@@ -249,6 +261,78 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
     }
 
     /**
+     * v1.5.216.62.49 — Format a user-typed keyword for display in
+     * headlines, post_title, image alt text, meta tags, and any other
+     * surface where the keyword is rendered as VISIBLE text.
+     *
+     * Rules by language family:
+     *   - English (en) → mb_convert_case Title Case
+     *     "australian rba interest rate decision may 2026"
+     *     → "Australian Rba Interest Rate Decision May 2026"
+     *     (Acronym restoration like "Rba" → "RBA" is left to the AI's
+     *     body generator which handles it correctly in body content;
+     *     headline keyword stays Title Case for grammatical neutrality.)
+     *   - Other Latin-script languages (es / fr / de / it / pt / nl /
+     *     pl / cs / da / fi / sv / no / hu / tr / ro / id / ms / vi /
+     *     etc.) → ucfirst-equivalent Sentence Case (capitalize first
+     *     letter only, rest unchanged) — matches title casing
+     *     conventions of those languages where most words stay
+     *     lowercase except the first word of a sentence and proper
+     *     nouns.
+     *   - Non-Latin scripts (ja / zh / ko / th / lo / km / hi / bn /
+     *     ta / te / kn / ml / gu / pa / si / ar / he / fa / ur / el /
+     *     hy / ka / ru / uk / bg / sr / mk / be / kk / mn) →
+     *     unchanged. These scripts don't carry case information so
+     *     forcing a transformation would either no-op or corrupt
+     *     character mapping.
+     *
+     * Mixed-case user input is preserved — if any letter is already
+     * uppercase, the user has signalled deliberate casing (e.g. "RBA
+     * interest rate decision") and we don't overwrite it.
+     *
+     * Empty / whitespace-only input returns unchanged.
+     *
+     * @param string $kw       Keyword as-typed by the user (or post-
+     *                         translation for non-English articles).
+     * @param string $language BCP-47 code (en, es, fr, ja, etc.).
+     * @return string          Display-formatted keyword.
+     */
+    public static function display_keyword( string $kw, string $language = 'en' ): string {
+        $kw_trimmed = trim( $kw );
+        if ( $kw_trimmed === '' ) return $kw;
+
+        // Preserve user-supplied mixed-case input.
+        if ( $kw_trimmed !== mb_strtolower( $kw_trimmed, 'UTF-8' ) ) {
+            return $kw;
+        }
+
+        $base = strtolower( substr( $language ?: 'en', 0, 2 ) );
+
+        $non_latin_scripts = [
+            'ja', 'zh', 'ko', 'th', 'lo', 'km', 'my',
+            'hi', 'bn', 'ta', 'te', 'kn', 'ml', 'gu', 'pa', 'si',
+            'ar', 'he', 'fa', 'ur',
+            'el', 'hy', 'ka',
+            'ru', 'uk', 'bg', 'sr', 'mk', 'be', 'kk', 'mn',
+        ];
+        if ( in_array( $base, $non_latin_scripts, true ) ) {
+            return $kw;
+        }
+
+        if ( $base === 'en' || $base === '' ) {
+            return mb_convert_case( $kw, MB_CASE_TITLE, 'UTF-8' );
+        }
+
+        // Other Latin-script languages — sentence case.
+        $first  = mb_strtoupper( mb_substr( $kw_trimmed, 0, 1, 'UTF-8' ), 'UTF-8' );
+        $rest   = mb_substr( $kw_trimmed, 1, null, 'UTF-8' );
+        // Preserve any leading/trailing whitespace on the original input.
+        $lead   = (string) preg_replace( '/[^\s].*$/su', '', $kw );
+        $trail  = (string) preg_replace( '/^.*[^\s]/su', '', $kw );
+        return $lead . $first . $rest . $trail;
+    }
+
+    /**
      * v1.5.216.62.48 — Per-content-type headline genre guardrail.
      *
      * Appended AFTER the standard 5-formula block in the headline prompt.
@@ -334,6 +418,9 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
                 $keyword_for_prompt = $translated[0];
             }
         }
+
+        // v1.5.216.62.49 — display-format keyword (matches generate_headlines).
+        $keyword_for_prompt = self::display_keyword( $keyword_for_prompt, $language );
 
         $summary = $article_text ? substr( $article_text, 0, 500 ) : '';
         $lang_clause = $is_english ? '' : "\n\nLANGUAGE: Write TITLE, DESCRIPTION, and OG_TITLE entirely in {$lang_name}. Every word except proper nouns must be in {$lang_name}. Do not ship English copy.";

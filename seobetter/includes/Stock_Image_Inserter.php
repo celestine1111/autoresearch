@@ -93,7 +93,13 @@ class Stock_Image_Inserter {
     private function generate_alt_text( string $keyword, string $heading, string $context, string $language = 'en' ): string {
         $heading = preg_replace( '/[#*_\[\]()]/', '', $heading );
         $heading = trim( $heading, '? ' );
-        $keyword_clean = trim( $keyword );
+        // v1.5.216.62.49 — display-format the keyword (Title Case for English,
+        // Sentence Case for other Latin-script, unchanged for non-Latin scripts).
+        // Pre-fix an all-lowercase user keyword like "australian rba interest
+        // rate decision may 2026" rendered into image alt as
+        // "Why it matters... — australian rba interest rate decision may 2026
+        // visual guide". Title-casing fixes the keyword tail.
+        $keyword_clean = AI_Content_Generator::display_keyword( trim( $keyword ), $language );
         $base_lang = strtolower( substr( $language ?: 'en', 0, 2 ) );
 
         // v1.5.213.2 — Non-English path: skip the English template strings
