@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.49
+ * Version: 1.5.216.62.50
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.49' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.50' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -2864,12 +2864,46 @@ final class SEOBetter {
      * Returns $text unchanged if within $max_chars; otherwise trims to
      * ($max_chars - 1) and appends a single ellipsis character (1 char = 1 "char" count).
      */
+    /**
+     * Truncate $text to $max_chars (multibyte-safe), preferring a
+     * word-boundary cut so the result never ends mid-word.
+     *
+     * v1.5.216.62.50 — word-boundary truncation. Pre-fix the truncator
+     * cut at byte $max_chars - 1 unconditionally and appended an
+     * ellipsis. Result on a 60-char SEO title cap: a meta title like
+     * "Why AI Content Moderation Is Broken in 2026 — What No One Admits"
+     * would truncate to "Why AI Content Moderation Is Broken in 2026 — What
+     * No One Adm…" (mid-word "Adm…"). User-reported on the Opinion
+     * article retest. Apparent across all 6 callers (SEO title, meta
+     * description, OG title, OG description, Twitter title, Twitter
+     * description) for every language.
+     *
+     * Fix: cut at $max_chars - 1, then walk back to the last whitespace
+     * (space / tab / newline) and truncate there instead. Guard against
+     * "no whitespace at all" (CJK / agglutinative languages) by falling
+     * back to byte cut. Guard against "tiny first word" (whitespace at
+     * pos 5 of a 60-char string) by requiring the trimmed result to be
+     * at least half the requested length, otherwise keep the byte cut.
+     * Trim trailing punctuation/whitespace before appending the
+     * ellipsis so we don't get "Foo, …" or "Foo. …".
+     */
     private function sb_truncate( string $text, int $max_chars ): string {
         $text = trim( $text );
         if ( mb_strlen( $text ) <= $max_chars ) {
             return $text;
         }
-        return rtrim( mb_substr( $text, 0, $max_chars - 1 ) ) . '…';
+        $cut = mb_substr( $text, 0, $max_chars - 1 );
+        // Find the last whitespace in the cut window (multibyte-safe).
+        if ( preg_match( '/^(.*)\s\S*$/us', $cut, $m ) ) {
+            $candidate = $m[1];
+            // Only accept the word-boundary cut if it preserves at least
+            // half the requested length — otherwise the input had a long
+            // first word and we'd rather keep the byte cut + ellipsis.
+            if ( mb_strlen( $candidate ) >= max( 1, (int) ( $max_chars / 2 ) ) ) {
+                $cut = $candidate;
+            }
+        }
+        return rtrim( $cut, " \t\n\r.,;:—–-" ) . '…';
     }
 
     /**
