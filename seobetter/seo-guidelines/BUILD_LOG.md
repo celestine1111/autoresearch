@@ -19,7 +19,7 @@
 ## v1.5.216.62.44 — FIX "this topic" placeholder leak; ADD Employment / Career / Workplace category; expand quote-substantive vocab
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `11f4b99`
 
 ### Why
 
