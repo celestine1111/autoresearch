@@ -309,10 +309,48 @@ async function launch() {
 }
 
 async function checkLoggedIn(page) {
+  // Why this got rewritten 2026-05-04:
+  //
+  // Pre-fix only checked for `/login` or `/i/flow/login` in the URL.
+  // Twitter changed anti-automation behavior: logged-out sessions now
+  // get silently redirected to `https://x.com/` (the public landing
+  // page) with title "X. It's what's happening / X" — NOT `/login`.
+  // Old check thought "URL doesn't contain /login → must be logged in"
+  // and let the bot proceed. Subsequent actions all failed (search
+  // returned 0 results, compose modal never opened) because actually
+  // logged out. No `COOKIES_EXPIRED` was raised → no critical email →
+  // user only saw the "0 actions today" digest with no actionable
+  // signal for ~24h until they investigated manually.
+  //
+  // New check is a 2-gate test:
+  //   Gate 1 (URL): after going to `/home`, the URL must STILL be
+  //     `/home`. Anything else (`/`, `/login`, `/i/flow/login`,
+  //     `/i/flow/signup`, etc.) = logged out.
+  //   Gate 2 (DOM):  even on `/home`, verify the logged-in shell is
+  //     present by waiting for the compose button (sidebar "Post"
+  //     button — `a[data-testid="SideNav_NewTweet_Button"]`). This
+  //     catches shadow-logouts where Twitter keeps the URL but
+  //     strips the logged-in UI shell.
+  //
+  // Either gate failing throws COOKIES_EXPIRED, which the main loop
+  // turns into a critical email. User finds out the same day, not 24h
+  // later from a silent digest.
   await page.goto('https://x.com/home', { waitUntil: 'domcontentloaded', timeout: 30000 });
   await jitter(2000, 4000);
   const url = page.url();
-  if (url.includes('/login') || url.includes('/i/flow/login')) {
+
+  // Gate 1 — URL didn't stay on /home → Twitter redirected us out
+  if (!/\/home(\?|#|$)/.test(url)) {
+    throw new Error('COOKIES_EXPIRED');
+  }
+
+  // Gate 2 — verify a logged-in-only DOM element is present
+  // (sidebar Post button is one of the most stable logged-in selectors).
+  // 10s timeout is intentionally generous — slower VPS + ScrapeOps proxy
+  // hop can take 5-7s to fully render the shell.
+  try {
+    await page.waitForSelector('a[data-testid="SideNav_NewTweet_Button"]', { timeout: 10000 });
+  } catch {
     throw new Error('COOKIES_EXPIRED');
   }
 }
