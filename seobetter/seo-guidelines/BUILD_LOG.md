@@ -19,7 +19,7 @@
 ## v1.5.216.62.41 — FIX: URL normalization for user-typed organizer / offers / hiring-org URLs
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `e072e37`
 
 ### Why
 
