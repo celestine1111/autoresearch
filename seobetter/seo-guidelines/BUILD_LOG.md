@@ -7,12 +7,62 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.51)
+> **Last updated:** 2026-05-04 (v1.5.216.62.52)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.52 — Per-content-type word-count minimums realigned to §10.1 low bound (5 types bumped); opinion Arg 3 made required
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+The v62.51 SECTION COUNT CONTRACT tells the outline AI to emit one H2 per section in the prose template's section list. That works fine when the user's chosen `word_count` is large enough to budget every section. But the existing per-type word-count minimums (set in v1.5.183) were below the documented §10.1 ranges in 5 cases — meaning the contract demanded N sections at minimums that didn't have enough word budget for them. User flagged this in retest of T3 #3 Opinion: "we made sure that when they selected the word count it had a absolute minimum for different types — figure out the best option which keeps aligned with seo.md files."
+
+Audit of `Async_Generator::start()::$min_words` against [SEO-GEO-AI-GUIDELINES.md §10.1](seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md):
+
+| Type | Old min | §10.1 range | New min | Reason |
+|---|---|---|---|---|
+| `buying_guide` | 1500 | 2000-5000 | **2000** | Quick Picks Table + ~10 mini-reviews + Buying Advice + FAQ + Refs needs 2000+ |
+| `pillar_guide` | 2000 | 3000-10000 | **3000** | TOC + 5-10 chapters (each is a standalone mini-guide) needs 3000+ |
+| `opinion` | 1000 | 800-1400 (sweet 900-1100) | **1100** | 10 template sections (Key Take + Hook & Thesis + 3 Args + Objection + WTM + FAQ + Conclusion+CTA + Refs) — at 100 words/section average, 1000 was too tight; 1100 is the upper end of §10.1 sweet spot and fits all 10 |
+| `white_paper` | 2000 | 2500-8000 | **2500** | Exec Sum + Methodology + Findings + Analysis + Recommendations + Conclusion needs research-paper-level depth |
+| `scholarly_article` | 2000 | 3000-8000 | **3000** | Abstract + Lit Review + Methods + Results + Discussion is academic-paper structure |
+
+Other 16 types already aligned with their §10.1 low bound — no change needed.
+
+### Companion fix — opinion Arg 3 made required
+
+The opinion template's guidance previously said *"Argument 3 is optional — include only if the total article is over 1000 words; otherwise skip it"*. Pre-v62.51 this conflicted with the new SECTION COUNT CONTRACT (which demands all 10 sections). With the floor now at 1100w, every opinion article has budget for 3 full arguments at 150-220 words each. Updated guidance:
+
+> *"Argument 3 is REQUIRED — claim sentence + 2-3 evidence sentences + 1 example + 1 transition, 150-220 words (same structure as Arguments 1 and 2). Three arguments is the minimum for a credible op-ed at this length floor (1100w minimum per v1.5.216.62.52)."*
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.51 → 62.52
+- `seobetter/includes/Async_Generator.php`:
+  - `$min_words` array — 5 types bumped to §10.1 low bound, in-place comment block documents the rationale and maps each value to its §10.1 reference
+  - opinion template `guidance` — Arg 3 conditional removed; now REQUIRED at all word counts
+
+### Verify
+
+```
+grep -A 12 "v1.5.216.62.52 — minimums realigned" seobetter/includes/Async_Generator.php
+grep -B 1 -A 1 "Argument 3.*REQUIRED" seobetter/includes/Async_Generator.php
+```
+
+### Behavior change for users
+
+- Opinion / Buying Guide / Pillar Guide / White Paper / Scholarly Article: if the user picks a word count below the new floor in the Content Generator UI, generation will silently round up to the floor (existing v1.5.183 behavior — `if ( $word_count < $floor ) { $word_count = $floor; }`). No error or warning shown.
+- All other 16 content types unchanged.
+
+**Verified by user:** UNTESTED
 
 ---
 

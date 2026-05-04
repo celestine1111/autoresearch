@@ -77,13 +77,33 @@ class Async_Generator {
         // v1.5.183 — Enforce minimum word count per content type.
         // Prevents truncated articles when users select too few words
         // for complex content types (e.g. 800-word white papers).
+        //
+        // v1.5.216.62.52 — minimums realigned to the documented LOW BOUND
+        // of each content type's word range in
+        // SEO-GEO-AI-GUIDELINES.md §10.1. Five types were below their §10.1
+        // minimum and routinely truncated their template's section list:
+        //
+        //   buying_guide      1500 → 2000  (§10.1 "2000-5000")
+        //   pillar_guide      2000 → 3000  (§10.1 "3000-10000")
+        //   opinion           1000 → 1100  (§10.1 "800-1400, sweet 900-1100"
+        //                                   — 1100 ensures all 10 template
+        //                                   sections fit including the
+        //                                   previously-conditional Arg 3)
+        //   white_paper       2000 → 2500  (§10.1 "2500-8000")
+        //   scholarly_article 2000 → 3000  (§10.1 "3000-8000")
+        //
+        // Companion change in v62.52: opinion guidance no longer marks
+        // Argument 3 as optional — at 1100 word floor every opinion has
+        // budget for all 3 arguments + Objection + What This Means + FAQ
+        // + Conclusion+CTA + References. Aligns with §3.1A HYBRID profile
+        // and the new SECTION COUNT CONTRACT (v62.51).
         $content_type = sanitize_text_field( $params['content_type'] ?? 'blog_post' );
         $min_words = [
-            'white_paper' => 2000, 'scholarly_article' => 2000, 'pillar_guide' => 2000,
+            'white_paper' => 2500, 'scholarly_article' => 3000, 'pillar_guide' => 3000,
             'case_study' => 1500, 'tech_article' => 1500, 'comparison' => 1500,
-            'buying_guide' => 1500, 'listicle' => 1500,
+            'buying_guide' => 2000, 'listicle' => 1500,
             'blog_post' => 1000, 'how_to' => 1000, 'review' => 1000,
-            'opinion' => 1000, 'interview' => 1000, 'faq_page' => 1000,
+            'opinion' => 1100, 'interview' => 1000, 'faq_page' => 1000,
             'personal_essay' => 1500,
             'news_article' => 800, 'recipe' => 800, 'live_blog' => 800,
             'sponsored' => 800,
@@ -877,7 +897,7 @@ class Async_Generator {
             // decision may 2026" headline that AI generated when handed
             // the RBA event keyword.
             'news_article' => ['sections' => 'Lede (who/what/when/where/why in first 25 words), Nut Graf, Supporting Details, Background Context, What Happens Next, FAQ, References', 'guidance' => 'Inverted pyramid news report. Headline RULES — write as an event report (subject + active verb + 5 Ws), e.g. "RBA Holds Cash Rate at 4.10% in May 2026 Decision". Do NOT use How-to / Guide / Tips framings — those belong to the how_to / blog_post types. Most important facts first. Neutral third person. Attribute every claim with named source. Short paragraphs (2-3 sentences). No Key Takeaways box (genre convention — news leads with the lede, not an editorial summary).', 'schema' => 'NewsArticle'],
-            'opinion' => ['sections' => 'Key Takeaways, Hook and Thesis, Argument 1, Argument 2, Argument 3, The Objection, What This Means, FAQ, Conclusion and Call to Action, References', 'guidance' => 'Argumentative op-ed with an explicit, provable thesis stated by paragraph 3 at the latest. SECTION PURPOSE: "Hook and Thesis" opens with a 1-3 sentence anecdote/stat/provocation, then an explicit thesis sentence, then a 1-2 sentence preview of your 2-3 arguments. "Argument 1" is your STRONGEST point — claim sentence + 2-3 evidence sentences (named source + number) + 1 example + 1 transition, 150-220 words. "Argument 2" follows the same structure. "Argument 3" is optional — include only if the total article is over 1000 words; otherwise skip it and keep moving. "The Objection" steelmans the opposing view in one paragraph, then refutes with specifics — 100-180 words total. "What This Means" covers implications and stakes for the reader — 100-150 words. "FAQ" is 3-5 Q&A addressing common objections and "what should I do next" — 40-60 words per answer, answer-first format. "Conclusion and Call to Action" restates the thesis reframed by the evidence, one sentence of stakes, then a concrete CTA. TONE: First person is ENCOURAGED ("I argue", "I have seen", "In my view") but avoid weak hedges ("I think", "I feel", "I believe"). Lead with a specific anecdote, a surprising stat with source, or a provocative one-line claim — never "In today\'s world". Strongest argument first, weakest never. Steelman the counterargument before refuting. Every factual claim needs an outbound citation — aim for 4-8 pool-matched links per 1000 words with descriptive noun-phrase anchor text (not "click here" or naked URLs). Qualified claims beat absolutism ("in most cases" beats "always"). Label the piece as opinion somewhere in the prose. Pull out 1-2 sentences from the thesis or conclusion as candidate pull quotes (bold them with **). End with a concrete call to action (share, contact, read the cited source, act) — not "let me know what you think".', 'schema' => 'OpinionNewsArticle'],
+            'opinion' => ['sections' => 'Key Takeaways, Hook and Thesis, Argument 1, Argument 2, Argument 3, The Objection, What This Means, FAQ, Conclusion and Call to Action, References', 'guidance' => 'Argumentative op-ed with an explicit, provable thesis stated by paragraph 3 at the latest. SECTION PURPOSE: "Hook and Thesis" opens with a 1-3 sentence anecdote/stat/provocation, then an explicit thesis sentence, then a 1-2 sentence preview of your 2-3 arguments. "Argument 1" is your STRONGEST point — claim sentence + 2-3 evidence sentences (named source + number) + 1 example + 1 transition, 150-220 words. "Argument 2" follows the same structure. "Argument 3" is REQUIRED — claim sentence + 2-3 evidence sentences + 1 example + 1 transition, 150-220 words (same structure as Arguments 1 and 2). Three arguments is the minimum for a credible op-ed at this length floor (1100w minimum per v1.5.216.62.52). "The Objection" steelmans the opposing view in one paragraph, then refutes with specifics — 100-180 words total. "What This Means" covers implications and stakes for the reader — 100-150 words. "FAQ" is 3-5 Q&A addressing common objections and "what should I do next" — 40-60 words per answer, answer-first format. "Conclusion and Call to Action" restates the thesis reframed by the evidence, one sentence of stakes, then a concrete CTA. TONE: First person is ENCOURAGED ("I argue", "I have seen", "In my view") but avoid weak hedges ("I think", "I feel", "I believe"). Lead with a specific anecdote, a surprising stat with source, or a provocative one-line claim — never "In today\'s world". Strongest argument first, weakest never. Steelman the counterargument before refuting. Every factual claim needs an outbound citation — aim for 4-8 pool-matched links per 1000 words with descriptive noun-phrase anchor text (not "click here" or naked URLs). Qualified claims beat absolutism ("in most cases" beats "always"). Label the piece as opinion somewhere in the prose. Pull out 1-2 sentences from the thesis or conclusion as candidate pull quotes (bold them with **). End with a concrete call to action (share, contact, read the cited source, act) — not "let me know what you think".', 'schema' => 'OpinionNewsArticle'],
             'how_to' => ['sections' => 'Key Takeaways, Why This Matters, What You Will Need, Numbered Steps (each step: action verb + result), Common Problems, Conclusion, FAQ, References', 'guidance' => 'Step-by-step tutorial. Imperative voice (do this, then do that). Clear prerequisites. Each step should be independently actionable.', 'schema' => 'HowTo'],
             'listicle' => ['sections' => 'Key Takeaways, Introduction (selection criteria and why this list), 10 Numbered Items (EACH item gets its own H2 heading numbered 1-10 like "1. Product Name" with 100-200 words per item), Conclusion (overall recommendation), FAQ, References', 'guidance' => 'TOP 10 LIST FORMAT: You MUST create exactly 10 numbered items. Each item gets its OWN H2 heading formatted as "1. Item Name", "2. Item Name" etc. Write 100-200 words per item. Make it scannable — readers skip to items they care about. Include one specific detail or stat per item.', 'schema' => 'Article'],
             'review' => ['sections' => 'Key Takeaways, What It Is and Who It Is For, Key Specs and Features, Hands-on Experience, Pros and Cons, Verdict and Rating, FAQ, References', 'guidance' => 'Honest product evaluation. Evidence-based claims. Include specific measurements and comparisons. Declare a clear verdict.', 'schema' => 'Review'],
