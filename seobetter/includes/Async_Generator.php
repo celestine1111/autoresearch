@@ -115,8 +115,23 @@ class Async_Generator {
         }
 
         // Content sections + takeaways + FAQ + references
+        // v1.5.216.62.54 — derive section count as MAX(word-count formula,
+        // prose template's explicit section-list count). Pre-fix the formula
+        // alone capped at $content_sections + 3 = 6 (1100w) or 8 (2000w),
+        // truncating genre-override types whose template lists more sections
+        // than the formula allows. User-reported on Opinion v62.53 retest:
+        // 7 of 10 documented sections shipped (KT → Hook → 3 Args →
+        // Objection → FAQ — missing What This Means / Conclusion+CTA /
+        // References) because outline emitted 10 H2s but only 8 section_N
+        // steps were queued, so the last 2 H2s never got content. Fix:
+        // queue enough section steps to cover the template's full list.
+        // Default-profile types (blog_post, listicle, etc.) hit max() with
+        // formula since their template lists don't exceed the formula.
+        $prose_for_count = self::get_prose_template( $content_type, (int) ( $params['recipe_source_count'] ?? 3 ) );
+        $template_section_count = max( 3, count( array_filter( array_map( 'trim',
+            explode( ',', (string) ( $prose_for_count['sections'] ?? '' ) ) ) ) ) );
         $content_sections = max( 3, min( 8, round( $word_count / 400 ) ) );
-        $num_sections = $content_sections + 3;
+        $num_sections = max( $content_sections + 3, $template_section_count );
 
         // Build the step queue
         $steps = [ 'trends', 'outline' ];

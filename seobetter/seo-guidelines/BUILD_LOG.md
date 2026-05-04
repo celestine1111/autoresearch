@@ -7,12 +7,77 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.53)
+> **Last updated:** 2026-05-04 (v1.5.216.62.54)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.54 — Section-count formula now respects template list (opinion 7→10 sections); H1 demotion + inline-bold strip mirrored into rest_save_draft() so they actually reach saved post_content
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User retest of T3 #3 Opinion with v62.53 at 2000 words showed two regressions still active:
+
+**1. Section count: 7 of 10 sections shipped (still missing What This Means / Conclusion+CTA / References)**
+
+Cause: `Async_Generator::start()` line 119 calculated `$num_sections = $content_sections + 3` from a word-count formula (`max(3, min(8, round($word_count/400)))`). For 2000w opinion: `content_sections = 5`, `num_sections = 8`. Outline emitted 10 H2s per the v62.51 SECTION COUNT CONTRACT, but the section step queue only ran 8 `section_N` steps — the last 2 H2s never got content. v62.51 fixed the OUTLINE prompt but not the section-step LOOP.
+
+**2. Body H1 still leaking ("Why AI Content Moderation Is Broken")**
+
+Cause: the v62.51 H1 demotion regex was placed in `Async_Generator::assemble_final()` — which runs on the PREVIEW path. But `rest_save_draft()` in `seobetter.php` RE-RUNS `Content_Formatter::format()` from markdown to build saved `post_content`. That re-formatter re-emits `<h1 class="wp-block-heading">` from any `# Heading` in markdown source. The save path never ran the H1 demotion → saved post_content kept body H1.
+
+Same path issue affects the v62.53 inline-bold strip: it ran in assemble_final preview but not in the save path, so saved post_content could keep AI-emitted `<strong>` tags even when the preview was clean.
+
+### What changed
+
+**1. `start()` section-count formula now respects template list** ([includes/Async_Generator.php:118-130](seobetter/includes/Async_Generator.php))
+
+```php
+$prose_for_count = self::get_prose_template( $content_type, ... );
+$template_section_count = max( 3, count( array_filter( array_map( 'trim',
+    explode( ',', (string) ( $prose_for_count['sections'] ?? '' ) ) ) ) ) );
+$content_sections = max( 3, min( 8, round( $word_count / 400 ) ) );
+$num_sections = max( $content_sections + 3, $template_section_count );
+```
+
+For 2000w opinion: formula gives 8, opinion template has 10 entries → `max(8, 10) = 10`. Section queue now runs 10 `section_N` steps — every outline H2 gets content.
+
+For default-profile types (blog_post, listicle, etc.) the formula dominates since their template lists are shorter. No regression for default types.
+
+**2. H1 demotion + inline-bold strip + wp:heading metadata fix mirrored into `rest_save_draft()`** ([seobetter.php after Content_Formatter::format() in the hybrid branch](seobetter/seobetter.php))
+
+Identical regex logic to `assemble_final()`:
+- `<h1>...</h1>` → `<h2>...</h2>`
+- `<!-- wp:heading {"level":1} -->` → `<!-- wp:heading -->` (so Gutenberg editor metadata matches the demoted HTML; otherwise the editor could re-promote on next edit)
+- `<strong>...</strong>` unwrap unless inner text ≤32 chars + ends with colon (keeps **Pros:** / **Cons:** structural labels)
+
+Applied BEFORE `enforce_heading_language()` so the heading-language guard sees the already-demoted H2s.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.53 → 62.54; v62.51 H1 demotion + v62.53 bold strip mirrored into `rest_save_draft()` hybrid-format branch
+- `seobetter/includes/Async_Generator.php` — `start()` section-count formula uses MAX(formula, template count)
+
+### Verify
+
+```
+grep -A 6 "v1.5.216.62.54 — derive section count" seobetter/includes/Async_Generator.php
+grep -A 4 "v1.5.216.62.54 — Apply the v62.51 H1 demotion" seobetter/seobetter.php
+```
+
+After upload + retest of opinion at any word count ≥ 1100:
+- All 10 documented opinion sections present in body (Key Takeaways → Hook & Thesis → Args 1/2/3 → The Objection → What This Means → FAQ → Conclusion + CTA → References)
+- ONE H1 only on the rendered page (theme post_title); body H1 demoted to H2
+- Zero inline `<strong>` tags except `**Pros:**` / `**Cons:**` structural labels
+
+**Verified by user:** UNTESTED
 
 ---
 

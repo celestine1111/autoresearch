@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.53
+ * Version: 1.5.216.62.54
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.53' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.54' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -1989,6 +1989,36 @@ final class SEOBetter {
                 // ps, sd, dv, ug, yi, ckb) wrap the article in dir="rtl"
                 'language'     => sanitize_text_field( $request->get_param( 'language' ) ?? 'en' ),
             ] );
+
+            // v1.5.216.62.54 — Apply the v62.51 H1 demotion + v62.53 inline-
+            // bold strip to the saved post_content. Pre-fix the safety nets
+            // ran in Async_Generator::assemble_final() (preview HTML) but
+            // NOT in this rest_save_draft() save path, so the published
+            // post_content kept body H1s and AI-emitted <strong> emphasis
+            // tags even though the preview was clean. User-reported on
+            // Opinion v62.53 retest: 0 inline bolds (preview safety net
+            // worked) but body H1 "Why AI Content Moderation Is Broken"
+            // still shipped because save path re-runs Content_Formatter
+            // from markdown which re-emits <h1 class="wp-block-heading">
+            // from any `# Heading` left in the markdown source.
+            //
+            // Defense in depth: run BOTH safety nets here too, with the
+            // SAME logic as Async_Generator::assemble_final().
+            $post_content = preg_replace( '#<h1\b([^>]*)>(.*?)</h1>#is', '<h2$1>$2</h2>', $post_content ) ?: $post_content;
+            // Also rewrite any wp:heading {"level":1} comment block headers
+            // so the Gutenberg editor metadata matches the demoted HTML.
+            $post_content = preg_replace( '#<!--\s*wp:heading\s*\{\s*"level"\s*:\s*1\s*\}\s*-->#i', '<!-- wp:heading -->', $post_content ) ?: $post_content;
+            $post_content = preg_replace_callback(
+                '#<strong\b[^>]*>(.*?)</strong>#is',
+                function ( $m ) {
+                    $inner_text = trim( wp_strip_all_tags( $m[1] ) );
+                    if ( $inner_text !== '' && mb_strlen( $inner_text ) <= 32 && substr( $inner_text, -1 ) === ':' ) {
+                        return $m[0];
+                    }
+                    return $m[1];
+                },
+                $post_content
+            ) ?: $post_content;
 
             // v1.5.212.4 — Apply the same heading-language guard to the saved
             // post_content that Async_Generator already runs on the preview.
