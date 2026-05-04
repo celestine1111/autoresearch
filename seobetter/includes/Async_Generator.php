@@ -2167,9 +2167,18 @@ class Async_Generator {
                         $kw_escaped = preg_quote( $keyword, '/' );
                         $count_art = 0;
                         if ( $is_english ) {
-                            $line_new = preg_replace(
+                            // v1.5.216.62.45 — preserve sentence-start capital.
+                            // Pre-fix the literal `it` replacement was always
+                            // lowercase — when the matched span started a
+                            // sentence ("The most effective X includes...") the
+                            // result was "it includes..." with broken capital
+                            // at sentence start. Use callback to detect
+                            // sentence position and emit "It" vs "it" accordingly.
+                            $line_new = preg_replace_callback(
                                 '/\b(the|a|an)\s+(?:[a-z]+\s+){0,3}' . $kw_escaped . '\b/i',
-                                'it',
+                                function ( $m ) {
+                                    return ctype_upper( substr( $m[1], 0, 1 ) ) ? 'It' : 'it';
+                                },
                                 $lines[ $i ],
                                 1,
                                 $count_art

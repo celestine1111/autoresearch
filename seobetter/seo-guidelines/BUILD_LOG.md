@@ -7,12 +7,65 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.44)
+> **Last updated:** 2026-05-04 (v1.5.216.62.45)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.45 — FIX inner Tavily-extraction substantive regex still pet-only; preserve sentence-start capital in "it" replacement
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User retest of T3 #1 "morning routine for remote workers" with Employment category (v62.44 fixes applied) still showed:
+
+> ⚠️ Expert Quotes: skipped — Tavily raw=0, passed substantive/e-commerce filter=0, rejected=0. Sonar pool=0.
+
+Diagnostic stayed at zero raw quotes despite:
+- ✅ Employment category picked
+- ✅ `employment` authority domains list active (BLS, OECD, ILO, Gallup, Pew, APA, SHRM, HBR, MIT Sloan, McKinsey, WHO, CDC, JSTOR)
+- ✅ outer `inject_quotes()` `$substantive_re` expanded with productivity vocabulary in v62.44
+
+Cause: there's a SECOND substantive regex one level deeper, inside `tavily_search_and_extract()` at line ~2700, that filters sentences DURING Tavily quote extraction (before any quote ever reaches `inject_quotes()`). v62.44 missed it. The inner regex was still the pet-vocabulary-only original (`recommend|study|...|veterinar|nutriti|allerg|formul|diagnos`), so every productivity-domain sentence got dropped before counting. The diagnostic counter sees zero.
+
+Both regexes must stay in sync — they enforce the same "must contain substantive claim language" rule at two pipeline stages.
+
+Also fixed in same ship: the v62.44 density-reducer "it" replacement was always lowercase, so when the matched span started a sentence ("**The** most effective morning routine for remote workers includes…") the output read "it includes…" with broken capital at sentence start. Switched to `preg_replace_callback` that emits "It" / "it" based on the input article's case.
+
+### What changed
+
+**1. Sync the inner Tavily-extraction substantive regex** ([Content_Injector.php:2700](seobetter/includes/Content_Injector.php#L2700))
+
+Same ~50 productivity / workplace / business / tech / news / finance / education / sustainability word-stems added in v62.44 to the outer `inject_quotes()` regex are now also present in the inner extraction regex. Both regexes documented as "must stay in sync" in the comment block.
+
+**2. Preserve sentence-start capital in density-reducer "it" replacement** ([Async_Generator.php](seobetter/includes/Async_Generator.php))
+
+Switched from `preg_replace('/\b(the|a|an)\s+...keyword/i', 'it', …)` to `preg_replace_callback` with a closure that returns `'It'` when the matched article token is title-case (`The`/`A`/`An`) and `'it'` when it's lowercase (`the`/`a`/`an`). Mid-sentence "the X includes..." → "it includes..." (lowercase, correct). Sentence-start "The X includes..." → "It includes..." (capital, correct).
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.44 → 62.45
+- `seobetter/includes/Content_Injector.php` — inner substantive regex synced with outer
+- `seobetter/includes/Async_Generator.php` — `it`/`It` case-preserving replacement
+
+### Verify
+
+```
+grep -n "productiv|focus|habit|wellness" seobetter/includes/Content_Injector.php   # both regexes match
+grep -n "preg_replace_callback" seobetter/includes/Async_Generator.php
+```
+
+After upload + retest of the morning-routine article (third regen):
+- Expert Quotes diagnostic should report Tavily raw≥1, with quotes from BLS / Gallup / APA / etc.
+- FAQ answers starting after sentence break should begin with capital "It includes…" not lowercase "it includes…".
+
+**Verified by user:** UNTESTED
 
 ---
 

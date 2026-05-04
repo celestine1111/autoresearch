@@ -2697,7 +2697,17 @@ Return ONLY the Markdown table, nothing else.";
 
                 // v1.5.105 — Require substantive claim/opinion language.
                 // Rejects taglines and meta descriptions in favor of expert statements.
-                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos)\b/i', $trimmed ) ) continue;
+                //
+                // v1.5.216.62.45 — vocabulary expansion. v62.44 added the
+                // productivity / workplace / business / tech / news / finance
+                // / education / sustainability vocabulary to the inject_quotes()
+                // outer-filter regex but missed THIS inner regex that filters
+                // sentences during Tavily extraction itself. With the inner
+                // regex still pet-vocabulary-only, every extracted productivity
+                // sentence was dropped here BEFORE counting → diagnostic
+                // showed `Tavily raw=0` for non-pet topics. Both regexes must
+                // stay in sync.
+                if ( ! preg_match( '/\b(recommend|found|study|studies|research|important|risk|benefit|help|cause|prevent|improve|according|evidence|expert|veterinar|nutriti|health|safe|danger|effective|suggest|show|report|associat|linked|common|require|diet|ingredien|allerg|deficien|formul|diagnos|productiv|focus|habit|wellness|wellbeing|workplace|burnout|stress|engagement|motivation|workflow|efficien|career|hire|employ|salary|wages|management|leadership|workforce|remote|hybrid|economi|market|invest|growth|revenue|profit|trend|consumer|user|customer|technolog|softwar|platform|algorithm|polic|regulat|govern|election|vote|reform|sustain|climate|emission|energy|innovat|teach|learn|skill|train|develop|cogniti|behav)\b/i', $trimmed ) ) continue;
 
                 // Dedupe
                 $key = strtolower( substr( $trimmed, 0, 40 ) );
