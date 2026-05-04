@@ -19,7 +19,7 @@
 ## v1.5.216.62.54 — Section-count formula now respects template list (opinion 7→10 sections); H1 demotion + inline-bold strip mirrored into rest_save_draft() so they actually reach saved post_content
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `e8678b0`
 
 ### Why
 
