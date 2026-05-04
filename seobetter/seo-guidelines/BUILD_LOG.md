@@ -19,7 +19,7 @@
 ## v1.5.216.62.35 — FIX: Event Schema Block field-defs alignment
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `5a86b31`
 
 ### Why
 
