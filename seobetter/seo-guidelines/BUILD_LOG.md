@@ -7,12 +7,63 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.36)
+> **Last updated:** 2026-05-04 (v1.5.216.62.37)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.37 — UX: Schema Block datetime-local split into date + time pickers, time auto-defaults to 09:00
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+User feedback after v62.36 ("ok it works when you put it time, you need to fix that to make it easier for the user, time selector"). Native HTML5 `datetime-local` input has a real UX trap: requires BOTH date AND time filled before the value propagates. Users naturally pick the date first, see `--:-- --` placeholder remaining, hit save, get "Required: Start" warning even though the date IS visibly entered. Confusing.
+
+### Fix
+
+Split the single `datetime-local` field into two side-by-side inputs:
+- **Left:** native `<input type="date">` (calendar picker)
+- **Right:** native `<input type="time">` (clock/spinner, ~110px wide)
+
+When the user picks a date, the time auto-defaults to `09:00` so the combined value becomes valid immediately. User can still change the time after. When the user changes time, it combines with the current date. Stored format unchanged: `"YYYY-MM-DDTHH:mm"` so PHP `iso_datetime()` parses it identically.
+
+Required-field hint added below the inputs: *"Pick a date first; time defaults to 09:00. Both required."* Only shows on required fields (the hint disappears for the optional `end_date` etc).
+
+### Affected fields
+
+- Event block: `start_date` (required), `end_date` (optional)
+- Future blocks using datetime-local: same fix applies automatically (it's in the shared `renderField` helper)
+
+`date`-type fields (Job Posting `date_posted`, `valid_through`) keep the single date-only input — they don't have the same UX trap because date alone is a complete value.
+
+### Why this passes the 3 systematic questions
+
+1. **All keywords?** ✅ Pure UI input, no keyword logic.
+2. **All 21 content types?** ✅ Schema Blocks are blocks, not content types.
+3. **All AI models?** ✅ JS-only.
+
+### Verify
+
+```bash
+grep -n "combineDateTime" /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js  # expect 3 hits (1 def + 2 calls)
+node --check /Users/ben/Documents/autoresearch/seobetter/assets/js/schema-blocks.js                # syntax clean
+```
+
+### Test plan for user
+
+1. Upload v62.37
+2. Hard-refresh editor (Cmd+Shift+R)
+3. Insert Event block
+4. Click Start date input → pick a date → time auto-fills to 09:00 → preview should render immediately
+5. Click time input → change to your real time → preview re-renders with new time
+
+**Verified by user:** UNTESTED
 
 ---
 

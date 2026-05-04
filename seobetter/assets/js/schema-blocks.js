@@ -181,19 +181,9 @@
             case 'number':
                 return el( TextControl, { key: fieldKey, type: 'number', label: label, value: value || '', placeholder: placeholder, onChange: onChange } );
             case 'date':
-            case 'datetime-local':
-                // 2026-05-04 — bypass TextControl for date / datetime-local.
-                // wp.components.TextControl renders these HTML5 input types
-                // but its onChange wrapper is unreliable for them — picker
-                // shows, value never propagates to React state. User reported
-                // Event block "Required: Start" warning persisting even
-                // after picking a Start datetime. Same affects Job Posting
-                // date_posted / valid_through.
-                //
-                // Fix: render a raw <input> so the native browser picker
-                // fires `change` events that we wire directly to onChange
-                // via e.target.value. Style matches WP's TextControl
-                // visually so the field doesn't look out of place.
+                // 2026-05-04 — single date input, raw HTML5. Bypass TextControl
+                // since its onChange wrapper is unreliable for date/datetime
+                // input types (value doesn't propagate to React state).
                 return el( 'div', { key: fieldKey, className: 'components-base-control', style: { marginBottom: '24px' } },
                     el( 'div', { className: 'components-base-control__field' },
                         el( 'label', {
@@ -201,23 +191,92 @@
                             style: { display: 'block', marginBottom: '8px', fontSize: '11px', fontWeight: 500, lineHeight: 1.4, textTransform: 'uppercase' }
                         }, label ),
                         el( 'input', {
-                            type: def.type,
+                            type: 'date',
                             value: value || '',
                             onChange: function ( e ) { onChange( e.target.value ); },
                             style: {
-                                display: 'block',
-                                width: '100%',
-                                padding: '6px 8px',
-                                fontSize: '13px',
-                                lineHeight: '20px',
-                                background: '#fff',
-                                border: '1px solid #757575',
-                                borderRadius: '2px',
-                                boxSizing: 'border-box'
+                                display: 'block', width: '100%', padding: '6px 8px',
+                                fontSize: '13px', lineHeight: '20px', background: '#fff',
+                                border: '1px solid #757575', borderRadius: '2px', boxSizing: 'border-box'
                             }
                         } )
                     )
                 );
+            case 'datetime-local': {
+                // 2026-05-04 v62.37 — split into TWO inputs (date + time)
+                // side-by-side instead of one HTML5 datetime-local field.
+                //
+                // Pre-fix UX trap: native datetime-local requires BOTH parts
+                // filled before the value propagates. Users naturally pick the
+                // date first, see "--:-- --" remaining, hit save, get
+                // "Required: Start" warning — confusing because the date IS
+                // visibly entered. Two reports of this on Event block before
+                // we fixed it.
+                //
+                // New behavior:
+                //   - Left input: native <input type="date"> (calendar picker)
+                //   - Right input: native <input type="time"> (clock/spinner)
+                //   - When user picks a date, time DEFAULTS to "09:00" so the
+                //     combined value becomes valid immediately. User can still
+                //     change the time.
+                //   - When user changes time, combine with current date.
+                //   - Stored format unchanged: "YYYY-MM-DDTHH:mm" (so PHP
+                //     iso_datetime() parses it the same way).
+                //
+                // Also covers `end_date` on Event and `start_date`/`end_date`
+                // on any future block that uses datetime-local.
+                var dateValue = '';
+                var timeValue = '';
+                if ( value && typeof value === 'string' && value.indexOf( 'T' ) > -1 ) {
+                    var parts = value.split( 'T' );
+                    dateValue = parts[0] || '';
+                    timeValue = parts[1] ? parts[1].slice( 0, 5 ) : '';  // strip seconds if present
+                }
+                var combineDateTime = function ( d, t ) {
+                    if ( ! d ) return '';
+                    return d + 'T' + ( t || '09:00' );
+                };
+                return el( 'div', { key: fieldKey, className: 'components-base-control', style: { marginBottom: '24px' } },
+                    el( 'div', { className: 'components-base-control__field' },
+                        el( 'label', {
+                            className: 'components-base-control__label',
+                            style: { display: 'block', marginBottom: '8px', fontSize: '11px', fontWeight: 500, lineHeight: 1.4, textTransform: 'uppercase' }
+                        }, label ),
+                        el( 'div', { style: { display: 'flex', gap: '8px' } },
+                            el( 'input', {
+                                type: 'date',
+                                value: dateValue,
+                                onChange: function ( e ) {
+                                    // When date is picked, default time to 09:00
+                                    // if user hasn't set one yet — makes the
+                                    // combined value valid immediately.
+                                    onChange( combineDateTime( e.target.value, timeValue ) );
+                                },
+                                style: {
+                                    flex: '1 1 auto', minWidth: 0, padding: '6px 8px',
+                                    fontSize: '13px', lineHeight: '20px', background: '#fff',
+                                    border: '1px solid #757575', borderRadius: '2px', boxSizing: 'border-box'
+                                }
+                            } ),
+                            el( 'input', {
+                                type: 'time',
+                                value: timeValue,
+                                onChange: function ( e ) {
+                                    onChange( combineDateTime( dateValue, e.target.value ) );
+                                },
+                                style: {
+                                    flex: '0 0 auto', width: '110px', padding: '6px 8px',
+                                    fontSize: '13px', lineHeight: '20px', background: '#fff',
+                                    border: '1px solid #757575', borderRadius: '2px', boxSizing: 'border-box'
+                                }
+                            } )
+                        ),
+                        ! def.required ? null : el( 'p', {
+                            style: { fontSize: '11px', color: '#6b7280', marginTop: '4px' }
+                        }, 'Pick a date first; time defaults to 09:00. Both required.' )
+                    )
+                );
+            }
             case 'url':
                 return el( TextControl, { key: fieldKey, type: 'url', label: label, value: value || '', placeholder: placeholder, onChange: onChange } );
             case 'image':
