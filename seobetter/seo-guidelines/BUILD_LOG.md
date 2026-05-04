@@ -19,7 +19,7 @@
 ## v1.5.216.62.40 — FIX VacationRental @type warning; FEATURE Schema Blocks shown in Rich Results Preview tab
 
 **Date:** 2026-05-04
-**Commit:** `[pending]`
+**Commit:** `2360166`
 
 ### Why
 
