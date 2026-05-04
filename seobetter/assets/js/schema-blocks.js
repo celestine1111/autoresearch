@@ -788,11 +788,15 @@
     function attrsFromDefs( fieldDefs ) {
         var out = { enabled: { type: 'boolean', default: true } };
         Object.keys( fieldDefs ).forEach( function ( k ) {
+            // v1.5.216.62.43 — `number` field-type maps to `string`
+            // attribute (matches Schema_Blocks_Registry.php counterpart).
+            // The HTML5 input type=number UI hint stays — only the wire-
+            // format attribute schema relaxes to string so saved values
+            // round-trip through ServerSideRender's REST validation.
+            // See Registry::build_attributes_from_field_defs() comment.
             var t = fieldDefs[ k ].type;
             out[ k ] = {
-                type:    t === 'checkbox' ? 'boolean' :
-                         t === 'number'   ? 'number'  :
-                                            'string',
+                type:    t === 'checkbox' ? 'boolean' : 'string',
                 default: t === 'checkbox' ? false : ''
             };
         } );

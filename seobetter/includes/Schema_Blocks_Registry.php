@@ -40,6 +40,7 @@ class Schema_Blocks_Registry {
         'seobetter/local-business'  => 'localbusiness',
         'seobetter/vacation-rental' => 'vacationrental',
         'seobetter/job-posting'     => 'jobposting',
+        'seobetter/faq'             => 'faq',
     ];
 
     /**
@@ -155,14 +156,23 @@ class Schema_Blocks_Registry {
             'enabled' => [ 'type' => 'boolean', 'default' => true ],
         ];
         foreach ( $field_defs as $key => $def ) {
-            $type = 'string';
+            // v1.5.216.62.43 — `number` field-type registers as `string`
+            // attribute. Why: the JS TextControl with type='number' fires
+            // onChange with the raw string value, and the editor stores
+            // that string in the block attribute. When the post is reloaded
+            // and ServerSideRender re-validates the attributes against the
+            // registered schema, a strict JSON-Schema `number` type rejects
+            // the saved string ('' default or '4' user-typed) and the
+            // block-renderer REST endpoint returns "Invalid parameter(s):
+            // attributes". The JSON-LD builders already (int)/(float) cast
+            // the string before emitting, so 'string' is the correct
+            // wire-level attribute type. The 'number' field-type still
+            // controls the HTML5 input type=number UI hint via renderField.
+            $type    = 'string';
             $default = '';
             if ( ( $def['type'] ?? '' ) === 'checkbox' ) {
-                $type = 'boolean';
+                $type    = 'boolean';
                 $default = false;
-            } elseif ( ( $def['type'] ?? '' ) === 'number' ) {
-                $type = 'number';
-                $default = 0;
             }
             $attrs[ $key ] = [ 'type' => $type, 'default' => $default ];
         }

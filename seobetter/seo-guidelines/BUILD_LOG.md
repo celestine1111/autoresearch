@@ -7,12 +7,76 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.42)
+> **Last updated:** 2026-05-04 (v1.5.216.62.43)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.43 — FIX: FAQ JSON-LD missing from @graph; VacationRental "Invalid parameter(s): attributes" after save+refresh
+
+**Date:** 2026-05-04
+**Commit:** `[pending]`
+
+### Why
+
+Two bugs surfaced as soon as the user re-tested v62.42 on staging:
+
+**1. FAQ Schema Block didn't emit JSON-LD into the article @graph.**
+
+Symptom: user added a FAQ block, saved the post, paste URL into validator.schema.org → no `FAQPage` node detected. Sidebar Rich Results Preview also didn't list "FAQ card".
+
+Cause: `Schema_Blocks_Registry::BLOCK_NAME_MAP` (the `const` lookup table that `collect_blocks_from_post()` uses to walk parsed post content and identify SEOBetter schema blocks) was missing the `seobetter/faq` → `faq` entry. v62.42 only updated the local `$blocks` map inside `register_blocks()` (which controls Gutenberg block registration on `init`), not the constant.
+
+The walker silently skipped FAQ blocks → `Schema_Blocks_Manager::build_all_jsonld()` returned the article-level @graph without the FAQPage node → the article's JSON-LD on the front-end had everything except FAQ.
+
+**2. VacationRental block: "Error loading block: Invalid parameter(s): attributes" after save + reload.**
+
+Symptom: user saves a Vacation Rental block, reloads the editor → the block area replaces the styled-card preview with a red "Error loading block: Invalid parameter(s): attributes" message. The `Save post` button still appears below it.
+
+Cause: ServerSideRender's REST endpoint at `/wp/v2/block-renderer/seobetter/vacation-rental` validates the `attributes` query param against the registered block-attribute schema. Block attributes for `number_of_rooms` and `occupancy_max` were registered with `type: 'number'` (both client-side via `attrsFromDefs` and server-side via `build_attributes_from_field_defs`), but the actual storage path is:
+
+1. JS `TextControl` with `type='number'` fires `onChange` with the **string** value of the input (WP's TextControl never converts to a Number).
+2. The Gutenberg attribute store keeps the string.
+3. After save, the post's block content has the attribute as a JSON string (`"number_of_rooms":"4"` or `""`).
+4. On reload + first ServerSideRender call, REST validates the string against the registered `number` JSON-Schema type → fails → "Invalid parameter(s): attributes".
+
+Same potential bug on `Product.rating_count`. The user only hit it on Vacation Rental because that's the block they saved + reloaded.
+
+### What changed
+
+**1. Add `seobetter/faq` to the BLOCK_NAME_MAP constant** ([includes/Schema_Blocks_Registry.php](seobetter/includes/Schema_Blocks_Registry.php))
+
+The const is now the source of truth for both block registration AND `collect_blocks_from_post()` walking. FAQ now merges into the @graph identically to the other 5 blocks.
+
+**2. Register `number` field-types as `string` attributes** ([includes/Schema_Blocks_Registry.php::build_attributes_from_field_defs()](seobetter/includes/Schema_Blocks_Registry.php) + [assets/js/schema-blocks.js::attrsFromDefs()](seobetter/assets/js/schema-blocks.js))
+
+The `number` field-type still controls the HTML5 `<input type="number">` UI hint inside `renderField()` — that's purely visual. The wire-level attribute schema relaxes to `string` so saved values (whether `''` default or `'4'` user-typed) always round-trip through REST validation. The PHP JSON-LD builders already cast `(int) $b['number_of_rooms']` etc. before emitting, so no downstream change is needed.
+
+This applies to all `number` fields across all 6 blocks: Product `rating_count`, VacationRental `number_of_rooms` / `occupancy_max`. (None of the others use the `number` field-type currently.)
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.42 → 62.43
+- `seobetter/includes/Schema_Blocks_Registry.php` — BLOCK_NAME_MAP gains `seobetter/faq` entry; `build_attributes_from_field_defs()` drops the `'number' => 'number'` mapping
+- `seobetter/assets/js/schema-blocks.js` — `attrsFromDefs()` mirror change
+
+### Verify
+
+```
+grep -A 8 "public const BLOCK_NAME_MAP" seobetter/includes/Schema_Blocks_Registry.php
+grep -B 1 -A 4 "v1.5.216.62.43" seobetter/includes/Schema_Blocks_Registry.php seobetter/assets/js/schema-blocks.js
+```
+
+After upload + retest:
+- Vacation Rental block should reload cleanly after save (no "Invalid parameter(s)" error).
+- Schema validator on a post with a FAQ block should now show `FAQPage` with the user's `Question` array.
+- Sidebar Rich Results Preview should list "FAQ card (N questions)".
+
+**Verified by user:** UNTESTED
 
 ---
 
