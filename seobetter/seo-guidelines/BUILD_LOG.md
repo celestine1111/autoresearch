@@ -19,7 +19,7 @@
 ## v1.5.216.62.71 — Listicle quartet: drop bogus top-level Product schema + add to SPEAKABLE_TYPES + expand "N Items/Products/Picks" template entries to N queue slots + bump listicle floor 1500→2500w
 
 **Date:** 2026-05-05
-**Commit:** `[pending]`
+**Commit:** `2fc13aa`
 
 ### Why
 
