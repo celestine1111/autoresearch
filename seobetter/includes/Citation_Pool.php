@@ -276,6 +276,21 @@ class Citation_Pool {
             return $markdown;
         }
 
+        // v1.5.216.62.63 — Pre-filter the pool through the v62.62 source-
+        // quality helper. Pre-fix the auto-References section listed every
+        // pool URL including Bluesky / HN / non-allowlisted Reddit /
+        // LinkedIn-personal — those are what the user reported on the
+        // v62.62 retest. Source-quality filter is now centralized in
+        // SEOBetter::is_low_quality_source(); skip pool entries that fail.
+        $pool = array_values( array_filter( $pool, function ( $entry ) {
+            $url = $entry['url'] ?? '';
+            return $url !== '' && class_exists( '\\SEOBetter' )
+                && ! \SEOBetter::is_low_quality_source( $url );
+        } ) );
+        if ( empty( $pool ) ) {
+            return $markdown;
+        }
+
         // Remove any existing References section the AI may have written
         $markdown = preg_replace(
             '/\n(##+)\s*(references|sources|further reading|bibliography|citations)\b[^\n]*(\n[\s\S]*?)?(?=\n#{1,6}\s|\z)/i',

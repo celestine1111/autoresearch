@@ -7,12 +7,72 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-04 (v1.5.216.62.62)
+> **Last updated:** 2026-05-05 (v1.5.216.62.63)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.63 — Centralize source-quality filter (was bypassed by linkify_bracketed_references); constrain Devil's Advocate frame to content-width
+
+**Date:** 2026-05-05
+**Commit:** `[pending]`
+
+### Why
+
+User retest of T3 #3 Opinion on v62.62 still showed Bluesky / HN / non-allowlisted Reddit / LinkedIn-personal links in the bibliography. Diagnosis revealed the v62.62 filters lived ONLY inside `validate_outbound_links()::filter_link()` — a closure that processes AI-written markdown links. But two later passes ALSO inject pool-sourced URLs into the body, and they bypass the closure:
+
+1. **`linkify_bracketed_references()`** runs AFTER `validate_outbound_links` (per the v1.5.191 ordering) and converts plain-text `(Source)` mentions into clickable links by matching the source name against the citation pool. URLs in the pool that wouldn't have passed `filter_link` got re-injected here.
+2. **`Citation_Pool::append_references_section()`** auto-generates the References section from pool URLs that the body cited (or fallback first-8 entries) — same bypass.
+
+User-reported on the latest retest: 6 bsky.app citations + 2 ycombinator + 3 r/trustandsafetypros (not in v62.62 allowlist) all came through these post-validation passes.
+
+Plus: user observed the Devil's Advocate frame was still rendering full-template-width despite v62.60's `max-width:100%` + `margin:auto`. Cause: the `wp:html` block sits inside the article container at full-width depending on theme behaviour, and `max-width:100%` only caps to parent — if parent is full-width, frame is full-width.
+
+### What changed
+
+**1. `SEOBetter::is_low_quality_source( string $url )` — new public static helper** ([seobetter.php](seobetter/seobetter.php))
+
+Centralizes the v62.62 filter chain (Reddit allowlist + LinkedIn `/pulse` + Medium publications + HN block + Quora block + Bluesky/Mastodon/Lemmy host blocks) in ONE method. Callers:
+
+- `validate_outbound_links()::filter_link()` — refactored from inline regex chain to a single `if ( self::is_low_quality_source( $url ) )` call
+- `linkify_bracketed_references()` — pre-filters the pool before building the lookup table; low-quality entries are skipped so the function never wraps a `(Source)` mention with a low-quality URL
+- `Citation_Pool::append_references_section()` — pre-filters pool entries before building the auto-References list
+
+Adding a new low-trust host is now a one-line change in `is_low_quality_source()` and propagates everywhere.
+
+**2. Devil's Advocate frame — constrain to body content width** ([Content_Formatter.php](seobetter/includes/Content_Formatter.php))
+
+Changed `max-width:100%` → `max-width: var(--wp--style--global--content-size, 768px)`. WordPress block themes set the `--wp--style--global--content-size` CSS variable (typically 720-820px) on the body content wrapper — the frame inherits it and matches the article paragraph column width. Fallback `768px` for classic / non-block themes that don't set the variable.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.62 → 62.63; new `is_low_quality_source()` public static helper; v62.62 inline filter in `validate_outbound_links()::filter_link()` refactored to call the helper; pre-filter pool inside `linkify_bracketed_references()`
+- `seobetter/includes/Citation_Pool.php` — pre-filter pool inside `append_references_section()` via `\SEOBetter::is_low_quality_source()` (with `class_exists()` guard)
+- `seobetter/includes/Content_Formatter.php` — Devil's Advocate frame `max-width` switched to `var(--wp--style--global--content-size, 768px)`
+
+### Known follow-up (deferred)
+
+User also flagged that the linkify regex is greedy across multi-source parentheticals: `(TechPolicy.Press, LinkedIn)` renders as a single `<a href="techpolicy.press/...">TechPolicy.Press, LinkedIn</a>` — anchor text stuffs both source names but href points to one URL. Two fixes needed (separate ship):
+1. Tighten the linkify regex so it matches only one source name within a parenthetical (split on commas first, linkify each)
+2. After the v62.63 filter prunes some sources, the parenthetical may end up half-linked half-bare (e.g. `(TechPolicy.Press, LinkedIn)` with TechPolicy linked but LinkedIn now bare because LinkedIn-personal got filtered) — the prose reads awkwardly. Decision: linkify should drop the bare names from the parenthetical when their URLs fail the filter, leaving cleaner `(TechPolicy.Press)` instead of `(TechPolicy.Press, LinkedIn)`.
+
+Logged for v62.64.
+
+### Verify
+
+```
+grep -A 6 "is_low_quality_source" seobetter/seobetter.php | head -20
+grep -B 1 -A 3 "v1.5.216.62.63 — Pre-filter the pool" seobetter/seobetter.php seobetter/includes/Citation_Pool.php
+grep -B 1 -A 2 "wp--style--global--content-size" seobetter/includes/Content_Formatter.php
+```
+
+After upload + retest of any opinion / educational article: zero outbound links to non-allowlisted sources via either the validate path OR the linkify path OR the auto-References path. Devil's Advocate frame width matches the body paragraph column.
+
+**Verified by user:** UNTESTED
 
 ---
 

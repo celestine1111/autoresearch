@@ -852,10 +852,24 @@ CSS;
                             // horizontally centered. Inner content remains
                             // left-anchored per the user's "always on the left for this
                             // one" requirement.
+                            // v1.5.216.62.63 — constrain to the theme's content
+                            // width so the frame matches the article body
+                            // text column (not the full template width).
+                            // WordPress block themes set the
+                            // `--wp--style--global--content-size` CSS variable
+                            // (typically 768px-820px) on the body content
+                            // wrapper. Frames inside that scope inherit it.
+                            // Fallback to 768px if the theme doesn't set the
+                            // variable (classic / non-block themes). User
+                            // reported on v62.60 retest: frame was rendering
+                            // full-width despite max-width:100% because
+                            // the wp:html block's parent was the full
+                            // template, not the constrained body column.
                             $output[] = "<!-- wp:html -->\n"
                                 . '<div style="border:1px dashed #9ca3af !important;border-radius:0 !important;'
                                 . 'background:#fefdfb !important;padding:1.5em 1.75em !important;'
-                                . 'margin:1.5em auto 2em !important;max-width:100% !important;'
+                                . 'margin:1.5em auto 2em !important;'
+                                . 'max-width:var(--wp--style--global--content-size, 768px) !important;'
                                 . 'color:#374151 !important">'
                                 . '<div style="display:flex !important;align-items:center !important;gap:10px !important;'
                                 . 'padding-bottom:0.75em !important;margin-bottom:1em !important;'

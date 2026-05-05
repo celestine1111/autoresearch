@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.62
+ * Version: 1.5.216.62.63
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.62' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.63' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -3607,7 +3607,115 @@ final class SEOBetter {
         ];
     }
 
+    /**
+     * v1.5.216.62.63 — Source-quality URL test (centralized helper).
+     *
+     * Returns true when the URL fails the v62.62 source-quality filters
+     * (Reddit non-allowlist subs, LinkedIn non-pulse, Medium personal-story,
+     * Hacker News, Quora). Used by:
+     *   - validate_outbound_links()::filter_link()       — strips AI-written links
+     *   - linkify_bracketed_references()                 — drops pool entries before linkifying plain-text (Source) mentions
+     *   - append_references_section()                    — excludes from auto-built References list
+     *   - Citation_Pool::append_references_section()     — same exclusion in the shared path
+     *
+     * Pre-fix v62.62 only ran the filters in validate_outbound_links's
+     * inner closure. linkify and references_section pulled URLs straight
+     * from the citation pool, bypassing the filter — Bluesky / HN /
+     * non-allowlisted Reddit / LinkedIn-personal URLs got re-injected
+     * after validate stripped the AI's own attempts. User-reported on the
+     * v62.62 retest: 6 bsky.app links + 2 ycombinator + 3 r/trustandsafetypros
+     * (not in allowlist) all came through linkify.
+     *
+     * Centralizing here makes adding new low-trust hosts a one-line
+     * change. All consumers see the same filter.
+     *
+     * Returns:
+     *   true  → URL is low-quality, should be stripped from the article
+     *   false → URL passes (or filter doesn't apply to its host)
+     */
+    public static function is_low_quality_source( string $url ): bool {
+        $host = wp_parse_url( $url, PHP_URL_HOST ) ?? '';
+        $path = wp_parse_url( $url, PHP_URL_PATH ) ?? '';
+        if ( $host === '' ) return false;
+
+        // Reddit — allowlisted subreddits only
+        if ( preg_match( '#(?:^|\.)reddit\.com$#i', $host ) ) {
+            if ( ! preg_match( '#^/r/([^/]+)/comments/#i', $path, $sub_m ) ) {
+                return true; // not a comments-thread URL
+            }
+            $subreddit = strtolower( $sub_m[1] );
+            static $allowed_subreddits = [
+                // Q&A heavily moderated (expert flair / citations required)
+                'askhistorians', 'askscience', 'askacademia', 'askvet', 'askdocs',
+                'askculinary', 'askhr', 'ask_lawyers', 'askmusicianship',
+                'explainlikeimfive', 'changemyview',
+                // Domain professional
+                'medicine', 'medicalstudent', 'legaladvice',
+                'personalfinance', 'investing', 'financialindependence',
+                'bogleheads', 'economics',
+                'entrepreneur', 'smallbusiness', 'startups', 'marketing',
+                'ecommerce', 'shopify', 'woocommerce',
+                'professors', 'teachers', 'gradschool', 'cscareerquestions',
+                // Tech / science / engineering
+                'science', 'machinelearning', 'datascience', 'statistics',
+                'physics', 'biology', 'chemistry', 'compsci', 'algorithms',
+                'programming', 'webdev', 'wordpress', 'seo', 'cybersecurity',
+                'sysadmin', 'devops', 'javascript', 'python', 'reactjs',
+                // Other expert-moderated
+                'musictheory', 'books', 'literature',
+                'climatechange', 'environment', 'sustainability', 'foodscience',
+                'transit', 'urbanplanning', 'aviation', 'meteorology',
+                'gamedev', 'indiedev',
+                'design', 'architecture',
+                'cryptotechnology', 'ethereum',
+                'backpacking', 'onebag',
+                'moviedetails',
+            ];
+            return ! in_array( $subreddit, $allowed_subreddits, true );
+        }
+
+        // LinkedIn — allow only /pulse/named-author-slug
+        if ( preg_match( '#(?:^|\.)linkedin\.com$#i', $host ) ) {
+            return ! preg_match( '#^/pulse/[a-z0-9-]+#i', $path );
+        }
+
+        // Medium — block @username + bare title-hash personal stories
+        if ( preg_match( '#(?:^|\.)medium\.com$#i', $host ) ) {
+            if ( preg_match( '#^/@#', $path ) ) return true;
+            if ( preg_match( '#^/[a-z0-9][a-z0-9-]*-[a-f0-9]{8,}/?$#i', $path ) ) return true;
+            return false;
+        }
+
+        // Hacker News — blocked entirely
+        if ( preg_match( '#(?:^|\.)ycombinator\.com$#i', $host ) ) return true;
+
+        // Quora — blocked entirely
+        if ( preg_match( '#(?:^|\.)quora\.com$#i', $host ) ) return true;
+
+        // Personal social feeds (post-v62.61 these aren't in the static whitelist
+        // anymore but pool-membership could still surface them — block here too)
+        if ( preg_match( '#(?:^|\.)bsky\.(?:app|social)$#i', $host ) ) return true;
+        if ( preg_match( '#(?:^|\.)mastodon\.social$#i', $host ) ) return true;
+        if ( preg_match( '#(?:^|\.)lemmy\.world$#i', $host ) ) return true;
+
+        return false;
+    }
+
     public static function linkify_bracketed_references( string $markdown, array $pool ): string {
+        if ( empty( $pool ) ) return $markdown;
+
+        // v1.5.216.62.63 — Pre-filter the pool through the source-quality
+        // helper. Pre-fix linkify pulled directly from the pool, so URLs
+        // that validate_outbound_links would have stripped (Bluesky, HN,
+        // non-allowlisted Reddit, LinkedIn-personal, Medium-personal)
+        // still made it into the body when linkify wrapped a matching
+        // (Source) plain-text mention. Now low-quality entries are
+        // skipped entirely — the bracket stays as plain text rather than
+        // becoming a clickable bad link.
+        $pool = array_values( array_filter( $pool, function ( $entry ) {
+            $url = $entry['url'] ?? '';
+            return $url !== '' && ! self::is_low_quality_source( $url );
+        } ) );
         if ( empty( $pool ) ) return $markdown;
 
         // Normalize text for matching: lowercase, normalize dashes, strip trailing ellipsis
@@ -4096,63 +4204,12 @@ final class SEOBetter {
             // 1500-point staff-pick from a 3-comment shitpost.
             //
             // Quora: block. User answers without expert verification.
-            if ( preg_match( '#(?:^|\.)reddit\.com$#i', $host ) ) {
-                if ( ! preg_match( '#^/r/([^/]+)/comments/#i', $path ?? '', $sub_m ) ) {
-                    return [ 'keep' => false, 'text' => $text ];
-                }
-                $subreddit = strtolower( $sub_m[1] );
-                $allowed_subreddits = [
-                    // Q&A heavily moderated (expert flair / citations required)
-                    'askhistorians', 'askscience', 'askacademia', 'askvet', 'askdocs',
-                    'askculinary', 'askhr', 'ask_lawyers', 'askmusicianship',
-                    'explainlikeimfive', 'changemyview',
-                    // Domain professional
-                    'medicine', 'medicalstudent', 'legaladvice',
-                    'personalfinance', 'investing', 'financialindependence',
-                    'bogleheads', 'economics',
-                    'entrepreneur', 'smallbusiness', 'startups', 'marketing',
-                    'ecommerce', 'shopify', 'woocommerce',
-                    'professors', 'teachers', 'gradschool', 'cscareerquestions',
-                    // Tech / science / engineering
-                    'science', 'machinelearning', 'datascience', 'statistics',
-                    'physics', 'biology', 'chemistry', 'compsci', 'algorithms',
-                    'programming', 'webdev', 'wordpress', 'seo', 'cybersecurity',
-                    'sysadmin', 'devops', 'javascript', 'python', 'reactjs',
-                    // Other expert-moderated
-                    'musictheory', 'books', 'literature',
-                    'climatechange', 'environment', 'sustainability', 'foodscience',
-                    'transit', 'urbanplanning', 'aviation', 'meteorology',
-                    'gamedev', 'indiedev',
-                    'design', 'architecture',
-                    'cryptotechnology', 'ethereum',
-                    'backpacking', 'onebag',
-                    'moviedetails',
-                ];
-                if ( ! in_array( $subreddit, $allowed_subreddits, true ) ) {
-                    return [ 'keep' => false, 'text' => $text ];
-                }
-            }
-            if ( preg_match( '#(?:^|\.)linkedin\.com$#i', $host ) ) {
-                if ( ! preg_match( '#^/pulse/[a-z0-9-]+#i', $path ?? '' ) ) {
-                    return [ 'keep' => false, 'text' => $text ];
-                }
-            }
-            if ( preg_match( '#(?:^|\.)medium\.com$#i', $host ) ) {
-                // Block @username personal stories
-                if ( preg_match( '#^/@#', $path ?? '' ) ) {
-                    return [ 'keep' => false, 'text' => $text ];
-                }
-                // Block bare medium.com/title-hash with no publication slug.
-                // Personal stories without /@ have this shape; publication
-                // articles are medium.com/<publication>/<title-hash>.
-                if ( preg_match( '#^/[a-z0-9][a-z0-9-]*-[a-f0-9]{8,}/?$#i', $path ?? '' ) ) {
-                    return [ 'keep' => false, 'text' => $text ];
-                }
-            }
-            if ( preg_match( '#(?:^|\.)ycombinator\.com$#i', $host ) ) {
-                return [ 'keep' => false, 'text' => $text ];
-            }
-            if ( preg_match( '#(?:^|\.)quora\.com$#i', $host ) ) {
+            // v1.5.216.62.63 — refactored to call the centralized helper
+            // SEOBetter::is_low_quality_source() so linkify_bracketed_references
+            // and append_references_section share the same filter logic.
+            // The inline regex chain that used to live here is now in the
+            // helper method (one source of truth for low-trust URL patterns).
+            if ( self::is_low_quality_source( $url ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
 
