@@ -19,7 +19,7 @@
 ## v1.5.216.62.73 — Review follow-up quartet: build_review's itemReviewed type SoftwareApplication false-positive + Speakable injection inside build_review + item_name dangling-fragment cleanup + server-side `$`→[currency_symbol] body enforcement
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `05362dc`
 
 ### Why
 
