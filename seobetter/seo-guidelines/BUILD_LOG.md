@@ -19,7 +19,7 @@
 ## v1.5.216.62.72 — Review septet: 7 surgical schema + headline + body fixes for Review content type (drop dupe Product, tighten SoftwareApplication trigger, add Speakable, country→currency helpers, secondary reviewRating extraction, review headline guardrail + per-type fallbacks, currency-symbol body rule)
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `4826967`
 
 ### Why
 
