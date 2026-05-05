@@ -176,6 +176,27 @@ Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badg
 - Throttled at 5 req/s to avoid being treated as scraper.
 - Schema strip uses Schema_Generator regenerate path — never edits stored postmeta JSON-LD blob directly (idempotency).
 
+#### Multilingual structural-completeness sprint (v62.72+ deferred)
+
+> **Status:** PLANNED. Discovered 2026-05-05 during T3 #5 Listicle multilingual test on `Die 10 besten waschbaren Hundebetten Deutschland 2026`. Multilingual *translation* works (German H1, German H2s, German body, real German pet brands sourced correctly). Multilingual *structural enforcement* doesn't — German listicle shipped 4 products instead of 10, products lacked the "1.", "2." numbering prefix, FAQ rendered as separate H2 questions instead of nested H3 under one FAQ H2, and the auto-injected Quick Comparison Table landed at position 11 instead of position 3.
+>
+> **Why deferred:** All English content types verified through T3 first (16 of 21 still to test as of 2026-05-05). Multilingual fixes touch shared infrastructure that could regress English work. Cleaner to finish English coverage, lock the regression baseline, then sprint multilingual.
+>
+> **Why this is a Pro-tier feature concern:** Multilingual generation is a Pro/Pro+/Agency feature (Free is English-only per Tier Matrix above). The multilingual *promise* — "60+ languages with localized translations of structural anchors" — is currently only half-true. Translations work; structural integrity in non-English doesn't. Fixing this defends the wedge ("60+ languages" claim).
+
+| Sub-fix | Risk to English (when shipped) | Effort | Build status |
+|---|---|---|---|
+| **A. Translate the outline-padding synonym map per language.** Currently `Async_Generator::generate_outline()`'s `$section_matches` closure checks substring/synonyms/key-tokens against template names that are all English. For German, `Die wichtigsten Erkenntnisse` isn't recognized as covering `Key Takeaways` → padding incorrectly appends an English `Key Takeaways` slot. Fix: use `Localized_Strings::get($key, $language)` to translate every canonical template name into match-candidate variants per article's language. | **Zero** — additive, English `if` branch hits first. | 0.5 day | ⏳ v62.72+ |
+| **B. Strengthen SECTION COUNT CONTRACT for non-English listicles.** The template guidance string `"10 Numbered Items (each gets H2 numbered 1-10 like '1. Product Name')"` doesn't survive cleanly through the German AI's interpretation. Fix: add an explicit numbering enforcement rule to the LANGUAGE clause (gated on `!$is_english`) — `"EVERY product H2 MUST be prefixed with 'N. ' where N is 1-10. This is mandatory, not stylistic."` Same for FAQ structure: explicitly require `## [TRANSLATED 'Frequently Asked Questions']` with `### [Question]` children. | **Zero** — gated `if (!$is_english)`, English path untouched. | 1 day | ⏳ v62.72+ |
+| **C. Fix `enforce_geo_requirements` table-position for non-English.** Auto-injected Quick Comparison Table lands at end of article instead of position 3 (after Introduction) when language ≠ en. Fix: position-detection logic must use `Localized_Strings::get('introduction', $language)` to find the Introduction H2 in the article's actual language, then insert immediately after. | **Medium** — touches shared code path. Mitigate with `if ($lang !== 'en') { new logic } else { existing path }` gate. | 0.5 day | ⏳ v62.72+ |
+| **D. Multilingual regression test fixture.** Once A+B+C ship, build a minimal automated regression suite that generates one article per signed-off content type × 3 priority languages (de, ja, es) and asserts: ≥80% of expected H2s present, no English template names leaking into non-English headings, structural anchors localized correctly. Runs on every v62.X+ ship that touches Async_Generator / Schema_Generator / enforce_geo_requirements. | **Zero** — pure test code, no runtime impact. | 1-2 days | ⏳ v62.72+ |
+
+**Total effort:** 3-4 days of focused work. Schedule: after T3 English coverage hits 21/21 + at least 7 days of stable English regression. Tracking issue per sub-fix on next sprint.
+
+**Dependency risk:** None of A-D depend on each other. Can ship piecemeal. C is the riskiest because it touches shared infrastructure — ship it LAST after A+B prove the gating pattern works cleanly.
+
+**Spot-test discipline (in the meantime):** for each newly-signed-off English content type, generate ONE article in German as a smoke test. Don't try to fix multilingual issues found — just log them in `multilingual-bugs.md` (or this section's TODO list) so the v62.72 sprint inherits a complete bug surface.
+
 #### AI Citation Tracker (THE wedge)
 
 | Feature | Free | Pro | Pro+ | Agency | Build status |
