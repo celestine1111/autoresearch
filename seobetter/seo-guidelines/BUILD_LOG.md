@@ -19,7 +19,7 @@
 ## v1.5.216.62.67 — Raise opinion word floor 1100 → 1500 so each §3.1A section gets ~150w breathing room
 
 **Date:** 2026-05-05
-**Commit:** `[pending]`
+**Commit:** `24570de`
 
 ### Why
 
