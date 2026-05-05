@@ -19,7 +19,7 @@
 ## v1.5.216.62.70 — ROOT CAUSE: v62.65 path filters + YouTube blocking lived only in `filter_link()`, references-builder bypassed them entirely. Consolidated into `is_low_quality_source()` so all 3 consumers (filter_link / linkify / references-builder) share one source of truth.
 
 **Date:** 2026-05-05
-**Commit:** `[pending]`
+**Commit:** `0074125`
 
 ### Why
 
