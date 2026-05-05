@@ -7,12 +7,71 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.72)
+> **Last updated:** 2026-05-06 (v1.5.216.62.73)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.73 — Review follow-up quartet: build_review's itemReviewed type SoftwareApplication false-positive + Speakable injection inside build_review + item_name dangling-fragment cleanup + server-side `$`→[currency_symbol] body enforcement
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+T3 #6 Review v62.72 retest (Dyson V15 Detect, country=UK) confirmed 5 of 7 v62.72 fixes worked but exposed 2 architectural gaps + 2 polish issues:
+
+**Issue 1 — itemReviewed.@type still SoftwareApplication for hardware Review.** v62.72 tightened `detect_software_schema()` (the standalone path) but left `build_review()`'s in-line type detection at line ~1490 untouched. That detection said "if category in [technology, games] OR text mentions [software|SaaS|plugin|extension|desktop app|web app|mobile app] → SoftwareApplication." For ANY technology-category review (vacuums, TVs, cameras, headphones, phones, laptops), category alone was enough to trigger SoftwareApplication. Result: Dyson V15 vacuum review still emitted `"itemReviewed":{"@type":"SoftwareApplication"...}`.
+
+**Issue 2 — `Speakable` still missing from Review schema.** v62.72 added 'review' to `SPEAKABLE_TYPES`. But the Speakable injection at line 737 only runs when `$type` is in `[BlogPosting, NewsArticle, OpinionNewsArticle, Article]`. Review schema is built in `build_review()` which returns BEFORE that injection. Result: 0 Speakable nodes despite 'review' being in SPEAKABLE_TYPES.
+
+**Issue 3 — `itemReviewed.name` had dangling fragment.** Post_title "Dyson v15 detect cordless vacuum review: Best features for 2026" got stripped of "review" + "best" + year, leaving "Dyson v15 detect cordless vacuum :  features for" — dangling colon AND connector word "for" AND generic word "features". Schema name was a malformed fragment.
+
+**Issue 4 — body had 12 hallucinated `$XXX` prices despite v62.72's CURRENCY HARD RULE in system + section prompts.** AI's training-data US-bias is stronger than the prompt instruction. Explicit symbol rule helped on 3/15 prices (the £600/£650 ones) but the remaining 12 came through as `$400`-`$850` ranged hallucinations. Need server-side enforcement to override AI's `$` default on non-US articles.
+
+### What changed
+
+**Fix 1 — `build_review()` itemReviewed type detection** ([includes/Schema_Generator.php](seobetter/includes/Schema_Generator.php)) — applied the SAME App Store URL / download-verb gate that v62.72 added to `detect_software_schema()`. Now the in-line software detection requires either (a) explicit title-override "software/saas/app", OR (b) App Store / Play Store / Microsoft Store / Chrome Web Store / Mozilla Add-ons URL, OR (c) "download [iOS|Android|Windows|Mac|Linux|Chrome|web]" verb in proximity, OR (d) explicit terms like "SaaS|plugin|extension|desktop app|web app|mobile app" (NOT just bare "app" word). Bare `app|software|platform|tool` mention is no longer enough. Vacuum/TV/camera/headphone reviews in technology category default to Product.
+
+**Fix 2 — `build_review()` injects SpeakableSpecification directly** ([includes/Schema_Generator.php](seobetter/includes/Schema_Generator.php)) — added a `$schema['speakable']` injection at the end of `build_review()` gated by `in_array('review', SPEAKABLE_TYPES)`. cssSelector matches the article path: `[h1, .key-takeaways, h2 + p]`. Speakable now fires for Review schema directly without depending on the line-737 article path.
+
+**Fix 3 — `build_review()` item_name extraction** ([includes/Schema_Generator.php](seobetter/includes/Schema_Generator.php)) — strengthened cleanup pass:
+1. Drop anything from a trailing colon onwards (": Best features for 2026" → "")
+2. Drop trailing year + connector words (`for|of|to|with|in`)
+3. Drop trailing generic words (`features|options|picks|things|ideas|tips`)
+4. Strip any remaining trailing punctuation
+Result: "Dyson v15 detect cordless vacuum review: Best features for 2026" → "Dyson v15 detect cordless vacuum" (clean product name).
+
+**Fix 4 — Server-side `$` → `[currency_symbol]` body enforcement** ([seobetter.php](seobetter/seobetter.php)) — new pass right after `validate_outbound_links()`. For non-US articles (country != 'US'/'PR'/'GU'/'VI') with a non-`$` target currency symbol, regex-replaces every `$XXX` / `$XXX.XX` / `$X,XXX` pattern with the target currency symbol. UK articles get `£XXX`, EU `€XXX`, JP `¥XXX`, AU `AUD XXX`, etc. Doesn't fix hallucinated price VALUES — that's Phase 2's verified-data pipeline. Just ensures the symbol is consistent with the article's target country.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.72 → 62.73 + server-side currency-symbol enforcement pass after validate_outbound_links
+- `seobetter/includes/Schema_Generator.php`:
+  - `build_review()` itemReviewed type detection — same App Store / download-verb gate as v62.72's detect_software_schema
+  - `build_review()` Speakable injection (gated by SPEAKABLE_TYPES)
+  - `build_review()` item_name cleanup (colon-fragment + connector-word + generic-word stripping)
+
+### Verify
+
+```
+grep -B 1 -A 22 "v1.5.216.62.73 — gate by SAME signals" seobetter/includes/Schema_Generator.php
+grep -B 1 -A 12 "v1.5.216.62.73 — Add SpeakableSpecification directly" seobetter/includes/Schema_Generator.php
+grep -B 1 -A 12 "v1.5.216.62.73 — stronger trailing-cleanup" seobetter/includes/Schema_Generator.php
+grep -B 1 -A 18 "v1.5.216.62.73 — Server-side currency-symbol enforcement" seobetter/seobetter.php
+```
+
+After upload + retest T3 #6 Review (Dyson V15 Detect, UK):
+- `"itemReviewed":{"@type":"Product"...}` (was SoftwareApplication)
+- `"itemReviewed":{"name":"Dyson v15 detect cordless vacuum"...}` (clean, no dangling fragment)
+- SpeakableSpecification PRESENT in JSON-LD
+- ZERO `$XXX` prices in body (all converted to `£XXX`)
+
+**Verified by user:** UNTESTED
 
 ---
 

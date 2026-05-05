@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.72
+ * Version: 1.5.216.62.73
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.72' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.73' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -1958,6 +1958,35 @@ final class SEOBetter {
         // every surviving plain-text source mention in the body.
         if ( ! empty( $markdown ) ) {
             $markdown = $this->validate_outbound_links( $markdown, $combined_pool );
+        }
+
+        // v1.5.216.62.73 — Server-side currency-symbol enforcement on non-US
+        // articles. The v62.72 system-prompt CURRENCY HARD RULE wasn't strong
+        // enough to override the AI's training-data US bias — UK retest
+        // 2026-05-06 still showed 12 hallucinated `$` prices alongside 3 `£`
+        // prices. Server-side regex pass replaces every `$XXX` (or `$X.XX`)
+        // pattern with the country's currency symbol on non-US articles.
+        // Doesn't fix hallucinated price VALUES (Phase 2 verified-data
+        // pipeline owns that), but at least the symbol is right —
+        // user reading "$749 for the V15" on a UK article looks broken;
+        // "£749" looks merely wrong-by-value. Symbol consistency matters
+        // for trust even when value is unverified.
+        $article_country = strtoupper( sanitize_text_field( $request->get_param( 'country' ) ?? '' ) );
+        if ( ! empty( $markdown ) && $article_country !== '' && ! in_array( $article_country, [ 'US', 'PR', 'GU', 'VI' ], true ) ) {
+            $target_symbol = \SEOBetter\Schema_Generator::country_to_currency_symbol( $article_country );
+            if ( $target_symbol !== '$' ) {
+                // Replace `$XXX` and `$XXX.XX` and `$X,XXX` with target symbol.
+                // Only replace standalone $ followed by a digit (preserves
+                // legitimate $ usages like "$50 bill" — wait, those should
+                // also convert. The only reason NOT to convert is if the
+                // user typed about a verifiably-USD entity. Phase 2 will
+                // handle that nuance; for now, all $ → target symbol).
+                $markdown = preg_replace(
+                    '/\$(\d[\d,]*(?:\.\d{1,2})?)/',
+                    $target_symbol . '$1',
+                    $markdown
+                ) ?? $markdown;
+            }
         }
 
         // v1.5.191 — Linkify plain-text source references AFTER validation.

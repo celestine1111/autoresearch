@@ -1548,10 +1548,26 @@ class Schema_Generator {
         $category  = get_post_meta( $post->ID, '_seobetter_domain', true ) ?: '';
         $country   = get_post_meta( $post->ID, '_seobetter_country', true ) ?: '';
 
-        // Item name = title with common review words stripped
-        $item_name = trim( preg_replace( '/\b(review|in-depth|honest|full|best|top|guide|comparison|vs\.?|versus|roundup|our|the)\b/i', '', $post->post_title ) );
-        $item_name = trim( preg_replace( '/\s+/', ' ', $item_name ) );
-        $item_name = trim( preg_replace( '/\b(20\d{2}|in)\b\s*[:.\-]*\s*$/i', '', $item_name ) );
+        // Item name = title with common review words stripped.
+        // v1.5.216.62.73 — stronger trailing-cleanup pass. Pre-fix the
+        // post_title "Dyson v15 detect cordless vacuum review: Best
+        // features for 2026" got stripped of "review" and "best", left
+        // behind "Dyson v15 detect cordless vacuum :  features for 2026"
+        // → year strip → "Dyson v15 detect cordless vacuum :  features for"
+        // — dangling colon + connector words. Now: drop any trailing
+        // colon-introduced fragment AND any common dangling connector
+        // words (features for / guide / picks / options / things / etc.)
+        // so itemReviewed.name is a clean product identifier.
+        $item_name = preg_replace( '/\b(review|in-depth|honest|full|best|top|guide|comparison|vs\.?|versus|roundup|our|the)\b/i', '', $post->post_title );
+        $item_name = preg_replace( '/\s+/', ' ', $item_name );
+        // Drop anything from a trailing colon onwards (": Best features for 2026" → "")
+        $item_name = preg_replace( '/\s*:\s*[^:]*$/', '', $item_name );
+        // Drop trailing year + connector-word fragments
+        $item_name = preg_replace( '/\b(20\d{2}|in|for|of|to|with)\b\s*[:.\-]*\s*$/i', '', $item_name );
+        // Drop any remaining dangling generic words ("features", "options", "picks", "things", "ideas")
+        $item_name = preg_replace( '/\b(features?|options?|picks?|things?|ideas?|tips?)\s*$/i', '', $item_name );
+        // Final whitespace + punctuation cleanup
+        $item_name = trim( preg_replace( '/[:.\-,;]\s*$/', '', trim( $item_name ) ) );
         if ( strlen( $item_name ) < 3 ) $item_name = $post->post_title;
 
         // ── Smart itemReviewed type detection ──
@@ -1574,10 +1590,31 @@ class Schema_Generator {
         elseif ( preg_match( '/\b(restaurant|cafe|diner|bistro)\b/i', $title_and_kw ) ) $title_override = 'Restaurant';
         elseif ( preg_match( '/\b(course|class|bootcamp)\b/i', $title_and_kw ) ) $title_override = 'Course';
 
-        // Software / App detection — only if title signals it OR category is tech
-        if ( $title_override === 'Software'
-            || ( ! $title_override && ( in_array( $category, [ 'technology', 'games' ], true )
-            || preg_match( '/\b(software|SaaS|plugin|extension|desktop app|web app|mobile app)\b/i', $text ) ) ) ) {
+        // Software / App detection — v1.5.216.62.73 — gate by SAME signals as
+        // detect_software_schema(): require either a strong title override
+        // OR explicit software signals (App Store / Play Store URL OR a
+        // "download iOS/Android/Mac/Windows/web" verb). Pre-fix the
+        // condition `category in [technology, games]` was sufficient, so
+        // EVERY hardware review in the technology category (vacuums, TVs,
+        // cameras, headphones, phones, laptops) became @type:SoftwareApplication
+        // — wrong for hardware. User-reported on T3 #6 v62.72 retest:
+        // Dyson V15 vacuum review still emitted SoftwareApplication as
+        // itemReviewed type even though detect_software_schema was tightened.
+        // Now this in-build_review path needs the same gate.
+        $has_app_store_url = preg_match(
+            '#https?://(?:apps\.apple\.com|play\.google\.com|microsoft\.com/store|chrome\.google\.com/webstore|addons\.mozilla\.org)/#i',
+            $content
+        );
+        $has_download_signal = preg_match(
+            '/\bdownload\b[^.]{0,80}\b(?:ios|android|iphone|ipad|windows|mac\s?os|macos|linux|chrome\s?(?:os|book)?|web(?:\s|$|-))\b/i',
+            $text
+        );
+        $has_strong_software_signal = $title_override === 'Software'
+            || $has_app_store_url
+            || $has_download_signal
+            || preg_match( '/\b(SaaS|plugin|extension|desktop app|web app|mobile app)\b/i', $text );
+
+        if ( $has_strong_software_signal ) {
             if ( preg_match( '/\b(ios|android|iphone|ipad|mobile app|play store|app store)\b/i', $text ) ) {
                 $reviewed_type = 'MobileApplication';
                 if ( preg_match( '/\b(ios|iphone|ipad)\b/i', $text ) ) $reviewed_extra['operatingSystem'] = 'iOS';
@@ -1723,6 +1760,23 @@ class Schema_Generator {
         if ( $thumbnail ) {
             // v1.5.216.62.51 — single-URL image for Review (was 3-dupe array).
             $schema['image'] = $thumbnail;
+        }
+
+        // v1.5.216.62.73 — Add SpeakableSpecification directly to the Review
+        // schema. Pre-fix v62.72 added 'review' to SPEAKABLE_TYPES, but the
+        // Speakable injection at line ~737 ONLY runs for $type in
+        // [BlogPosting, NewsArticle, OpinionNewsArticle, Article] — Review
+        // has its own build path (build_review) that returns before that
+        // injection. Result: v62.72 retest showed 0 Speakable nodes despite
+        // 'review' being in SPEAKABLE_TYPES. Now Speakable is injected
+        // directly here so review gets voice readout. cssSelector mirrors
+        // the article path: title + key takeaways + first paragraph after
+        // each H2 (covers verdict, hands-on, spec list).
+        if ( in_array( 'review', self::SPEAKABLE_TYPES, true ) ) {
+            $schema['speakable'] = [
+                '@type'       => 'SpeakableSpecification',
+                'cssSelector' => [ 'h1', '.key-takeaways', 'h2 + p' ],
+            ];
         }
 
         // ── Extract rating ONLY if present in content ──
