@@ -146,6 +146,36 @@ Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badg
 | Editor sidebar suggester (5 suggestions/post) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 1 (1 week) |
 | Unlimited suggestions + auto-linking rules (Link Whisper-style) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
 
+#### Link Health Scanner (broken-link detection + context-aware strip)
+
+> **Why:** Generation-time URL filters (v62.x `is_low_quality_source`) catch known-bad patterns but can't catch URLs that 404 *after* publication, return soft-404 HTML pages, or were valid at generation but redirected to spam. Equivalent of the popular "Broken Link Checker" plugin but built-in, schema-aware, and tied to the SEOBetter citation pool / references section so removed links don't leave dangling text.
+>
+> **Why context-aware strip is mandatory:** A naive "remove `<a>` tag, keep text" approach breaks the article. SEOBetter links live in 4 distinct contexts and each needs a different strip strategy:
+> 1. **Body inline wrap** — `<a>...</a>` around prose phrase → unwrap, keep text only.
+> 2. **References list `<li>`** — entire numbered citation entry must be removed AND remaining entries renumbered AND any `[N]` brackets in body re-numbered to match. Removing the URL alone leaves a citation with no target.
+> 3. **Expert quote attribution** — `<cite>` block with name + source link. Strip URL, keep name+source as plaintext attribution.
+> 4. **Schema `citation[]` array** — JSON-LD entry must be removed from `Schema_Generator` output for that post (else schema cites a 404).
+>
+> Without context-awareness, fixing one broken link can leave the article looking malformed. This is why off-the-shelf Broken Link Checker doesn't work for SEOBetter content.
+
+| Feature | Free | Pro | Pro+ | Agency | Build status |
+|---|---|---|---|---|---|
+| Per-article "Validate Links" button (Posts list row action + editor sidebar) — HEAD-then-GET, manual trigger | ✅ Manual single-post only | ✅ | ✅ | ✅ | ⏳ Phase 1.5 (3-5 days) |
+| Context-aware strip (body unwrap / reference renumber / quote-attribution preserve / schema citation[] remove) | ✅ | ✅ | ✅ | ✅ | ⏳ Phase 1.5 (bundled with above) |
+| Site-wide bulk scanner (admin page: SEOBetter → Link Health; queue + progress bar) | ❌ | ✅ | ✅ | ✅ | ⏳ Phase 1.5 |
+| Scheduled background scans (WP-Cron / Action Scheduler, configurable cadence) | ❌ | ❌ | ✅ Weekly | ✅ Daily/weekly/custom | ⏳ Phase 1.5 |
+| Audit log per post (last scan date, links checked, what was stripped, before/after diff) | ❌ | ✅ Last scan only | ✅ Full history | ✅ Full history + CSV export | ⏳ Phase 1.5 |
+| Soft-404 detection (page returns 200 but body matches "page not found" / domain-parking signatures) | ❌ | ✅ | ✅ | ✅ | ⏳ Phase 1.5 |
+| Redirect-chain analysis (flag `>3 hops`, parked-domain redirects, http→https demotion) | ❌ | ❌ | ✅ | ✅ | ⏳ Phase 2 |
+| Auto-replace via Citation Pool (find a fresh URL from same domain or trusted-whitelist source matching the cited claim, instead of strip) | ❌ | ❌ | ❌ | ✅ | ⏳ Phase 5+ |
+
+**Design constraints (locked):**
+- Read-only by default; strips require explicit user click ("Strip 3 broken links") with diff preview. Never auto-mutates published posts without confirmation.
+- HEAD first (cheap), GET fallback when HEAD returns 405/403 (some servers reject HEAD).
+- Whitelist exemption for sources that block bots but humans can reach (gov sites with WAFs, paywalls returning 401/403). Exempt list lives in same `is_host_trusted` allowlist.
+- Throttled at 5 req/s to avoid being treated as scraper.
+- Schema strip uses Schema_Generator regenerate path — never edits stored postmeta JSON-LD blob directly (idempotency).
+
 #### AI Citation Tracker (THE wedge)
 
 | Feature | Free | Pro | Pro+ | Agency | Build status |
@@ -191,63 +221,167 @@ Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badg
 
 Each phase lists features + the security work that ships alongside (per `security.md`).
 
-### Phase 1 — Pre-launch (3-4 weeks of dev, then test gate)
+> **Strategy update 2026-05-04 — Plugin-split-first.** The original plan was: build everything with `License_Manager::can_use()` gates, ship as ONE plugin with Pro features hidden behind runtime checks, then split into Free + Pro plugins later. **Replaced** with: build everything in a single Pro codebase (current state — basically done), test, then split into two distributable zips (Free derived by stripping Pro-only files + code blocks). Reasons:
+>
+> 1. **Runtime gates are bypassable.** A determined attacker (or any modern AI assistant pointed at the codebase) can patch `License_Manager::can_use()` to always return `true` in seconds. The only rock-solid defense is "the Pro feature's code never landed on the free user's server."
+> 2. **WordPress.org policy requires it anyway.** Their guidelines disallow "free" plugins that lock features behind license keys — so a separate free plugin is mandatory for WP.org distribution. Doing it in two phases is wasted gating work.
+> 3. **Industry standard.** Yoast / Rank Math / Elementor / Beaver Builder / WPBakery all ship Free plugins (in WP.org) and separate Pro plugins (self-hosted). The Free version is genuinely missing features on disk, not gated.
+> 4. **Cleaner code.** Without `if ( can_use() )` checks scattered everywhere, the master codebase reads cleanly. Defense-in-depth gating remains useful inside the Pro plugin's internals (multi-tier — Pro vs Pro+ vs Agency) but stops being the primary security mechanism.
+>
+> The `License_Manager::can_use()` calls already in the code stay as defense-in-depth (still useful for tier separation inside the Pro plugin — Pro vs Pro+ vs Agency). The `SEOBETTER_GATE_LIVE` flag becomes obsolete because the Free plugin physically doesn't ship Pro code.
 
-**Features:**
+### Phase 1 — Build complete, test, split-prep (current phase)
 
-| Order | Task | Effort | Tier |
+**Features (status as of 2026-05-04, v1.5.216.62.33):**
+
+| Order | Task | Status | Notes |
 |---|---|---|---|
-| 1 | Canonical URL sync to all 4 SEO plugins | 15 min | All |
-| 2 | License gating wire-up + **TEST MODE flag** — `License_Manager::can_use()` checks at every feature route. Add `SEOBETTER_GATE_LIVE` constant (default `false` during Phase 1) — when `false`, all gates return `true` so Ben can test ALL Pro/Pro+/Agency features as if licensed. UI lock badges + tooltip copy still render so the upsell experience can be tested. Flag flips to `true` only after Phase 1 test gate passes (item 18 below). | 4 h | — |
-| 3 | GSC integration MVP (OAuth + daily cron + view dashboard) | 1 week | Free for connect+view; Pro+ for Freshness driver |
-| 4 | Freshness inventory MVP (sortable table; GSC-driven priority for Pro+) | 1 week | Free age-based; Pro+ GSC-driven |
-| 5 | Internal Links MVP (orphan report Free; editor suggester Pro+) | 1 week | Free orphan; Pro+ suggester |
-| 6 | Brand Voice profiles (upload sample posts + banned-phrase regex pass + system prompt injection) | 2-3 weeks | Pro 1; Pro+ 3; Agency unlimited |
-| 7 | SEOBetter Score 0-100 composite (weighted blend of existing GEO layer scores) | 1-2 days | All |
-| 8 | Rich Results validation preview surfacing (data exists; needs polish) | 2 days | All |
-| 9 | Bulk CSV UX layer (presets + per-row override + Action Scheduler queue + GEO 40 floor + default-to-draft) | 5-8 days | Agency only |
-| 10 | 5 Schema Blocks (Product / Event / LocalBusiness / Vacation Rental / Job Posting) | 5-7 days | Pro+ |
-| 11 | Country allowlist split — Free = US/UK/AU/CA/NZ/IE (no Regional_Context block fires); Pro+ = full 80+ | 1 day | Free 6; Pro 80+ |
-| 12 | **llms.txt rewrite + `/llms-full.txt` + caching** — rewrite `LLMS_Txt_Generator` for content-type categorization + GEO-score filtering + custom summary + language/country signals + FAQ pointers; add `/llms-full.txt` endpoint; transient cache 24h + invalidate on post save; Settings UI for custom summary + regenerate button. **Reinforces the wedge — directly maps to article-marketing.md Top-10 keyword #6 ("llms.txt wordpress").** | 3-5 days | Basic Free; Optimized Pro; full+multilingual+custom Pro+ |
-| 13 | **Settings.php restructure into 6 tabs** — License & Account / AI Provider / General / Author Bio / Branding / Research & Integrations. WordPress nav-tab-wrapper pattern, deep-linkable via `?tab=`, save button per tab (existing per-form handlers preserved). Add tier-aware Pro/Pro+/Agency 3-card upsell grid. Remove dead settings (`target_readability`, `geo_engines`). Update all marketing copy to match `pro-features-ideas.md` §2 Tier Matrix. | 2-3 days | All |
-| 14 | **Brand Voice profile section** (in Settings → Branding tab) — sample-post uploader (drag-drop or pick from existing posts) + banned-phrase textarea + voice profiles list (1/3/unlimited per tier with quota badge). Persists to `seobetter_brand_voices` option as array. Tier-gated number of voices. | 1 day (UI only — generation pipeline integration is separate Phase 1 task #6) | Pro 1 / Pro+ 3 / Agency unlimited |
-| 15 | **License tier display logic** — internal `License_Manager` stores precise license type (`free` / `pro_subscription` / `pro_plus_subscription` / `agency_subscription` / `pro_lifetime` / `pro_plus_lifetime` / `agency_lifetime`) BUT externally displays ONLY: Free / Pro / Pro+ / Agency. AppSumo LTD buyers see the same tier badge as subscription buyers — never an "LTD" or "Lifetime" badge (would deter future paying customers from joining if they see lifetime equivalence shown publicly). LTD attribute affects only billing, hard Cloud cap enforcement, and cheap-config-forced flag — invisible to UI. | 1 day | All |
-| 16 | **Tier-aware UI gating** — gate AI Image provider/style preset behind Pro license check with lock badges + upsell tooltips. Tavily field shows Pro lock badge. Places APIs stay free-accessible per Option B (article quality decision: place-citation articles need this; users provide own keys at $0 cost to Ben). | 1-2 days | Pro |
-| 17 | **License & Account tab dashboard** — tier badge (Free/Pro/Pro+/Agency) · site usage meter ("1 of 3 sites") · Cloud article usage ("47 of 100 used this month" — for Cloud users only; BYOK shows "Unlimited via your provider") · Cloud Credits balance + Buy Credits button (placeholder until Phase 2 ships Credits backend) · 3-card Pro/Pro+/Agency upsell grid for free users; upgrade-to-next-tier card for current paid users · Annual savings copy in dollars not percent | 2 days | All |
-| 18 | **AI Crawler Access audit** — single Settings page check (in Research & Integrations tab): scan robots.txt + meta robots + HTTP X-Robots-Tag headers for blocks against GPTBot / ClaudeBot / PerplexityBot / Bingbot / ChatGPT-User / Google-Extended / CCBot / anthropic-ai. Show pass/fail per bot. One-click fix that updates robots.txt with AI-bot-friendly rules (using the WP `do_robotstxt` filter). Bridge feature for engines that haven't adopted llms.txt yet — protects users from accidental blocks by aggressive WordPress security plugins. | 1-2 days | Free (table-stakes) |
-| 19 | **Dashboard restructure** (admin.php?page=seobetter) — header tier badge expanded from binary FREE/PRO to **Free/Pro/Pro+/Agency** · onboarding adds "or skip BYOK with Pro" alternative path · "What You Get" rewrites: Free list aligned with new tier matrix (basic schema = Article+FAQPage+BreadcrumbList only — REMOVE Recipe/Organization/Person from free list) · ADD missing Free features: SEOBetter Score 0-100, Rich Results preview, basic meta sync, GSC connect+view, Internal Links orphan, age-based Freshness, AI Crawler audit, basic llms.txt · REPLACE single Pro upsell with **3-tier comparison grid** (Pro/Pro+/Agency cards) for free users · tier-aware "next-tier upgrade" card for paid users · Remove "inject buttons" line · Fix "Premium tier LLM Claude Sonnet 4.6" → "50 Cloud articles/mo using SEOBetter research stack" · Fix "Auto-translate 29 languages" → "Multilingual generation 60+ languages" · Clarify "AIOSEO/Yoast/RankMath auto-population" → "AIOSEO full schema sync" (basic meta sync to all 4 plugins is Free) · ADD missing Pro features to upsell: AI Citation Tracker (1/5/25 prompts by tier), Brand Voice (1/3/unlimited), Country localization 80+, Brave Search, inline citations, auto-detect schemas. | 2-3 days | All |
-| 20 | **Recent Articles columns** (dashboard) — add SEOBetter Score 0-100 column alongside existing GEO score column (item 7 dependency); placeholder slots for Phase 2 columns (AI Citations badge, AI Readiness mini-score). | 0.5 day | All |
-| 21 | **Generate Content page sweep** (?page=seobetter-generate) — add 🔒 Pro lock badges to 18 non-free content types in the dropdown (Free shows only blog_post, how_to, listicle unlocked) · fix pre-generation contextual-hints JS schema list (Free's `blog_post` only emits `Article + FAQPage + BreadcrumbList` — remove `Organization + Person` from free hint) · update sidebar Pro upsell card: remove "Analyze & Improve inject buttons" line · fix "Sonnet-tier LLM" + "5 on Free" misleading copy · add wedge features to upsell (AI Citation Tracker, Brand Voice, Multilingual 60+, Country localization, Brave Search, inline citations) · keep upsell density LOW (active task flow) — sidebar only, no full-page interrupt · add subtle "6 free / 80+ Pro" hint to country picker · remove hardcoded `5/15` Cloud count in status bar (read from License_Manager) | 1-2 days | All |
-| 22 | **Bulk Generate page tier fix** (?page=seobetter-bulk) — change "Bulk Generation requires Pro" → "Bulk Generation requires Agency" · update CTA from $39/mo → $179/mo with Agency value prop · fix `$is_pro` gate to `License_Manager::can_use('bulk_csv')` which checks Agency tier · expand binary PRO/FREE header badge to Free/Pro/Pro+/Agency (consistent with dashboard) · the full UX rebuild (presets / per-row override / Action Scheduler queue / GEO floor 40 / default-to-draft) is Phase 1 item 9 which replaces the form entirely — this item is just the tier-correctness sweep that ships alongside | 0.5 day | All |
-| 23 | **Phase 1 test gate** — Ben personally tests EVERY feature works correctly with `SEOBETTER_GATE_LIVE=false` (testing-as-Pro mode). Test matrix: 3 GEO-90+ articles (How-To / Listicle / Local Business Listicle per pro-plan-pricing.md §6); all 21 content types generate without errors; AI Featured Image works for all 7 style presets across major languages (English, Portuguese, German, Japanese); GSC OAuth connects + dashboard shows data; Freshness inventory loads; Internal Links suggester returns suggestions; Brand Voice enforces banned phrases; Bulk CSV runs end-to-end with quality gate; 5 Schema Blocks render and validate in Google Rich Results Test; llms.txt + llms-full.txt serve correctly; AI Crawler Access audit finds + fixes blocked bots; **Dashboard 3-tier upsell grid renders correctly with all tiers and accurate copy**; **Settings 6-tab restructure works with no broken save handlers**; **Generate Content page shows 🔒 lock icons on 18 non-free content types**; **Bulk Generate page correctly says "Agency required" not "Pro required"**; meta sync to Yoast/RankMath/AIOSEO/SEOPress works; multilingual gen works for 10+ languages. **Failure of any one halts Phase 2.** Bug-fix iteration loop until everything is green. | 1-2 weeks elapsed | — |
-| 24 | **Flip `SEOBETTER_GATE_LIVE` to `true`** — after item 23 fully passes. Final smoke test: spin up a fresh free-tier WP install (no license key) and confirm: Pro features show lock badges + refuse to execute; Free features all work; upsell CTAs link to correct pricing tiers; **Dashboard tier badge correctly shows "Free" not "Pro"**; **Generate Content blocks Pro content types from execution**; **Bulk Generate blocks all non-Agency users**. THIS is the moment Pro/Pro+/Agency gating becomes real. Removes the existing `License_Manager.php` v1.5.13 testing flag. | 0.5 day | — |
+| 1 | Canonical URL sync to all 4 SEO plugins | ✅ Shipped | `seobetter.php:2851-2935` — Yoast, RankMath, AIOSEO, SEOPress all wired |
+| 2 | ~~License gating wire-up + `SEOBETTER_GATE_LIVE` test-mode flag~~ | ✅ Shipped (now defense-in-depth only — strategy pivot) | `License_Manager.php` ships; `can_use()` calls retained as Pro-internal tier separator (Pro vs Pro+ vs Agency); GATE_LIVE flag deprecated since the Free plugin won't have Pro code at all |
+| 3 | GSC integration (OAuth + Manager + dashboard data) | ✅ Shipped | `GSC_Manager.php` + cloud-api OAuth proxy v62; data feeds Freshness panel |
+| 4 | Freshness inventory MVP + Pro+ "Why?" diagnostic + Editor sidebar | ✅ Shipped (v1.5.216.54) | `Content_Freshness_Manager.php` |
+| 5 | Internal Links — Orphan report Free + Pro+ suggester view | ✅ Shipped | `Technical_SEO_Auditor.php::check_orphan_pages()` + `link-suggestions.php`. ⚠️ User reports suggester not returning suggestions — needs debug |
+| 6 | Brand Voice generation pipeline integration | ✅ Shipped | `Async_Generator.php:227` threads `brand_voice_id` into system prompt |
+| 7 | SEOBetter Score 0-100 composite | ✅ Shipped | `includes/Score_Composite.php` |
+| 8 | Rich Results validation preview surfacing | ✅ Shipped + extensively polished v62.20-62.33 | 2-state model · 13 honest tiles · 21-platform video detection · per-tile action hints · Schema Block cards inline · honest stats removed · LLM citation score with verifiable signals |
+| 9 | Bulk CSV UX layer (presets + Action Scheduler queue + GEO 40 floor + default-to-draft) | ✅ Shipped | `Bulk_Generator.php` + `bulk-generator.php` (presets, save/delete handlers, Agency gate) |
+| 10 | 5 Schema Blocks (Product / Event / LocalBusiness / VacationRental / JobPosting) | ✅ Shipped (v62.28-62.33) | Native Gutenberg blocks · MediaUpload picker · readable enum labels · 66-currency searchable dropdown · 89-country picker · in-block Save post button · Pro+ registration gate |
+| 11 | Country allowlist split (Free 6 / Pro+ 80+) | ✅ Shipped | `content-generator.php:247-292` — 🔒 lock badges + upsell modal |
+| 12 | llms.txt rewrite + `/llms-full.txt` + caching + multilingual | ✅ Shipped | `LLMS_Txt_Generator.php` — Pro/Pro+/Agency tiers, GEO-floor filtering, multilingual variants |
+| 13 | Settings.php restructure into 6 tabs | ✅ Shipped (v1.5.216.32) | License & Account / AI Provider / General / Author Bio / Branding / Research & Integrations — all 6 tabs deep-linkable via `?tab=` |
+| 14 | Brand Voice profile section UI | ✅ Shipped | Settings → Branding tab |
+| 15 | License tier display logic (precise vs shown labels) | ✅ Shipped | `License_Manager.php` |
+| 16 | Tier-aware UI gating (AI Image / Tavily / etc. lock badges) | ✅ Shipped | `License_Manager::can_use()` calls in 6+ admin views with 🔒 badges |
+| 17 | License & Account tab dashboard | ✅ Shipped | tier badge + site usage + Cloud usage + upsell grid in Settings tab |
+| 18 | AI Crawler Access audit (GPTBot / ClaudeBot / PerplexityBot / etc.) | ✅ Shipped | `includes/AI_Crawler_Audit.php` |
+| 19 | Dashboard restructure (3-tier comparison grid) | ✅ Shipped | `dashboard.php:268-288` |
+| 20 | Recent Articles SEOBetter Score column | ✅ Shipped | `seobetter.php:5164,5231` |
+| 21 | Generate Content page sweep (🔒 lock badges on 18 non-free types) | ✅ Shipped | `content-generator.php:270,447` |
+| 22 | Bulk Generate page tier fix (Agency $179/mo) | ✅ Shipped | `bulk-generator.php:136` |
 
-**Security work (per security.md):**
+**Phase 1 build = effectively complete.** What remains is testing and split-prep, not new feature work.
 
-| Order | Task | Effort | Layer |
+### Phase 1 remaining — Test gate + plugin split prep
+
+| Order | Task | Effort | Status |
 |---|---|---|---|
-| S1 | Build `do_action()` hook stubs in free plugin codebase for every Pro feature (preparation for Layer 3 split) | 3 days | Layer 2 prep |
-| S2 | Cloud API license verification — every Pro endpoint validates Freemius license, refuses on invalid | 2 days | Layer 2 |
-| S3 | Inject button cleanup — remove `Analyze & Improve inject buttons` code entirely from codebase (not just feature-gate) | 1 day | code hygiene + locked NO |
+| T1 | **Internal Links suggester debug** — user reports Pro+ in-editor suggester doesn't return suggestions. Investigate `class Internal_Links_Suggester` (or wherever the suggester logic lives), test against orphan + non-orphan posts, fix and verify against test article. | 0.5-1 day | ⏳ Pending — first task tomorrow |
+| T2 | **3 launch articles at GEO 90+** (per pro-plan-pricing.md §6): how-to dog raw food, best washable dog beds AU listicle, best Melbourne dog food delivery listicle | 1-2 days each + iterate | ⏳ Pending |
+| T3 | **All 21 content type smoke test** — generate one article per content type, verify it completes, schema validates in Google Rich Results Test, no PHP errors | 2-3 days | ⏳ Pending |
+| T4 | **Bulk Generate end-to-end test** — upload CSV of 5-10 keywords, verify presets save/load, Action Scheduler queue runs, GEO 40 floor blocks low-quality drafts, default-to-draft saves correctly | 0.5 day | ⏳ Pending |
+| T5 | **Freshness inventory test** — verify age-based loads, Pro+ "Why?" diagnostic shows GSC click decay + position drift, editor sidebar mirrors metabox panel | 0.5 day | ⏳ Pending |
+| T6 | **5 Schema Blocks live render test** — insert each Pro+ block in a real post, fill required fields, verify card renders in editor + on front-end, JSON-LD validates in Schema.org Validator + Google Rich Results Test | 1 day | ⏳ Pending |
+| T7 | **AI Featured Image** — verify all 7 style presets work across English / Portuguese / German / Japanese | 0.5 day | ⏳ Pending |
+| T8 | **AI Crawler Access audit** — confirm robots.txt scan finds blocked bots, one-click fix updates robots.txt correctly | 0.25 day | ⏳ Pending |
+| T9 | **llms.txt + /llms-full.txt** — verify both endpoints serve, transient cache invalidates on post save | 0.25 day | ⏳ Pending |
+| T10 | **Multilingual gen smoke** — generate 1 article in each of 10+ languages (en/es/fr/de/it/pt/ja/ko/zh/ar) | 1-2 days | ⏳ Pending |
 
-**Phase 1 test gate (BLOCKER — no Phase 2 until passes):**
+**Plugin split prep (replaces old "Phase 2 Layer 3 split"):**
 
-Per existing pro-plan-pricing.md §6, three test articles must hit GEO 90+:
-- `how to transition your dog to raw food safely 2026` (How-To)
-- `best washable dog beds australia 2026` (Listicle)
-- `best dog food delivery services in melbourne australia 2026` (Listicle, places-heavy)
+| Order | Task | Effort | What it does |
+|---|---|---|---|
+| P1 | **Inject button cleanup (S3 → P1)** — remove `Analyze & Improve inject buttons` code entirely from codebase. Locked NO per §7. | 1 day | Code hygiene |
+| P2 | **Mark Pro-only files** — annotate `Schema_Blocks_Manager.php`, `Schema_Blocks_Registry.php`, `Brand_Voice*` (when shipped), `Bulk_Generator.php`, `Citation_Tracker.php`, `Content_Freshness_Manager.php` (Pro+ portions), `LLMS_Txt_Generator.php` (Pro+ multilingual portions), the AI Featured Image generator, etc. with `// @pro:start` … `// @pro:end` markers | 1 day | Marks the strip boundaries |
+| P3 | **Build the strip script** — bash script that copies `seobetter/` to `build/seobetter-free/`, deletes Pro-only files, removes `// @pro:start … // @pro:end` blocks via sed, rewrites the plugin header (Plugin Name → "SEOBetter (Free)", Plugin URI), removes Pro-only menu items, generates the free zip. Yoast / Rank Math / Elementor all use this pattern | 2-3 days | One commit → two zips |
+| P4 | **`do_action()` hook stubs (S1 → P4)** — In the Free plugin, leave hook stubs where Pro features used to fire. The Pro plugin (loaded as a separate WP plugin) registers handlers on those hooks. Cracking the Free plugin unlocks zero Pro capability because the Pro logic doesn't exist there. | 3 days | Wires Free + Pro plugin pair |
+| P5 | **Cloud API license verification (S2 → P5)** — every Pro endpoint validates Freemius license, refuses on invalid. Defense-in-depth even if a customer extracts the Pro plugin code; the Cloud API still won't serve them | 2 days | Server-side defense |
+| P6 | **Free-plugin smoke test** — install only the generated free zip on a clean WP, verify all Free features work, no Pro features visible, no broken pages | 0.5 day | Validates the strip |
+| P7 | **Pro-plugin install test** — install Free zip + Pro zip, verify Pro features activate cleanly via the do_action stubs | 0.5 day | Validates the wiring |
 
-PLUS the full feature test matrix in item 18 above. The `SEOBETTER_GATE_LIVE` flag stays `false` during testing so Ben can exercise EVERY Pro/Pro+/Agency feature as if licensed. Once all features pass, item 19 flips the flag to `true` and gating becomes real.
+### Phase 1.5 — Sell-ready infrastructure (week 3 — UNLOCKS REVENUE)
 
-**Critical sequencing:**
-1. Build everything (items 1-17) with `SEOBETTER_GATE_LIVE=false`
-2. Test everything with full Pro access (item 18)
-3. Fix bugs, retest
-4. Only when fully green: flip `SEOBETTER_GATE_LIVE=true` (item 19)
-5. Smoke-test free-tier behavior on a clean install
-6. THEN proceed to Phase 2 (Freemius)
+After test gate (week 1) and plugin split (week 2), one more week to start charging:
 
-**Total Phase 1: ~7-9 weeks of solo dev** (some parallelizable, +1-2 weeks testing & fix iteration)
+| Order | Task | Effort | Notes |
+|---|---|---|---|
+| L1 | **Freemius SDK integration** — drop-in. Adds activation opt-in flow (Touchpoint 1 of `email-marketing.md` §2 — 40-60% conversion), license-key delivery, subscription billing, GDPR-compliant unsubscribe. Wraps the existing `License_Manager` checks. | 2-3 days | Single biggest unlock — Freemius handles email capture + delivery + GDPR for free |
+| L2 | **Activation opt-in copy** — write the 1 sentence that goes in Freemius's activation prompt: "Allow SEOBetter to collect diagnostic data and send you weekly tips on getting higher GEO scores?" Skippable, plugin works 100% normally if declined. | 0.5 day | Per `email-marketing.md` §2 Touchpoint 1 |
+| L3 | **seobetter.com pricing page + Stripe Checkout** — landing page with 4-tier comparison grid (Free / Pro / Pro+ / Agency), Stripe Checkout for direct sales (Freemius takes a cut; direct Stripe at this stage = higher margin per founder customer), automated post-payment Pro plugin zip delivery via email | 2-3 days | Marketing site work; doesn't block launch but enables it |
+| L4 | **Email capture in plugin (Touchpoint 2 + 3)** — non-blocking banners after first article success and after Optimize All success. Email field + opt-in checkbox. Sends to Freemius mailing list segment. Show once, dismiss permanently. Per `email-marketing.md` §2 Touchpoints 2-3. | 1-2 days | Optional for first sales (Freemius activation opt-in catches most users); ship as Phase 2 if time-pressed |
+| L5 | **Founder customer outreach** — WordPress Facebook groups, Reddit r/SEO + r/IndieHackers, IndieHackers post, cold email to 10-20 SEO bloggers (offer free Pro for review). Per `pro-plan-pricing.md` §7B First-20-Users Playbook. | ongoing | The actual selling work |
+
+### Phase 1 remaining timeline & cost analysis
+
+| Week | Milestone | Cost in (your spend) | Revenue out |
+|---|---|---|---|
+| 1 | Test gate green (T1-T10) | $50 fixed infra + ~$10 API testing | $0 |
+| 2 | Plugin split done (P1-P7) | $50 fixed infra | $0 |
+| 3 | Freemius wired + pricing page live (L1-L3) | $50 fixed + ~$30 Freemius setup costs | $0 |
+| 4 | First 5 founder buyers ($99/yr each) | $50 fixed | **+$495 first revenue** |
+| 5-6 | Founders 6-15 + ongoing outreach (L5) | $50 fixed | **+$990 cumulative** |
+| 7-9 | AppSumo application + first 30 organic Pro users | $50-80 fixed (more API for trial users) | **+$3-4K cumulative** ($99/yr founders + $39-69/mo regulars) |
+| 10-14 | AppSumo LTD launch | $80-150 fixed (LTD users testing) | **+$15-20K LTD payout** (after AppSumo cut) |
+| 15-18 | WP.org submission + free plugin live | $80-150 fixed | **slow MRR ramp begins** (~$700 new MRR/mo per `email-marketing.md` §8 math) |
+
+**Year 1 totals (realistic):**
+- Costs: ~$1,000 fixed infra + ~$7,500 ongoing API for paying users = **~$8,500**
+- Revenue: ~$1,500 founders + ~$3,000 Freemius regulars + ~$20,000 AppSumo + ~$5,000 first 6mo MRR ramp = **~$30,000**
+- **Net Year 1: ~$20,000.** Bootstrappable.
+
+### "Sell-ready" milestone — when to alert Ben
+
+The plugin is sell-ready when:
+- ✅ Test gate items T1-T10 all pass (no PHP errors on 21 content types; 3 launch articles GEO 90+; Schema Blocks render + validate; Bulk + Freshness + Internal Links + AI Crawler + llms.txt all work end-to-end)
+- ✅ Plugin split items P1-P7 all complete (Free zip strips correctly; Pro plugin activates against Free plugin; Cloud API rejects unlicensed Pro requests)
+
+When BOTH gates pass, Claude reports: **"v62.x is sell-ready. Recommend: Day 1 build seobetter.com pricing page + Stripe Checkout, Day 2 wire Freemius SDK, Day 3 send the first 5 founder DMs. First revenue within ~7 days from this alert."**
+
+This is the trigger — at that point, code work pauses and outreach begins.
+
+### Email infrastructure — split between Freemius (free) and plugin code
+
+Per `email-marketing.md` §9 Implementation Order and `automated-emails.md` §4-6:
+
+| Phase | Email work | Source |
+|---|---|---|
+| **Phase 1.5 (sell-ready)** | Activation opt-in only — Freemius default, ~5 min config (L2 above) | Freemius built-in |
+| **Phase 2 (post-AppSumo)** | In-app capture banners (L4) + Sequence A 7-email Free Onboarding drip | Plugin code (L4) + Freemius email templates |
+| **Phase 3 (1000+ users)** | Sequence B Trial Activation (5 emails) + behavioral triggers (article hits 90+, Optimize All success) | Freemius behavioral triggers |
+| **Phase 4 (5000+ users)** | Sequence C Win-Back + Pro feature alerts (AI Citation Tracker matches) | Custom `Email_Router.php` per `automated-emails.md` §4.2 |
+| **Phase 5+** | Full custom email pipeline (`Email_Router`, `Email_Templates`, `Email_Event_Log`, `Email_Preferences`) IF outgrowing Freemius email | Custom build |
+
+**Key insight: NO custom email infrastructure required for first revenue.** Freemius SDK ships activation opt-in + transactional emails (purchase receipt, license key delivery, password reset, etc.) for free. Plugin only needs to enable the opt-in checkbox and write the activation copy. **Don't build Email_Router until Phase 4+** — premature for solo founder.
+
+WordPress.org compliance (per `email-marketing.md` §6):
+- ✅ No required email to use plugin (BYOK works without any account)
+- ✅ Activation opt-in is non-blocking + skippable + dismissed permanently
+- ✅ One-click unsubscribe (Freemius default)
+- ✅ Privacy policy link during opt-in (seobetter.com/privacy already live)
+- ✅ Diagnostic data collection only with consent
+
+These are already designed-in — Freemius handles them automatically once integrated. No additional work needed for WP.org acceptance.
+
+### Sequencing — the actual order to execute
+
+1. **Tomorrow (Day 1):** T1 (fix Internal Links bug) + T6 (Schema Blocks smoke test)
+2. **Days 2-5:** T2 (3 launch articles GEO 90+) → T3 (21-content-type smoke)
+3. **Days 6-8:** T4 (Bulk) → T5 (Freshness) → T7-T10 (AI Image / AI Crawler / llms.txt / multilingual smoke)
+4. **Days 9-12:** Plugin split P1-P7
+5. **Days 13-15:** Freemius L1 + opt-in copy L2 + seobetter.com pricing L3
+6. **Day 15+: SELL.** Founder outreach L5 — first revenue target Day 21
+7. **Week 6+:** AppSumo application prep + ongoing organic outreach
+8. **Week 10-14:** AppSumo launch
+9. **Week 16-18:** WP.org submission
+
+**Compressed timeline = ~3 weeks build + sell from there.**
+
+### Excluded from launch (deferred to Phase 5+ to ship faster)
+
+Per the cross-check of `pro-plan-pricing.md` tier features against shipped reality (2026-05-04):
+
+| Feature | Original tier | Decision |
+|---|---|---|
+| AI Citation Tracker | Pro/Pro+/Agency | **Defer to v1.5.217 (post-revenue, ~30 days post-launch).** Marketing copy: "Coming Q3 2026 — included in your tier from launch day." Build cost: 2-3 weeks. Don't burn revenue runway building it pre-launch. |
+| WooCommerce Category Intros / Product Description Rewriter | Pro+ / Agency | Defer to Phase 5+. Add-on product, not launch-tier feature. |
+| Cannibalization detector | Agency | Defer to Phase 5+. |
+| Refresh-brief generator | Agency | Defer to Phase 5+. Locked-NO on auto-rewrite per §7. |
+| GSC Indexing API | Agency | Defer to Phase 5+. |
+| Auto-linking rules (Link Whisper-style) | Agency | Defer to Phase 5+. |
+| Custom prompt templates per content type | Agency | Defer to Phase 5+. |
+| White-label basic | Agency | **Build in Phase 2 alongside Freemius (~3 days).** Required for agency-tier credibility at AppSumo launch. |
+| API access (n8n / Zapier) | Agency | **Build in Phase 2 (~3 days).** Same reasoning. |
+| 5 team seats | Agency | **Verify Freemius supports it (likely yes by default).** No custom build needed. |
+| Free tier feature list update | Free | **Update `pro-plan-pricing.md` §2** to reflect what shipped (SEOBetter Score, Rich Results preview, GSC connect, Internal Links orphan, age-based Freshness, AI Crawler audit, basic llms.txt, Yoast/RankMath/AIOSEO/SEOPress meta sync, canonical URL sync). Drop "Recipe + Organization + Person" from Free schema list — those are Pro per the tier matrix. |
 
 ### Phase 2 — Freemius integration & plugin split (~3 weeks)
 
@@ -345,30 +479,47 @@ This summarizes `security.md` — the canonical 4-layer plan. Every Pro feature 
 | Cost circuit breaker (Serper / Firecrawl / OpenRouter / Anthropic / Groq) | ✅ |
 | Environment variable hygiene | ✅ |
 
-### Layer 2 — Pro gating architecture (Phase 1)
+### Layer 2 — Defense-in-depth (Pro plugin internals only)
 
-**Rule 1 — Pro features must execute server-side.** No client-side license checks. Every Pro endpoint on the cloud API verifies the Freemius license before executing. A cracked plugin still can't get Pro behavior because the code lives behind the API.
+**Strategy pivot 2026-05-04 — demoted from primary defense to defense-in-depth.** Originally Layer 2 was the primary security mechanism with `License_Manager::can_use()` checks at every Pro feature route. Plus runtime gating via `SEOBETTER_GATE_LIVE` flag.
 
-**Rule 2 — License verification via Freemius.** Plugin sends license key with every cloud-api request. Cloud API validates against Freemius API; refuses on invalid. Cached for 1h with revocation honored.
+That approach is bypassable in seconds — find the gate function, change `return false` to `return true`, save. Modern AI assistants can do this faster than the developer who wrote the gate.
 
-### Layer 3 — Plugin split (Phase 2)
+**New role for Layer 2:** the existing `License_Manager::can_use()` calls remain inside the Pro plugin as a tier separator (Pro vs Pro+ vs Agency). They are NO LONGER the primary defense — that's now Layer 3 (plugin split, promoted to Phase 1).
+
+**Rule 1 — Pro features must execute server-side.** Where possible. Every Pro endpoint on the cloud API verifies the Freemius license before executing. A cracked plugin still can't get cloud-side behavior because the code lives behind the API.
+
+**Rule 2 — License verification via Freemius.** Plugin sends license key with every cloud-api request. Cloud API validates against Freemius API; refuses on invalid. Cached for 1h with revocation honored. Belt-and-braces alongside the plugin split.
+
+### Layer 3 — Plugin split (PHASE 1 — promoted from Phase 2)
+
+**This is now the primary security mechanism.** Per the strategy pivot in §3, the Free + Pro plugins are physically separate codebases, distributed separately. Cracking the Free plugin reveals NO Pro code because the Pro code never landed in the free zip in the first place.
 
 **Free plugin `seobetter` — WordPress.org**:
 - Unobfuscated PHP (WP.org rule)
-- Free tier features ONLY: 3 content types, basic schema, GEO Analyzer, Pexels, GSC connect, footer link
-- Contains hook stubs for Pro features: `do_action('seobetter_pro_inject_citation', ...)`, etc.
-- **No Pro logic** — even if cracked, no Pro capability is unlocked
+- Free tier features ONLY: 3 content types (blog_post / how_to / listicle), basic schema (Article + FAQPage + BreadcrumbList), GEO Analyzer, Pexels stock, GSC connect, country allowlist 6 EN-only, basic llms.txt, AI Crawler Access audit, SEOBetter Score 0-100, orphan-pages report, age-based Freshness, Rich Results validation preview (read-only), Yoast/RankMath/AIOSEO/SEOPress meta sync, footer link
+- Contains `do_action()` hook stubs where Pro features used to fire
+- **No Pro logic on disk** — even if cracked, zero Pro capability unlocked
 
-**Pro add-on `seobetter-pro` — Freemius distribution only (NOT WP.org)**:
+**Pro plugin `seobetter-pro` — Freemius distribution only (NOT WP.org)**:
 - Distributed via Freemius downloads after purchase
-- Contains all Pro/Pro+/Agency PHP: 5 Schema Blocks render_callbacks, Brand Voice logic, AI Citation Tracker, Bulk CSV UX, AIOSEO full schema, Places Pro tiers, Internal Links suggester, GSC Freshness driver, etc.
+- Contains all Pro/Pro+/Agency PHP: 5 Schema Blocks render_callbacks, Brand Voice logic, AI Citation Tracker, Bulk CSV UX, AIOSEO full schema, Places Pro tiers, Internal Links Pro+ suggester, GSC Freshness driver, multilingual llms.txt, /llms-full.txt, AI Featured Image generator, all 80+ countries, all 21 content types, Brave Search, Firecrawl, Serper SERP intelligence, Multilingual gen 60+ langs, Cloud Credits backend, etc.
 - Hooks into free plugin's `do_action` stubs
-- Freemius Bundle Generator handles the split build automatically
+- Internal `License_Manager::can_use()` calls separate Pro vs Pro+ vs Agency tier features
+
+**Build tooling — `build/strip.sh`**:
+- Bash script that copies `seobetter/` → `build/seobetter-free/`
+- Deletes Pro-only files (Schema_Blocks_*, Brand_Voice*, Bulk_Generator, Citation_Tracker, etc.)
+- Removes `// @pro:start … // @pro:end` blocks from shared files via `sed`
+- Rewrites the plugin header (Plugin Name, Plugin URI) for the free version
+- Generates `seobetter-free.zip` for WP.org and `seobetter-pro.zip` for Freemius
+- Yoast / Rank Math / Elementor all use this pattern
 
 **User flow:**
 1. Install free plugin from WP.org → gets free tier
-2. Buy Pro/Pro+/Agency via Freemius → Freemius emails ZIP download link
-3. Upload Pro add-on ZIP → free plugin detects companion → Pro features activate
+2. Buy Pro/Pro+/Agency via Freemius → Freemius emails Pro plugin ZIP download
+3. Upload Pro plugin ZIP via Plugins → Add New → Upload → activates as a separate plugin
+4. Free plugin detects companion via `function_exists()` check on a Pro plugin loader → Pro features activate via the `do_action` stubs
 
 ### Layer 4 — Anti-tamper + fingerprinting (Phase 5+)
 

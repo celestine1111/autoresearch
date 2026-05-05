@@ -7,7 +7,7 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.65)
+> **Last updated:** 2026-05-05 (v1.5.216.62.66)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
@@ -16,10 +16,70 @@
 
 ---
 
-## v1.5.216.62.65 — Tighten link filters: path-segment data endpoints (`/json`), commerce PLP hash IDs (homedepot/lowes), data-portal path prefixes (/valet, /observations, /series)
+## v1.5.216.62.66 — ROOT CAUSE 2: AI rephrases placeholder section headings (Argument 1/2/3) → preg_quote-protected regex misses → truncate drops them. Fix: force-prepend canonical heading + never delete whole sections + scrub plaintext bsky/mastodon/lemmy handles.
 
 **Date:** 2026-05-05
 **Commit:** `[pending]`
+
+### Why
+
+T3 #3 Opinion final retest at https://srv1608940.hstgr.cloud/why-ai-content-moderation-is-broken-in-2026-my-take-2/ shipped 7 of 10 documented sections — better than v62.55's 6/10 but still missing Argument 1, Argument 2, Argument 3, References. The Devil's Advocate frame ✓ rendered (v62.58/v62.59 fix held), single H1 ✓, zero inline bolds ✓, no bsky/HN/quora *URLs* ✓ — but a bsky.social *handle* (`@kcox105.bsky.social`) appeared in prose because the v62.61–v62.63 URL filters can only see `<a href>` and bracketed markdown, not bare handles typed by the AI.
+
+**Root cause #1 (section dropouts):** `truncate_to_target()` (v62.58) builds the protected-headings regex by `preg_quote`-ing the literal template names from the prose-template `sections` field. For Opinion the template lists `Argument 1, Argument 2, Argument 3` — but the AI on every retest rephrases these placeholder names to topical headings like `Why Algorithms Cannot Read Context` (because "Argument 1" is meaningless to a writing model without context). The protected regex matches `/Argument\ 1|Argument\ 2|Argument\ 3|.../i` against the assembled markdown's H2 lines — which contain the AI's rephrased text, NOT the literal template names. Match fails → sections are unprotected → truncator drops paragraphs from them, then deletes the whole section when only one paragraph remains. v62.58 fixed The Objection / What This Means / Conclusion+CTA (template names AI keeps verbatim) but Argument N placeholders stayed vulnerable.
+
+**Root cause #2 (plaintext handle leak):** The v62.61 / v62.62 / v62.63 filter chain (`SEOBetter::is_low_quality_source()` + `validate_outbound_links()` + `Citation_Pool::append_references_section()`) operates on URLs only. A bare `@kcox105.bsky.social` typed into prose by the AI is a plaintext attribution, not an `<a href>` — so every URL filter passes it through. Same gap exists for `@user@mastodon.social` and `@user@lemmy.world` style handles.
+
+### What changed
+
+**Fix A1 — `Async_Generator::assemble_markdown()` force-prepends the canonical heading** ([includes/Async_Generator.php](seobetter/includes/Async_Generator.php))
+
+For each `section_N` in `$job['results']`, look up the canonical heading at `$job['headings'][N]`. If the section's body doesn't start with `## `, prepend `## {canonical}\n\n`. Guarantees every section produces an H2 in the assembled markdown — even when the AI emitted prose without a heading marker (which it did for Argument 1/2/3 placeholders). The canonical heading text matches the template-built protected regex, so truncate cannot drop the section. AI's own H2 (when emitted) is preserved verbatim — this fix only adds a heading when one is missing.
+
+**Fix A2 — `Async_Generator::truncate_to_target()` never deletes whole sections** ([includes/Async_Generator.php](seobetter/includes/Async_Generator.php))
+
+The previous `array_splice($sections, $i, 1)` on a one-paragraph section deleted that section entirely. Replaced with `continue` — skip and try the next non-protected section. If every remaining unprotected section is also down to one paragraph, the loop's `$trimmed=false` guard breaks out and the article keeps full structural shape. Word-count overshoot is the lesser evil — §10.1 of SEO-GEO-AI-GUIDELINES gives word *ranges* not point targets, so overshooting by 200-400w is fine; dropping a documented §3.1A section is not.
+
+**Fix B — `validate_outbound_links()` Pass -0.5 plaintext handle scrub** ([seobetter.php](seobetter/seobetter.php))
+
+Three preg_replace patterns, applied before everything else:
+- `\(?@[\w._-]+\.bsky\.(?:app|social)\)?` — Bluesky handles (`@kcox105.bsky.social`)
+- `\(?@[\w._-]+@mastodon\.[a-z0-9.-]+\)?` — Mastodon-style handles (`@user@mastodon.social`)
+- `\(?@[\w._-]+@lemmy\.[a-z0-9.-]+\)?` — Lemmy-style handles
+
+Plus three cleanup passes for orphaned punctuation / empty parens / double-spaces left by the scrub.
+
+Twitter / X handles (`@username` no domain suffix) are NOT scrubbed — `@username` is the canonical reference style for X and many credible sources are X-only. Quora `@username` is also kept (Quora restrictions are URL-only). The scrub only matches handles whose suffix unambiguously identifies a personal-feed platform we already excluded from the citation whitelist.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.65 → 62.66; `validate_outbound_links()` Pass -0.5 plaintext handle scrub (~28 lines added)
+- `seobetter/includes/Async_Generator.php`:
+  - `assemble_markdown()` — force-prepend canonical heading from `$job['headings'][N]` when section body lacks `## ` (~16 lines added)
+  - `truncate_to_target()` — replace `array_splice` whole-section delete with `continue` (~10 lines comment + 1-line change)
+
+### Verify
+
+```
+grep -B 1 -A 14 "v1.5.216.62.66 — Force-prepend the canonical" seobetter/includes/Async_Generator.php
+grep -B 1 -A 6 "v1.5.216.62.66 — Was: array_splice" seobetter/includes/Async_Generator.php
+grep -B 2 -A 20 "Pass -0.5: Scrub plaintext social-platform handles" seobetter/seobetter.php
+```
+
+After upload + retest opinion at 1100w / Government Law Politics / GB:
+- All 10 documented Opinion sections present (Key Takeaways, Hook & Thesis, Argument 1, Argument 2, Argument 3, The Objection, What This Means, FAQ, Conclusion+CTA, References)
+- Article may render at 1500-2000w to fit all sections — that's the new tradeoff (was: drop sections to fit 1100w)
+- Zero `@*.bsky.social` / `@*@mastodon.*` / `@*@lemmy.*` handles in prose
+- Devil's Advocate frame still on The Objection (v62.58/v62.59/v62.63 chain holds)
+- No bsky.app / mastodon / lemmy / HN / Quora URLs in body or References (v62.61–v62.65 filters hold)
+
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.216.62.65 — Tighten link filters: path-segment data endpoints (`/json`), commerce PLP hash IDs (homedepot/lowes), data-portal path prefixes (/valet, /observations, /series)
+
+**Date:** 2026-05-05
+**Commit:** `3f58dc8`
 
 ### Why
 

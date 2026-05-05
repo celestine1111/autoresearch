@@ -1634,8 +1634,32 @@ class Async_Generator {
         $section_keys = array_filter( array_keys( $job['results'] ), fn( $k ) => str_starts_with( $k, 'section_' ) );
         ksort( $section_keys );
 
+        // v1.5.216.62.66 — Force-prepend the canonical H2 heading from
+        // $job['headings'][N] when the AI's section body lacks a leading
+        // `## ` marker. Pre-fix the AI sometimes emitted prose with no
+        // H2 marker for placeholder-named sections (Argument 1 / 2 / 3,
+        // Bullet Item N, Step N). Without an H2 marker, the body
+        // appended onto the previous section's body — making the section
+        // structurally invisible AND losing truncate-protection because
+        // the protected_headings regex matches on H2 text. T3 #3 Opinion
+        // v62.65 retest: 7/10 sections shipped because Args 1/2/3 (which
+        // the AI rephrased to topical headings or omitted entirely) got
+        // truncated when their headings didn't match the protected
+        // regex's preg_quote("Argument 1") alternation. Force-prepending
+        // the canonical heading guarantees every section has an H2 that
+        // matches the protected_headings regex, so truncate cannot drop
+        // them. AI's own H2 (if it emitted one) is preserved verbatim.
         foreach ( $section_keys as $key ) {
-            $md .= trim( $job['results'][ $key ] ) . "\n\n";
+            $body = trim( $job['results'][ $key ] );
+            if ( $body === '' ) continue;
+
+            $idx = (int) str_replace( 'section_', '', $key );
+            $canonical = $job['headings'][ $idx ] ?? '';
+            if ( $canonical !== '' && ! preg_match( '/^##\s/', $body ) ) {
+                $body = "## {$canonical}\n\n" . $body;
+            }
+
+            $md .= $body . "\n\n";
         }
 
         // v1.5.61 — truncate if over target
@@ -1745,10 +1769,19 @@ class Async_Generator {
                 // Drop the last paragraph (split on double newline)
                 $paragraphs = preg_split( '/\n{2,}/', trim( $body ) );
                 if ( count( $paragraphs ) <= 1 ) {
-                    // Section has only one paragraph — drop the whole section
-                    array_splice( $sections, $i, 1 );
-                    $trimmed = true;
-                    break;
+                    // v1.5.216.62.66 — Was: array_splice() to delete the
+                    // whole section. Pre-fix this killed sections from
+                    // the article when their body trimmed down to a
+                    // single paragraph (Args 1/2/3 on Opinion retests
+                    // when AI rephrased the heading away from the
+                    // template's literal name). Now: skip and continue
+                    // to the next non-protected section. If every
+                    // remaining unprotected section is also down to one
+                    // paragraph, the loop's $trimmed=false guard breaks
+                    // out and the article keeps its full structural
+                    // shape — overshooting the word target is a smaller
+                    // sin than dropping a documented §3.1A section.
+                    continue;
                 }
                 array_pop( $paragraphs );
                 $sections[ $i ]['body'] = "\n" . implode( "\n\n", $paragraphs ) . "\n\n";

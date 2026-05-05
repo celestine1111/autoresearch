@@ -296,6 +296,22 @@ append_references_section  ← builds ## References from pool URLs the body cite
 
 Runs as four sequential passes:
 
+### Pass -0.5 — Plaintext social-handle scrub (v1.5.216.62.66)
+
+Runs FIRST, before every other pass. Three preg_replace patterns strip bare social-platform handles typed into prose by the AI (no `<a href>`, no markdown link, no URL — just plaintext attribution like `(@kcox105.bsky.social)`):
+
+| Pattern | Catches |
+|---|---|
+| `\(?@[\w._-]+\.bsky\.(?:app|social)\)?` | Bluesky handles, e.g. `@kcox105.bsky.social` |
+| `\(?@[\w._-]+@mastodon\.[a-z0-9.-]+\)?` | Mastodon-style handles, e.g. `@user@mastodon.social` |
+| `\(?@[\w._-]+@lemmy\.[a-z0-9.-]+\)?` | Lemmy-style handles, e.g. `@user@lemmy.world` |
+
+Plus three cleanup passes for orphaned punctuation / empty parens / double-spaces left by the scrub.
+
+**Why it's needed:** the v62.61 / v62.62 / v62.63 filters operate on URLs only — `is_low_quality_source()` parses `wp_parse_url()` host + path. A bare `@kcox105.bsky.social` typed into prose has no URL, so every URL-based filter passes it through. T3 #3 Opinion v62.65 retest: zero bsky URLs survived the link filter (filters held), but a `@kcox105.bsky.social` handle still appeared in the article body as plaintext attribution because the AI mentioned the bsky user by handle, not by linking to their post.
+
+**Why X / Quora / Reddit handles are NOT scrubbed:** the scrub only matches handles whose suffix unambiguously identifies a personal-feed platform we already excluded from the citation whitelist. Twitter / X handles (`@username` no domain suffix) are NOT scrubbed — `@username` is the canonical reference style for X, and many credible sources are X-only. Quora `@username` is also kept (Quora restrictions are URL-only). Reddit `u/username` and `r/subreddit` are NOT scrubbed — Reddit allowlisting is URL-based per v62.62.
+
 ### Pass 0 — References section sanitizer
 
 `sanitize_references_section($markdown)` catches any `## References`, `## Sources`, `## Bibliography`, `## Further Reading`, or `## Citations` section the AI may have written despite being told not to. Walks each line, applies the full whitelist rules to every link, drops failing lines, removes the heading entirely if zero references survive.
