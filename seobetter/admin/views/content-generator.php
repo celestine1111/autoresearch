@@ -878,7 +878,7 @@ var SB_TYPE_PRESETS = {
     news_article:    {tone:'journalistic',   wc:'1000', min:800,  label:'News Article'},
     opinion:         {tone:'authoritative',  wc:'1500', min:1500, label:'Opinion'},
     how_to:          {tone:'educational',    wc:'2000', min:1000, label:'How-To Guide'},
-    listicle:        {tone:'conversational', wc:'2000', min:1500, label:'Listicle'},
+    listicle:        {tone:'conversational', wc:'2500', min:2500, label:'Listicle'},
     review:          {tone:'authoritative',  wc:'1500', min:1000, label:'Review'},
     comparison:      {tone:'authoritative',  wc:'2000', min:1500, label:'Comparison'},
     buying_guide:    {tone:'authoritative',  wc:'2500', min:2000, label:'Buying Guide'},

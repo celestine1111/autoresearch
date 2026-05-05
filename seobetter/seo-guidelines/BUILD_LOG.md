@@ -7,12 +7,79 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.70)
+> **Last updated:** 2026-05-05 (v1.5.216.62.71)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.71 — Listicle quartet: drop bogus top-level Product schema + add to SPEAKABLE_TYPES + expand "N Items/Products/Picks" template entries to N queue slots + bump listicle floor 1500→2500w
+
+**Date:** 2026-05-05
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on T3 #5 Listicle retest at https://srv1608940.hstgr.cloud/best-washable-dog-beds-australia-for-2026-top-picks-revealed/ + Schema.org Validator (https://validator.schema.org/#url=...): four distinct problems hitting the same article.
+
+**Problem 1 — bogus top-level Product schema.** `Schema_Generator::detect_product_schema()` included `listicle` in its trigger types (line 2490), emitting a single Product node treating the entire "Top 10 X" article as one product:
+- `name: "washable dog beds australia for 2026: picks revealed"` (article-slug-derived blob, not a product name)
+- `description: "Top List Best Washable Dog Beds Australia Last Updated: May 2026 Key Takeaways..."` (article intro prose, not product description)
+- `offers.price: "110"` (first price match in body — one bed of 10, misrepresented as "the" price)
+- `offers.priceCurrency: "USD"` (defaulted to USD even though article was entirely in AUD)
+
+Google Rich Results Validator flagged this as missing required fields (no review, no aggregateRating, no real brand) AND it violates Schema.org §2: marked-up @type must match content type. A listicle is correctly an `ItemList`, not a `Product`.
+
+**Problem 2 — Speakable schema missing entirely.** `SPEAKABLE_TYPES` at line 341 listed 10 types since v1.5.213 expansion (blog_post, news_article, opinion, pillar_guide, how_to, faq_page, interview, recipe, personal_essay, press_release) — `listicle` was never added. But voice-search queries like "Hey Google, what are the best dog beds in Australia" are exactly what listicles answer; they should support voice readout.
+
+**Problem 3 — "Top 10 Picks" promised, only 4 product H2s shipped.** Listicle prose template's `sections` field has "10 Numbered Items (EACH item gets its own H2 heading numbered 1-10)" as ONE comma-separated entry. `$template_section_count` counted that as 1 slot. `$num_sections = max(content_sections+3, template_count) = max(4+3, 6) = 7` for 1500w. Only 7 section_N steps queued: KT + Intro + Quick Comparison + Items 1-4 = 7 used; Items 5-10 + Conclusion + FAQ + References never reached.
+
+**Problem 4 — even if 10 product slots were queued, 1500w / 15 slots = 100w/slot would be too cramped for the §10.1-spec'd 100-200w per product mini-review.**
+
+### What changed
+
+**Fix 1 — `Schema_Generator::detect_product_schema()`** ([includes/Schema_Generator.php:2490](seobetter/includes/Schema_Generator.php)) — removed `listicle` from the trigger list. Listicle is correctly represented by the existing ItemList wrapper; a single bogus top-level Product is strictly worse than no Product. Future enhancement: enrich each ItemList ListItem to be a full Product node with name/image/offer/aggregateRating per item.
+
+**Fix 2 — `Schema_Generator::SPEAKABLE_TYPES`** — `listicle` added (now 11 types). Voice-search of "Top N X" queries is a primary use case; cssSelector chain in `build_article()` already targets h1 + .key-takeaways + first paragraph after each h2, which works naturally for a numbered listicle.
+
+**Fix 3 — `Async_Generator::expand_meta_instruction_slots()`** new helper — detects `^N (Numbered/Individual/Topical)? (Items|Products|Picks|Chapters|Mini-Reviews|Sub-Sections)` patterns at the start of template `sections` entries (with parentheticals stripped). For each match, adds `(N - 1)` extra slots to `$template_section_count` (subtracting 1 because the entry already counted as 1 in the base). Range patterns like "5-7 Picks" use the high bound. Generalizes to listicle's "10 Numbered Items", buying_guide's "Individual Product Mini-Reviews each with H2", pillar_guide's "5-10 Chapter Sections" (chapter_count uses high bound = 10).
+
+**Fix 4 — `Async_Generator::$min_words['listicle']`** — bumped 1500 → 2500w. With the now-expanded queue (KT + Intro + Quick Comparison + 10 Items + Conclusion + FAQ + References = 15 slots), 2500w / 15 ≈ 167w per slot fits the §10.1 spec's mid-range for product mini-reviews. The v62.66 "truncate never deletes whole sections" rule means article may render at 3000-4000w — acceptable per the §10.1 word range.
+
+### Companion doc updates
+
+- `SEO-GEO-AI-GUIDELINES.md` §10.1 Listicle row — word range bumped 1000-3000 → 2500-4000, schema column clarifies "ItemList only — NOT a top-level Product (v62.71 schema fix)"
+- `admin/views/content-generator.php` SB_TYPE_PRESETS — listicle min: 1500 → 2500, wc: 2000 → 2500 to match PHP source of truth
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.70 → 62.71
+- `seobetter/includes/Schema_Generator.php` — detect_product_schema trigger list (`listicle` removed) + SPEAKABLE_TYPES (`listicle` added)
+- `seobetter/includes/Async_Generator.php` — `$min_words['listicle']` 1500 → 2500 + new `expand_meta_instruction_slots()` helper called in `create_job()`
+- `seobetter/admin/views/content-generator.php` — listicle preset min/wc bumped to 2500
+- `seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §10.1 Listicle row updated
+
+### Verify
+
+```
+grep -n "'review', 'buying_guide', 'comparison', 'sponsored' \]" seobetter/includes/Schema_Generator.php
+grep -n "'listicle' \]" seobetter/includes/Schema_Generator.php
+grep -n "'listicle' => 2500" seobetter/includes/Async_Generator.php
+grep -B 1 -A 25 "v1.5.216.62.71 — Expand .N Items / N Products" seobetter/includes/Async_Generator.php
+grep -n "private static function expand_meta_instruction_slots" seobetter/includes/Async_Generator.php
+```
+
+After upload + retest T3 #5 Listicle ("best washable dog beds australia"):
+- All 10 product mini-review H2s present (1. through 10.)
+- Each product mini-review 100-200w of substantive content
+- Schema.org Validator: no Product node (was bogus single one); ItemList passes
+- JSON-LD includes `SpeakableSpecification` with cssSelector `[ "h1", ".key-takeaways", "h2 + p" ]`
+- Article body 2500-4000w (the new expected range)
+
+**Verified by user:** UNTESTED
 
 ---
 

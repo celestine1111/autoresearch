@@ -338,7 +338,16 @@ class Schema_Generator {
     // search results for their respective intents (recipe queries, opinion
     // pieces, brand news), so emitting Speakable widens the surface where
     // Google Assistant / Alexa can read them aloud.
-    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release' ];
+    // v1.5.216.62.71 — `listicle` added. Voice assistants reading "Top 10 X"
+    // out loud is a frequent voice-search use case (Google Assistant
+    // / Siri / Alexa "Hey Google, what are the best dog beds in
+    // Australia"), so emitting Speakable on listicle widens the surface
+    // where the article can be read aloud. cssSelector chain in
+    // build_article() already targets h1 + .key-takeaways + first
+    // paragraph after each h2, which works naturally for a numbered
+    // listicle. User-reported on T3 #5 Listicle: Speakable was missing
+    // entirely from the JSON-LD blob.
+    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release', 'listicle' ];
 
     // Content types that get universal `citation[]` injection (v1.5.210).
     // Implements the "biggest LLM-citation lever" rollout flagged in v1.5.209
@@ -2487,7 +2496,35 @@ class Schema_Generator {
      * Only fires when content mentions specific product names with prices or ratings.
      */
     private function detect_product_schema( \WP_Post $post, string $content, string $content_type, string $category ): ?array {
-        if ( ! in_array( $content_type, [ 'review', 'buying_guide', 'comparison', 'sponsored', 'listicle' ], true ) ) {
+        // v1.5.216.62.71 — REMOVED 'listicle' from this trigger list.
+        //
+        // Pre-fix detect_product_schema() emitted a single top-level Product
+        // node for listicles, treating the entire "Top 10 X" article as one
+        // product. The Product node would have:
+        //   - name: article title minus "best/top/in-2026/etc" (e.g.
+        //     "washable dog beds australia for 2026: picks revealed" — not
+        //     a real product name, just a slug-derived blob)
+        //   - description: first 30 words of body (Key Takeaways prose, not
+        //     a product description)
+        //   - offers.price: first price match in body ($110 from one bed
+        //     of 10) misrepresented as "the" price
+        //   - offers.priceCurrency: defaulted to USD even when article was
+        //     entirely in AUD
+        // Google Rich Results Validator flags this as "missing required
+        // fields" (no review, no aggregateRating, no real brand) AND it
+        // misrepresents structured data (treating an article as a product
+        // is a Schema.org policy violation per §2 — content type must
+        // match marked-up @type).
+        //
+        // Listicles are correctly represented by the ItemList wrapper
+        // (already emitted by build_aioseo_schema) — each numbered item
+        // becomes a ListItem. A future enhancement will enrich each
+        // ListItem to be a full Product node with name/image/offer/
+        // aggregateRating per item, but a single bogus top-level Product
+        // is strictly worse than no Product at all. User-reported on T3
+        // #5 Listicle retest with Schema.org Validator: the Product node
+        // failed validation while the ItemList passed.
+        if ( ! in_array( $content_type, [ 'review', 'buying_guide', 'comparison', 'sponsored' ], true ) ) {
             return null;
         }
         $text = wp_strip_all_tags( $content );

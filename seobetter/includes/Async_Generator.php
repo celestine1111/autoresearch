@@ -112,7 +112,15 @@ class Async_Generator {
         $min_words = [
             'white_paper' => 2500, 'scholarly_article' => 3000, 'pillar_guide' => 3000,
             'case_study' => 1500, 'tech_article' => 1500, 'comparison' => 1500,
-            'buying_guide' => 2000, 'listicle' => 1500,
+            // v1.5.216.62.71 — listicle floor raised 1500 → 2500. The
+            // "10 Numbered Items" template entry now expands to 10 H2
+            // queue slots via expand_meta_instruction_slots(); paired
+            // with the v62.66 "truncate never deletes whole sections"
+            // rule, the only way to give each of 10 product mini-reviews
+            // the §10.1-spec'd 100-200 words of content is to bump the
+            // total floor. 2500w / 15 sections (10 products + 5
+            // structural) ≈ 167w per slot — fits the spec's mid-range.
+            'buying_guide' => 2000, 'listicle' => 2500,
             'blog_post' => 1000, 'how_to' => 1000, 'review' => 1000,
             'opinion' => 1500, 'interview' => 1000, 'faq_page' => 1000,
             'personal_essay' => 1500,
@@ -141,6 +149,18 @@ class Async_Generator {
         $prose_for_count = self::get_prose_template( $content_type, (int) ( $params['recipe_source_count'] ?? 3 ) );
         $template_section_count = max( 3, count( array_filter( array_map( 'trim',
             explode( ',', (string) ( $prose_for_count['sections'] ?? '' ) ) ) ) ) );
+        // v1.5.216.62.71 — Expand "N Items / N Products / N Picks /
+        // N Mini-Reviews" meta-instruction entries in the template's
+        // sections list to actual per-item slots. Pre-fix listicle's
+        // "10 Numbered Items" template entry counted as 1 in
+        // $template_section_count → num_sections capped at 7 → AI
+        // outline produced 10 product headings but only 4 got content
+        // generation because only 7 section_N steps were queued (KT +
+        // Intro + Quick Comparison Table + Items 1-4 = 7 used; Items
+        // 5-10 + Conclusion + FAQ + References never reached). User-
+        // reported on T3 #5 Listicle: "Top 10 Picks for 2026" promised,
+        // only 4 product H2 sections shipped.
+        $template_section_count = self::expand_meta_instruction_slots( $prose_for_count, $template_section_count );
         $content_sections = max( 3, min( 8, round( $word_count / 400 ) ) );
         $num_sections = max( $content_sections + 3, $template_section_count );
 
@@ -201,6 +221,52 @@ class Async_Generator {
             'est_minutes'  => $est_minutes,
             'first_step'   => $steps[0],
         ];
+    }
+
+    /**
+     * v1.5.216.62.71 — Expand "N Items / N Products / N Picks /
+     * N Mini-Reviews / N Chapters" meta-instruction entries in a prose
+     * template's `sections` field. The template's sections list usually
+     * has one entry per H2 heading (e.g. "Key Takeaways", "FAQ"), but
+     * some types describe a SET of similarly-structured items as a
+     * single meta-instruction entry (e.g. listicle's "10 Numbered Items
+     * (each gets its own H2)" or buying_guide's "Individual Product
+     * Mini-Reviews each with H2"). Pre-fix these counted as 1 slot
+     * even though they imply N slots, capping the section queue too
+     * tight. This helper detects the pattern and adds the implied
+     * extra slots.
+     *
+     * Pattern: looks for `^N Items|N Products|N Picks|N Mini-Reviews|
+     * N Chapters` at the start of an entry, where N is a positive
+     * integer or a small range (5-7, 3-5). Range high-bound wins to
+     * give the AI room. Single-digit "items" without a leading number
+     * (e.g. "FAQ items") doesn't match.
+     *
+     * Returns the adjusted slot count (base + extra slots from
+     * detected meta-instruction entries).
+     */
+    private static function expand_meta_instruction_slots( array $prose, int $base_count ): int {
+        $sections_str = (string) ( $prose['sections'] ?? '' );
+        if ( $sections_str === '' ) return $base_count;
+
+        $extra_slots = 0;
+        foreach ( array_map( 'trim', explode( ',', $sections_str ) ) as $entry ) {
+            // Strip parentheticals so "10 Numbered Items (each gets H2)" matches the head.
+            $clean = trim( preg_replace( '/\s*\([^)]*\)\s*/', ' ', $entry ) );
+            if ( preg_match(
+                '/^(\d+)(?:\s*[-–]\s*(\d+))?\s+(?:numbered\s+|individual\s+|topical\s+)?(?:items?|products?|picks?|chapters?|mini.?reviews?|sub.?sections?)\b/i',
+                $clean, $m
+            ) ) {
+                // Range like "5-7 Picks" → use the high bound (7) so the
+                // queue has room for the longer end of the range.
+                $count = isset( $m[2] ) && $m[2] !== '' ? (int) $m[2] : (int) $m[1];
+                if ( $count > 1 ) {
+                    $extra_slots += ( $count - 1 ); // -1 because the entry already counted as 1 in base_count
+                }
+            }
+        }
+
+        return $base_count + $extra_slots;
     }
 
     /**
