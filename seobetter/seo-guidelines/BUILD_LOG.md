@@ -19,7 +19,7 @@
 ## v1.5.216.62.68 — Image-in-H2 rendering bug + meta title `&…` SERP truncation
 
 **Date:** 2026-05-05
-**Commit:** `[pending]`
+**Commit:** `56fcfe6`
 
 ### Why
 
