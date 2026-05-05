@@ -7,12 +7,55 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.66)
+> **Last updated:** 2026-05-05 (v1.5.216.62.67)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.67 — Raise opinion word floor 1100 → 1500 so each §3.1A section gets ~150w breathing room
+
+**Date:** 2026-05-05
+**Commit:** `[pending]`
+
+### Why
+
+After v62.66 fixed `truncate_to_target()` to never delete whole sections, the architectural floor for opinion became "all 10 §3.1A sections preserved at any word count." But at the prior 1100w floor, that meant 1100w / 10 sections = ~110 words per section — not enough for the §3.1A guidance's per-section structure: each Argument N needs claim sentence + 2-3 evidence sentences (named source + number) + 1 example + 1 transition = 150-220 words. At 110w each, the AI was forced to drop evidence or examples to fit. User-requested 2026-05-05.
+
+### What changed
+
+**`Async_Generator.php::create_job()` minimum-word table** — `'opinion' => 1100` → `'opinion' => 1500`.
+
+**`Async_Generator.php::get_prose_template()` opinion guidance text** — bumped the floor reference from "1100w minimum per v1.5.216.62.52" → "1500w minimum per v1.5.216.62.67" so the AI prompt sees the matching number.
+
+**`SEO-GEO-AI-GUIDELINES.md` §10.1 opinion row** — word range bumped from "800-1400 (sweet spot 900-1100)" → "1500-2200 (sweet spot 1500-1800)". Same row also clarifies Arg 3 is REQUIRED (not conditional) since v62.52 already removed the conditionality.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.66 → 62.67
+- `seobetter/includes/Async_Generator.php`:
+  - `$min_words['opinion']` 1100 → 1500 (line ~106)
+  - opinion prose-template guidance text floor reference 1100w → 1500w (line ~915)
+  - new comment block documenting the v62.67 rationale
+- `seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md` §10.1 opinion row — word range + Arg 3 status
+
+### Verify
+
+```
+grep -n "'opinion' => 1500" seobetter/includes/Async_Generator.php
+grep -n "1500w minimum per v1.5.216.62.67" seobetter/includes/Async_Generator.php
+grep -n "1500-2200" seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md
+```
+
+After upload + retest opinion at any keyword (system rounds up <1500w to 1500):
+- Article body word count between 1500w and ~2500w (the new natural range with §3.1A 10 sections × 150-220w each + structural sections)
+- Each Argument N section visibly fuller — evidence sentence + source citation + at least one specific example present, not just a thesis claim
+- All other v62.66 acceptance criteria unchanged (10 sections, single H1, zero inline bolds, Devil's Advocate frame body-width, no bsky/mastodon/HN/quora URLs OR plaintext handles)
+
+**Verified by user:** UNTESTED
 
 ---
 
