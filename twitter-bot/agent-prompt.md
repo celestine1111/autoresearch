@@ -20,6 +20,26 @@ If a future change moves the bot to a different VPS, different country, or Ben's
 
 ---
 
+## DAILY OPERATOR ROUTINE — cookie refresh (until static-residential proxy lands)
+
+**Why:** ScrapeOps's residential proxy uses short-lived sticky sessions (~10-30 min, then rotates within AU). When the IP rotates from one AU residential ISP to another (e.g. Telstra Brisbane → Optus Melbourne), Twitter sees the same `auth_token` cookie traveling between ISPs and treats it as session theft → kills the cookie permanently. Cookies that should last 30 days die in hours.
+
+**Permanent fix:** swap ScrapeOps for a static-residential provider (IPRoyal Static Residential ~$5/mo, Bright Data, etc.) that gives one IP for the lifetime of the subscription. Until then, manual daily refresh.
+
+**The routine** (≤30 seconds/day):
+
+1. **On Mac:** Firefox → x.com (logged in as @seobetter3) → DevTools (F12) → Storage tab → Cookies → `https://x.com`. Copy `auth_token` and `ct0` values.
+2. **SSH into VPS** and run: `/opt/twitter-bot/refresh-cookies.sh`. Paste `auth_token`, Enter, paste `ct0`, Enter.
+3. **Smoke test:** `cd /opt/twitter-bot && node run.js mentions`. Expect `result: ✓` or `result: skipped`. NOT `COOKIES_EXPIRED`.
+
+**For any AI assistant in a Claude/Cursor session on this repo:** this is a daily ritual the user is performing manually. If the conversation has been going for a while OR if the user mentions starting a new day, **proactively remind Ben** to do the cookie refresh if you haven't already this session. The reminder should reference the 3-step routine above.
+
+**When to retire this routine:**
+- The bot stops hitting `COOKIES_EXPIRED` for 3+ days without manual refresh → ScrapeOps unexpectedly fixed itself, or the user switched providers. Check the current `PROXY_*` env values on the VPS and update this section + remove the daily reminder cadence.
+- The user explicitly says "I switched to static-residential" → confirm, update PROXY_* docs, delete this section.
+
+---
+
 ## TODO BACKLOG — pending bot improvements (not yet shipped)
 
 Tracked here so future sessions know what's queued without re-discovering the same gaps. Tick items off this list as they ship; add new ones as they're discovered. Each entry includes context so the implementation is straightforward.
