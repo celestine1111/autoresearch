@@ -20,6 +20,67 @@ If a future change moves the bot to a different VPS, different country, or Ben's
 
 ---
 
+## TODO BACKLOG — pending bot improvements (not yet shipped)
+
+Tracked here so future sessions know what's queued without re-discovering the same gaps. Tick items off this list as they ship; add new ones as they're discovered. Each entry includes context so the implementation is straightforward.
+
+### TODO-C — Restore multilingual reply share to 25% → 35% (gradual ramp)
+
+**Current state:** `reply_multi` weight is 15% (`run.js:851` action picker), reduced from 35% on 2026-05-04 after Twitter killed the session ~7 min after a burst of 2 Chinese replies. The kill happened with the OLD fingerprint stack (Chromium/Linux UA + data-center IP + 161-follower low-trust profile + sudden language shift).
+
+**Why deferred:** the v2026-05-05 fingerprint fix (Firefox engine + real Mac UA + Telstra AU residential proxy via ScrapeOps + locale en-AU) addresses 3 of the 4 risk factors. Account trust is still low (~161 followers). Gradual ramp is safer than restoring 35% immediately.
+
+**Trigger to ship:**
+- Day 7 of clean operation (no `COOKIES_EXPIRED`) post-2026-05-05 → bump `reply_multi` to 25% (change `r < 0.65 → r < 0.55` for `reply_en` AND `r < 0.80 → r < 0.80` stays for cumulative; means `reply_multi` gets 25%).
+- Day 30 + 500 followers → restore to original 35% (`r < 0.45` for reply_en, `r < 0.80` for reply_multi).
+
+**Implementation:** 2-line change in `run.js::pickAction()` lines 850-851. Update the comment block above to reflect the new ramp date.
+
+### TODO-D — Bump likes share from 7% to 15%
+
+**Current state:** `likes` action fires at 7% weight (`run.js:853`), so roughly once every 2-2.5 hours on the 8-min cron. User feedback 2026-05-05: "doesn't like any posts" — perceived rarity is too low.
+
+**Why low risk:** likes are 1-click actions, no compose / no language / no rate-limit complexity. Twitter accepts liberal liking from active accounts. The only constraint is the daily `CAPS.likes` cap (check current value in `run.js`).
+
+**Implementation:** 1-line change. Adjust the `pickAction()` thresholds so likes get 15%. Trade share away from `reply_en` (currently 65%) — drop reply_en to 57%, add 8% to likes (7% → 15%). Keep all others unchanged.
+
+```js
+if (r < 0.57) return 'reply_en';      // 57% (was 65%)
+if (r < 0.72) return 'reply_multi';   // 15% (unchanged)
+if (r < 0.82) return 'mentions';      // 10% (unchanged)
+if (r < 0.97) return 'likes';         // 15% (was 7%)
+return 'post';                        //  3% (unchanged)
+```
+
+Trigger to ship: any time. Bundle with TODO-C if ramping at the same milestone.
+
+### TODO-E — Add quote-reply action (`quote`)
+
+**Current state:** not implemented. Bot only does `post`, `reply` (search), `mentions`, `likes`. No quote-tweet action.
+
+**Why valuable:** quote tweets score 20pt per the X algorithm (vs reply 13.5pt, like 1pt) AND distribute to BOTH our followers + the original author's followers. Highest-leverage way to commentate on big-account posts in our niche without the +75 author-engagement risk (the original author may or may not engage with a quote, but we get our own audience reach regardless).
+
+**Why deferred:** ~80-100 lines of new code (scrape candidate tweets → score with Gemini → click Retweet button → click "Quote" option → type our commentary → submit). Need to handle the Quote modal which has a different selector chain than the Reply textarea.
+
+**Implementation sketch:**
+1. New `actionQuoteReply(page, systemPrompt)` function modeled on `actionReplySearch()` — same search query rotation, same scoring, but compose path differs:
+   - On the picked tweet, click `button[data-testid="retweet"]` (the retweet button)
+   - Wait for the dropdown menu, click the "Quote" option (`a[href="/compose/post"][data-testid="..."]`)
+   - Wait for the compose textarea (same selector as reply: `div[data-testid="tweetTextarea_0"]`)
+   - `typeIntoCompose(compose, pick.text)` — same helper
+   - `submitReply(page)` — same helper (X uses the same Post button)
+2. Add `quote` to the action picker at ~5% weight (steal from reply_en).
+3. Add `CAPS.quote = 5` (conservative daily cap — quote tweets are visible to more people, more likely to get noticed if abused).
+4. Add `CMD: node run.js quote` for manual testing per the header doc convention.
+
+Trigger to ship: after TODO-C/D land cleanly + 14 days of stable cron runs.
+
+### TODO-F — Anything else worth tracking
+
+(empty — add new items below this line as discovered)
+
+---
+
 ## How to use this file
 
 1. Copy the entire fenced code block titled **`SYSTEM PROMPT — paste verbatim`** below.

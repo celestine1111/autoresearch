@@ -218,6 +218,33 @@ const ENGLISH_QUERIES = [
 
 // Loosened in v1.0.1 — same reasoning as ENGLISH_QUERIES. Multi-word AND
 // queries narrow the topic without forcing exact phrasing.
+// 2026-05-05 — Fix A: code → human-readable language name. Pre-fix the prompt
+// passed `lang.toUpperCase()` (e.g. "ZH") to Gemini, which the model often
+// interpreted ambiguously and silently defaulted to English replies on Chinese /
+// Japanese / Korean / Arabic targets. Passing the human-readable name resolves
+// the ambiguity. User-reported on the @seobetter3 account: bot was replying in
+// English to clearly-Chinese tweets despite reply_multi mode firing correctly.
+const LANG_NAMES = {
+  en: 'English',
+  ja: 'Japanese',
+  es: 'Spanish',
+  pt: 'Portuguese',
+  de: 'German',
+  fr: 'French',
+  zh: 'Chinese (Simplified)',
+  ko: 'Korean',
+  it: 'Italian',
+  ru: 'Russian',
+  nl: 'Dutch',
+  pl: 'Polish',
+  tr: 'Turkish',
+  id: 'Indonesian',
+  vi: 'Vietnamese',
+  th: 'Thai',
+  ar: 'Arabic',
+  hi: 'Hindi',
+};
+
 const MULTILINGUAL_QUERIES = [
   // Japanese
   { q: 'WordPress SEO プラグイン -is:retweet lang:ja', lang: 'ja' },
@@ -584,15 +611,16 @@ async function actionReplySearch(page, systemPrompt, useLang) {
   );
   if (!fresh.length) return `searched "${query.substring(0, 60)}": all ${tweets.length} from already-replied handles`;
 
+  const langName = LANG_NAMES[lang] || lang.toUpperCase();
   const userPrompt = `MODE: prospect_search
 
 INPUT:
-- Search language: ${lang}
+- Search language: ${langName} (BCP-47 code: ${lang})
 - Query: ${query}
 - Candidate tweets:
 ${JSON.stringify(fresh, null, 2)}
 
-Score each tweet 1-10 per §5. For tweets scoring ≥7, write a reply IN ${lang.toUpperCase()} (the prospect's language) per §6 + §7 + §17.
+Score each tweet 1-10 per §5. For tweets scoring ≥7, write a reply IN ${langName} (the prospect's language — write naturally in that language using its native script; do NOT default to English) per §6 + §7 + §17.
 Return ONLY the JSON per §4 schema. The "tweets" array has one entry per scored prospect, with "in_reply_to" set to that prospect's tweet URL.`;
 
   const raw  = await gemini(systemPrompt, userPrompt);
@@ -633,7 +661,18 @@ Return ONLY the JSON per §4 schema. The "tweets" array has one entry per scored
 async function actionMentions(page, systemPrompt) {
   if (getDailyCount('mention_reply') >= CAPS.mention_reply) return 'skipped: mention cap reached';
 
-  await page.goto('https://x.com/notifications/mentions', { waitUntil: 'domcontentloaded' });
+  // 2026-05-05 — Fix B: was /notifications/mentions which only shows tweets
+  // that explicitly @-mention us. Replies to OUR tweets that don't include
+  // an @-mention (X increasingly auto-strips the @ prefix from in-thread
+  // replies) go to the general /notifications tab instead, NOT /mentions.
+  // Pre-fix the bot's "5 mentions, all already responded" log meant it was
+  // re-seeing the same old @-mentions repeatedly while missing every new
+  // reply-without-@-prefix on tweets it had posted — losing the +75 algo
+  // signal (author engaging with reply on own post = highest weighted X
+  // engagement signal per §0). Switching to /notifications surfaces both
+  // explicit @-mentions AND in-thread replies; the existing dedup against
+  // replied-mentions state file prevents double-replying.
+  await page.goto('https://x.com/notifications', { waitUntil: 'domcontentloaded' });
   // Wait for either tweets to render or for an "empty state" indicator.
   try {
     await Promise.race([
