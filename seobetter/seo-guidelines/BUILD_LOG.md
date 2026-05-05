@@ -19,7 +19,7 @@
 ## v1.5.216.62.66 — ROOT CAUSE 2: AI rephrases placeholder section headings (Argument 1/2/3) → preg_quote-protected regex misses → truncate drops them. Fix: force-prepend canonical heading + never delete whole sections + scrub plaintext bsky/mastodon/lemmy handles.
 
 **Date:** 2026-05-05
-**Commit:** `[pending]`
+**Commit:** `9ccf488`
 
 ### Why
 
