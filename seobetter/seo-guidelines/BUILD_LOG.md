@@ -7,7 +7,7 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.63)
+> **Last updated:** 2026-05-05 (v1.5.216.62.64)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
@@ -16,10 +16,76 @@
 
 ---
 
-## v1.5.216.62.63 — Centralize source-quality filter (was bypassed by linkify_bracketed_references); constrain Devil's Advocate frame to content-width
+## v1.5.216.62.64 — FIX detect_video_schema fires fake VideoObject for text-link YouTube references (Schema.org cloaking violation)
 
 **Date:** 2026-05-05
 **Commit:** `[pending]`
+
+### Why
+
+User-reported on T3 #4 How-To "how to set up a home compost bin" retest: schema declared a `VideoObject` with `embedUrl` / `contentUrl` / `thumbnailUrl` for `https://www.youtube.com/embed/egyNJ7xPyoQ`, but the rendered article had **zero `<iframe>` and zero `<img>`** for YouTube. The video URLs only existed inside the JSON-LD schema.
+
+This is a Schema.org policy violation per [Google's structured-data guidelines](https://developers.google.com/search/docs/appearance/structured-data/sd-policies):
+
+> "When you mark up your content using structured data, your visible content must match the structured data."
+
+Declaring a VideoObject when no video is actually embedded is exactly the kind of cloaking Google penalizes — and AI search engines flag it as a trust signal failure.
+
+Root cause: `Schema_Generator::detect_video_schema()` regex matched ANY YouTube URL pattern including `youtube.com/watch?v=...` text-link share URLs. The flow that triggered the bug:
+
+1. Topic-research returned a YouTube video URL in the citation pool
+2. AI mentioned `(YouTube)` as a citation in body prose
+3. `linkify_bracketed_references` wrapped it: `[(YouTube)](https://www.youtube.com/watch?v=egyNJ7xPyoQ)`
+4. `validate_outbound_links` kept it (pool-membership pass)
+5. `detect_video_schema` scanned the saved `post_content`, regex matched `youtube.com/watch?v=egyNJ7xPyoQ` in the link href
+6. Generated VideoObject with `embedUrl`, `contentUrl`, `thumbnailUrl` from the matched ID
+
+But the body only had a small text link, not an embedded player. Every step worked "as designed" but the final schema lied about visible content.
+
+### What changed
+
+**`detect_video_schema()` now requires actual embed-element presence** ([Schema_Generator.php](seobetter/includes/Schema_Generator.php))
+
+Before running the per-platform regex chain, extract all `<iframe>`, `<embed>`, and `<video>` tags from the content into a concatenated blob:
+
+```php
+if ( ! preg_match_all( '/<(?:iframe|embed|video)\b[^>]+>/i', $content, $tag_matches ) ) {
+    return null;
+}
+$embed_blob = implode( ' ', $tag_matches[0] );
+```
+
+Per-platform patterns now run against `$embed_blob` instead of the full content. Text links to YouTube / Vimeo / Rumble / etc. URLs no longer trigger VideoObject. Real player embeds still match because their `src=` URL is inside the iframe tag string.
+
+Universal across all 21 video platforms in the v1.5.216.62.24 detection list (YouTube, Vimeo, Rumble, TikTok, Twitch, Facebook Watch, Instagram Reels, Bilibili, Youku, iQiyi, Niconico, Naver TV, Kakao TV, Dailymotion, Vidio, Aparat, RuTube, VK Video, Coub, Wistia, Mux, Brightcove).
+
+### Note on what still ships when video IS embedded
+
+For articles that genuinely embed a video, the iframe context is present and VideoObject fires correctly. The schema's `name` is still the article title (per pre-fix behaviour) and `description` is still derived from `wp_trim_words(wp_strip_all_tags($content), 30)`. Those fields describe the ARTICLE not the video — slightly misleading but Schema.org spec requires `name` so we can't drop it.
+
+A separate ship could fetch real video metadata via YouTube oEmbed API or similar, but that's per-platform extra HTTP calls and parking it as a future enhancement.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.63 → 62.64
+- `seobetter/includes/Schema_Generator.php::detect_video_schema()` — iframe/embed/video tag extraction added before per-platform pattern loop
+
+### Verify
+
+```
+grep -A 6 "v1.5.216.62.64 — require actual embed-element presence" seobetter/includes/Schema_Generator.php
+```
+
+After upload + retest of any how-to / educational article: VideoObject schema appears ONLY when the body has an actual `<iframe>` (or `<embed>` / `<video>` tag) referencing one of the 21 supported platforms. Text-link references to video URLs no longer produce VideoObject schema. Articles without embedded videos: no VideoObject node in `@graph`.
+
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.216.62.63 — Centralize source-quality filter (was bypassed by linkify_bracketed_references); constrain Devil's Advocate frame to content-width
+
+**Date:** 2026-05-05
+**Commit:** `a4ce627`
 
 ### Why
 

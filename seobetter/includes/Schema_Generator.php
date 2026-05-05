@@ -2021,9 +2021,29 @@ class Schema_Generator {
      * (where extractable) + name + description + uploadDate.
      */
     private function detect_video_schema( \WP_Post $post, string $content ): ?array {
+        // v1.5.216.62.64 — require actual embed-element presence.
+        // Pre-fix the per-platform regex matched ANY YouTube URL including
+        // plain text links like `[Watch a video](https://www.youtube.com/watch?v=egyNJ7xPyoQ)`,
+        // producing fake VideoObject schema for articles that didn't
+        // actually embed a video. User-reported on T3 #4 How-To: schema
+        // declared embedUrl/contentUrl/thumbnailUrl for a YouTube video
+        // that wasn't visible on the page (zero `<iframe>` rendered).
+        // Schema.org policy: structured data must match visible content.
+        // Google flags this as cloaking.
+        //
+        // Fix: extract all <iframe>, <embed>, <video> tags from the
+        // content and run the per-platform pattern only against the
+        // concatenated tag text. Text-link references to videos no
+        // longer trigger VideoObject. Real player embeds still match
+        // because their src= URL is inside the iframe tag string.
+        if ( ! preg_match_all( '/<(?:iframe|embed|video)\b[^>]+>/i', $content, $tag_matches ) ) {
+            return null;
+        }
+        $embed_blob = implode( ' ', $tag_matches[0] );
+
         $configs = self::get_video_platform_configs();
         foreach ( $configs as $platform ) {
-            if ( preg_match( $platform['pattern'], $content, $m ) ) {
+            if ( preg_match( $platform['pattern'], $embed_blob, $m ) ) {
                 $node = [
                     '@type'       => 'VideoObject',
                     'name'        => $post->post_title,
