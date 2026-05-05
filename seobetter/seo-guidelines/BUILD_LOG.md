@@ -7,12 +7,58 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.67)
+> **Last updated:** 2026-05-05 (v1.5.216.62.68)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.68 — Image-in-H2 rendering bug + meta title `&…` SERP truncation
+
+**Date:** 2026-05-05
+**Commit:** `[pending]`
+
+### Why
+
+User screenshot of T3 #3 Opinion v62.67 retest showed the H2 "Hook and Thesis: The Real Problem With Automatic Content Moderation" rendering with the entire markdown image syntax `![Why AI content moderation is broken comparison chart showing key features and differences](https://images.pexels.com/photos/6750221/...)` literally stuffed INTO the H2 element's text content. Image displayed nowhere, heading displayed as a giant unreadable purple block of alt text + URL.
+
+Separately, the Google SERP / AIOSEO meta title was displaying as `Why AI content moderation is broken: 2026 insights &…` — the trailing `&…` is literal "&" followed by ellipsis, indicating Google truncated a too-long title at a position that landed on an unencoded `&` character (probably from `2026 insights & strategies` or similar).
+
+### What changed
+
+**Bug 1 — `Stock_Image_Inserter::insert_images()`** ([includes/Stock_Image_Inserter.php](seobetter/includes/Stock_Image_Inserter.php))
+
+Was: `$output .= "\n\n![{$alt_text}]({$image_url})\n";` — markdown image syntax. Some downstream pipeline step (markdown parser quirk OR a trim/collapse) was eating the blank line between the H2 and the image and parsing the entire `## Heading\n![alt](url)` blob as a single H2 with the image syntax as its text content.
+
+Fix: emit the image as raw HTML `<p><img src="..." alt="..." loading="lazy" /></p>` block instead of markdown syntax. Markdown parsers MUST treat raw HTML block elements as standalone — they cannot be collapsed into the previous heading element. Both `alt` and `src` are htmlspecialchars-encoded with ENT_QUOTES + UTF-8 to defend against XSS from any AI-generated alt text.
+
+**Bug 2 — `AI_Content_Generator::generate_meta_tags()`** ([includes/AI_Content_Generator.php](seobetter/includes/AI_Content_Generator.php))
+
+Added a `sanitize_meta_title( $title, $max_chars )` helper that runs after the AI returns the meta. It (1) decodes any HTML entities the AI may have emitted, (2) replaces standalone ` & ` with ` and ` so neither side leaves a dangling ampersand at SERP truncation boundaries, (3) collapses whitespace, (4) if still over the limit (60 for TITLE, 90 for OG_TITLE per the AI prompt's `[50-60 chars]` and `[60-90 chars]` instructions), trims to the last word boundary AND strips trailing punctuation. Result: title always fits SERP display + never displays mid-entity garbage.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.67 → 62.68
+- `seobetter/includes/Stock_Image_Inserter.php` — line 72 emits raw HTML `<p><img/></p>` block instead of markdown image syntax
+- `seobetter/includes/AI_Content_Generator.php` — `generate_meta_tags()` now post-processes title + og_title through new `sanitize_meta_title()` helper (40 lines)
+
+### Verify
+
+```
+grep -A 3 "v1.5.216.62.68 — emit as raw HTML" seobetter/includes/Stock_Image_Inserter.php
+grep -A 3 "v1.5.216.62.68 — defensive meta-title" seobetter/includes/AI_Content_Generator.php
+grep -B 1 -A 12 "private static function sanitize_meta_title" seobetter/includes/AI_Content_Generator.php
+```
+
+After upload + retest opinion at any keyword:
+- Inline images render as actual `<img>` elements with the Pexels photo visible, NOT as text inside an H2
+- H2 headings display only the heading text, no embedded URLs or alt text strings
+- Meta title in AIOSEO panel + Google SERP preview is ≤60 chars, no trailing `&…`, ends at a word boundary
+
+**Verified by user:** UNTESTED
 
 ---
 

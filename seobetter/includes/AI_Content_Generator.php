@@ -465,6 +465,18 @@ Rules:
             }
         }
 
+        // v1.5.216.62.68 — defensive meta-title sanitization. The AI was
+        // told "50-60 chars" but routinely overshoots to 63-70 chars, and
+        // sometimes emits an unencoded `&` (ampersand) inside the title.
+        // Google's SERP truncates titles >60 chars at the boundary, and when
+        // the truncation lands mid-character on an `&`, the displayed title
+        // ends with literal "&…" — user-reported on T3 #3 Opinion as
+        // "Why AI content moderation is broken: 2026 insights &…". Fix:
+        // replace `& ` → ` and `, decode any entities, trim to last
+        // word boundary if still over limit.
+        $meta['title']    = self::sanitize_meta_title( $meta['title'], 60 );
+        $meta['og_title'] = self::sanitize_meta_title( $meta['og_title'], 90 );
+
         // CTR scoring
         $meta['title_length'] = mb_strlen( $meta['title'] );
         $meta['desc_length'] = mb_strlen( $meta['description'] );
@@ -472,6 +484,35 @@ Rules:
         $meta['desc_score'] = $this->score_meta_description( $meta['description'], $keyword_for_prompt );
 
         return $meta;
+    }
+
+    /**
+     * v1.5.216.62.68 — sanitize a meta title to avoid mid-character SERP
+     * truncation. Replaces standalone `&` with " and " (so neither side
+     * leaves a dangling ampersand), decodes any HTML entities the AI may
+     * have emitted, collapses whitespace, then trims to the last word
+     * boundary if the result still exceeds $max_chars. Returns "" for
+     * empty input. Default max for TITLE is 60 (Google SERP cutoff);
+     * pass 90 for OG_TITLE per AI prompt §10 of generate_meta_tags.
+     */
+    private static function sanitize_meta_title( string $title, int $max_chars = 60 ): string {
+        if ( trim( $title ) === '' ) return $title;
+        // Decode entities first so we're working with literal characters
+        $title = html_entity_decode( $title, ENT_QUOTES, 'UTF-8' );
+        // Replace standalone & (with surrounding whitespace) with "and"
+        $title = preg_replace( '/\s+&\s+/', ' and ', $title );
+        // Collapse any remaining whitespace runs
+        $title = preg_replace( '/\s+/', ' ', trim( $title ) );
+        if ( mb_strlen( $title ) <= $max_chars ) {
+            return $title;
+        }
+        // Over budget — trim at the last word boundary within $max_chars
+        $cut = mb_substr( $title, 0, $max_chars );
+        if ( preg_match( '/^(.+)\s+\S+$/u', $cut, $m ) ) {
+            $cut = $m[1];
+        }
+        // Strip trailing punctuation that would look dangling after truncation
+        return rtrim( $cut, " ,;:-—–" );
     }
 
     /**

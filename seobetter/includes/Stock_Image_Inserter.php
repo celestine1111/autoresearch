@@ -69,7 +69,22 @@ class Stock_Image_Inserter {
                     $alt_text = $this->generate_alt_text( $keyword, $heading_text, $section_context, $language );
                     $image_url = $this->get_image_url( $keyword, $heading_text, $image_inserted );
 
-                    $output .= "\n\n![{$alt_text}]({$image_url})\n";
+                    // v1.5.216.62.68 — emit as raw HTML <p><img/> block, NOT
+                    // markdown `![alt](url)` syntax. Pre-fix the markdown
+                    // image syntax appended after H2 was getting stuffed
+                    // INTO the H2 heading's text content on render — root
+                    // cause unclear (downstream markdown parser quirk OR
+                    // a pipeline step trimming the blank line between
+                    // heading and image), but the symptom was reproducible
+                    // on T3 #3 Opinion: the H2 displayed verbatim
+                    // `Hook and Thesis: ...![alt](https://images.pexels.com/...)`
+                    // as one big purple heading with the image's alt text
+                    // and Pexels URL embedded. Raw HTML <p> block is
+                    // unambiguous to every markdown parser and CANNOT be
+                    // collapsed into the previous heading element.
+                    $alt_escaped = htmlspecialchars( $alt_text, ENT_QUOTES, 'UTF-8' );
+                    $url_escaped = htmlspecialchars( $image_url, ENT_QUOTES, 'UTF-8' );
+                    $output .= "\n\n<p><img src=\"{$url_escaped}\" alt=\"{$alt_escaped}\" loading=\"lazy\" /></p>\n\n";
                     $image_inserted++;
                 }
             } else {
