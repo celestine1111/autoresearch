@@ -4,6 +4,22 @@
 
 ---
 
+## DEPLOYMENT CONTEXT — read this BEFORE suggesting any workflow changes
+
+**Where the bot runs:** a remote VPS in Sydney, Australia. NOT on Ben's Mac. There is no local-Mac copy of the bot — it lives only at `/opt/twitter-bot/` on the VPS.
+
+**Implications for any AI assistant editing this repo:**
+
+1. **Do not suggest `scp` from Mac to VPS** to deploy code changes. The Mac doesn't have a working copy in the same way — Ben edits via the Mac repo, but new code reaches the VPS via `curl https://raw.githubusercontent.com/celestine1111/autoresearch/main/twitter-bot/<file>` directly on the VPS, OR via `git clone` of the public repo into a temp dir then `cp` the needed files. The VPS at `/opt/twitter-bot/` is NOT a git repo — it was originally seeded by scp from the Mac at install time but has since drifted to "VPS-only deploy via curl".
+2. **All test commands run on the VPS** — `node run.js mentions`, `tail -f log.txt`, `curl -x ...` proxy tests. Don't propose Mac-side test scripts.
+3. **Cookie source ≠ runtime location.** Ben's browser (where `auth_token` / `ct0` originate) runs on his Mac in Sydney. The bot replays those cookies from the Sydney VPS through a ScrapeOps Australian residential proxy so the IP fingerprint matches the cookie's home-country origin.
+4. **Editing flow:** Ben pulls this repo on his Mac, makes code changes, commits + pushes to GitHub (`celestine1111/autoresearch` main branch), then pulls those files onto the VPS via `curl raw.githubusercontent.com/...`. There is no CI/CD; deploys are manual per-file curls.
+5. **Current runtime config (Sydney AU, Telstra residential via ScrapeOps):** Firefox engine, real Mac Firefox UA in `USER_AGENT`, `LOCALE=en-AU`, `TIMEZONE=Australia/Sydney`, ScrapeOps sticky-session residential proxy with `country=au.sticky_session=78451234`. See `/opt/twitter-bot/.env` on the VPS for the exact values.
+
+If a future change moves the bot to a different VPS, different country, or Ben's local machine — update this section.
+
+---
+
 ## How to use this file
 
 1. Copy the entire fenced code block titled **`SYSTEM PROMPT — paste verbatim`** below.
