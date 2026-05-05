@@ -7,12 +7,60 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.69)
+> **Last updated:** 2026-05-05 (v1.5.216.62.70)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.70 — ROOT CAUSE: v62.65 path filters + YouTube blocking lived only in `filter_link()`, references-builder bypassed them entirely. Consolidated into `is_low_quality_source()` so all 3 consumers (filter_link / linkify / references-builder) share one source of truth.
+
+**Date:** 2026-05-05
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on T3 #4 How-To retest at https://srv1608940.hstgr.cloud/how-to-set-up-a-home-compost-bin-the-complete-2026-guide/: References section still contained `https://www.youtube.com/watch?v=egyNJ7xPyoQ` (Reference #10) and `https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json` (Reference #8). Both were supposedly fixed in v62.64 (YouTube text-link → no fake VideoObject) and v62.65 (Bank of Canada Valet URL → blocked path-segment data endpoints).
+
+**Root cause:** the v62.65 path-pattern filters (`\.(json|xml|...)$|/(json|xml|...)/?$|/api/v\d`, etc.) and the v62.65 commerce / data-portal blockers were added INSIDE `validate_outbound_links()::filter_link()` — the function that processes inline body links. The references-builder (`Citation_Pool::append_references_section()`) and the bracketed-mention linkifier (`linkify_bracketed_references()`) BYPASS filter_link entirely — they call the centralized `SEOBetter::is_low_quality_source()` helper directly. That helper only had v62.61–v62.63 patterns (Reddit, LinkedIn, Medium, HN, Quora, Bluesky, Mastodon, Lemmy) — it never received the v62.65 patterns. So URLs that filter_link blocked from body inline use happily landed in the auto-built References section.
+
+YouTube was a separate omission — never added anywhere as a citation blocker. The v62.64 fix was scoped to `Schema_Generator::detect_video_schema` (preventing fake VideoObject schema for text-link YouTube refs); it never touched citation filtering. So youtube.com/watch?v=... URLs from the citation pool flowed straight into the body and References without challenge.
+
+### What changed
+
+**`SEOBetter::is_low_quality_source()` extended with all v62.65 patterns + YouTube/youtu.be host blocks** ([seobetter.php](seobetter/seobetter.php)).
+
+Three new pattern groups added to the helper:
+
+1. **YouTube hosts blocked entirely** — `youtube.com` and `youtu.be`. Text-link YouTube citations aren't useful (can't verify content, may be deleted, no E-E-A-T authority signal). Articles that actually EMBED a video go through the `<iframe>` path which gets a real VideoObject schema (v62.64) — that path is unaffected.
+2. **API endpoint / data file path patterns** (origin v62.65, was inline in filter_link only): `\.(json|xml|csv|rss|atom)$|/(json|xml|csv|rss|atom|raw|export|dump|download)/?$|/query$|/search$|fdsnws|/api/v\d`
+3. **Commerce category-listing hash IDs** (origin v62.65): `^/[cb]/[^/]+/[^/]+/[a-f0-9]{20,}/?$`
+4. **Data-portal path prefixes** (origin v62.65): `^/(valet|observations|series|datasets?|raw|api)/`
+
+The inline copies in `filter_link()` are now redundant defense-in-depth — they could be removed in a cleanup commit, but leaving them costs nothing and protects against future bypass paths. Single source of truth for URL quality is now `is_low_quality_source()`.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.69 → 62.70
+- `seobetter/seobetter.php::is_low_quality_source()` — added YouTube/youtu.be host blocks + v62.65 path-pattern blocks (~25 lines)
+- `seobetter/seo-guidelines/external-links-policy.md` — Pass -0.5 docs section updated (next edit)
+
+### Verify
+
+```
+grep -B 1 -A 25 "v1.5.216.62.70 — YouTube text-link references blocked" seobetter/seobetter.php
+grep -A 10 "Path-based blocks (consolidated from filter_link" seobetter/seobetter.php
+```
+
+After upload + T3 #4 How-To regenerate at the same params:
+- Zero `youtube.com/watch?v=...` or `youtu.be/...` URLs in body OR references
+- Zero `bankofcanada.ca/valet/...` or any other `/(valet|observations|series|datasets|raw|api)/` URLs
+- Zero `*.json` / `/json/` / `/api/v\d/` path URLs
+
+**Verified by user:** UNTESTED
 
 ---
 

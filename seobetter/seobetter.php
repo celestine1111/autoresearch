@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.69
+ * Version: 1.5.216.62.70
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.69' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.70' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -3697,6 +3697,51 @@ final class SEOBetter {
         if ( preg_match( '#(?:^|\.)bsky\.(?:app|social)$#i', $host ) ) return true;
         if ( preg_match( '#(?:^|\.)mastodon\.social$#i', $host ) ) return true;
         if ( preg_match( '#(?:^|\.)lemmy\.world$#i', $host ) ) return true;
+
+        // v1.5.216.62.70 — YouTube text-link references blocked.
+        // Pre-fix YouTube URLs (text-link format like
+        // youtube.com/watch?v=... or youtu.be/...) were getting auto-added
+        // to the References section by Citation_Pool::append_references_section
+        // because is_low_quality_source() didn't reject them. The v62.64
+        // detect_video_schema fix already prevents fake VideoObject schema
+        // from firing on text-link YouTube refs, but the citation itself
+        // still slipped into the References list. User-reported on T3 #4
+        // How-To: youtube.com/watch?v=... appeared as Reference #10 even
+        // though the article had no embedded video. Block YouTube hosts
+        // entirely as citation sources — text-link YouTube refs aren't
+        // useful citations (can't verify content, may be deleted, no
+        // authority signal). If a future article actually EMBEDS a video,
+        // it goes through the iframe path and gets a real VideoObject
+        // schema — that path is unaffected.
+        if ( preg_match( '#(?:^|\.)youtube\.com$#i', $host ) ) return true;
+        if ( preg_match( '#(?:^|\.)youtu\.be$#i', $host ) ) return true;
+
+        // v1.5.216.62.70 — Path-based blocks (consolidated from filter_link
+        // inline checks added in v62.65). Pre-fix v62.65's API endpoint /
+        // commerce PLP / data portal patterns lived ONLY inside
+        // validate_outbound_links()::filter_link(), so the references-
+        // builder (Citation_Pool::append_references_section) and the
+        // bracketed-mention linkifier bypassed them — both call
+        // is_low_quality_source() directly. User-reported on T3 #4 How-To:
+        // bankofcanada.ca/valet/observations/FXUSDCAD/json appeared in
+        // Reference #8 despite filter_link's v62.65 regex matching it.
+        // Moving the patterns INTO the helper makes all three consumers
+        // (filter_link, linkify, references-builder) share one source of
+        // truth for URL quality. The inline copies in filter_link are
+        // now redundant defense-in-depth.
+        $path_lc = $path ?? '';
+        // API endpoint / data file patterns (v62.65 origin)
+        if ( preg_match( '#\.(json|xml|csv|rss|atom)$|/(json|xml|csv|rss|atom|raw|export|dump|download)/?$|/query$|/search$|fdsnws|/api/v\d#i', $path_lc ) ) {
+            return true;
+        }
+        // Commerce category-listing hash IDs (v62.65 origin)
+        if ( preg_match( '#^/[cb]/[^/]+/[^/]+/[a-f0-9]{20,}/?$#i', $path_lc ) ) {
+            return true;
+        }
+        // Data-portal path prefixes (v62.65 origin)
+        if ( preg_match( '#^/(valet|observations|series|datasets?|raw|api)/#i', $path_lc ) ) {
+            return true;
+        }
 
         return false;
     }

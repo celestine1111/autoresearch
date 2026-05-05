@@ -470,6 +470,8 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 
 - `dev.to` — DEV.to tech articles. **Retained** because DEV.to posts function more like curated tutorial publications than personal social feeds; tech articles do legitimately cite DEV.to for code-walkthrough content.
 
+**v1.5.216.62.70 consolidation:** all v62.65 path-pattern blockers (json/api/valet/observations/etc.) AND YouTube/youtu.be host blockers were moved INTO `is_low_quality_source()` so the references-builder (`Citation_Pool::append_references_section`) and the bracketed-mention linkifier (`linkify_bracketed_references`) finally enforce them too — pre-fix v62.65 patterns lived only in `validate_outbound_links::filter_link()` which the references-builder bypasses entirely. User-reported on T3 #4 How-To: youtube.com/watch?v=... and bankofcanada.ca/valet/.../json both appeared in auto-built References despite filter_link blocking them inline. Single source of truth for URL quality is now `is_low_quality_source()`. The redundant inline copies in `filter_link()` remain as defense-in-depth.
+
 **REMOVED v1.5.216.62.61** — the following were originally added in v1.5.16 as "trending discussion sources" but produced E-E-A-T-weakening citations to personal social-media posts (e.g. user-reported on the AI-content-moderation Opinion article: 4 inline citations to a single `kcox105.bsky.social` user post). Personal social posts are not authoritative sources for SEO / opinion / educational article citations and violate §2's "every claim traceable to a real source" rule. Removed from `seobetter.php::get_trusted_domain_whitelist()`:
 
 - ~~`bsky.app`, `bsky.social`~~ — Bluesky personal posts (removed)
