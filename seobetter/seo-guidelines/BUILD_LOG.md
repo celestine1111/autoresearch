@@ -7,12 +7,53 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.73)
+> **Last updated:** 2026-05-06 (v1.5.216.62.74)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.74 — Review polish duo: extend item_name strip word list (+tested/reviewed/compared/ranked/rated/new/latest/ultimate) + Review prose-template NUMERIC RATING RULE (mandatory X/Y in Verdict section so reviewRating extracts)
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+T3 #6 Review v62.73 retest (Dyson V15 Detect, country=UK) — 3 of 4 v62.73 fixes worked perfectly, 1 partial:
+
+**Polish 1 — item_name still had dangling fragment.** Post_title `"Dyson v15 detect cordless vacuum review tested for 2026"` — v62.73 stripped `review` + year + connector word `for`, but left `tested` orphaned. Schema's itemReviewed.name = "Dyson v15 detect cordless vacuum tested for". Better than v62.72's "...features for" (different dangling word), but still imperfect.
+
+**Polish 2 — reviewRating still 0 because AI doesn't emit a numeric rating in the Verdict section.** v62.72 + v62.73 added the SECONDARY regex fallback that scans the Verdict section body for any X/Y pattern. But the AI's generated Verdict prose never contained a numeric rating like "8/10" or "4.5/5" — it said qualitative things like "Excellent value" or "Highly recommended for [audience]" without a number. Result: schema correctly omits reviewRating (no fake rating ever) but Google's Review rich-result eligibility requires it. Need to instruct the AI explicitly: emit a numeric rating in the Verdict section, mandatory.
+
+### What changed
+
+**Fix 1 — `Schema_Generator::build_review()` strip word list extension** ([includes/Schema_Generator.php](seobetter/includes/Schema_Generator.php)) — added `tested|reviewed|compared|ranked|rated|new|latest|ultimate` to the strip-word regex. Catches verb-tense variants the AI commonly produces in review titles ("X Tested", "X Compared", "X Ranked", "Ultimate X Review"). Combined with v62.73's trailing-fragment cleanup, the Dyson title now strips down to "Dyson v15 detect cordless vacuum" cleanly.
+
+**Fix 2 — `Async_Generator` review prose template NUMERIC RATING RULE** ([includes/Async_Generator.php](seobetter/includes/Async_Generator.php)) — added a mandatory rule to the review template's `guidance` field: "in the Verdict and Rating H2 section, the FIRST sentence MUST contain a numeric rating in the format X/10 or X/5 or X.X/5". Examples provided: "Verdict: 8.5/10." / "Rating: 4.5/5." / "We rate the [product] 9/10 overall." Without the numeric rating, schema generator's reviewRating extraction (both primary regex and v62.72 secondary fallback) cannot fire. Now the AI is forced to produce a parseable rating. Acceptable scales: X/5 or X/10, decimals OK.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.73 → 62.74
+- `seobetter/includes/Schema_Generator.php` — `build_review()` item_name strip word list extended
+- `seobetter/includes/Async_Generator.php` — review prose template `guidance` adds NUMERIC RATING RULE
+
+### Verify
+
+```
+grep -n "tested|ranked|rated|new|latest|ultimate" seobetter/includes/Schema_Generator.php
+grep -n "v1.5.216.62.74 NUMERIC RATING RULE" seobetter/includes/Async_Generator.php
+```
+
+After upload + retest T3 #6 Review (Dyson V15 Detect, UK):
+- itemReviewed.name = "Dyson v15 detect cordless vacuum" (clean — no dangling "tested for" / "features for")
+- `reviewRating` PRESENT in JSON-LD with extractable ratingValue + bestRating
+- All v62.72/v62.73 fixes still hold (no SoftwareApplication, Speakable present, GBP currency, £ symbols only, no dupe Product, clean H1)
+
+**Verified by user:** UNTESTED
 
 ---
 

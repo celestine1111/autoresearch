@@ -1558,7 +1558,14 @@ class Schema_Generator {
         // colon-introduced fragment AND any common dangling connector
         // words (features for / guide / picks / options / things / etc.)
         // so itemReviewed.name is a clean product identifier.
-        $item_name = preg_replace( '/\b(review|in-depth|honest|full|best|top|guide|comparison|vs\.?|versus|roundup|our|the)\b/i', '', $post->post_title );
+        // v1.5.216.62.74 — added `tested|reviewed|compared|ranked|rated|new|latest|ultimate`
+        // to the strip word list. Pre-fix the v62.73 regex left "tested for"
+        // dangling on titles like "Dyson v15 detect cordless vacuum review
+        // tested for 2026" — strip "review" + year + connector word "for"
+        // worked but "tested" survived as an orphan. Adding tense variants
+        // catches "Dyson V15 Tested" / "Compared" / "Reviewed" / "Ranked"
+        // patterns the AI commonly produces.
+        $item_name = preg_replace( '/\b(review|reviewed|in-depth|honest|full|best|top|guide|comparison|compared|vs\.?|versus|roundup|our|the|tested|ranked|rated|new|latest|ultimate)\b/i', '', $post->post_title );
         $item_name = preg_replace( '/\s+/', ' ', $item_name );
         // Drop anything from a trailing colon onwards (": Best features for 2026" → "")
         $item_name = preg_replace( '/\s*:\s*[^:]*$/', '', $item_name );
