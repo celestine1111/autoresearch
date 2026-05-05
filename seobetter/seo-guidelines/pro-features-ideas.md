@@ -197,6 +197,50 @@ Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badg
 
 **Spot-test discipline (in the meantime):** for each newly-signed-off English content type, generate ONE article in German as a smoke test. Don't try to fix multilingual issues found — just log them in `multilingual-bugs.md` (or this section's TODO list) so the v62.72 sprint inherits a complete bug surface.
 
+#### Verified product data pipeline — UNIVERSAL price hallucination defense (Phase 2 wedge feature)
+
+> **Status:** PLANNED. Discovered 2026-05-05 during T3 #6 Review test (Dyson V15 Detect, country=UK): Product schema emitted price `699` USD when real UK MSRP is `£649.99` (sale `£549.99`). Article body had `$399` and `$449` price mentions that don't exist anywhere in real Dyson pricing — pure hallucination from the AI's training data.
+>
+> **Why universal scope (not just commercial types):** While Review/Listicle/Buying Guide/Comparison are the OBVIOUS commercial types, ANY content type can mention a price and any price the AI invents is a hallucination. Real cases discovered or anticipated:
+> - **How-To:** "Set up a compost bin for $30-50 in starter materials" — invented if no source data
+> - **Tech Article:** deep-dive technical pieces routinely cite product MSRPs
+> - **Opinion:** opinion on a product launch / pricing decision
+> - **News Article:** product launch coverage with pricing
+> - **Press Release:** pricing announcements (legitimate authored prices, but if sourced via SEOBetter need verification)
+> - **Pillar Guide:** comprehensive guides covering many products
+> - **FAQ:** "How much does X cost?" — answer requires real price
+> - **Sponsored:** product promotion (paid content but pricing must still be accurate per FTC + ASA)
+> - **Case Study:** "Company X bought Product Y for $Z"
+> - **Personal Essay:** "I paid $40 for it" — personal anecdote, harder to verify (different rule needed)
+> - **Recipe:** ingredient costs sometimes mentioned in budget recipes
+> - **Live Blog:** real-time pricing announcements
+> - **Interview:** "the product retails for $X"
+>
+> So price hallucination is a **plugin-wide** liability, not a commercial-types-only problem. The verification pipeline must run universally across ALL content types.
+>
+> **Why this is THE wedge:** No other WP SEO plugin (Yoast, RankMath, Surfer, Frase) verifies product prices server-side from real retailer data. SEOBetter's "BYOK + zero-hallucination prices" combination is a genuine differentiator that justifies $39/$69/$179 pricing vs Surfer's $89 (which still hallucinates).
+>
+> **Why deferred:** Needs new backend endpoint + AI prompt rework + server-side validation pass + Schema_Generator rework. ~1-2 weeks focused work. Schedule: AFTER 21/21 English content types signed off so the regression baseline is locked.
+>
+> **Cost at launch volume: $0/mo** using free tiers (Serper Shopping 2.5K/mo + eBay Browse 5K/day + Amazon PA-API once 3 affiliate sales hit). At scale (1000+ Pro users): ~$30-100/mo, easily covered by margin.
+
+| Sub-fix | Universal? | Effort | Build status |
+|---|---|---|---|
+| **A. New `cloud-api/api/product-enrichment.js` endpoint.** Inputs: `(product_name, country, language)`. Outputs: `[{name, brand, price, currency, image_url, source_url, in_stock, source: "serper-shopping"|"ebay"|"amazon"}, ...]`. Runs Serper Shopping (primary, 2.5K/mo free) + eBay Browse (free 5K/day cross-validation) in parallel, returns deduplicated + ranked-by-confidence list. Amazon PA-API added once Ben's affiliate account hits 3 sales. | Yes — backend endpoint usable by all article types | 3 days | ⏳ Phase 2 |
+| **B. Pre-generation product detection + enrichment.** For commercial content types (review/buying_guide/comparison/listicle), the research pipeline auto-extracts product mentions from the keyword + initial Serper SERP, calls product-enrichment.js for each, injects results into the citation pool as `verified_products`. For NON-commercial types, runs only if the AI's section-level outline mentions specific product names. | Yes — gated by content type + AI-detected product mentions | 2 days | ⏳ Phase 2 |
+| **C. AI prompt forced-data rule (STRICT universal).** System prompt addition (fires for ALL content types — no per-type leniency, no exceptions): `"PRICES — only use prices from VERIFIED PRODUCTS DATA below. NEVER invent a price under any circumstance. NEVER recall a price from your training data. If a product you want to mention isn't in the verified data, mention it WITHOUT a price OR omit the product entirely. This applies to ALL content types including how-to ('parts cost'), recipe ('ingredient cost'), personal essay ('I paid'), opinion ('the X retails for'), case study ('they spent'), interview ('you charge'), and every other type — no exceptions. NEVER convert currencies. NEVER quote 'approximate' or 'around' prices. When citing a verified price, immediately follow with the source URL: '$199 ([Brand] AU)'."` Violation flagged at quality gate regardless of type. | Yes — universal STRICT prompt addition | 1 day | ⏳ Phase 2 |
+| **D. Server-side price validation strip pass (STRICT universal).** Universal post-process — same strictness for every content type, no exceptions. Walk article body, regex-find every `[currency_symbol][digits]` pattern OR explicit price phrasing ("priced at", "costs", "MSRP", "retail", "around $", "approximately $", "I paid", "we spent", "for under $X", "starting at"). For each: extract surrounding ±50-word context (product name candidate), check against `verified_products` from research pool. Match within ±5% tolerance → keep + add source link. **No match → STRIP the price (replace `$199` with empty), regardless of content type.** Personal anecdotes lose the dollar amount but the prose stays ("I paid $40 for it" → "I paid for it"). Recipe budget claims lose the number ("ingredients cost $30-50" → "ingredients are inexpensive"). The strict rule eliminates plausible-sounding but unverifiable price claims across the board — better to lose specificity than ship a hallucination. | Yes — universal STRICT strip pass | 3 days | ⏳ Phase 2 |
+| **E. Schema_Generator uses verified data only.** Product / Review / ItemList Product nodes built ENTIRELY from `verified_products` list, NEVER from AI text extraction. If no verified data for a product mentioned in body, no Product schema for it. Currency from `country_to_currency()` (already in v62.72). Image from verified data's `image_url`. Source URL as `offers.url`. | Yes — universal across all schema-emitting types | 2 days | ⏳ Phase 2 |
+| **F. Verification audit log per post.** Admin-visible log: "Article generated 2026-05-15. Price claims: 8 detected, 6 verified ($X / £Y / etc.), 2 stripped (hallucinated)". Becomes a marketing proof point: "Every SEOBetter article shows you exactly which prices were verified vs invented — no other plugin does this." | Yes — universal audit | 1 day | ⏳ Phase 2 |
+
+**Total effort:** ~12 days focused work (~2 weeks). Schedule: after 21/21 English baseline + multilingual sprint stable.
+
+**Tier gating** (the verified-data pipeline is the wedge feature):
+- **Free:** detection + strip pass only (hallucinations stripped silently, no source links shown). Free users get hallucination-free articles but don't see the proof.
+- **Pro:** full verified pipeline + source links per price + Serper Shopping coverage.
+- **Pro+:** + eBay cross-validation for confidence scoring + multi-region price lookup (one article checks UK + US + AU prices in one go).
+- **Agency:** + Amazon PA-API integration + bulk verification across 50 articles + verification audit reports per client.
+
 #### Country-localized citation sources (deferred — after English T3 + multilingual sprint)
 
 > **Status:** PLANNED. Discovered 2026-05-05 during T3 #6 Review test on `Dyson V15 Detect cordless vacuum review` (country=UK). Every outbound citation came from US publishers (Wired, Popular Mechanics, TechRadar US, The Verge, Vacuumwars, Cleanmyspace, dyson.com US) — ZERO UK-specific sources despite country=UK. Real UK authoritative sources for Dyson reviews (which.co.uk, trustedreviews.com, t3.com, expertreviews.co.uk, dyson.co.uk) never made it into the citation pool.
