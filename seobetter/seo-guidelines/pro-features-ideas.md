@@ -197,6 +197,27 @@ Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badg
 
 **Spot-test discipline (in the meantime):** for each newly-signed-off English content type, generate ONE article in German as a smoke test. Don't try to fix multilingual issues found — just log them in `multilingual-bugs.md` (or this section's TODO list) so the v62.72 sprint inherits a complete bug surface.
 
+#### Country-localized citation sources (deferred — after English T3 + multilingual sprint)
+
+> **Status:** PLANNED. Discovered 2026-05-05 during T3 #6 Review test on `Dyson V15 Detect cordless vacuum review` (country=UK). Every outbound citation came from US publishers (Wired, Popular Mechanics, TechRadar US, The Verge, Vacuumwars, Cleanmyspace, dyson.com US) — ZERO UK-specific sources despite country=UK. Real UK authoritative sources for Dyson reviews (which.co.uk, trustedreviews.com, t3.com, expertreviews.co.uk, dyson.co.uk) never made it into the citation pool.
+>
+> **Why this matters for the wedge:** Localized articles claiming UK / AU / NZ / CA targeting that cite US sources are obviously not localized — they fail Princeton GEO citation-quality signal AND look amateurish to readers in the target country. Articles that genuinely localize sources rank better in country-specific Google + AI search.
+>
+> **Why deferred:** affects research backend (`cloud-api/api/research.js`) AND `Regional_Context` AND `Citation_Pool`. Touching shared research infrastructure carries regression risk to all signed-off English articles. Schedule: AFTER 21/21 English content types are signed off AND AFTER the multilingual structural-completeness sprint (v62.72+) lands and stabilizes.
+
+| Sub-fix | Risk to existing English articles | Effort | Build status |
+|---|---|---|---|
+| **A. Pass `gl=<country>` + `hl=<lang>` to Serper queries.** Currently `cloud-api/api/research.js` calls Serper without geo-localization params, defaulting results to global / US-biased. Adding `gl=gb` (or `gl=au`, etc.) per article's country biases the result set toward country-relevant publishers. | **Low** — additive Serper param. US articles default `gl=us` (matches today's behavior). | 0.5 day | ⏳ v62.7X+ |
+| **B. UK / AU / NZ / CA `Regional_Context` blocks.** The existing `Regional_Context::get_block($country)` injects regional source guidance for non-Anglo countries (China, Japan, Germany, etc.) — Anglo countries fell into a "no-op" bucket because the assumption was "Anglo = use US sources by default." That assumption is wrong. Add explicit blocks: UK → which.co.uk, trustedreviews.com, t3.com, expertreviews.co.uk, bbc.co.uk, gov.uk, nhs.uk, ons.gov.uk + sector-specific UK pubs; AU → choice.com.au, abc.net.au, gov.au, .edu.au unis, choice tested-by labels; NZ → consumer.org.nz, stuff.co.nz, govt.nz, rnz.co.nz; CA → cbc.ca, theglobeandmail.com, canada.ca + provincial gov. | **Low** — additive new blocks, doesn't change existing US/non-Anglo handling. | 1 day (research + write 4 blocks) | ⏳ v62.7X+ |
+| **C. TLD preference scoring in `Citation_Pool`.** When the same source is available at multiple TLDs (e.g. dyson.com vs dyson.co.uk, techradar.com vs techradar.com/uk/, amazon.com vs amazon.co.uk), prefer the country-matching TLD. Implement as a +5 score boost in the pool's source-quality scoring for any URL whose TLD matches the article's country (.co.uk → UK, .com.au → AU, .co.nz → NZ, .ca → CA). | **Medium** — touches Citation_Pool scoring which is shared across all article types. Mitigate by gating: scoring boost only fires when `$country !== 'US'` (US articles unaffected). | 0.5 day | ⏳ v62.7X+ |
+| **D. Static whitelist country-tagging.** `seobetter.php::get_trusted_domain_whitelist()` is a flat allow-list. Tag entries with country metadata: `which.co.uk → ['UK']`, `choice.com.au → ['AU']`, `dyson.co.uk → ['UK']`, etc. When picking from the whitelist for citation seeding, prefer country-tagged matches. Domains with no country tag (international: wikipedia.org, ourworldindata.org, gov institutions of any country) remain universally available. | **Low** — additive metadata, no behavior change for unmarked entries. | 1 day (tag ~50 country-specific entries from existing whitelist) | ⏳ v62.7X+ |
+
+**Total effort:** 3 days of focused work after all English + multilingual stable. Schedule earliest: **after the v62.72+ multilingual sprint lands AND 21/21 English content types are signed off**. Touching the research backend mid-multilingual-sprint risks regressions in both directions.
+
+**Verification protocol when shipped:** regenerate one signed-off article per (English type × 4 Anglo countries: US/UK/AU/CA) and assert ≥40% of citation-pool URLs match the country's TLD or country-tagged whitelist entry. US articles continue to use predominantly US sources (acceptable baseline).
+
+**Companion check — currency in body prose:** related but separate fix (in v62.72 scope) — when country=UK, body text must use `£` not `$`. Currently the AI emits whatever currency symbol it learned from training data, regardless of country setting. Solution: add explicit currency-symbol enforcement in the LANGUAGE/COUNTRY clause of the system prompt: "All prices in this article MUST use [£|€|$|AUD|etc.] — the symbol matching the article's target country."
+
 #### AI Citation Tracker (THE wedge)
 
 | Feature | Free | Pro | Pro+ | Agency | Build status |
