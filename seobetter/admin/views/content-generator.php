@@ -865,26 +865,34 @@ window.sbSuggestTopics = function(btn) {
 // Minimums based on GEO requirements: 2+ quotes, 5+ citations, 3+ stats/1000 words,
 // Key Takeaways, FAQ, table. Below the minimum, articles get truncated or lack
 // enough GEO elements for AI citation visibility.
+//
+// v1.5.216.62.69 — `min` values realigned with the server-side
+// $min_words table in Async_Generator::create_job() (lines ~101-111).
+// Pre-fix the JS UI displayed "Minimum: 1,000 words" for Opinion while
+// the PHP server enforced 1500 (per v62.67). Same staleness existed for
+// 6 other types whose floors were bumped in v62.52 / v62.67 but never
+// propagated to this UI table. Now JS == PHP for all 21 types — single
+// source of truth = Async_Generator::$min_words.
 var SB_TYPE_PRESETS = {
     blog_post:       {tone:'conversational', wc:'1500', min:1000, label:'Blog Post'},
     news_article:    {tone:'journalistic',   wc:'1000', min:800,  label:'News Article'},
-    opinion:         {tone:'authoritative',  wc:'1500', min:1000, label:'Opinion'},
+    opinion:         {tone:'authoritative',  wc:'1500', min:1500, label:'Opinion'},
     how_to:          {tone:'educational',    wc:'2000', min:1000, label:'How-To Guide'},
     listicle:        {tone:'conversational', wc:'2000', min:1500, label:'Listicle'},
     review:          {tone:'authoritative',  wc:'1500', min:1000, label:'Review'},
     comparison:      {tone:'authoritative',  wc:'2000', min:1500, label:'Comparison'},
-    buying_guide:    {tone:'authoritative',  wc:'2500', min:1500, label:'Buying Guide'},
-    pillar_guide:    {tone:'authoritative',  wc:'3000', min:2000, label:'Pillar Guide'},
+    buying_guide:    {tone:'authoritative',  wc:'2500', min:2000, label:'Buying Guide'},
+    pillar_guide:    {tone:'authoritative',  wc:'3000', min:3000, label:'Pillar Guide'},
     case_study:      {tone:'professional',   wc:'2000', min:1500, label:'Case Study'},
     interview:       {tone:'conversational', wc:'1500', min:1000, label:'Interview'},
     faq_page:        {tone:'educational',    wc:'1500', min:1000, label:'FAQ Page'},
     recipe:          {tone:'conversational', wc:'1500', min:800,  label:'Recipe'},
     tech_article:    {tone:'educational',    wc:'2000', min:1500, label:'Tech Article'},
-    white_paper:     {tone:'professional',   wc:'3000', min:2000, label:'White Paper'},
-    scholarly_article:{tone:'professional',  wc:'3000', min:2000, label:'Scholarly Article'},
+    white_paper:     {tone:'professional',   wc:'3000', min:2500, label:'White Paper'},
+    scholarly_article:{tone:'professional',  wc:'3000', min:3000, label:'Scholarly Article'},
     live_blog:       {tone:'journalistic',   wc:'1000', min:800,  label:'Live Blog'},
-    press_release:   {tone:'professional',   wc:'800',  min:500,  label:'Press Release'},
-    personal_essay:  {tone:'conversational', wc:'1500', min:1000, label:'Personal Essay'},
+    press_release:   {tone:'professional',   wc:'800',  min:400,  label:'Press Release'},
+    personal_essay:  {tone:'conversational', wc:'1500', min:1500, label:'Personal Essay'},
     glossary_definition:{tone:'educational', wc:'1000', min:500,  label:'Glossary'},
     sponsored:       {tone:'conversational', wc:'1000', min:800,  label:'Sponsored'},
 };

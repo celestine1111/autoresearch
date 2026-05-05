@@ -69,22 +69,35 @@ class Stock_Image_Inserter {
                     $alt_text = $this->generate_alt_text( $keyword, $heading_text, $section_context, $language );
                     $image_url = $this->get_image_url( $keyword, $heading_text, $image_inserted );
 
-                    // v1.5.216.62.68 — emit as raw HTML <p><img/> block, NOT
-                    // markdown `![alt](url)` syntax. Pre-fix the markdown
-                    // image syntax appended after H2 was getting stuffed
-                    // INTO the H2 heading's text content on render — root
-                    // cause unclear (downstream markdown parser quirk OR
-                    // a pipeline step trimming the blank line between
-                    // heading and image), but the symptom was reproducible
-                    // on T3 #3 Opinion: the H2 displayed verbatim
-                    // `Hook and Thesis: ...![alt](https://images.pexels.com/...)`
+                    // v1.5.216.62.68 — emit as raw HTML block, NOT markdown
+                    // `![alt](url)` syntax. Pre-fix the markdown image syntax
+                    // appended after H2 was getting stuffed INTO the H2
+                    // heading's text content on render — root cause unclear
+                    // (downstream markdown parser quirk OR a pipeline step
+                    // trimming the blank line between heading and image),
+                    // but the symptom was reproducible on T3 #3 Opinion: the
+                    // H2 displayed verbatim `Hook and Thesis: ...![alt](https://images.pexels.com/...)`
                     // as one big purple heading with the image's alt text
-                    // and Pexels URL embedded. Raw HTML <p> block is
-                    // unambiguous to every markdown parser and CANNOT be
-                    // collapsed into the previous heading element.
+                    // and Pexels URL embedded. Raw HTML block is unambiguous
+                    // to every markdown parser and CANNOT be collapsed into
+                    // the previous heading element.
+                    //
+                    // v1.5.216.62.69 — switched <p><img/></p> → <figure><img/></figure>
+                    // with explicit max-width constraint. Pre-fix v62.68's
+                    // <p><img/> rendered the Pexels image at its natural
+                    // 1200px width (Pexels URLs request `w=1200`), overflowing
+                    // the WP block theme's content column (~768px). Now the
+                    // <figure> wrapper inherits `--wp--style--global--content-size`
+                    // and the inner <img> uses max-width:100%;height:auto so
+                    // it scales down to the figure's width while preserving
+                    // aspect ratio. Same content-size variable already used
+                    // by the v62.63 Devil's Advocate frame fix.
                     $alt_escaped = htmlspecialchars( $alt_text, ENT_QUOTES, 'UTF-8' );
                     $url_escaped = htmlspecialchars( $image_url, ENT_QUOTES, 'UTF-8' );
-                    $output .= "\n\n<p><img src=\"{$url_escaped}\" alt=\"{$alt_escaped}\" loading=\"lazy\" /></p>\n\n";
+                    $output .= "\n\n<figure style=\"margin:1.5em auto;max-width:var(--wp--style--global--content-size, 768px);text-align:center;\">"
+                        . "<img src=\"{$url_escaped}\" alt=\"{$alt_escaped}\" loading=\"lazy\" "
+                        . "style=\"max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px;\" />"
+                        . "</figure>\n\n";
                     $image_inserted++;
                 }
             } else {

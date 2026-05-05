@@ -7,12 +7,73 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.68)
+> **Last updated:** 2026-05-05 (v1.5.216.62.69)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.69 — Sync content-generator UI minimums with PHP $min_words (7 stale values from v62.52 + v62.67) + constrain inline image width to content column
+
+**Date:** 2026-05-05
+**Commit:** `[pending]`
+
+### Why
+
+**Issue 1 — UI/server min mismatch.** User-reported on T3 #3 Opinion v62.68 retest UI: word-count hint displayed `Recommended: 1,500+ words for Opinion. Minimum: 1,000 words.` while the PHP server-side `$min_words` table enforced 1500w (per v62.67). The 1,000 in the UI was stale from before the v62.52 floor bumps were ever applied to the JS preset table. Same staleness existed for 6 other content types whose floors were bumped in v62.52 but never propagated to the UI.
+
+Result: user thinks "I can pick 1000 for Opinion" → picks 1000 → server silently bumps to 1500 → user is confused why their 1000-word selection rendered a 1500-word article.
+
+**Issue 2 — inline images overflow content column.** v62.68's switch from markdown `![alt](url)` to raw HTML `<p><img/></p>` rendered images at their natural width (Pexels URLs request `w=1200`), overflowing the WP block theme's content column (~768px). User-reported immediately after v62.68 retest: "the images are too big now and not the width of the body text". Bare `<img>` without max-width constraint renders at intrinsic dimensions regardless of parent block width.
+
+### What changed
+
+**Fix 1 — `SB_TYPE_PRESETS` JS object in [admin/views/content-generator.php](seobetter/admin/views/content-generator.php)** — `min` values realigned with `Async_Generator::create_job()` $min_words table:
+
+| Type | UI was | Now (matches PHP) |
+|---|---|---|
+| `opinion` | min: 1000 | **min: 1500** (v62.67) |
+| `buying_guide` | min: 1500 | **min: 2000** (v62.52) |
+| `pillar_guide` | min: 2000 | **min: 3000** (v62.52) |
+| `white_paper` | min: 2000 | **min: 2500** (v62.52) |
+| `scholarly_article` | min: 2000 | **min: 3000** (v62.52) |
+| `personal_essay` | min: 1000 | **min: 1500** |
+| `press_release` | min: 500 | **min: 400** (server allows lower) |
+
+All 21 types now match. Single source of truth = `Async_Generator::$min_words`. Comment block above the JS table now references the PHP table location explicitly so future drift is immediately visible.
+
+**Fix 2 — `Stock_Image_Inserter::insert_images()` figure wrapper** ([includes/Stock_Image_Inserter.php](seobetter/includes/Stock_Image_Inserter.php))
+
+Switched the HTML emit from `<p><img/></p>` to `<figure><img/></figure>` with explicit max-width constraints:
+
+```html
+<figure style="margin:1.5em auto;max-width:var(--wp--style--global--content-size, 768px);text-align:center;">
+  <img src="..." alt="..." loading="lazy"
+       style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px;" />
+</figure>
+```
+
+The `<figure>` wrapper inherits `--wp--style--global--content-size` (the same WP block theme variable used by the v62.63 Devil's Advocate frame fix), defaulting to `768px` for non-block themes. The inner `<img>` uses `max-width:100%;height:auto` so it scales down to the figure width while preserving aspect ratio. `<figure>` is also more semantically correct than `<p>` for an image — it allows future addition of `<figcaption>` if needed.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.68 → 62.69
+- `seobetter/admin/views/content-generator.php` — 7 `min` values + comment block referencing the PHP source-of-truth
+- `seobetter/includes/Stock_Image_Inserter.php` — `<p><img/></p>` → `<figure><img/></figure>` with content-size max-width
+
+### Verify
+
+```
+grep -B 1 -A 22 "v1.5.216.62.69 — \`min\` values realigned" seobetter/admin/views/content-generator.php
+diff <(grep -E "^ +'(blog_post|news_article|opinion|how_to|listicle|review|comparison|buying_guide|pillar_guide|case_study|interview|faq_page|recipe|tech_article|white_paper|scholarly_article|live_blog|press_release|personal_essay|news_article|sponsored|glossary_definition)' =>" seobetter/includes/Async_Generator.php | head -20) <(grep -E "^    [a-z_]+: +\{tone" seobetter/admin/views/content-generator.php | head -20)
+```
+
+After upload, in WP admin → SEOBetter → Content Generator, select Opinion: hint reads `Recommended: 1,500+ words for Opinion. Minimum: 1,500 words.` — the two numbers now match. Same applies for buying guide / pillar guide / white paper / scholarly article / personal essay.
+
+**Verified by user:** UNTESTED
 
 ---
 
