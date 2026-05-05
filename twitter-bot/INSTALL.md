@@ -97,9 +97,28 @@ node -e "const {chromium} = require('playwright'); chromium.launch().then(b => {
 
 Should print `OK`.
 
+**v2026-05-05 update — also install Firefox** (the bot now defaults to Firefox so its fingerprint matches the Firefox where you extract cookies):
+```bash
+cd /opt/twitter-bot
+npx playwright install firefox
+node -e "const {firefox} = require('playwright'); firefox.launch().then(b => { console.log('OK'); b.close(); })"
+```
+
+Should also print `OK`. If it fails with missing system libs, run `npx playwright install-deps firefox` first.
+
 ---
 
 ## STEP 3 — Build the persistent cookie file
+
+> **Why cookies expire in hours instead of 30 days, and how to fix it (v2026-05-05):**
+>
+> A Twitter `auth_token` is normally valid for ~30 days, but Twitter invalidates it the moment the *fingerprint* of the requests doesn't match the fingerprint of the browser that issued the cookie. Three signals matter:
+>
+> 1. **Browser engine** — cookies issued by Firefox die when replayed by Chromium (and vice versa). The bot now defaults to `BROWSER_TYPE=firefox` to match the Firefox extract flow.
+> 2. **User-Agent string** — must match the OS + browser version of the source. The default `USER_AGENT` env value is a recent Firefox/macOS UA. If you grab cookies from Firefox/Windows or Firefox/Linux, set `USER_AGENT` in `.env` to YOUR exact UA (run `navigator.userAgent` in the source browser's DevTools → Console).
+> 3. **IP geolocation** — cookies issued from your home IP (e.g. UK) replayed from a US/EU VPS look like session theft. Fix with a residential proxy in your country (see Step 5 ScrapeOps setup) — same country at minimum, same city ideal.
+>
+> Get all three signals matching and you'll see the full ~30-day lifetime. Get one wrong and the bot will work for hours then die.
 
 Create `/opt/twitter-bot/twitter-state.json`:
 
@@ -180,12 +199,37 @@ OPENROUTER_API_KEY=sk-or-v1-...
 MODEL=google/gemini-3.1-flash-lite-preview
 MODEL_MENTIONS=google/gemini-3.1-pro-preview
 
-# Optional residential proxy — recommended for VPS deployments. Comment
-# out to disable. Works with IPRoyal / BrightData / Soax / Smartproxy.
+# Browser fingerprint — defaults match Firefox/macOS. Override if your
+# cookie-source browser is different. See Step 3 for why this matters.
+# BROWSER_TYPE=firefox
+# USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 14.15; rv:131.0) Gecko/20100101 Firefox/131.0
+# LOCALE=en-GB
+# TIMEZONE=Europe/London
+
+# Residential proxy — STRONGLY RECOMMENDED for cookie longevity.
+# Without it, cookies issued from your home IP and replayed from a
+# data-center VPS IP get flagged as session theft within hours.
+#
+# ScrapeOps Residential Proxy with sticky session (use this — sticky
+# session is REQUIRED for x.com because every request needs the SAME
+# IP for the cookie's lifetime). Set country= to match where YOU browse
+# from (where you grabbed the cookies):
+# PROXY_URL=http://residential-proxy.scrapeops.io:8181
+# PROXY_USER=scrapeops.country=uk.keep_session_id=seobetter1
+# PROXY_PASS=YOUR_SCRAPEOPS_API_KEY
+#
+# IPRoyal / BrightData / Soax / Smartproxy alternatives:
 # PROXY_URL=http://proxy.iproyal.com:12321
 # PROXY_USER=your_username
-# PROXY_PASS=your_password_country-us
+# PROXY_PASS=your_password_country-uk
 ```
+
+**ScrapeOps setup notes** (since you have an account):
+- Use the **Residential Proxy** product, not the Proxy Aggregator API. The bot needs a sticky session — the Aggregator's per-request rotation breaks Twitter cookies.
+- The `keep_session_id=seobetter1` parameter pins requests to one IP for the lifetime of that session ID. Use a unique value per bot (e.g. `seobetter1`, `seobetter2`).
+- Sessions normally hold the same IP for ~30 minutes by default. For longer-lived pinning (matches our 30-day cookie lifetime), check ScrapeOps dashboard → Residential Proxy → set "Session Duration" to maximum (typically 30 min, but the bot will fall back to a fresh IP within the same country which Twitter usually accepts).
+- `country=uk` (or `us`, `au`, etc.) MUST match where you grab the cookies. Cookies extracted from a UK IP and replayed from a US-pinned proxy = same theft signal.
+- Their dashboard shows a usage meter — at 8-min ticks the bot makes ~8000 requests/month, well within their entry plan.
 
 **Estimated monthly cost** at the default cron cadence (`*/8 * * * *`):
 - All Flash Lite (skip MODEL_MENTIONS) → ~$3.50/mo

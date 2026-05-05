@@ -11,7 +11,7 @@
 //   node run.js metrics          # force daily metrics report
 
 require('dotenv').config({ path: __dirname + '/.env' });
-const { chromium } = require('playwright');
+const playwright = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
@@ -42,6 +42,21 @@ const MODEL_MENTIONS = process.env.MODEL_MENTIONS || MODEL;
 const PROXY_URL  = process.env.PROXY_URL || '';
 const PROXY_USER = process.env.PROXY_USER || '';
 const PROXY_PASS = process.env.PROXY_PASS || '';
+
+// 2026-05-05 — Browser fingerprint must match the browser/OS where you
+// extracted the cookies, otherwise Twitter detects a session-theft pattern
+// (cookie issued to Firefox/macOS, replayed by headless Chromium/Linux from
+// a VPS IP) and invalidates within hours instead of the normal ~30 days.
+//
+// Defaults below match a typical "extract cookies from Firefox on macOS"
+// flow. Override via .env if your cookie-source browser is different —
+// run `navigator.userAgent` in the source browser's DevTools console
+// and paste that into USER_AGENT.
+const BROWSER_TYPE = (process.env.BROWSER_TYPE || 'firefox').toLowerCase();
+const USER_AGENT   = process.env.USER_AGENT
+  || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.15; rv:131.0) Gecko/20100101 Firefox/131.0';
+const LOCALE       = process.env.LOCALE      || 'en-US';
+const TIMEZONE     = process.env.TIMEZONE    || 'America/New_York';
 
 // Daily caps — per twitter-agent-prompt.md §9 daily limits
 const CAPS = {
@@ -270,14 +285,20 @@ async function launch() {
   if (!fs.existsSync(STATE_FILE)) {
     throw new Error(`Missing ${STATE_FILE} — build it from your Firefox auth_token + ct0 cookies.`);
   }
-  const launchOpts = {
-    headless: true,
-    args: [
+  const browserType = playwright[BROWSER_TYPE];
+  if (!browserType || typeof browserType.launch !== 'function') {
+    throw new Error(`Unknown BROWSER_TYPE='${BROWSER_TYPE}' — must be 'firefox', 'chromium', or 'webkit'.`);
+  }
+
+  const launchOpts = { headless: true };
+  // Chromium-only flags (Firefox/WebKit reject these and fail to launch)
+  if (BROWSER_TYPE === 'chromium') {
+    launchOpts.args = [
       '--disable-blink-features=AutomationControlled',
       '--no-sandbox',
       '--disable-dev-shm-usage',
-    ],
-  };
+    ];
+  }
   if (PROXY_URL) {
     launchOpts.proxy = {
       server: PROXY_URL,
@@ -285,13 +306,13 @@ async function launch() {
       ...(PROXY_PASS ? { password: PROXY_PASS } : {}),
     };
   }
-  const browser = await chromium.launch(launchOpts);
+  const browser = await browserType.launch(launchOpts);
   const context = await browser.newContext({
     storageState: STATE_FILE,
     viewport: { width: 1280, height: 800 },
-    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-    locale: 'en-US',
-    timezoneId: 'America/New_York',
+    userAgent: USER_AGENT,
+    locale: LOCALE,
+    timezoneId: TIMEZONE,
     // Required when going through a proxy that MITMs HTTPS to inject headers
     // (ScrapeOps, BrightData with super-proxy mode, etc.). Safe here because
     // the proxy is paid, scoped to our account, and only used for x.com /
