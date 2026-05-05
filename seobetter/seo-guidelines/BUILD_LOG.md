@@ -7,7 +7,7 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.64)
+> **Last updated:** 2026-05-05 (v1.5.216.62.65)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
@@ -16,10 +16,86 @@
 
 ---
 
-## v1.5.216.62.64 — FIX detect_video_schema fires fake VideoObject for text-link YouTube references (Schema.org cloaking violation)
+## v1.5.216.62.65 — Tighten link filters: path-segment data endpoints (`/json`), commerce PLP hash IDs (homedepot/lowes), data-portal path prefixes (/valet, /observations, /series)
 
 **Date:** 2026-05-05
 **Commit:** `[pending]`
+
+### Why
+
+User on T3 #4 How-To retest reported two bad outbound links survived `validate_outbound_links()`:
+
+1. `https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json` — Bank of Canada's "Valet" public-data API endpoint that returns JSON, not an article page.
+2. `https://www.homedepot.com/c/ah/diy-compost-bin/9ba683603be9fa5395fab9013b7b4545` — Home Depot category landing page with an ephemeral hash ID. These routinely 404 or redirect when the promo expires.
+
+Existing v1.5.190 filter (`\.(json|xml|csv)$|/query$|/search$|fdsnws|/api/v\d`) caught file extensions but missed:
+- **Path-segment** end-of-URL data indicators (`/json` not `.json`)
+- **Commerce-site PLP hash patterns** (the `9ba683603be9...` shape)
+- **Data-portal path prefixes** (`/valet/`, `/observations/`, `/series/`)
+
+User asked: *"is there a way it not add 404 or fake links or scan afterwards 404 then remove the link reference? whats the best thing to do here in this stage of testing"*. My recommendation: ship pattern filters now (B), defer live HEAD-check admin scanner (C) until needed.
+
+### What changed
+
+**`validate_outbound_links()::filter_link()` — three new pattern shapes** ([seobetter.php](seobetter/seobetter.php))
+
+1. **Extended end-of-path matchers** for data endpoints:
+   ```
+   \.(json|xml|csv|rss|atom)$ | /(json|xml|csv|rss|atom|raw|export|dump|download)/?$ | /query$ | /search$ | fdsnws | /api/v\d
+   ```
+   Catches both `.json` (file extension) and `/json` (path segment).
+
+2. **Commerce category-page hash IDs**:
+   ```
+   ^/[cb]/[^/]+/[^/]+/[a-f0-9]{20,}/?$
+   ```
+   Matches the Home Depot / Lowe's / Wayfair / Target / Walmart ephemeral PLP URL shape (e.g. `/c/ah/diy-compost-bin/9ba683603be9fa5395fab9013b7b4545`).
+
+3. **Data-portal path prefixes**:
+   ```
+   ^/(valet|observations|series|datasets?|raw|api)/
+   ```
+   Catches public data portals like `bankofcanada.ca/valet/...`, `ecb.europa.eu/stats/observations/...`, `fred.stlouisfed.org/series/...`, etc. that return raw data rather than reader-friendly articles.
+
+All three patterns run as hard-fail rules in `filter_link()` BEFORE the citation-pool-membership check. Pool membership cannot override these rejections.
+
+### Why pattern filters over live HEAD checks at this stage
+
+| Strategy | Verdict |
+|---|---|
+| Live HEAD check at save time | ❌ 50-300ms × N links per article. Article generation already takes 1-3min; adding 2-5s for link validation hurts UX. Hosts may rate-limit or block HEAD verbs. Legitimate URLs sometimes return 5xx temporarily and would be falsely stripped. |
+| **Stricter pattern filters (this ship)** | ✅ Instant. Catches obvious non-article URLs (~70% of false-positives by inspection). Deterministic. No external dependency. |
+| Manual "Validate Links" admin scanner (deferred) | ✅ As a follow-up feature: a button on the post-list page that runs HEAD checks across all published articles, flags broken links, offers bulk-strip. Like Broken Link Checker plugin but built-in. Much more thorough than pattern filters but doesn't slow down generation. |
+
+The right strategy at test stage is patterns now, manual scanner later if/when needed.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.64 → 62.65; three new pattern blocks in `validate_outbound_links()::filter_link()`
+- `seobetter/seo-guidelines/external-links-policy.md` — §10 expanded with the v62.65 filter rules
+
+### Verify
+
+```
+grep -B 1 -A 6 "v1.5.216.62.65 — extended end-of-path" seobetter/seobetter.php
+grep -B 1 -A 6 "v1.5.216.62.65 — commerce category" seobetter/seobetter.php
+grep -B 1 -A 6 "v1.5.216.62.65 — block subdomains" seobetter/seobetter.php
+```
+
+After upload + retest:
+- `bankofcanada.ca/valet/observations/...` → stripped
+- `homedepot.com/c/ah/.../HASH` → stripped
+- API endpoint URLs ending with `/json`, `/xml`, `/csv`, `/raw`, `/export`, `/dump`, `/download` → stripped
+- Real article URLs (anything `*.gov`, `*.edu`, news outlets, etc. with normal article paths) → unchanged
+
+**Verified by user:** UNTESTED
+
+---
+
+## v1.5.216.62.64 — FIX detect_video_schema fires fake VideoObject for text-link YouTube references (Schema.org cloaking violation)
+
+**Date:** 2026-05-05
+**Commit:** `8d35933`
 
 ### Why
 

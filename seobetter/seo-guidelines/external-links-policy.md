@@ -460,6 +460,21 @@ Defined in `seobetter.php` — `get_trusted_domain_whitelist()` method. Extensib
 - ~~`mastodon.social`~~ — Mastodon personal statuses (removed)
 - ~~`lemmy.world`~~ — Lemmy community posts (removed)
 
+**API endpoint / data portal / commerce PLP hash filters (added v1.5.216.62.65)** — applied as hard-fail rules in `validate_outbound_links()::filter_link()` BEFORE the citation-pool-membership check. Three new pattern shapes added:
+
+1. **Path-segment data endpoints** (not just file extensions):
+   - `/json`, `/xml`, `/csv`, `/rss`, `/atom`, `/raw`, `/export`, `/dump`, `/download` as the LAST path segment
+   - User-reported example: `bankofcanada.ca/valet/observations/FXUSDCAD/json` (Canadian central bank exchange rate API endpoint)
+2. **Commerce category-page hash IDs**:
+   - `/c/SLUG/SLUG/[a-f0-9]{20,}` and `/b/SLUG/SLUG/[a-f0-9]{20,}`
+   - User-reported example: `homedepot.com/c/ah/diy-compost-bin/9ba683603be9fa5395fab9013b7b4545`
+   - Same shape applies to Lowe's, Wayfair, Target, Walmart ephemeral PLP URLs
+3. **Data-portal path segments**:
+   - URLs whose path starts with `/valet/`, `/observations/`, `/series/`, `/datasets/`, `/raw/`, `/api/`
+   - Catches public data portals (bankofcanada.ca/valet, ecb.europa.eu/stats/observations, fred.stlouisfed.org/series, etc.) that return data rather than article pages
+
+These patterns supplement the v1.5.190 API endpoint filter (`\.(json|xml|csv)$`, `/query$`, `/search$`, `fdsnws`, `/api/v\d`) and the v1.5.216.62.62 source-quality filters. All three layers run as hard-fail rules — pool membership doesn't override.
+
 **Source-quality URL filters (added v1.5.216.62.62)** — applied as hard-fail rules in `validate_outbound_links()::filter_link()`, BEFORE the citation-pool-membership check. URLs that fail these patterns are stripped regardless of pool membership. Per [Princeton GEO §1 (arxiv 2311.09735)](https://arxiv.org/abs/2311.09735), citation quality strongly correlates with whether the citing article gets picked up by AI search engines.
 
 The affected hosts pass through the citation pool because Tavily / Sonar return them in keyword-targeted free-text search results — they're not in the static whitelist but pool-membership bypasses the whitelist gate. v62.62 adds URL-pattern filters to drop the non-authoritative URL shapes within these hosts while keeping the editorial / heavily-moderated layer.

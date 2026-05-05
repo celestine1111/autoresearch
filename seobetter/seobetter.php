@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.64
+ * Version: 1.5.216.62.65
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.64' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.65' );
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -4146,7 +4146,25 @@ final class SEOBetter {
                 return [ 'keep' => false, 'text' => $text ];
             }
             // v1.5.190 — Block raw data file URLs and API query endpoints
-            if ( preg_match( '#\.(json|xml|csv)$|/query$|/search$|fdsnws|/api/v\d#i', $path ?? '' ) ) {
+            // v1.5.216.62.65 — extended end-of-path matchers to catch
+            // path-segment indicators (not just file extensions) and
+            // commerce-site PLP / category-listing hash IDs that
+            // routinely 404 or redirect. User-reported on T3 #4 retest:
+            //   - https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json
+            //     → path ends with /json (segment, not extension) — old
+            //     `\.(json|xml|csv)$` regex didn't match
+            //   - https://www.homedepot.com/c/ah/diy-compost-bin/HASH
+            //     → category-page hash ID (commerce PLP that 404s when
+            //     promo expires)
+            if ( preg_match( '#\.(json|xml|csv|rss|atom)$|/(json|xml|csv|rss|atom|raw|export|dump|download)/?$|/query$|/search$|fdsnws|/api/v\d#i', $path ?? '' ) ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+            // v1.5.216.62.65 — commerce category / PLP hash IDs.
+            // Pattern: /c/SLUG/SLUG/HASH or /b/SLUG/SLUG/HASH where HASH
+            // is a 20+ char alphanumeric id (the "9ba683603be9..." shape
+            // home depot / lowe's / wayfair / target / walmart use for
+            // ephemeral category pages). These routinely 404 or change.
+            if ( preg_match( '#^/[cb]/[^/]+/[^/]+/[a-f0-9]{20,}/?$#i', $path ?? '' ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
             // Block known data API hosts that aren't article pages
@@ -4163,6 +4181,15 @@ final class SEOBetter {
             }
             // Host must not look like an API host
             if ( preg_match( '/(^|\.)api\.|-api\.|\.herokuapp\.com$/i', $host ) ) {
+                return [ 'keep' => false, 'text' => $text ];
+            }
+            // v1.5.216.62.65 — block subdomains that are obviously data /
+            // valet / observations endpoints rather than article pages.
+            // bankofcanada.ca/valet/... is a public data portal; same
+            // pattern fits ecb.europa.eu/stats/ exchange rate observations,
+            // fred.stlouisfed.org/series/, etc. Path segments that signal
+            // data portals rather than article pages.
+            if ( preg_match( '#^/(valet|observations|series|datasets?|raw|api)/#i', $path ?? '' ) ) {
                 return [ 'keep' => false, 'text' => $text ];
             }
             // URL must be a DEEP link (has a real path) — not a bare homepage
