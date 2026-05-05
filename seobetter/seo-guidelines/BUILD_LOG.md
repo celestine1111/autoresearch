@@ -19,7 +19,7 @@
 ## v1.5.216.62.74 — Review polish duo: extend item_name strip word list (+tested/reviewed/compared/ranked/rated/new/latest/ultimate) + Review prose-template NUMERIC RATING RULE (mandatory X/Y in Verdict section so reviewRating extracts)
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `15c6809`
 
 ### Why
 
