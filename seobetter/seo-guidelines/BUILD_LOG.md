@@ -7,12 +7,87 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-05 (v1.5.216.62.71)
+> **Last updated:** 2026-05-06 (v1.5.216.62.72)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.72 — Review septet: 7 surgical schema + headline + body fixes for Review content type (drop dupe Product, tighten SoftwareApplication trigger, add Speakable, country→currency helpers, secondary reviewRating extraction, review headline guardrail + per-type fallbacks, currency-symbol body rule)
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on T3 #6 Review test 2026-05-05 (Dyson V15 Detect cordless vacuum review, country=UK): 7 distinct schema/structure problems on the same article.
+
+1. **Bogus duplicate Product schema** — `detect_product_schema()` fired alongside `build_review()` for review content type, emitting a SECOND standalone Product node with worse data (article-title-with-prefix as name, intro prose as description, USD currency from inline regex defaulting). The Review's own `itemReviewed` Product (from build_review) already had correct currency from `$country` — the standalone one was duplicative AND wrong.
+2. **SoftwareApplication false positive** — `detect_software_schema()` fired on a vacuum-cleaner Review because the trigger was loose (any "app" word match). The Dyson V15 article mentioned "MyDyson app" → SoftwareApplication schema emitted for a hardware Review. Schema.org policy violation.
+3. **Speakable missing for Review** — `SPEAKABLE_TYPES` listed 11 types as of v62.71; review wasn't included. But voice-search "Is the Dyson V15 worth it?" / "Is X a good buy?" is exactly what single-product Reviews answer.
+4. **Currency = USD on UK article** — Schema's currency detection chain at multiple call sites was inline + inconsistent + US-defaulted. UK article emitted `priceCurrency: USD` despite `country=UK`. Real Dyson V15 Detect Absolute MSRP is £649.99 / sale £549.99 (verified against dyson.co.uk).
+5. **No reviewRating** — primary regex in `build_review()` required a lead word like "rating|score|verdict" BEFORE the X/Y number. AI verdict prose often skips the lead word ("4.5/5 stars" / "8 out of 10" inline), missing extraction entirely.
+6. **H1 over-rephrased** — `headline_genre_guardrail()` had no `review` entry, so Review type defaulted to the generic 5-formula table including "How-to + keyword". AI emitted "How to Choose: Dyson v15 detect cordless vacuum review Guide" as H1 — buying-guide framing, not review framing.
+7. **Body prose used $ symbol on UK article** — system prompt's country-context said "(local currency)" vaguely; AI defaulted to `$` for prices regardless of country. UK article said "the V15 costs $749" instead of "£549."
+
+### What changed
+
+**Fix 1 — `Schema_Generator::detect_product_schema()`** ([includes/Schema_Generator.php](seobetter/includes/Schema_Generator.php)) — removed `review` from the trigger list (same logic as v62.71's listicle removal). `build_review()`'s itemReviewed remains the sole source of truth for Product on Review articles.
+
+**Fix 2 — `Schema_Generator::detect_software_schema()` tightened trigger** — now requires BOTH (a) software-noun mention AND (b) at least one explicit software signal: an App Store / Play Store URL OR a "download" verb in proximity to a platform name (iOS / Android / Windows / Mac / web). Hardware-with-companion-app no longer triggers because there's no App Store URL or "download from..." prose, just a passing app mention.
+
+**Fix 3 — `SPEAKABLE_TYPES` adds `review`** — now 12 types. cssSelector chain in `build_article()` (h1 + .key-takeaways + h2 + p) targets natural readout points for Reviews (title, takeaways, verdict, spec list, hands-on).
+
+**Fix 4 — `Schema_Generator::country_to_currency()` + `country_to_currency_symbol()` static helpers** — universal mapping. ISO 4217 code (e.g. UK→GBP, AU→AUD, EU members→EUR) for `priceCurrency` schema field; Unicode symbol or ISO code for body-prose currency rendering. Used by Async_Generator's system prompt + section prompts to enforce currency consistency.
+
+**Fix 5 — `build_review()` secondary reviewRating extraction** — primary regex unchanged. Added a fallback that locates the Verdict / Rating / Score H2 section in the rendered HTML and searches WITHIN that section's body for any X/Y rating pattern (no lead word required). Sanity bounds: best in {5, 10}, X<=best, X>0. Catches AI prose like "We rate this 4.5/5" or "8 out of 10 overall" inside a Verdict section.
+
+**Fix 6 — `AI_Content_Generator::headline_genre_guardrail()` adds `review` entry** — bans "How to Choose" + "Buyer's Guide" framings explicitly, steers toward verdict-style headlines ("X Review", "Is X Worth It?", "X: Honest Verdict"). PLUS per-content-type fallback list — pre-fix every type fell to a generic 3-fallback list with "How to Choose [kw]: Buyer's Guide" as fallback #3. Now each content type has its own framing-appropriate fallbacks.
+
+**Fix 7 — `Async_Generator` currency HARD RULE** — both `get_system_prompt()` (article-level) and `generate_section()` (per-section) inject a CURRENCY HARD RULE block when `$country` is set, naming the exact symbol AND ISO code: "Every price MUST use the £ symbol (ISO GBP). NEVER write USD prices unless the article is about the US specifically." Defends against AI's US-biased default.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.71 → 62.72
+- `seobetter/includes/Schema_Generator.php`:
+  - `detect_product_schema()` trigger list (`review` removed)
+  - `detect_software_schema()` tighter trigger (App Store URL OR download verb)
+  - `SPEAKABLE_TYPES` adds `review` (now 12)
+  - new `country_to_currency()` + `country_to_currency_symbol()` static helpers
+  - `build_review()` secondary reviewRating extraction (Verdict section body scan)
+- `seobetter/includes/AI_Content_Generator.php`:
+  - `headline_genre_guardrail()` adds `review` entry
+  - `generate_headlines()` per-content-type fallback list (replaces 3 generic fallbacks)
+- `seobetter/includes/Async_Generator.php`:
+  - `get_system_prompt()` country_context block — adds CURRENCY HARD RULE
+  - `generate_section()` kw_context block — adds CURRENCY HARD RULE (per-section reinforcement)
+
+### Verify
+
+```
+grep -B 1 -A 17 "v1.5.216.62.72 — REMOVED 'review'" seobetter/includes/Schema_Generator.php
+grep -B 1 -A 14 "v1.5.216.62.72 — Tightened trigger" seobetter/includes/Schema_Generator.php
+grep -n "'listicle', 'review' \];" seobetter/includes/Schema_Generator.php
+grep -n "public static function country_to_currency" seobetter/includes/Schema_Generator.php
+grep -B 1 -A 7 "v1.5.216.62.72 — secondary fallback" seobetter/includes/Schema_Generator.php
+grep -B 1 -A 7 "v1.5.216.62.72 — review guardrail" seobetter/includes/AI_Content_Generator.php
+grep -B 1 -A 5 "v1.5.216.62.72 — explicit currency-symbol enforcement" seobetter/includes/Async_Generator.php
+```
+
+After upload + retest T3 #6 Review (Dyson V15 Detect, UK):
+- Schema validator passes cleanly
+- Single Product node only (Review.itemReviewed) — no duplicate standalone Product
+- ZERO SoftwareApplication node (vacuum doesn't have App Store URL or "download iOS" signal)
+- SpeakableSpecification PRESENT
+- `priceCurrency: GBP` (not USD) inside Review.itemReviewed.offers
+- `reviewRating` present if article has any X/5 or X/10 in the Verdict section
+- H1 should be a Review-flavored framing — NOT "How to Choose [keyword] Guide"
+- Body prices written as `£XXX` (or omitted if AI doesn't have a verified price — Phase 2 will hard-enforce)
+
+**Verified by user:** UNTESTED
 
 ---
 

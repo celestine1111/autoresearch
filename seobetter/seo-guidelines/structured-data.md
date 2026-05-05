@@ -431,7 +431,7 @@ Each block uses InspectorControls for the form fields + `wp.serverSideRender` fo
 | blog_post | BlogPosting | FAQPage*, Speakable, BreadcrumbList, Organization, Person | All 5 | Standard blog article |
 | how_to | Article | FAQPage*, Speakable, citation[], BreadcrumbList | All 5 | NOT HowTo (deprecated by Google Sept 2023) |
 | listicle | Article | ItemList, FAQPage*, BreadcrumbList | All 5 | ItemList for numbered items |
-| review | Review OR Article | FAQPage*, Product*, AggregateRating, BreadcrumbList | All 5 | Review ONLY if rating extractable, else Article |
+| review | Review OR Article | FAQPage*, AggregateRating, BreadcrumbList, **SpeakableSpecification (added v62.72)** | All 5 | Review ONLY if rating extractable, else Article. **v62.72 — single-product Product comes from `build_review()`'s `itemReviewed` field, NOT from `detect_product_schema()` (review removed from that trigger list to eliminate duplicate Product nodes).** |
 | comparison | Article | FAQPage*, Product*, BreadcrumbList | All 5 | No special schema |
 | buying_guide | Article | ItemList, FAQPage*, Product*, BreadcrumbList | All 5 | ItemList for product list |
 | recipe | Recipe + Article wrapper | Speakable, BreadcrumbList | None recommended | Required: name + image. No hardcoded times. v1.5.213 wrapper. |
@@ -452,7 +452,7 @@ Each block uses InspectorControls for the form fields + `wp.serverSideRender` fo
 
 *FAQPage = automatic when article body contains a `## Frequently Asked Questions` section with 3+ Q&A pairs. Excluded types: recipe, live_blog, faq_page-as-primary.
 
-*Product (auto) = detected from review/comparison content with extractable price + product name. Manual Product Schema Block always overrides auto-detection for the same @type.
+*Product (auto) = detected from buying_guide / comparison / sponsored content with extractable price + product name (v1.5.216.62.72: `review` removed from this trigger list — Review's Product comes from `build_review()`'s `itemReviewed` field instead, eliminating duplicate Product nodes; v1.5.216.62.71: `listicle` removed for same reason — listicle uses ItemList wrapper). Manual Product Schema Block always overrides auto-detection for the same @type.
 
 **LocalBusiness as primary @type** = manual Schema Block ONLY (Pro+). v1.5.216.62.24 retired the auto-emit-from-article-listing path because article-style sites do not qualify for Google's Map Pack rich result; the manual block exists for the legitimate single-business-page use case where a customer is publishing about *their own* business.
 

@@ -347,7 +347,13 @@ class Schema_Generator {
     // paragraph after each h2, which works naturally for a numbered
     // listicle. User-reported on T3 #5 Listicle: Speakable was missing
     // entirely from the JSON-LD blob.
-    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release', 'listicle' ];
+    // v1.5.216.62.72 — `review` added (now 12). Voice-search "Is the Dyson
+    // V15 worth it?" / "Is X a good buy in 2026?" is exactly what a single-
+    // product Review answers. cssSelector chain in build_article() (h1 +
+    // .key-takeaways + h2 + p) targets the natural readout points: title,
+    // takeaways, and the first paragraph after each H2 (which for Reviews
+    // is the verdict, the spec list, the hands-on, etc.).
+    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release', 'listicle', 'review' ];
 
     // Content types that get universal `citation[]` injection (v1.5.210).
     // Implements the "biggest LLM-citation lever" rollout flagged in v1.5.209
@@ -1453,6 +1459,88 @@ class Schema_Generator {
      * Includes publisher, author.url, image on itemReviewed.
      * Pros/Cons extracted as positiveNotes/negativeNotes.
      */
+    /**
+     * v1.5.216.62.72 — Country → currency code mapping.
+     *
+     * Centralizes the country-to-ISO-4217 mapping used by Schema_Generator
+     * for `priceCurrency` fields. Pre-fix every place that needed a currency
+     * had its own inline regex/fallback chain (build_review line ~1577,
+     * detect_product_schema line ~2554), inconsistent and US-defaulted.
+     * Now all schema-emitting paths can call this helper for a single source
+     * of truth. Universal: returns 'USD' as the safe default for any
+     * unrecognized country, never errors.
+     *
+     * @param string $country ISO 3166-1 alpha-2 (case-insensitive). Empty/unknown → USD.
+     * @return string ISO 4217 currency code.
+     */
+    public static function country_to_currency( string $country ): string {
+        $c = strtoupper( trim( $country ) );
+        // EU members — all use EUR
+        $eurozone = [ 'DE', 'FR', 'IT', 'ES', 'NL', 'IE', 'BE', 'AT', 'FI', 'PT', 'GR', 'LU', 'SK', 'SI', 'EE', 'LV', 'LT', 'MT', 'CY', 'HR' ];
+        if ( in_array( $c, $eurozone, true ) ) return 'EUR';
+        return [
+            'US' => 'USD', 'PR' => 'USD', 'GU' => 'USD', 'VI' => 'USD',
+            'GB' => 'GBP', 'UK' => 'GBP',
+            'AU' => 'AUD', 'NZ' => 'NZD', 'CA' => 'CAD',
+            'JP' => 'JPY', 'KR' => 'KRW', 'CN' => 'CNY', 'TW' => 'TWD', 'HK' => 'HKD',
+            'IN' => 'INR', 'BR' => 'BRL', 'MX' => 'MXN',
+            'ZA' => 'ZAR', 'SG' => 'SGD', 'AE' => 'AED', 'TR' => 'TRY',
+            'CH' => 'CHF', 'SE' => 'SEK', 'NO' => 'NOK', 'DK' => 'DKK',
+            'PL' => 'PLN', 'CZ' => 'CZK', 'HU' => 'HUF', 'RO' => 'RON',
+            'IL' => 'ILS', 'RU' => 'RUB', 'SA' => 'SAR', 'AR' => 'ARS',
+        ][ $c ] ?? 'USD';
+    }
+
+    /**
+     * v1.5.216.62.72 — Country → currency symbol mapping (for body prose).
+     *
+     * Used by Async_Generator's system prompt to instruct the AI to use the
+     * correct currency symbol when writing prices in body text. Pre-fix the
+     * AI defaulted to `$` regardless of country, producing UK articles that
+     * said "the V15 costs $749" instead of "£549" — visually wrong AND
+     * misleading even for readers who know the conversion. Returns the
+     * Unicode symbol where one exists; returns the ISO code (e.g. "AUD")
+     * for currencies whose symbol is the same as USD ($) and would be
+     * ambiguous in body prose.
+     */
+    public static function country_to_currency_symbol( string $country ): string {
+        $code = self::country_to_currency( $country );
+        return [
+            'USD' => '$',
+            'GBP' => '£',
+            'EUR' => '€',
+            'JPY' => '¥',
+            'CNY' => '¥',
+            'KRW' => '₩',
+            'INR' => '₹',
+            'TRY' => '₺',
+            'ILS' => '₪',
+            'RUB' => '₽',
+            // For currencies sharing $ symbol — use the ISO code in body prose
+            // to disambiguate ("AUD 199" not "$199" which UK reader would read as USD).
+            'AUD' => 'AUD',
+            'NZD' => 'NZD',
+            'CAD' => 'CAD',
+            'HKD' => 'HKD',
+            'SGD' => 'SGD',
+            'TWD' => 'TWD',
+            'BRL' => 'R$',
+            'MXN' => 'MXN',
+            'ARS' => 'ARS',
+            'ZAR' => 'R',
+            'CHF' => 'CHF',
+            'SEK' => 'kr',
+            'NOK' => 'kr',
+            'DKK' => 'kr',
+            'PLN' => 'zł',
+            'CZK' => 'Kč',
+            'HUF' => 'Ft',
+            'RON' => 'lei',
+            'AED' => 'AED',
+            'SAR' => 'SAR',
+        ][ $code ] ?? '$';
+    }
+
     private function build_review( \WP_Post $post ): array {
         $thumbnail = get_the_post_thumbnail_url( $post->ID, 'full' );
         $text      = wp_strip_all_tags( $post->post_content );
@@ -1648,6 +1736,35 @@ class Schema_Generator {
                     'bestRating'  => (string) $best,
                     'worstRating' => '1',
                 ];
+            }
+        }
+
+        // v1.5.216.62.72 — secondary fallback: locate the Verdict / Rating /
+        // Score H2 section, then search ITS body for a bare X/Y rating
+        // pattern (no lead word required). Pre-fix the primary regex
+        // required a lead word like "rating" or "verdict" BEFORE the number,
+        // so AI verdict prose that simply opens with "4.5/5" or "8 out of
+        // 10" was missed entirely. User-reported on T3 #6 Review (Dyson V15
+        // Detect): article had a "Verdict and Rating" H2 section but no
+        // reviewRating in the JSON-LD because the prose said "We rate this
+        // 4.5/5" without leading the number with one of the strict-regex
+        // trigger words. New fallback scans within the verdict section
+        // body for any X/Y pattern with sanity bounds: best in {5, 10},
+        // X<=best, X>0.
+        if ( ! isset( $schema['reviewRating'] )
+            && preg_match( '/<h[2-3][^>]*>[^<]*(?:verdict|rating|score|our take|final word|bottom line)[^<]*<\/h[2-3]>(.*?)(?=<h[2-3]|$)/is', $content, $vsec ) ) {
+            $section_text = wp_strip_all_tags( $vsec[1] );
+            if ( preg_match( '/\b(\d+(?:\.\d+)?)\s*(?:\/|out of)\s*(\d+)\b/i', $section_text, $r2 ) ) {
+                $val  = floatval( $r2[1] );
+                $best = intval( $r2[2] );
+                if ( $val > 0 && $val <= $best && in_array( $best, [ 5, 10 ], true ) ) {
+                    $schema['reviewRating'] = [
+                        '@type'       => 'Rating',
+                        'ratingValue' => (string) $val,
+                        'bestRating'  => (string) $best,
+                        'worstRating' => '1',
+                    ];
+                }
             }
         }
 
@@ -2228,8 +2345,29 @@ class Schema_Generator {
             return null;
         }
         $text = wp_strip_all_tags( $content );
-        // Must mention software/app/platform/tool/SaaS
+        // v1.5.216.62.72 — Tightened trigger. Pre-fix the trigger required only
+        // a single bare-word match on `app|software|platform|tool|SaaS`, which
+        // false-positive fired on hardware Reviews that mention a companion
+        // app (e.g. Dyson V15 Detect cordless vacuum review category=technology
+        // mentions "MyDyson app" → emitted a SoftwareApplication schema for a
+        // vacuum cleaner). Now requires BOTH (a) a software-noun match AND
+        // (b) at least one explicit software signal: an App Store / Play Store
+        // URL, OR a "download" verb in proximity to a platform name (iOS /
+        // Android / Windows / Mac / web). Hardware-with-companion-app no
+        // longer triggers because the article doesn't say "download from the
+        // App Store" — it just mentions the app as an accessory.
         if ( ! preg_match( '/\b(app|software|platform|tool|SaaS|application|plugin|extension)\b/i', $text ) ) {
+            return null;
+        }
+        $has_app_store_url = preg_match(
+            '#https?://(?:apps\.apple\.com|play\.google\.com|microsoft\.com/store|chrome\.google\.com/webstore|addons\.mozilla\.org)/#i',
+            $content
+        );
+        $has_download_signal = preg_match(
+            '/\bdownload\b[^.]{0,80}\b(?:ios|android|iphone|ipad|windows|mac\s?os|macos|linux|chrome\s?(?:os|book)?|web(?:\s|$|-))\b/i',
+            $text
+        );
+        if ( ! $has_app_store_url && ! $has_download_signal ) {
             return null;
         }
         $schema = [
@@ -2524,7 +2662,22 @@ class Schema_Generator {
         // is strictly worse than no Product at all. User-reported on T3
         // #5 Listicle retest with Schema.org Validator: the Product node
         // failed validation while the ItemList passed.
-        if ( ! in_array( $content_type, [ 'review', 'buying_guide', 'comparison', 'sponsored' ], true ) ) {
+        // v1.5.216.62.72 — REMOVED 'review' from this trigger list (same logic
+        // as v62.71's listicle removal). For Review content type, build_review()
+        // already emits a Product as the Review's `itemReviewed` with the right
+        // currency pulled from $country (line ~1577). detect_product_schema()
+        // running ALONGSIDE produced a SECOND standalone Product node with
+        // worse data: name was the article's post_title minus review/best/top
+        // modifiers ("How to Choose: Dyson v15 detect cordless vacuum" — still
+        // had "How to Choose:" prefix from the headline generator), description
+        // was the article's intro prose, offers.priceCurrency defaulted to
+        // USD via inline regex even when $country=UK. User-reported on T3 #6
+        // Review retest with Schema.org Validator: the standalone Product
+        // failed validation (no aggregateRating, no real brand) and conflicted
+        // with the Review's itemReviewed Product (same product, two nodes,
+        // inconsistent data). Removing review here means build_review() is
+        // the sole source of truth for the Product node on Review articles.
+        if ( ! in_array( $content_type, [ 'buying_guide', 'comparison', 'sponsored' ], true ) ) {
             return null;
         }
         $text = wp_strip_all_tags( $content );

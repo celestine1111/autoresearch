@@ -1138,7 +1138,18 @@ class Async_Generator {
         $country_name = $country_names[ $country_code ] ?? '';
         $country_context = '';
         if ( $country_name ) {
-            $country_context = "\nTARGET COUNTRY: {$country_name}. Write for a {$country_name} audience. Use local brands, regulations, pricing (local currency), terminology, and cultural references specific to {$country_name}. Do NOT default to US examples, US brands, US regulations, or US pricing unless the keyword specifically mentions the US.";
+            // v1.5.216.62.72 — explicit currency-symbol enforcement. Pre-fix
+            // "(local currency)" was vague; the AI wrote `$749` for UK
+            // articles because its training data is US-biased and `$` is
+            // the default money symbol it knows. Now the system prompt
+            // names the exact symbol AND ISO code so AI emits prices in
+            // the right currency. Doesn't fix hallucinated price VALUES
+            // (Phase 2 verified-data pipeline owns that), but at least
+            // the symbol matches the article's target country.
+            $currency_code   = \SEOBetter\Schema_Generator::country_to_currency( $country_code );
+            $currency_symbol = \SEOBetter\Schema_Generator::country_to_currency_symbol( $country_code );
+            $country_context = "\nTARGET COUNTRY: {$country_name}. Write for a {$country_name} audience. Use local brands, regulations, terminology, and cultural references specific to {$country_name}. Do NOT default to US examples, US brands, US regulations, or US pricing unless the keyword specifically mentions the US."
+                . "\n\nCURRENCY (HARD RULE): Every price you mention in the article body MUST use the {$currency_symbol} symbol (ISO code: {$currency_code}) — the currency of {$country_name}. Examples: write \"{$currency_symbol}199\" or \"{$currency_symbol}1,200\". NEVER use a different currency symbol. NEVER write USD prices unless the article is about the US specifically. If you don't know the price in {$currency_code}, do NOT convert from another currency — instead, omit the price entirely.";
         }
         $recipe_count = $options['recipe_source_count'] ?? 3;
         $prose = self::get_prose_template( $content_type, $recipe_count );
@@ -1450,7 +1461,12 @@ class Async_Generator {
         ];
         $country_name_sec = $country_names_sec[ $country_code_sec ] ?? '';
         if ( $country_name_sec ) {
-            $kw_context .= "\nTARGET COUNTRY: {$country_name_sec}. Use {$country_name_sec} brands, regulations, pricing (local currency), terminology. Do NOT default to US examples unless the keyword mentions US.";
+            // v1.5.216.62.72 — same currency-symbol HARD RULE as get_system_prompt(),
+            // re-injected at section level so it's reinforced in every section call.
+            $currency_code_sec   = \SEOBetter\Schema_Generator::country_to_currency( $country_code_sec );
+            $currency_symbol_sec = \SEOBetter\Schema_Generator::country_to_currency_symbol( $country_code_sec );
+            $kw_context .= "\nTARGET COUNTRY: {$country_name_sec}. Use {$country_name_sec} brands, regulations, terminology. Do NOT default to US examples unless the keyword mentions US."
+                . "\nCURRENCY (HARD RULE): Every price MUST use the {$currency_symbol_sec} symbol (ISO {$currency_code_sec}). NEVER write USD unless the article is about the US.";
         }
         if ( ! empty( $secondary ) ) $kw_context .= "\nSecondary keywords to include: " . implode( ', ', $secondary );
         if ( ! empty( $lsi ) ) $kw_context .= "\nLSI keywords to include: " . implode( ', ', $lsi );

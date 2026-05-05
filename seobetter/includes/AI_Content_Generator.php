@@ -239,11 +239,33 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
         // Korean/Japanese/Chinese editorial style anyway.
         // v1.5.212.3 — fallbacks use the translated keyword too.
         if ( count( $headlines ) < 3 ) {
+            // v1.5.216.62.72 — per-content-type fallback lists. Pre-fix every
+            // type fell to the generic 3 fallbacks including "How to Choose
+            // [kw]: Buyer's Guide" — that's a buying-guide framing the AI
+            // would emit as Review H1 when its own headlines didn't pass
+            // the keyword filter. Each genre now gets fallbacks that match
+            // its own framing. English-only; non-English path below
+            // unchanged (keyword-only fallbacks stay safe across languages).
             if ( $is_english ) {
-                $fallbacks = [
-                    ucwords( $keyword_for_prompt ) . ': Complete Guide for ' . wp_date( 'Y' ),
-                    'Best ' . ucwords( $keyword_for_prompt ) . ' — Expert Review ' . wp_date( 'Y' ),
-                    'How to Choose ' . ucwords( $keyword_for_prompt ) . ': Buyer\'s Guide',
+                $kw_uc = ucwords( $keyword_for_prompt );
+                $year  = wp_date( 'Y' );
+                $fallbacks_by_type = [
+                    'review'         => [ "{$kw_uc} Review", "Is {$kw_uc} Worth It in {$year}?", "{$kw_uc}: Honest Verdict" ],
+                    'opinion'        => [ "Why {$kw_uc} Is Broken", "The Case Against {$kw_uc}", "{$kw_uc}: My Take" ],
+                    'news_article'   => [ "{$kw_uc}: What Happened in {$year}", "{$kw_uc}: The Latest", "{$kw_uc} Update" ],
+                    'press_release'  => [ "Company Announces {$kw_uc} for {$year}", "{$kw_uc}: New Release", "{$kw_uc} Now Available" ],
+                    'personal_essay' => [ "What {$kw_uc} Taught Me", "The Year of {$kw_uc}", "Why {$kw_uc} Still Matters" ],
+                    'recipe'         => [ "Easy {$kw_uc} Recipe ({$year})", "How to Make {$kw_uc}", "{$kw_uc}: Quick & Simple" ],
+                    'live_blog'      => [ "{$kw_uc}: Live Updates", "{$kw_uc} As It Happened", "{$kw_uc}: Live Blog" ],
+                    'interview'      => [ "On {$kw_uc}: A Conversation", "{$kw_uc}: Insights", "{$kw_uc} Explained" ],
+                    'comparison'     => [ "{$kw_uc}: Compared", "{$kw_uc}: Which Wins?", "{$kw_uc}: Side-by-Side" ],
+                    'buying_guide'   => [ "Best {$kw_uc} ({$year})", "How to Choose {$kw_uc}", "{$kw_uc}: Buyer's Guide" ],
+                    'listicle'       => [ "Best {$kw_uc} ({$year})", "Top {$kw_uc} List", "{$kw_uc}: Our Picks" ],
+                ];
+                $fallbacks = $fallbacks_by_type[ $content_type ] ?? [
+                    "{$kw_uc}: Complete Guide for {$year}",
+                    "Best {$kw_uc} — Expert Review {$year}",
+                    "{$kw_uc} Explained",
                 ];
             } else {
                 $fallbacks = [
@@ -387,6 +409,22 @@ Return ONLY the 5 headlines, numbered 1-5, one per line. No explanations.";
                 . "  • Use subject-led framings: \"[Name] on X\", \"How [Name] thinks about X\", \"[Name] explains X\".\n"
                 . "  • Skip formulas #1 (Number), #2 (How-to), #4 (Power words) — interview headlines lead with the subject.\n"
                 . "  • Concrete example for keyword \"{$kw}\": \"[Name] on {$kw}\" or \"A Conversation with [Name] about {$kw}\".",
+            // v1.5.216.62.72 — review guardrail. Pre-fix Review type had no
+            // entry, so it defaulted to the generic 5-formula table including
+            // formula #2 "How-to + keyword" → AI emitted "How to Choose:
+            // Dyson v15 detect cordless vacuum review Guide" as the H1 on
+            // T3 #6 (the "How to Choose" prefix is buying-guide framing,
+            // not review framing). Plus the English fallback list at line
+            // ~243 included "How to Choose [keyword]: Buyer's Guide" as
+            // fallback #3 which the AI happily picked up. New review
+            // guardrail bans "How to Choose" + "Buyer's Guide" framings
+            // explicitly and steers toward verdict-style headlines.
+            'review' => "\n\nGENRE GUARDRAIL (review — verdict on a single product, hands-on tested):\n"
+                . "  • Use review framings: \"{$kw} Review\", \"Is {$kw} Worth It?\", \"{$kw}: Honest Review\", \"{$kw} Tested for {$year}\", \"{$kw}: My Verdict\".\n"
+                . "  • Skip formula #2 (How-to) — Review is a verdict on a product, not how-to advice.\n"
+                . "  • NEVER prefix with \"How to Choose\" or \"How to Pick\" — those are buying-guide framings, not review framings.\n"
+                . "  • NEVER suffix with \"Buyer's Guide\" or \"Complete Guide\" — those are buying-guide / pillar framings.\n"
+                . "  • Concrete example for keyword \"{$kw}\": \"{$kw} Review\" or \"Is {$kw} Worth It in {$year}?\" or \"{$kw}: Honest Verdict\".",
         ];
 
         return $guardrails[ $content_type ] ?? '';
