@@ -123,6 +123,75 @@ Single-toggle opt-in. Recipient chooses weekly or monthly cadence in Settings �
 
 Single preferences toggle + one-click unsubscribe. Never fires without opt-in.
 
+#### TODO — Monthly digest enhancement (research-backed redesign)
+
+> **Status:** PLANNED for Phase 3 (~2-3 months post-launch). Listed here so the design is documented before the build.
+>
+> **Inspiration + anti-inspiration:** AIOSEO's monthly "SEO Performance Report" email (forwarded by Ben 2026-05-05). What works: clear date range header, recent-posts module with thumbnails + scores, "What's New" educational content driving back to their blog. What doesn't: zero actual performance numbers (clicks/impressions/position) — they punt to "Connect GSC" upsell on every email; no period-over-period comparison; no actionable recommendations; the educational links are pure cross-sell with no relevance to the user's site.
+>
+> **The differentiator** for SEOBetter is the wedge: **AI Citation events**. AIOSEO can't show "ChatGPT cited your article 12 times this month" — we can. Lead the email with that.
+
+**Subject line pattern (data-led, not "report"-led):**
+
+Decided by ranking emails by which signal moved most. Pick ONE per email — never multi-stat subjects (split test data shows single-stat outperforms 2.5×):
+
+| Trigger | Subject line example |
+|---|---|
+| Top article gained ≥30% clicks | "[Article title] got [+N%] more clicks in [Month]" |
+| New AI citation detected | "ChatGPT just cited your article on [keyword]" |
+| Average GEO score improved | "Your average GEO score climbed [N] points in [Month]" |
+| Article hit position 1 | "You're now #1 for [keyword]" |
+| Default (nothing dramatic) | "Your [Month] SEOBetter summary — [N] articles, [N] AI citations" |
+
+**Module order** (research: 50%+ of users only read above the fold on mobile; sequence matters):
+
+1. **Hero stat** (headline single number tied to subject line — e.g. "12 AI citations this month, up from 4 last month")
+2. **AI Citation events module** — Pro+ wedge differentiator. List 3-5 specific citations with engine + cited URL + cited claim snippet. THIS IS THE EMAIL'S REASON TO EXIST.
+3. **Top 3 articles by performance delta** (period-over-period change, not absolute). Show: thumbnail + title + GSC clicks delta + GEO score delta + "→ View" link. Not 10. Three.
+4. **Needs attention** — 2-3 articles with the biggest decay signals (rank drop / lost citations / score regression). Each with the ONE-CLICK fix link (Refresh Brief generator).
+5. **GEO score trend** — sparkline chart showing site-average score over last 6 months. Tiny inline SVG, mobile-friendly.
+6. **What's new in SEOBetter** — 1 (ONE) feature shipped, with a 1-sentence description and link. Skip the section in months where nothing meaningful shipped — silence beats filler.
+7. **Footer:** plain-text unsubscribe link + manage-preferences + "Why am I getting this?" explainer link.
+
+**Anti-patterns to avoid (drawn from AIOSEO email + 2026 email-marketing research):**
+
+- ❌ Multiple competing CTAs in the body. Each module gets ONE link. The email overall pushes ONE primary action (see "Suggested next action" below).
+- ❌ "Connect GSC for more insights" upsell repeated every email. Show it ONCE during onboarding, then stop.
+- ❌ Generic "What's New" educational links that aren't relevant to the user's site state. We only include educational content if it directly addresses something in the user's data (e.g. user has 3 articles with no schema → link to the schema-block guide).
+- ❌ Sending the email in months where nothing meaningful happened. The monthly cadence is a MAXIMUM, not a guarantee — if no AI citations, no rank movements, no score changes, skip the month entirely. A skipped month with a "we had nothing to report" line beats a fluff email.
+- ❌ Multi-stat subject lines ("+30% clicks · 4 new citations · 12 articles"). Pick one.
+- ❌ Cross-selling tier upgrades inside the digest body. Tier upsells live in their own email category (Trial Lifecycle / Renewal), not Usage Digest.
+- ❌ Charts that need >300px width to read. Mobile-first means single-column, sparklines not bar charts.
+
+**Suggested next action — the ONE primary CTA:**
+
+The email closes with a single contextual recommendation chosen by a small ranking function:
+
+| If user has... | Show this CTA |
+|---|---|
+| Articles with ≥30% rank drop AND no Refresh Brief in last 60 days | "Generate refresh brief for [article]" |
+| Articles cited by AI engines but missing schema | "Add schema to [article]" |
+| Sites with no GSC connection | "Connect GSC" (one-time, not repeated) |
+| All articles healthy, average GEO ≥80 | "Generate next article — your top topic is [trend keyword]" |
+| New month, no specific signal | "View full dashboard" |
+
+**Tier-gated detail (Pro vs Pro+ vs Agency):**
+
+| Module | Free | Pro | Pro+ | Agency |
+|---|---|---|---|---|
+| Hero stat + Top 3 + Needs Attention + GEO trend | ✅ | ✅ | ✅ | ✅ |
+| AI Citation events module | — (lock badge: "Upgrade to see who cited you") | — (lock badge) | ✅ Per-engine breakdown | ✅ Per-engine + per-prompt + 4-engine coverage |
+| Per-site rollup (multi-site) | — | — | ✅ Up to 3 sites | ✅ Up to 10 sites + per-site detail |
+| Cadence | Monthly only | Monthly OR Weekly | Monthly OR Weekly | Monthly OR Weekly |
+
+**Build sequencing:** ship the MVP (modules 1, 3, 5, 6, 7) in Phase 3 alongside Citation Tracker beta. Modules 2 and 4 land when Citation Tracker (Pro+ / Agency) and Refresh Brief generator (Agency) are live respectively — they have hard dependencies on those features existing.
+
+**File anchors when implemented:**
+- `includes/Email_Digest_Generator.php` — composes the monthly HTML/text digest from per-user `wp_seobetter_metrics` table
+- `templates/email/digest-monthly.php` — HTML template (single-column, mobile-first, inline CSS)
+- `includes/Email_Sender.php` — the shared Freemius/SMTP delivery layer (per §4.1)
+- Cron: `seobetter_monthly_digest_cron` daily at 09:30 site-time, sends to users whose `last_digest_sent` is ≥30 days old AND who opted in
+
 ### Category 7 — Product Updates (opt-in, irregular cadence)
 
 Announcements of new major features, breaking changes, or plugin updates that affect user workflow. Maximum 1 email per month; silence months when nothing substantial shipped.
