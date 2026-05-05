@@ -19,7 +19,7 @@
 ## v1.5.216.62.69 — Sync content-generator UI minimums with PHP $min_words (7 stale values from v62.52 + v62.67) + constrain inline image width to content column
 
 **Date:** 2026-05-05
-**Commit:** `[pending]`
+**Commit:** `98b9764`
 
 ### Why
 
