@@ -19,7 +19,7 @@
 ## v1.5.216.62.85 — Remove dead SEOBetter::get_instance() call (third pre-existing Bulk_Generator bug)
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `dc1dd0c`
 
 ### Why
 
