@@ -19,7 +19,7 @@
 ## v1.5.216.62.82 — Universal pre-emptive title cleaner (publisher-suffix strip + 60-char cap)
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `018ce3f`
 
 ### Why
 
