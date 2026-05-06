@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.77
+ * Version: 1.5.216.62.78
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.77' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.78' );
 
 // v1.5.216.62.75 — Auto-extracted Product schema feature flag. Currently
 // FALSE because the AI-extracted `offers.price` field is unreliable
@@ -2071,6 +2071,38 @@ final class SEOBetter {
         // just the first occurrence per URL).
         if ( ! empty( $markdown ) && ! empty( $combined_pool ) ) {
             $markdown = self::linkify_bracketed_references( $markdown, $combined_pool );
+        }
+
+        // v1.5.216.62.78 — Re-run bad-anchor unwrap AFTER linkify. v62.76+v62.77
+        // unwrap ran BEFORE linkify, but linkify_bracketed_references creates
+        // NEW anchors by matching parenthetical text like "(M4, 2024)" against
+        // citation-pool entries' compact form. Pool entries with titles like
+        // "Dell XPS 15 9530 (2023) vs Apple MacBook Pro 14 (M4, 2024)" register
+        // a compact form `dellxps159530vsapple...m42024` — which str_contains
+        // matches "(M4, 2024)" in the body via `m42024`. Linkify then wraps it
+        // → reintroduces the bad anchor my pre-linkify pass killed. User-
+        // reported on T3 #7 v62.77 retest: anchors `[M4, 2024]` `[2023]`
+        // `[2024]` `[10-core]` all back. Fix: re-run the same unwrap pass
+        // AFTER linkify. The check_anchor_quality closure was defined above
+        // (line ~1994); call it again. Defense in depth — covers AI-emitted
+        // bad anchors AND linkify-created bad anchors.
+        if ( ! empty( $markdown ) ) {
+            // Markdown form
+            $markdown = preg_replace_callback(
+                '/(?<!!)\[([^\]]{1,40})\]\((https?:\/\/[^)]+)\)/',
+                function ( $m ) use ( $check_anchor_quality ) {
+                    return $check_anchor_quality( $m[1] ) ? $m[0] : trim( $m[1] );
+                },
+                $markdown
+            ) ?? $markdown;
+            // HTML form
+            $markdown = preg_replace_callback(
+                '/<a\s[^>]*href="(https?:\/\/[^"]+)"[^>]*>([^<]{1,40})<\/a>/i',
+                function ( $m ) use ( $check_anchor_quality ) {
+                    return $check_anchor_quality( $m[2] ) ? $m[0] : trim( $m[2] );
+                },
+                $markdown
+            ) ?? $markdown;
         }
 
         if ( ! empty( $markdown ) ) {

@@ -7,12 +7,51 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.77)
+> **Last updated:** 2026-05-06 (v1.5.216.62.78)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.78 — ROOT CAUSE: bad-anchor unwrap ran BEFORE linkify, which then re-wrapped unwrapped text. Fix: re-run unwrap pass AFTER linkify too.
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+T3 #7 Comparison v62.77 retest: scraped-junk quote filter (Fix 2) WORKED — zero "Photograph: Luke Larsen" mangled quotes. But bad anchors STILL present: `[M4, 2024]`, `[2023]`, `[2024]`, `[10-core]` all linked to same nanoreview.net URL repeatedly.
+
+**Root cause:** the v62.76/77 bad-anchor unwrap pass was placed BEFORE `linkify_bracketed_references()`. The order was:
+1. validate_outbound_links
+2. v62.76/77 unwrap (kills AI-emitted bad anchors) ✓
+3. linkify_bracketed_references (matches body parenthetical text against pool's compact form)
+4. append_references_section
+
+`linkify_bracketed_references` registers each pool entry's compact form as a lookup key. Pool had entries like "Dell XPS 15 9530 (2023) vs Apple MacBook Pro 14 (M4, 2024)" → registered compact key `dellxps159530...m42024`. When linkify scanned body for parenthetical text `(M4, 2024)` → compact `m42024` → str_contains check found it inside the long key → matched → linkify wrapped `(M4, 2024)` back into `[M4, 2024](nanoreview-url)`. The unwrap pass had run but linkify reintroduced the same bad anchors.
+
+### What changed
+
+**Re-run the unwrap pass AFTER linkify** ([seobetter.php](seobetter/seobetter.php)) — same `$check_anchor_quality` closure (defined for the v62.76/77 pre-linkify pass) is invoked again immediately after `self::linkify_bracketed_references()`. Both markdown `[text](url)` and HTML `<a>` forms are checked. Defense-in-depth covers both AI-emitted bad anchors AND linkify-created bad anchors. Pre-linkify unwrap remains so non-linkify-scope anchors (AI-direct HTML) are caught early.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.77 → 62.78 + post-linkify unwrap pass
+
+### Verify
+
+```
+grep -B 1 -A 25 "v1.5.216.62.78 — Re-run bad-anchor unwrap AFTER linkify" seobetter/seobetter.php
+```
+
+After upload + retest:
+- ZERO bad anchors in body (`M4, 2024` / `2023` / `2024` / `10-core` etc. now plain text not links)
+- All v62.66→v62.77 fixes still hold
+
+**Verified by user:** UNTESTED
 
 ---
 
