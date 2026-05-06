@@ -241,6 +241,107 @@ Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badg
 - **Pro+:** + eBay cross-validation for confidence scoring + multi-region price lookup (one article checks UK + US + AU prices in one go).
 - **Agency:** + Amazon PA-API integration + bulk verification across 50 articles + verification audit reports per client.
 
+#### Verified citation & quote pipeline — UNIVERSAL hallucination defense for sources + quotations (Phase 2 wedge — sister fix to verified prices)
+
+> **Status:** PLANNED — promoted from "deferred" to **active** 2026-05-06 after live audit of T3 #4 How-To post 742 (`how to install a smart thermostat`, country=UK). Three distinct citation/quote bugs surfaced in a single article:
+>
+> **Bug 1 — Topically chimeric quote:** quote about "Android App installed on a dedicated smart device, namely a tablet" with "biomedical measurements" attributed loosely to a smart-thermostat context. Source URL was a real PubMed paper but on a completely unrelated medical-device topic. AI grabbed text from a tangentially-related paper because it contained the keyword "smart device".
+>
+> **Bug 2 — Title-as-quote (lazy paraphrase):** "Machine Learning-Based Intrusion Detection System on a Smart Thermostat" rendered inside `<blockquote>` as if it were a body excerpt — but it's actually the paper's title. Looks like a quote because of the quotation marks the AI added; isn't.
+>
+> **Bug 3 — URL-only verification, no content match:** current pipeline checks `wp_remote_head($url) → 200`, but never verifies the AI's quoted text actually appears anywhere on that page's body. AI can quote from one paragraph and link to a different paper — both individually valid, jointly hallucinated.
+>
+> **Why this matters for the wedge:** These are LLM training-data tells. SEOBetter's positioning is "engineers content to be cited by AI search" — but if the article ITSELF cites things that aren't real or aren't in the cited URL, AI engines will downgrade it as low-trust (Princeton GEO §1 citation-quality drop). Verified-quote pipeline is the citation half of the verification wedge — same architecture as verified-prices, applied to quotes instead of prices.
+>
+> **Why universal scope:** every content type emits citations / quotes. Not just commercial.
+
+| Sub-fix | Universal? | Effort | Build status |
+|---|---|---|---|
+| **A. Live URL content fetch in citation pool builder.** When `Citation_Pool` adds a URL, fetch the page body once (`wp_remote_get` w/ User-Agent + 10s timeout), strip tags, store first 8KB as `pool_entry['body_text']`. Cached 24h via transient. | Universal | 1 day | ⏳ Phase 2 |
+| **B. Per-quote str_contains validation (CHEAPEST, ship first).** For every `<blockquote>` or `"...." — Source` block in the AI's markdown, find the cited URL, fuzzy-match (lowercase + punct-collapsed `str_contains`) the quote text against the pool entry's `body_text`. No match → strip the quote (delete the blockquote + attribution line entirely). Match → keep + add inline link. | Universal | 1 day | ⏳ Phase 2 — **propose first** |
+| **C. Title-as-quote rejection.** If quote text equals (post-normalize) the page's `<title>` or `<h1>` or the URL slug expanded → reject. Paper titles aren't body excerpts. | Universal | 0.5 day | ⏳ Phase 2 |
+| **D. Topical relevance score (cross-encoder or keyword overlap).** Compute Jaccard similarity between article keyword + cited page's `<title>` body. Below threshold (e.g. 0.15) → drop the URL from the pool entirely; quote can't survive without a valid citation. | Universal | 1 day | ⏳ Phase 2 |
+| **E. AI prompt forced-data rule (STRICT universal).** Add to `Async_Generator::get_system_prompt()`: `"QUOTES — only quote text that appears verbatim in the VERIFIED_QUOTES list provided in the citation pool. NEVER invent a quote, NEVER paraphrase a paper's title and present it as a quote, NEVER attribute a quote to a person/org without their direct words. If a relevant quote isn't in VERIFIED_QUOTES, write the point in your own prose without a blockquote. Same rule applies to inline '"X" — Source' attributions."` Mirror of price strict-rule §C. | Universal | 0.5 day | ⏳ Phase 2 |
+| **F. Schema citation[] only includes verified URLs.** Drop any URL that fails (B) or (D) from the JSON-LD `citation[]` array — schema with hallucinated citations is worse than schema with fewer citations. | Universal | 0.5 day | ⏳ Phase 2 |
+| **G. CrossRef / Semantic Scholar / OpenAlex verification for academic citations.** When a citation URL matches `pubmed|ncbi|arxiv|sciencedirect|doi.org|jstor`, lookup via the `check-citations` skill to confirm DOI + author + year + title actually match. Mismatch → drop the citation. | Universal (academic content) | 2 days | ⏳ Phase 2 |
+| **H. Verification audit log per post.** Admin meta-box: "Citations: 8 detected, 6 verified (URL fetch + quote match), 2 stripped (1 chimeric, 1 title-as-quote). Speaker attributions: 4 detected, 3 verified, 1 stripped (made-up expert)." Same proof-point pattern as price audit. | Universal | 1 day | ⏳ Phase 2 |
+
+**Total effort:** 7-8 days. Sub-fixes (B) + (C) + (E) are the cheapest 80% — ship first as initial Phase 2 protection.
+
+**Tier gating** (citation verification = wedge feature, parallel to verified prices):
+- **Free:** detection + strip pass only (hallucinated quotes silently removed, no audit shown).
+- **Pro:** full verified pipeline + per-quote source link + audit log visible.
+- **Pro+:** + CrossRef / Semantic Scholar / OpenAlex academic verification + relevance scoring.
+- **Agency:** + bulk re-verify across post archive + verification report per client.
+
+**Verification protocol when shipped:** regenerate one signed-off article per content type, assert (a) every `<blockquote>` text appears in its cited URL's body, (b) zero "title-as-quote" detections, (c) topical relevance score ≥0.15 on every retained citation, (d) audit log shows N detected / M verified / (N-M) stripped per category.
+
+**Workflow change effective 2026-05-06:** after every article generation test going forward, the audit checklist explicitly includes citation/quote verification (URL HTTP status, quote-text presence on cited page, title-as-quote detection). See "Article test audit template" below.
+
+---
+
+#### Article test audit template (effective 2026-05-06)
+
+After each article generation test, the audit checklist is communicated explicitly BEFORE running grep checks, so the user knows what's being verified. The checklist:
+
+**Title / SEO surface:**
+- [ ] H1 50-60 chars (§7.1)
+- [ ] H1 contains keyword
+- [ ] No trailing `…` / middle dot `·` / `– Publisher` suffix
+- [ ] Brand caps preserved (MacBook, XPS, iPhone, etc.)
+
+**Meta description (§8):**
+- [ ] `<meta name="description">` HTML tag present
+- [ ] 150-160 chars
+- [ ] Keyword in first half
+- [ ] Has CTA / urgency
+- [ ] og:description + twitter:description match `<meta>` content
+
+**Schema (§10.1):**
+- [ ] @type matches CONTENT_TYPE_MAP entry for the type
+- [ ] BlogPosting/Article/HowTo/Review/etc. headline + description present
+- [ ] description == meta description (single source of truth)
+- [ ] FAQPage with 3-5 Question/Answer pairs (if §3.1 type)
+- [ ] BreadcrumbList present
+- [ ] SpeakableSpecification with cssSelector chain
+- [ ] No bogus Product/SoftwareApplication (Phase 2 disable in effect)
+- [ ] Person + Organization graph nodes present
+
+**Body structure (§3.1 or §3.1A as applicable):**
+- [ ] Last Updated stamp at top
+- [ ] Key Takeaways block (§3.1 types only — skipped for §3.1A overrides)
+- [ ] Required H2s per content type (varies — see §3.1A table for genre overrides)
+- [ ] FAQ H2 with 3-5 Q&A pairs (skipped for live_blog/recipe/personal_essay/interview)
+- [ ] References H2 with 5-8 cited sources
+- [ ] Step-by-step ordered list (How-To types)
+- [ ] Comparison table (Comparison types)
+
+**Country localization (when country ≠ US):**
+- [ ] Country name appears in body ("in the UK", "for Canadians", etc.)
+- [ ] Currency symbol matches country (£ for GB, $AUD for AU, $CAD for CA)
+- [ ] At least 1 country-specific source in references (when country-localized citation sources lands)
+
+**Citations & quotes (Phase 2 — verifies once verified-citation pipeline ships):**
+- [ ] All citation URLs return HTTP 200 (or 403 = bot-blocked, manual sanity-check)
+- [ ] No empty `<a></a>` references (v62.80 fix regression check)
+- [ ] Every `<blockquote>` text appears on the cited URL's body (Phase 2 (B))
+- [ ] No paper-title-as-quote (Phase 2 (C))
+- [ ] Schema citation[] array only contains URLs that survive verification
+
+**Anchor / formatting hygiene (v62.79+):**
+- [ ] 0 bracket bad-anchors `[2024]` / `[14"]` / `[M4, 2024]`
+- [ ] 0 multi-word generic anchors `[click here]` / `[read more]`
+- [ ] 0 raw `[text](url)` markdown leakage in rendered HTML
+- [ ] 0 raw `${currency_symbol}` markers
+
+**Word count:**
+- [ ] Within or above per-type minimum from `Async_Generator::WORD_COUNT_FLOORS`
+- [ ] No truncated sentences mid-URL (v62.66 truncate-protection regression check)
+
+This is the explicit list communicated to the user before / during each test.
+
+---
+
 #### Country-localized citation sources (deferred — after English T3 + multilingual sprint)
 
 > **Status:** PLANNED. Discovered 2026-05-05 during T3 #6 Review test on `Dyson V15 Detect cordless vacuum review` (country=UK). Every outbound citation came from US publishers (Wired, Popular Mechanics, TechRadar US, The Verge, Vacuumwars, Cleanmyspace, dyson.com US) — ZERO UK-specific sources despite country=UK. Real UK authoritative sources for Dyson reviews (which.co.uk, trustedreviews.com, t3.com, expertreviews.co.uk, dyson.co.uk) never made it into the citation pool.
