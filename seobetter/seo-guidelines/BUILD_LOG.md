@@ -7,12 +7,57 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.80)
+> **Last updated:** 2026-05-06 (v1.5.216.62.81)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.81 — Sanitizer normalize-then-compare + brand_caps()
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+Live audit of T3 #7 retest #2 at `/dell-xps-15-2023-vs-macbook-pro-16-inch-m4-pro-2024-ht-tech/` showed v62.80 fixed Bug B (refs) ✅ but missed Bug A again because:
+
+- Pool entry stored: `Dell Xps 15 2023 vs Macbook Pro 16 Inch M4 Pro 2024 &#8211; HT Tech` (en-dash `–`, HTML-encoded)
+- Input title sanitized to: `Dell Xps 15 2023 vs Macbook Pro 16 Inch M4 Pro 2024 - HT Tech` (plain hyphen, after my own middle-dot replacement)
+- v62.80 used byte-equality `$title === $entry_title` — different separator characters → no match → echo passed through unchanged
+
+Plus the keyword fallback used `ucwords()` which produces "Macbook Pro M4 Vs Dell Xps 15" — wrong caps for tech brand names.
+
+§7 violation: H1 was 61 chars (over 60 limit), wrong caps, citation suffix. Body otherwise compliant per §3.1 (Last Updated ✓, Key Takeaways ✓, 5 Comparison Tables ✓, FAQ ✓, References ✓).
+
+### What changed
+
+**1. `normalize_for_compare()` static helper** (seobetter/seobetter.php) — html_entity_decode + unify all separator chars (·, –, —, |, ‐, -) to ` - ` + strip trailing ellipsis + collapse whitespace + lowercase. Run on BOTH input and pool entry titles before comparing — different byte forms of the same logical title now collide.
+
+**2. `brand_caps()` static helper** — token-based capitalization fix for the keyword fallback. Replaces lowercase `macbook` → `MacBook`, `iphone` → `iPhone`, `ipad` → `iPad`, `airpods` → `AirPods`, `imac` → `iMac`, `xps` → `XPS`, `cpu` → `CPU`, `gpu` → `GPU`, `usb` → `USB`, `ssd` → `SSD`, `ram` → `RAM`, `hdr` → `HDR`, `led` → `LED`, `oled` → `OLED`, `lcd` → `LCD`, `tv` → `TV`, `pc` → `PC`, `api` → `API`, `ios` → `iOS`, `macos` → `macOS`. Plus `Vs` → `vs` (lowercase mid-sentence).
+
+**3. `sanitize_headline()` upgraded** — uses normalize_for_compare on both sides for the pool-echo check. Fallback returns `brand_caps( ucwords($keyword) )` instead of plain `ucwords()`.
+
+**4. test-headline-sanitizer.php updated** — added v62.81 case for hyphen-vs-en-dash echo. Updated existing case-1 expected output to match brand_caps. Added iPhone/iPad token test for keyword fallback. 10 cases total.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.80 → 62.81, new brand_caps + normalize_for_compare helpers, upgraded sanitize_headline
+- `seobetter/tests/test-headline-sanitizer.php` — v62.81 cases, brand_caps mirror
+
+### Verify
+
+```
+grep -A 16 "function sanitize_headline\|function brand_caps\|function normalize_for_compare" seobetter/seobetter.php | head -50
+curl -sL https://raw.githubusercontent.com/celestine1111/autoresearch/main/seobetter/tests/test-headline-sanitizer.php | php  # expect 10/10
+```
+
+### Verified by user
+
+UNTESTED — pending v62.81 deploy + cron-run JSON green + MacBook regenerate.
 
 ---
 

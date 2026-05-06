@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.80
+ * Version: 1.5.216.62.81
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.80' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.81' );
 
 // v1.5.216.62.75 — Auto-extracted Product schema feature flag. Currently
 // FALSE because the AI-extracted `offers.price` field is unreliable
@@ -1920,35 +1920,57 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.62.80 — Sanitize headline before it becomes post_title.
+     * v1.5.216.62.81 — Sanitize headline before it becomes post_title.
      *
-     * Catches Bug A from v62.79 audit: H1 was a citation source page title
-     * echoed verbatim ("Apple MacBook Pro (2024) 14\" · M4 (10-core CPU)
-     * vs Dell XPS 15 …"), with trailing ellipsis and middle dot · that
-     * percolated to the URL slug as %c2%b7.
-     *
-     * Rules:
-     *   1. Reject if exact match to any pool entry's title (citation echo) → keyword fallback
-     *   2. Strip trailing ellipsis (… or ...)
-     *   3. Replace middle dot · with " - " (cleaner ASCII slug)
-     *   4. Collapse whitespace
-     *   5. Empty after sanitizing → keyword fallback
+     * v62.80 introduced verbatim-equality citation-echo check. v62.81
+     * upgrades that with normalize-then-compare so en-dash/hyphen/middle-dot
+     * separators all collide during comparison, plus brand_caps() on the
+     * fallback so the keyword "macbook pro m4 vs dell xps 15" produces
+     * "MacBook Pro M4 vs Dell XPS 15" not "Macbook Pro M4 Vs Dell Xps 15".
      *
      * Mirror in tests/test-headline-sanitizer.php — keep in sync.
      */
+    private static function brand_caps( string $title ): string {
+        $tokens = [
+            'macbook' => 'MacBook', 'iphone' => 'iPhone', 'ipad' => 'iPad',
+            'airpods' => 'AirPods', 'imac' => 'iMac', 'xps' => 'XPS',
+            'cpu' => 'CPU', 'gpu' => 'GPU', 'usb' => 'USB', 'ssd' => 'SSD',
+            'ram' => 'RAM', 'hdr' => 'HDR', 'led' => 'LED', 'oled' => 'OLED',
+            'lcd' => 'LCD', 'tv' => 'TV', 'pc' => 'PC', 'api' => 'API',
+            'ios' => 'iOS', 'macos' => 'macOS',
+        ];
+        $title = preg_replace_callback(
+            '/\b(' . implode( '|', array_keys( $tokens ) ) . ')\b/i',
+            function ( $m ) use ( $tokens ) { return $tokens[ strtolower( $m[1] ) ]; },
+            $title
+        );
+        $title = preg_replace( '/\bVs\b/', 'vs', $title );
+        return $title;
+    }
+
+    private static function normalize_for_compare( string $s ): string {
+        $s = html_entity_decode( $s, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+        $s = preg_replace( '/\s*[·–—|‐\-]\s*/u', ' - ', $s );
+        $s = preg_replace( '/\s*(?:\x{2026}|\.{3,})\s*$/u', '', $s );
+        $s = preg_replace( '/\s+/u', ' ', trim( $s ) );
+        return mb_strtolower( $s );
+    }
+
     private static function sanitize_headline( string $title, string $fallback_keyword, array $pool = [] ): string {
         $title = trim( $title );
+        $normalized_title = self::normalize_for_compare( $title );
         foreach ( $pool as $entry ) {
             $entry_title = trim( (string) ( $entry['title'] ?? '' ) );
-            if ( $entry_title !== '' && $title === $entry_title ) {
-                return ucwords( $fallback_keyword );
+            if ( $entry_title === '' ) continue;
+            if ( self::normalize_for_compare( $entry_title ) === $normalized_title ) {
+                return self::brand_caps( ucwords( $fallback_keyword ) );
             }
         }
         $title = preg_replace( '/\s*(?:\x{2026}|\.{3,})\s*$/u', '', $title );
         $title = preg_replace( '/\s*·\s*/u', ' - ', $title );
         $title = preg_replace( '/\s+/', ' ', trim( $title ) );
         if ( $title === '' ) {
-            return ucwords( $fallback_keyword );
+            return self::brand_caps( ucwords( $fallback_keyword ) );
         }
         return $title;
     }
@@ -1959,7 +1981,7 @@ final class SEOBetter {
         $content  = $request->get_param( 'content' ) ?? '';
         $accent   = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
 
-        // v1.5.216.62.80 — sanitize headline AFTER citation_pool is parsed below
+        // v1.5.216.62.81 — sanitize headline AFTER citation_pool is parsed below
         // so we can detect citation echoes. Done at temp value here; finalized
         // after $combined_pool is built (see below).
         $title = sanitize_text_field( $raw_title );
@@ -1992,7 +2014,7 @@ final class SEOBetter {
             }
         }
 
-        // v1.5.216.62.80 — Now that the pool is assembled, sanitize the
+        // v1.5.216.62.81 — Now that the pool is assembled, sanitize the
         // headline. Catches citation-echo titles passed from frontend.
         $kw_for_fallback = (string) ( $request->get_param( 'keyword' ) ?? $raw_title );
         $title = sanitize_text_field( self::sanitize_headline( $raw_title, $kw_for_fallback, $combined_pool ) );
@@ -2275,7 +2297,7 @@ final class SEOBetter {
                     foreach ( $cited_entries as $entry ) {
                         $url   = esc_url( $entry['url'] ?? '' );
                         if ( $url === '' ) continue;
-                        // v1.5.216.62.80 — truthy fallback chain. Pre-fix used
+                        // v1.5.216.62.81 — truthy fallback chain. Pre-fix used
                         // `?? ?? ??` which only catches null/missing, not empty
                         // string. Pool entries with title=''/source_name=''
                         // bypassed every fallback → empty <a></a> rendered.
