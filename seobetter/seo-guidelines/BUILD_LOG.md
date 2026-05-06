@@ -16,6 +16,31 @@
 
 ---
 
+## T3 #4 How-To — Verified end-to-end via Bulk Generate, 2 keywords / 2 countries
+
+**Date:** 2026-05-06
+
+### Posts verified
+
+- **Post 741** — `how to set up a home compost bin`, Canada (CA), 1500w → "7 Steps: How To Set Up A Home Compost Bin for Fresh Soil" (56 chars). Country localization: "Why This Matters for Canadians", "in Canada". 20 list items.
+- **Post 742** — `how to install a smart thermostat`, UK (GB), 1500w → "7 Steps On How To Install A Smart Thermostat And Save Money" (59 chars). Country localization: "in the UK" ×5+. 18 list items. Schema enriched with MonetaryAmount + QuantitativeValue (energy-savings stats).
+
+### Verified against guidelines
+
+- §3.1 default-profile structure: Key Takeaways + 5 content H2s including Step-by-Step Guide + FAQ
+- §4.2 Step-by-Step block (ordered list with numbered steps)
+- §7.1 H1: 50-60 chars, keyword front-loaded, number-led
+- §8 meta description: 150-160 chars, keyword + CTA
+- §10.1 schema: Article (correct per CONTENT_TYPE_MAP — HowTo schema deprecated by Google Sept 2023, see Schema_Generator.php:line)
+- v62.86+87 meta description pipeline holding (single source of truth across `<meta>`, og, twitter, JSON-LD)
+- 0 bracket bad-anchors, 0 multi-word generics, 0 raw markdown, 0 empty references
+
+### Status
+
+✅ T3 #4 How-To signed off 2026-05-06.
+
+---
+
 ## v1.5.216.62.87 — Bulk_Generator schema regeneration after meta sync (close v62.86 timing race)
 
 **Date:** 2026-05-06
