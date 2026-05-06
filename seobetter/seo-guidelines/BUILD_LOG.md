@@ -19,7 +19,7 @@
 ## v1.5.216.62.84 — Fix pre-existing Bulk_Generator field-name bug (Async_Generator expects 'keyword' not 'primary_keyword')
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `f592046`
 
 ### Why
 
