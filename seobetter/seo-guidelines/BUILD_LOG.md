@@ -19,7 +19,7 @@
 ## v1.5.216.62.81 — Sanitizer normalize-then-compare + brand_caps()
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Why
 
@@ -3931,7 +3931,7 @@ I should have caught this in v62.16 when I wired in `$resolve_alias`. The pre-fi
 ## v1.5.216.62.20 — HOTFIX: Revert v62.17 FAQ post-process safety net
 
 **Date:** 2026-05-03
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Why
 
@@ -13136,7 +13136,7 @@ All three fixes are universal — no keyword/domain/content-type/model-specific 
 ## v1.5.138 — Content type visual differentiation: badges + personalization tips
 
 **Date:** 2026-04-20
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13163,7 +13163,7 @@ All three fixes are universal — no keyword/domain/content-type/model-specific 
 ## v1.5.136 — Review schema overhaul: smart itemReviewed detection (9 types)
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13186,7 +13186,7 @@ All three fixes are universal — no keyword/domain/content-type/model-specific 
 ## v1.5.137 — Regenerate schema URLs on publish (draft ?p=ID → pretty permalink)
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13210,7 +13210,7 @@ Schema was generated at `rest_save_draft()` time when post was a draft. `get_per
 ## v1.5.135 — Rich Results Preview metabox tab + 6 new schema types
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Phase 1: Rich Results Preview (4th metabox tab)
 
@@ -13272,7 +13272,7 @@ All new schemas wired into `generate()` method between Dataset and BreadcrumbLis
 ## v1.5.134 — Rich Results Preview panel in Gutenberg sidebar
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13303,7 +13303,7 @@ All new schemas wired into `generate()` method between Dataset and BreadcrumbLis
 ## v1.5.133 — Serper + Firecrawl research pipeline (replaces Sonar)
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Major Architecture Change
 
@@ -13359,7 +13359,7 @@ Replaced Perplexity Sonar (AI black box) with Serper (Google search) + Firecrawl
 ## v1.5.128 — Recipe data injection: AI cannot write ingredients/instructions
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13395,7 +13395,7 @@ Replaced Perplexity Sonar (AI black box) with Serper (Google search) + Firecrawl
 ## v1.5.127 — No invented recipes: 3-layer enforcement (count match + prompt + strip gate)
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13435,7 +13435,7 @@ Replaced Perplexity Sonar (AI black box) with Serper (Google search) + Firecrawl
 ## v1.5.126 — Schema bugfixes: ghost recipe, FAQ detection, author email, recipeCuisine, JSON escaping
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13504,7 +13504,7 @@ Replaced Perplexity Sonar (AI black box) with Serper (Google search) + Firecrawl
 ## v1.5.116 — Google-compliant schema overhaul (all 21 content types)
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Major Changes
 
@@ -13543,7 +13543,7 @@ Replaced Perplexity Sonar (AI black box) with Serper (Google search) + Firecrawl
 ## v1.5.115 — Country context in AI prompts (fixes US-centric content)
 
 **Date:** 2026-04-19
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Bug Fix
 
@@ -13668,7 +13668,7 @@ Replaced Perplexity Sonar (AI black box) with Serper (Google search) + Firecrawl
 ## v1.5.108 — Complete authority domains: all 25 categories + user sites global
 
 **Date:** 2026-04-18
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13693,7 +13693,7 @@ Replaced Perplexity Sonar (AI black box) with Serper (Google search) + Firecrawl
 ## v1.5.107 — Country-specific authority domains (non-commercial sources only)
 
 **Date:** 2026-04-18
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Major Feature
 
@@ -13721,7 +13721,7 @@ After: rspca.org.au, apvma.gov.au, abc.net.au, ncbi.nlm.nih.gov (plus global pet
 ## v1.5.106 — Authority domain targeting for Tavily quotes (per category)
 
 **Date:** 2026-04-18
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### New Feature
 
@@ -13750,7 +13750,7 @@ After: rspca.org.au, apvma.gov.au, abc.net.au, ncbi.nlm.nih.gov (plus global pet
 ## v1.5.105 — Filter junk stats + require substantive quotes (systematic, all paths)
 
 **Date:** 2026-04-18
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Bug Fixes
 
@@ -13776,7 +13776,7 @@ After: rspca.org.au, apvma.gov.au, abc.net.au, ncbi.nlm.nih.gov (plus global pet
 ## v1.5.104 — Fix CORE-EEAT citation count bug + add FAQ injection to Optimize All
 
 **Date:** 2026-04-18
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Bug Fixes
 
@@ -13808,7 +13808,7 @@ After: rspca.org.au, apvma.gov.au, abc.net.au, ncbi.nlm.nih.gov (plus global pet
 ## v1.5.103 — Strip all emoji + convert long dashes to short (systematic, 5+ locations)
 
 **Date:** 2026-04-18
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Changes
 
@@ -13854,7 +13854,7 @@ Fixed in 5 locations:
 ## v1.5.102 — Fix GEO scoring: use hybrid HTML for accurate analysis
 
 **Date:** 2026-04-18
-**Commit:** `[pending]`
+**Commit:** `78eb7f7`
 
 ### Bug Fix
 
