@@ -19,7 +19,7 @@
 ## v1.5.216.62.86 — Meta description pipeline overhaul: standard `<meta name="description">` + Bulk meta generation + Schema/Social fallback cleanup
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `ce17614`
 
 ### Why
 
