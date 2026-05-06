@@ -19,7 +19,7 @@
 ## v1.5.216.62.83 — Wire sanitize_headline into Bulk_Generator (was bypassing the cleaner)
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `5e12700`
 
 ### Why
 
