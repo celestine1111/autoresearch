@@ -46,31 +46,51 @@ function normalize_for_compare( string $s ): string {
     return mb_strtolower( $s );
 }
 
+function clean_title_universal( string $title ): string {
+    $title = trim( $title );
+    $title = preg_replace( '/\s*(?:\x{2026}|\.{3,})\s*$/u', '', $title );
+    $title = preg_replace( '/\s*·\s*/u', ' - ', $title );
+    if ( mb_strlen( $title ) > 50 ) {
+        $title = preg_replace(
+            '/\s+[·–—|‐\-]\s+[A-Za-z][A-Za-z0-9.\s]{1,40}\s*$/u',
+            '',
+            $title
+        );
+    }
+    $title = preg_replace( '/\s+/u', ' ', trim( $title ) );
+    if ( mb_strlen( $title ) > 60 ) {
+        $cut = mb_substr( $title, 0, 60 );
+        $last_space = mb_strrpos( $cut, ' ' );
+        $title = $last_space !== false && $last_space > 30
+            ? mb_substr( $cut, 0, $last_space )
+            : $cut;
+        $title = rtrim( $title, ' .,;:!?-—–' );
+    }
+    return $title;
+}
+
 function sanitize_headline( string $title, string $fallback_keyword, array $pool = [] ): string {
     $title = trim( $title );
-
-    // (1) v62.81 — normalize BOTH sides before comparing. Pre-fix used byte
-    // equality which missed en-dash vs hyphen, and HTML entities.
     $normalized_title = normalize_for_compare( $title );
+    $is_echo = false;
     foreach ( $pool as $entry ) {
         $entry_title = trim( (string) ( $entry['title'] ?? '' ) );
         if ( $entry_title === '' ) continue;
         if ( normalize_for_compare( $entry_title ) === $normalized_title ) {
-            return brand_caps( ucwords( $fallback_keyword ) );
+            $is_echo = true;
+            break;
         }
     }
-
-    // (2) Strip trailing ellipsis
-    $title = preg_replace( '/\s*(?:\x{2026}|\.{3,})\s*$/u', '', $title );
-    // (3) Replace middle dot with hyphen
-    $title = preg_replace( '/\s*·\s*/u', ' - ', $title );
-    // (4) Collapse whitespace
-    $title = preg_replace( '/\s+/', ' ', trim( $title ) );
-
-    if ( $title === '' ) {
-        return brand_caps( ucwords( $fallback_keyword ) );
+    if ( $is_echo ) {
+        $fallback = clean_title_universal( $fallback_keyword );
+        return brand_caps( ucwords( $fallback ) );
     }
-    return $title;
+    $cleaned = clean_title_universal( $title );
+    if ( $cleaned === '' ) {
+        $fallback = clean_title_universal( $fallback_keyword );
+        return brand_caps( ucwords( $fallback ) );
+    }
+    return $cleaned;
 }
 
 $pool = [
@@ -150,6 +170,50 @@ $cases = [
         [],
         'iPhone 16 vs iPad Pro',
         'v62.81 — keyword fallback applies brand_caps (iPhone, iPad, vs lowercase)',
+    ],
+
+    // v62.82 — universal pre-emptive cleaning (no pool dependency)
+    [
+        'Dell XPS 15 7590 vs Apple MacBook Pro 2024 M4 14.2" Liquid …',
+        'macbook pro m4 vs dell xps 15',
+        [],
+        'Dell XPS 15 7590 vs Apple MacBook Pro 2024 M4 14.2" Liquid',
+        'v62.82 — long title (>50 chars) keeps content but strips trailing ellipsis',
+    ],
+    [
+        'Apple MacBook Pro 14" Liquid Retina XDR Display 24GB RAM 1TB SSD vs Dell XPS 15 - Pangoly',
+        'macbook pro m4 vs dell xps 15',
+        [],
+        'Apple MacBook Pro 14" Liquid Retina XDR Display',
+        'v62.82 — long title with publisher suffix gets stripped + 60-char cap',
+    ],
+    [
+        'Best Laptops 2026: Top 10 Picks for Pros and Creators - TechRadar',
+        'best laptops',
+        [],
+        'Best Laptops 2026: Top 10 Picks for Pros and Creators',
+        'v62.82 — long title with " - Publisher" stripped',
+    ],
+    [
+        'How to Cook Rice — A Beginner Guide',
+        'how to cook rice',
+        [],
+        'How to Cook Rice — A Beginner Guide',
+        'v62.82 — short title (<50 chars) with em-dash subtitle kept intact (no false positive)',
+    ],
+    [
+        'iPhone 16 - Review',
+        'iphone 16 review',
+        [],
+        'iPhone 16 - Review',
+        'v62.82 — short title with " - Word" suffix kept (length under threshold)',
+    ],
+    [
+        'This is an extremely long headline that goes on and on far past sixty characters in length',
+        'long keyword phrase here',
+        [],
+        'This is an extremely long headline that goes on and on far',
+        'v62.82 — title >60 chars truncated at last word boundary',
     ],
 ];
 

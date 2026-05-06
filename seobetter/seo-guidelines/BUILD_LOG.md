@@ -7,12 +7,67 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.81)
+> **Last updated:** 2026-05-06 (v1.5.216.62.82)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.82 — Universal pre-emptive title cleaner (publisher-suffix strip + 60-char cap)
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+Third T3 #7 retest at `/dell-xps-15-7590-vs-apple-macbook-pro-2024-m4-14-2-liquid-2/` exposed that pool-comparison-only echo detection (v62.80/81) is insufficient. The H1 was a pangoly.com page title, but the post slug pattern + length suggest the user's KEYWORD itself was set to that long string (likely from a topic-suggester / autocomplete). When the v62.81 fallback ran `brand_caps(ucwords($keyword))`, the keyword WAS the bad string → fallback returned the bad string verbatim. Two pool comparisons can't save you when both sides are corrupt.
+
+§7.1 spec: title 50-60 chars, keyword front-loaded. Anything >60 chars with a trailing publisher suffix is structurally wrong regardless of pool.
+
+### What changed
+
+**1. New `clean_title_universal()` static helper** (seobetter/seobetter.php) — pre-emptive cleaner that runs regardless of pool match:
+   - Strip trailing ellipsis (… or ...)
+   - Replace middle dot · with " - "
+   - **If title >50 chars**: strip trailing `\s+[·–—|‐\-]\s+[A-Za-z][A-Za-z0-9.\s]{1,40}\s*$` (publisher suffix pattern). Length threshold prevents false positives on short subtitles.
+   - **§7.1 hard cap**: if >60 chars, truncate at last word boundary ≥30 chars in.
+
+**2. `sanitize_headline()` upgraded** — runs `clean_title_universal()` on the input title, AND on the keyword fallback. So even if the keyword itself is a citation echo from frontend, the fallback is cleaned to ≤60 chars.
+
+**3. test-headline-sanitizer.php** — added 6 new v62.82 cases:
+   - Long title with publisher suffix gets stripped
+   - Title with " - Publisher" cleaned
+   - Short title with em-dash subtitle KEPT (no false-positive)
+   - Short title with " - Word" suffix KEPT (length under threshold)
+   - Title >60 chars truncated at word boundary
+   - Pangoly-pattern long title cleaned
+
+16 cases total now (was 10).
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.81 → 62.82, new `clean_title_universal()` static helper, `sanitize_headline()` rewritten to use it on both input and fallback
+- `seobetter/tests/test-headline-sanitizer.php` — 6 v62.82 cases added
+
+### Verify
+
+```
+grep -A 22 "function clean_title_universal" seobetter/seobetter.php | head -25
+curl -sL https://raw.githubusercontent.com/celestine1111/autoresearch/main/seobetter/tests/test-headline-sanitizer.php | php  # expect 16/16
+```
+
+Headline contract guarantees post v62.82:
+- Always ≤60 chars (§7.1 compliant)
+- No trailing `…`
+- No middle dot `·`
+- No trailing ` – Publisher` / ` | Publisher` / ` - Publisher` patterns when length >50
+
+### Verified by user
+
+UNTESTED — pending v62.82 deploy + cron-run JSON green + MacBook regenerate.
 
 ---
 
