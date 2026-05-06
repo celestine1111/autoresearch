@@ -19,7 +19,7 @@
 ## v1.5.216.62.79 — Test-driven anchor-quality fixes: multi-word generic phrases + ≥5 unique-letter threshold + cron-fed JSON test runner
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `d731437`
 
 ### Why
 
