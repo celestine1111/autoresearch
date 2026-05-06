@@ -19,7 +19,7 @@
 ## v1.5.216.62.80 — Headline citation-echo sanitizer + empty-reference fallback fix
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `3f1e759`
 
 ### Why
 
