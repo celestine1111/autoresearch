@@ -7,12 +7,60 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.76)
+> **Last updated:** 2026-05-06 (v1.5.216.62.77)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.77 — Bad-anchor unwrap stricter (≥4 unique letters required) + HTML form support + scraped-junk quote filter (image-caption echo / phrase repetition / mid-sentence cuts)
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+T3 #7 Comparison v62.76 retest (Pangoly-derived MacBook vs Dell title) found two bugs slipping through:
+
+**Issue 1 — bad-anchor unwrap regex too narrow.** v62.76 unwrap caught pure-numeric ("2023"), ≤3-char ("14"), and generic single words ("Wikipedia"). But mixed letter+digit anchors like `[M4, 2024]`, `[10-core]` passed because they had alphanumeric chars >3. Plus the regex only handled markdown `[text](url)` form, not HTML `<a href>text</a>` (some content sections render to HTML before this pass runs).
+
+**Issue 2 — scraped-junk quote shipped on the article.** Quote attributed to wired.com:
+> "I Recommend Most Photograph: Luke Larsen Photograph: Luke Larsen Photograph: Luke Larsen Photograph: Luke Larsen Apple MacBook Air (M5, 2026) When friends or family ask what laptop to buy, I always start with the." – wired.com
+
+Tavily/Sonar/Firecrawl scraped Wired's HTML and grabbed image-caption metadata (`Photograph: Luke Larsen` × 4) interleaved with article body text. Quote cut mid-sentence after "the." `validate_quote()` filters substantive vocabulary + e-commerce + junk, but had no detection for image caption echoes / phrase repetition / mid-sentence cuts.
+
+### What changed
+
+**Fix 1 — Stricter unwrap rule + HTML support** ([seobetter.php](seobetter/seobetter.php)) — added two strictness layers:
+- Anchor must contain **≥4 unique letter characters** (a-z case-insensitive). Catches "M4, 2024" (1 letter), "10-core" (4 letters borderline), keeps "NanoReview" (8 unique letters), "Dell XPS 15" (5 unique letters).
+- Unwrap pass now handles BOTH markdown `[text](url)` AND HTML `<a href="url">text</a>` forms via two preg_replace_callback chains sharing the same `$check_anchor_quality` closure.
+
+**Fix 2 — Scraped-junk quote filter** ([includes/Content_Injector.php](seobetter/includes/Content_Injector.php) `validate_quote`) — three new filter rules added to the universal quote validator:
+- (a) Image caption echo: pattern `\b(?:Photograph|Photo|Image|Picture|Caption)\s*:\s*[A-Z][a-zA-Z\s]+/i` matching 2+ times → reject.
+- (b) Internal phrase repetition: any 3-word substring appearing 3+ times in the quote → reject. Catches caption echo loops + AI-extraction artifacts.
+- (c) Mid-sentence cuts: quote must end with terminal punctuation (`.`, `!`, `?`, `"`, `'`, `)`) → otherwise reject. PLUS: trailing connector word ("the", "a", "an", "and", "of", "to", "in", "on", "for", "with", "at", "by", "from") at the end is a dead giveaway of scraper truncation → reject.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.76 → 62.77 + bad-anchor unwrap stricter (≥4 unique letters) + HTML form regex
+- `seobetter/includes/Content_Injector.php` — `validate_quote()` adds 3 scraped-junk filters
+
+### Verify
+
+```
+grep -B 1 -A 16 "v1.5.216.62.76 / v1.5.216.62.77 — Bad-anchor unwrap" seobetter/seobetter.php
+grep -B 1 -A 25 "v1.5.216.62.77 — Scraped-junk filters" seobetter/includes/Content_Injector.php
+```
+
+After upload + retest any commercial type:
+- ZERO bad anchors with mixed letter+digit fragments ("M4, 2024", "10-core")
+- ZERO scraped-junk quotes (image caption echoes, mid-sentence cuts)
+- All v62.66→v62.76 fixes still hold
+
+**Verified by user:** UNTESTED
 
 ---
 

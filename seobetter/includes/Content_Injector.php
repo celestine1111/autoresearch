@@ -385,6 +385,53 @@ class Content_Injector {
             if ( preg_match( $junk_re, $text ) ) return null;
             if ( preg_match( $ecommerce_re, $text ) ) return null;
             if ( ! preg_match( $substantive_re, $text ) ) return null;
+
+            // v1.5.216.62.77 — Scraped-junk filters. User-reported on T3 #7
+            // Comparison: a wired.com quote shipped as
+            //   "I Recommend Most Photograph: Luke Larsen Photograph: Luke
+            //    Larsen Photograph: Luke Larsen Photograph: Luke Larsen
+            //    Apple MacBook Air (M5, 2026) When friends or family ask
+            //    what laptop to buy, I always start with the."
+            // — image caption metadata (Photograph: Luke Larsen) echoed
+            // 4× and the quote cut mid-sentence after "the." Tavily/Sonar/
+            // Firecrawl scraped Wired's HTML and grabbed image captions
+            // interleaved with article body text. Three new filters:
+            //
+            // (a) Image caption echo — pattern "Photograph: [Name]" or
+            //     "Photo: [Name]" or "Image: [Name]" appearing 2+ times.
+            // (b) Internal phrase repetition — any 3-word substring
+            //     appearing 3+ times (catches caption echo + AI-extraction
+            //     loop artifacts).
+            // (c) Mid-sentence cuts — quote text doesn't end with terminal
+            //     punctuation (.!?"'). The trailing-the / trailing-and /
+            //     trailing-of pattern is a dead giveaway of scraper
+            //     truncation.
+            if ( preg_match_all( '/\b(?:Photograph|Photo|Image|Picture|Caption)\s*:\s*[A-Z][a-zA-Z\s]+/i', $text, $img_caps ) ) {
+                if ( count( $img_caps[0] ) >= 2 ) return null;
+            }
+            // Phrase-repetition check — split into 3-word grams, count duplicates
+            $words = preg_split( '/\s+/', strtolower( $text ) );
+            if ( count( $words ) >= 6 ) {
+                $grams = [];
+                for ( $i = 0; $i < count( $words ) - 2; $i++ ) {
+                    $g = $words[ $i ] . ' ' . $words[ $i + 1 ] . ' ' . $words[ $i + 2 ];
+                    $grams[] = $g;
+                }
+                $counts = array_count_values( $grams );
+                foreach ( $counts as $g => $n ) {
+                    if ( $n >= 3 ) return null; // any 3-word phrase repeated 3+ times
+                }
+            }
+            // Mid-sentence cut — text must end with terminal punctuation
+            $last_char = mb_substr( $text, -1 );
+            if ( ! in_array( $last_char, [ '.', '!', '?', '"', '\'', '”', '’', ')' ], true ) ) {
+                return null;
+            }
+            // Common trailing word that signals truncation: "the" / "a" / "an" / "and" / "of" / "to" / "in" / "on" / "for" / "with" at the very end
+            if ( preg_match( '/\b(?:the|a|an|and|or|of|to|in|on|for|with|at|by|from)[.\s]*$/i', $text ) ) {
+                return null;
+            }
+
             return [ 'text' => $text, 'url' => $url, 'source' => $source ];
         };
 

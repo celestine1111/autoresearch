@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.76
+ * Version: 1.5.216.62.77
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.76' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.77' );
 
 // v1.5.216.62.75 — Auto-extracted Product schema feature flag. Currently
 // FALSE because the AI-extracted `offers.price` field is unreliable
@@ -1978,41 +1978,51 @@ final class SEOBetter {
             $markdown = $this->validate_outbound_links( $markdown, $combined_pool );
         }
 
-        // v1.5.216.62.76 — Bad-anchor unwrap pass. The AI sometimes writes
-        // markdown links with non-descriptive anchor text — wrapping just
-        // a year ("2023"), a model number ("9530"), a screen size ("14")
-        // or a generic word ("Wikipedia"). User-reported on T3 #7
-        // Comparison: anchors like `[2023](https://nanoreview.net/...)`
-        // and `[14"](https://versus.com/...)` and `[9530](https://...)`.
-        // These are useless for SEO + bad UX (user can't tell what they're
-        // clicking). Universal fix: unwrap markdown links whose anchor
-        // text is (a) pure-numeric, (b) ≤3 chars, or (c) a single generic
-        // word like "Wikipedia"/"link"/"here"/"this"/"source"/"site". The
-        // URL is preserved in the citation pool and surfaces in the
-        // auto-built References section at the end — just not as an
-        // inline body link with a meaningless anchor. Defense-in-depth
-        // alongside the system prompt's "use descriptive noun-phrase
-        // anchor text" guidance which AI ignores 30% of the time.
+        // v1.5.216.62.76 / v1.5.216.62.77 — Bad-anchor unwrap pass. The AI
+        // emits markdown links + HTML <a> tags with non-descriptive anchor
+        // text — wrapping just a year ("2023"), a model number ("9530"),
+        // a screen size ("14"), a partial fragment ("M4, 2024"), or a
+        // generic word ("Wikipedia"/"click"/"here"). v62.76 caught
+        // pure-numeric / ≤3-char / generic-single-word but missed mixed
+        // patterns like "M4, 2024" (1 letter + digits). v62.77 tightens:
+        // anchor must contain at least 4 unique LETTER characters
+        // (case-insensitive a-z) — kills "M4, 2024" (1 letter), "10-core"
+        // (4 letters borderline-pass), keeps "NanoReview" (8 unique
+        // letters) + "Dell XPS 15" (5 unique letters). Plus v62.77 extends
+        // to HTML <a href> form (some content sections render to HTML
+        // before this pass runs); markdown form was already covered.
+        $check_anchor_quality = function ( string $anchor ) {
+            $clean = trim( strip_tags( $anchor ) );
+            $alphanum = preg_replace( '/[^a-z0-9]/i', '', $clean );
+            $letters_only = preg_replace( '/[^a-z]/i', '', $clean );
+            $unique_letters = count( array_unique( str_split( strtolower( $letters_only ) ) ) );
+
+            // (a) Pure numeric — year, model number, dimension
+            if ( preg_match( '/^[\d.,\s\'"\x{2018}-\x{201F}″"&#;]+$/u', $clean ) ) return false;
+            // (b) Too-short alphanumeric (≤3 chars)
+            if ( strlen( $alphanum ) <= 3 ) return false;
+            // (c) Generic single-word anchors that don't identify the source
+            if ( preg_match( '/^(?:wikipedia|wiki|link|here|this|that|site|source|page|article|read|more|click|see|view|details|info)$/i', trim( $clean, ' .,;:!?' ) ) ) return false;
+            // (d) v62.77 — must have ≥4 unique LETTER chars (catches "M4, 2024" etc.)
+            if ( $unique_letters < 4 ) return false;
+            return true;
+        };
+
         if ( ! empty( $markdown ) ) {
+            // Markdown form: [anchor](url)
             $markdown = preg_replace_callback(
                 '/(?<!!)\[([^\]]{1,40})\]\((https?:\/\/[^)]+)\)/',
-                function ( $m ) {
-                    $anchor = trim( $m[1] );
-                    $anchor_clean = strip_tags( $anchor );
-                    $anchor_alphanum = preg_replace( '/[^a-z0-9]/i', '', $anchor_clean );
-                    // (a) Pure numeric anchor (year, model number, dimension)
-                    if ( preg_match( '/^[\d.,\s\'"\x{2018}-\x{201F}″"&#;\d]+$/u', $anchor_clean ) ) {
-                        return $anchor;
-                    }
-                    // (b) Too-short anchor (≤3 alphanumeric chars)
-                    if ( strlen( $anchor_alphanum ) <= 3 ) {
-                        return $anchor;
-                    }
-                    // (c) Generic single-word anchors that don't identify the source
-                    if ( preg_match( '/^(?:wikipedia|wiki|link|here|this|that|site|source|page|article|read|more|click|see|view|details|info)$/i', trim( $anchor_clean, ' .,;:!?' ) ) ) {
-                        return $anchor;
-                    }
-                    return $m[0];
+                function ( $m ) use ( $check_anchor_quality ) {
+                    return $check_anchor_quality( $m[1] ) ? $m[0] : trim( $m[1] );
+                },
+                $markdown
+            ) ?? $markdown;
+
+            // v62.77 — HTML form: <a href="url">anchor</a>
+            $markdown = preg_replace_callback(
+                '/<a\s[^>]*href="(https?:\/\/[^"]+)"[^>]*>([^<]{1,40})<\/a>/i',
+                function ( $m ) use ( $check_anchor_quality ) {
+                    return $check_anchor_quality( $m[2] ) ? $m[0] : trim( $m[2] );
                 },
                 $markdown
             ) ?? $markdown;
