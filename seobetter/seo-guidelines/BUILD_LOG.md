@@ -7,12 +7,74 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.74)
+> **Last updated:** 2026-05-06 (v1.5.216.62.75)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.75 — DISABLE auto Product schema until Phase 2 verified-data lands + comparison Speakable + currency space format + institution-attribution hallucination ban
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on T3 #7 Comparison test (MacBook Pro M4 vs Dell XPS 15, country=CA): structural + content issues stacking on every commercial article.
+
+- **Hallucinated prices in body** — CAD 1,499-2,049 range when real MacBook Pro M4 14" CAD MSRP is $2,499+. v62.73's `$`→`CAD` conversion fixed the SYMBOL but values stayed AI-invented.
+- **`detect_product_schema()` and `build_review()` itemReviewed.offers** both auto-extract from AI body text — architecturally guaranteed to ship hallucinated values until Phase 2 verified-data pipeline.
+- **Hallucinated institution authority** — "According to Bank of Canada data, price differences fluctuate..." appeared verbatim twice. Bank of Canada has zero data on laptop pricing. Top-3 AI hallucination pattern: invoke a real-but-irrelevant institution to lend credibility to a vague claim.
+- **`comparison` content type missing from SPEAKABLE_TYPES** — voice search "MacBook vs Dell, which is better?" same use case as Review.
+- **v62.73 currency conversion produced `CAD1,499`** (no space) which read awkwardly AND broke `Schema_Generator::build_review()`'s offers-extraction regex which expected `\s+` between code and number.
+
+User direction: **don't auto-emit Product schema with potentially-hallucinated data until 100% verified.** Manual Schema Blocks (Pro+, already shipped) bridge for users who want accurate Product schema TODAY. Phase 2 backend verified-data pipeline collapses the gap.
+
+### What changed
+
+**Fix 1 — `SEOBETTER_PRODUCT_SCHEMA_AUTO` feature flag** ([seobetter.php](seobetter/seobetter.php)) — new constant, default `false`. When false:
+- `detect_product_schema()` returns null entirely (no standalone Product node for buying_guide / comparison / sponsored)
+- `build_review()`'s itemReviewed Product strips `offers` field (keeps name + image + brand which extract reliably from title + featured image)
+- ItemList wrappers (Listicle / Buying Guide / Comparison) stay as bare ListItems, no nested Product nodes
+
+When Phase 2 ships, flipping the flag to `true` re-enables auto-extraction WITH verified-data backing. Manual Schema Blocks (Pro+) bypass this flag — user-supplied data is always 100% accurate by definition.
+
+**Fix 2 — `comparison` added to SPEAKABLE_TYPES** ([Schema_Generator.php](seobetter/includes/Schema_Generator.php)) — now 13 types. Voice search "X vs Y, which is better?" benefits from Speakable.
+
+**Fix 3 — Currency conversion adds space for ISO-code symbols** ([seobetter.php](seobetter/seobetter.php)) — v62.73's regex emitted `CAD1,499` (no space). Now ISO codes (AUD/NZD/CAD/HKD/SGD/TWD/AED/SAR/MXN/ARS — currencies that share `$` with USD and need ISO disambiguation) emit with a space: `CAD 1,499`. Unicode symbols (£/€/¥/₹/etc.) stay attached because they're visually distinct without spacing.
+
+**Fix 4 — Institution-attribution hallucination ban** ([Async_Generator.php](seobetter/includes/Async_Generator.php) `get_system_prompt()`) — universal system-prompt rule for ALL content types: when invoking a specific named institution to support a claim ("According to [Institution]..." / "[Institution] reports..." / "Per [Institution]..."), the institution's domain MUST appear in the article's citation pool. Banned without citation pool backing: Bank of Canada, Federal Reserve, RBA, ECB, BoE, IMF, OECD, World Bank, Treasury, BLS, Census Bureau, Statistics Canada, ABS, ONS, Eurostat, NHS, CDC, FDA, NIH, plus consultancies (McKinsey, Gartner, Forrester, Deloitte, PwC, KPMG, EY) and elite universities (MIT, Stanford, Harvard). If the institution isn't in the pool, the AI must rewrite WITHOUT the attribution ("Industry data suggests..." or omit the framing entirely). Inventing institutional authority is worse than no attribution.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.74 → 62.75 + new `SEOBETTER_PRODUCT_SCHEMA_AUTO` constant + currency-conversion regex space-handling for ISO codes
+- `seobetter/includes/Schema_Generator.php`:
+  - `detect_product_schema()` early-return null when SEOBETTER_PRODUCT_SCHEMA_AUTO is false
+  - `build_review()` itemReviewed offers gated by SEOBETTER_PRODUCT_SCHEMA_AUTO
+  - SPEAKABLE_TYPES adds `comparison`
+- `seobetter/includes/Async_Generator.php`:
+  - `get_system_prompt()` adds INSTITUTION ATTRIBUTION (HARD) rule
+
+### Verify
+
+```
+grep -n "SEOBETTER_PRODUCT_SCHEMA_AUTO" seobetter/seobetter.php seobetter/includes/Schema_Generator.php
+grep -n "'listicle', 'review', 'comparison' \];" seobetter/includes/Schema_Generator.php
+grep -B 1 -A 5 "v1.5.216.62.75 — for ISO-code symbols" seobetter/seobetter.php
+grep -B 1 -A 3 "INSTITUTION ATTRIBUTION (HARD)" seobetter/includes/Async_Generator.php
+```
+
+After upload + retest T3 #7 Comparison or any commercial type:
+- ZERO standalone Product nodes (detect_product_schema disabled)
+- Review's itemReviewed has @type:Product but NO offers field (offers gated until Phase 2)
+- Currency in body: "CAD 1,499" with space (was "CAD1,499")
+- ZERO "According to Bank of Canada..." style hallucinated authority phrases
+- Comparison articles get SpeakableSpecification
+
+**Verified by user:** UNTESTED
 
 ---
 

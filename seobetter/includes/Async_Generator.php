@@ -1073,7 +1073,26 @@ class Async_Generator {
             // E-E-A-T
             . ' E-E-A-T: Show experience (first-hand testing), expertise (specific knowledge), authority (cite real sources), trustworthiness (honest pros/cons, no fake claims).'
             // URLs
-            . ' NEVER invent URLs. Only use URLs from the AVAILABLE CITATIONS list. If mentioning an organization without a URL, do NOT link it.';
+            . ' NEVER invent URLs. Only use URLs from the AVAILABLE CITATIONS list. If mentioning an organization without a URL, do NOT link it.'
+            // v1.5.216.62.75 — Institution-attribution hallucination ban.
+            // User-reported on T3 #7 Comparison (MacBook vs Dell, country=CA):
+            // article said "According to Bank of Canada data, price differences
+            // fluctuate..." TWICE verbatim. Bank of Canada has zero data on
+            // laptop pricing — pure hallucinated authority. Universal rule
+            // for ALL content types: when invoking a specific named
+            // institution to support a factual claim, the institution's
+            // domain MUST appear in the AVAILABLE CITATIONS list (the
+            // research pool). Vague claims sound credible when attributed
+            // to real-but-irrelevant institutions ("Bank of Canada data
+            // shows X" / "Per the Federal Reserve report..." / "OECD
+            // research indicates Y") — this is a top-3 AI hallucination
+            // pattern. Strict: do not write "According to [named
+            // institution]..." OR "[Named institution] reports..." OR
+            // "Per [named institution]..." UNLESS that institution\'s URL
+            // is in the citation pool. If the claim is true but the
+            // source is unknown, write it WITHOUT the named-institution
+            // attribution ("Industry data shows..." or omit entirely).
+            . ' INSTITUTION ATTRIBUTION (HARD): When you write "According to [Institution]..." or "[Institution] reports..." or "Per [Institution]...", the institution\'s domain MUST appear in the AVAILABLE CITATIONS list above. Banned without citation pool backing: Bank of Canada, Federal Reserve, RBA, ECB, BoE, IMF, OECD, World Bank, Treasury, BLS, Census Bureau, Statistics Canada, ABS, ONS, Eurostat, NHS, CDC, FDA, NIH, MIT, Stanford, Harvard, McKinsey, Gartner, Forrester, Deloitte, PwC, KPMG, EY, similar named institutions. If you don\'t have the institution\'s URL in the pool, rewrite the claim WITHOUT the attribution — say "Industry data suggests..." or omit the framing. Inventing institutional authority is worse than no attribution.';
 
         $template = $templates[ $content_type ] ?? $templates['blog_post'];
         $template['guidance'] .= $shared;

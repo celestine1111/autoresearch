@@ -353,7 +353,10 @@ class Schema_Generator {
     // .key-takeaways + h2 + p) targets the natural readout points: title,
     // takeaways, and the first paragraph after each H2 (which for Reviews
     // is the verdict, the spec list, the hands-on, etc.).
-    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release', 'listicle', 'review' ];
+    // v1.5.216.62.75 — `comparison` added (now 13). Voice search "MacBook Pro
+    // M4 vs Dell XPS 15, which is better?" is a primary use case for
+    // comparison content — same voice-readout value as review.
+    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release', 'listicle', 'review', 'comparison' ];
 
     // Content types that get universal `citation[]` injection (v1.5.210).
     // Implements the "biggest LLM-citation lever" rollout flagged in v1.5.209
@@ -1703,23 +1706,40 @@ class Schema_Generator {
             $item_reviewed['image'] = $thumbnail;
         }
 
-        // Add price for Product/Software if detected
-        if ( in_array( $reviewed_type, [ 'Product', 'SoftwareApplication', 'MobileApplication' ], true ) ) {
-            if ( preg_match( '/[\$\£\€\¥]\s*([\d,]+(?:\.\d{2})?)/i', $text, $price ) ) {
-                $currency = 'USD';
-                if ( preg_match( '/\£/', $text ) ) $currency = 'GBP';
-                elseif ( preg_match( '/\€/', $text ) ) $currency = 'EUR';
-                elseif ( preg_match( '/AUD/i', $text ) || $country === 'AU' ) $currency = 'AUD';
-                elseif ( preg_match( '/CAD/i', $text ) || $country === 'CA' ) $currency = 'CAD';
-                elseif ( preg_match( '/NZD/i', $text ) || $country === 'NZ' ) $currency = 'NZD';
-                elseif ( preg_match( '/\¥|JPY/i', $text ) || $country === 'JP' ) $currency = 'JPY';
-
-                $item_reviewed['offers'] = [
-                    '@type'         => 'Offer',
-                    'price'         => str_replace( ',', '', $price[1] ),
-                    'priceCurrency' => $currency,
-                    'availability'  => 'https://schema.org/InStock',
-                ];
+        // v1.5.216.62.75 — Auto-extracted offers DISABLED until Phase 2
+        // verified-data pipeline. AI-extracted prices from article body
+        // routinely hallucinate (T3 #6 Dyson V15 UK: $400-$750 emitted vs
+        // real £549.99-£649.99). Until Phase 2 provides verified prices
+        // server-side from Serper Shopping + eBay Browse, this block is
+        // gated by SEOBETTER_PRODUCT_SCHEMA_AUTO. itemReviewed.@type stays
+        // Product (or SoftwareApplication where genuinely software) with
+        // name + image + brand — those come from title/featured image
+        // and are reliable. Just no `offers` field while values are
+        // unverifiable. Pro+ users get accurate offers TODAY via manual
+        // Schema Blocks. When the flag flips post-Phase 2, the regex below
+        // pulls from verified data instead of $text.
+        if ( defined( 'SEOBETTER_PRODUCT_SCHEMA_AUTO' ) && SEOBETTER_PRODUCT_SCHEMA_AUTO
+            && in_array( $reviewed_type, [ 'Product', 'SoftwareApplication', 'MobileApplication' ], true ) ) {
+            if ( preg_match( '/[\$\£\€\¥]\s*([\d,]+(?:\.\d{2})?)|\b([A-Z]{3})\s*([\d,]+(?:\.\d{2})?)/i', $text, $price ) ) {
+                // Prefer country_to_currency() for canonical mapping; fallback to symbol-based detection
+                $currency = ! empty( $country ) ? self::country_to_currency( $country ) : 'USD';
+                if ( $currency === 'USD' ) {
+                    if ( preg_match( '/\£/', $text ) ) $currency = 'GBP';
+                    elseif ( preg_match( '/\€/', $text ) ) $currency = 'EUR';
+                    elseif ( preg_match( '/AUD/i', $text ) ) $currency = 'AUD';
+                    elseif ( preg_match( '/CAD/i', $text ) ) $currency = 'CAD';
+                    elseif ( preg_match( '/NZD/i', $text ) ) $currency = 'NZD';
+                    elseif ( preg_match( '/\¥|JPY/i', $text ) ) $currency = 'JPY';
+                }
+                $price_value = ! empty( $price[1] ) ? $price[1] : ( $price[3] ?? '' );
+                if ( $price_value !== '' ) {
+                    $item_reviewed['offers'] = [
+                        '@type'         => 'Offer',
+                        'price'         => str_replace( ',', '', $price_value ),
+                        'priceCurrency' => $currency,
+                        'availability'  => 'https://schema.org/InStock',
+                    ];
+                }
             }
         }
 
@@ -2695,6 +2715,33 @@ class Schema_Generator {
      * Only fires when content mentions specific product names with prices or ratings.
      */
     private function detect_product_schema( \WP_Post $post, string $content, string $content_type, string $category ): ?array {
+        // v1.5.216.62.75 — DISABLED entirely until Phase 2 verified-data
+        // pipeline ships. AI-extracted Product schema from article body is
+        // architecturally unreliable: prices, currency, brand, image,
+        // aggregateRating all come from AI training data and frequently
+        // hallucinate (T3 #6 Dyson V15 UK: $400-$750 hallucinated when real
+        // is £549.99-£649.99; T3 #7 MacBook vs Dell CAD: $1,499-$2,049
+        // when real is $2,499+). Schema.org §2 + Google Rich Results both
+        // require structured data to MATCH visible content AND be accurate.
+        //
+        // Until Phase 2 ships (cloud-api/api/product-enrichment.js using
+        // Serper Shopping + eBay Browse + Amazon PA-API for verified
+        // server-side product data), this function returns null entirely.
+        // Pro+ users get accurate Product schema TODAY via manual Schema
+        // Blocks (Schema_Blocks_Manager — Product/Event/LocalBusiness/
+        // VacationRental/JobPosting blocks). Manual blocks emit perfect
+        // JSON-LD because the user supplies the data directly.
+        //
+        // When SEOBETTER_PRODUCT_SCHEMA_AUTO is flipped to true post-Phase
+        // 2, the implementation below is gated on verified-data presence
+        // (price came from product-enrichment.js, not body regex) before
+        // emitting the Product node.
+        if ( ! defined( 'SEOBETTER_PRODUCT_SCHEMA_AUTO' ) || ! SEOBETTER_PRODUCT_SCHEMA_AUTO ) {
+            return null;
+        }
+
+        // v1.5.216.62.72 — REMOVED 'review' from trigger list (build_review's
+        // itemReviewed is the canonical Product source for Review type).
         // v1.5.216.62.71 — REMOVED 'listicle' from this trigger list.
         //
         // Pre-fix detect_product_schema() emitted a single top-level Product

@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.74
+ * Version: 1.5.216.62.75
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,25 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.74' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.75' );
+
+// v1.5.216.62.75 — Auto-extracted Product schema feature flag. Currently
+// FALSE because the AI-extracted `offers.price` field is unreliable
+// (hallucinated prices from training data). Phase 2's verified-data
+// pipeline (Serper Shopping + eBay Browse + Amazon PA-API) will provide
+// real product prices server-side; at that point flip this to true.
+// When false:
+//   - detect_product_schema() returns null entirely (no standalone Product)
+//   - build_review()'s itemReviewed Product strips offers + aggregateRating
+//     (keeps only name + image + brand which are extractable reliably)
+//   - Listicle / Buying Guide / Comparison ItemList items stay as bare
+//     ListItems (name only, no Product nesting)
+// Manual Schema Blocks (Pro+) bypass this flag — user-supplied data is
+// always 100% accurate by definition, so manual blocks emit full Product
+// schema regardless of this flag.
+if ( ! defined( 'SEOBETTER_PRODUCT_SCHEMA_AUTO' ) ) {
+    define( 'SEOBETTER_PRODUCT_SCHEMA_AUTO', false );
+}
 define( 'SEOBETTER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 // v1.5.216.62.28 — absolute path to the main plugin file. Schema_Blocks_Registry
 // uses this with plugins_url() to build the editor-script asset URL correctly.
@@ -1981,9 +1999,16 @@ final class SEOBetter {
                 // also convert. The only reason NOT to convert is if the
                 // user typed about a verifiably-USD entity. Phase 2 will
                 // handle that nuance; for now, all $ → target symbol).
+                // v1.5.216.62.75 — for ISO-code symbols (AUD/NZD/CAD/HKD/SGD/etc.
+                // that share `$` with USD) insert a space between code and
+                // number for readability — `CAD 1,499` not `CAD1,499`.
+                // Unicode symbols (£/€/¥/₹/etc.) stay attached because they're
+                // visually distinct without spacing.
+                $is_iso_code = (bool) preg_match( '/^[A-Z]{3}$/', $target_symbol );
+                $replacement = $is_iso_code ? "{$target_symbol} \$1" : "{$target_symbol}\$1";
                 $markdown = preg_replace(
                     '/\$(\d[\d,]*(?:\.\d{1,2})?)/',
-                    $target_symbol . '$1',
+                    $replacement,
                     $markdown
                 ) ?? $markdown;
             }
