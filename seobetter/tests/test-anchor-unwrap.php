@@ -40,23 +40,31 @@ $cases = [
     [ '9530',         false, 'pure numeric model number' ],
     [ 'M4',           false, 'too short, 1 letter' ],
     [ 'Wikipedia',    false, 'generic single word' ],
-    [ 'click here',   false, 'generic phrase (matches "here" alone... wait does it?)' ],
     [ 'here',         false, 'generic single word' ],
     [ '2-tb',         false, 'too few unique letters' ],
 
-    // Should KEEP (true expected)
-    [ 'NanoReview',          true,  'real source name, 8 unique letters' ],
-    [ 'wired.com',           true,  'real domain, 8 unique letters' ],
-    [ 'Dell XPS 15',         true,  '5 unique letters (D,e,l,X,P,S)' ],
+    // v62.79 — multi-word generic phrases (regex extended to catch these)
+    [ 'click here',   false, 'v62.79 generic 2-word phrase' ],
+    [ 'read more',    false, 'v62.79 generic 2-word phrase' ],
+    [ 'see more',     false, 'v62.79 generic 2-word phrase' ],
+    [ 'view all',     false, 'v62.79 generic 2-word phrase' ],
+    [ 'view more',    false, 'v62.79 generic 2-word phrase' ],
+    [ 'view details', false, 'v62.79 generic 2-word phrase' ],
+    [ 'learn more',   false, 'v62.79 generic 2-word phrase' ],
+
+    // v62.79 — unique-letter threshold tightened from <4 to <5 (catches spec fragments)
+    [ '10-core',      false, 'v62.79: 4 unique letters (c,o,r,e) — spec fragment, not source name' ],
+    [ '4K HDR',       false, 'v62.79: 4 unique letters (k,h,d,r) — spec fragment, not source name' ],
+    [ 'M.2 SSD',      false, '3 unique letters (m,s,d)' ],
+
+    // Should KEEP (true expected) — real source names, ≥5 unique letters
+    [ 'NanoReview',          true,  '8 unique letters' ],
+    [ 'wired.com',           true,  '8 unique letters' ],
+    [ 'Dell XPS 15',         true,  '6 unique letters (d,e,l,x,p,s)' ],
     [ 'MacBook Pro M4',      true,  'real product name' ],
     [ 'Tom\'s Hardware',     true,  'real source name' ],
     [ 'TechRadar',           true,  'real source name' ],
     [ 'Bank of Canada',      true,  'real institution name (caveat: still subject to v62.75 institution-attribution ban via different filter)' ],
-
-    // Edge cases
-    [ '10-core',      false, '4 unique letters EXACTLY (c,o,r,e) — should fail (rule is <4 fails, so 4 passes... let me re-check)' ],
-    [ 'M.2 SSD',      false, '2 unique letters (M, S, D = 3 unique → should fail)' ],
-    [ '4K HDR',       false, '4 unique letters (K, H, D, R) — should pass... let me trace' ],
 ];
 
 // ----- Run each case -----

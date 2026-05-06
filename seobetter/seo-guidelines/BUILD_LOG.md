@@ -7,12 +7,56 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.78)
+> **Last updated:** 2026-05-06 (v1.5.216.62.79)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.79 — Test-driven anchor-quality fixes: multi-word generic phrases + ≥5 unique-letter threshold + cron-fed JSON test runner
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+VPS run of `tests/test-anchor-unwrap.php` exposed 3 failures in the v62.78 logic:
+
+1. `click here` was kept as a link — generic-word regex was single-word only, missed 2-word phrases like `click here`, `read more`, `view all`, `learn more`.
+2. `10-core` was kept — 4 unique letters (c,o,r,e) passed the `<4 fails` rule. Spec fragment, not a source name.
+3. `4K HDR` was kept — 4 unique letters (k,h,d,r) — same root cause.
+
+All real source names have ≥5 unique letters (NanoReview=8, TechRadar=8, Dell XPS 15=6, Tom's Hardware=10+). Tightening the threshold to <5 catches both spec fragments without affecting any real source.
+
+Plus the user requested a cron-fed JSON test runner so test results can be fetched from Mac without SSH.
+
+### What changed
+
+**Anchor quality regex extended** (seobetter/seobetter.php::check_anchor_quality() line ~1994) — added rule (c2) matching multi-word generic phrases: `click\s+here|read\s+more|see\s+more|view\s+(?:more|all|details)|learn\s+more|find\s+out\s+more|get\s+started|sign\s+up`. Tightened rule (d) from `< 4` to `< 5` unique letter chars.
+
+**Test cases updated** (seobetter/tests/test-anchor-unwrap.php) — added v62.79 cases for `read more`, `see more`, `view all`, `view more`, `view details`, `learn more` (all expect UNWRAP). Re-noted `10-core` and `4K HDR` for the new threshold. 27 cases total, all expected green under v62.79.
+
+**Cron-fed test runner** (seobetter/tests/run-all.php) — NEW file. Runs every `tests/test-*.php`, captures stdout + exit, writes JSON summary to `wp-content/uploads/seobetter-tests/results.json`. Cron entry: `* * * * * /usr/bin/php /home/USER/htdocs/.../wp-content/plugins/seobetter/tests/run-all.php >/dev/null 2>&1`. Public URL pattern: `https://YOUR-DOMAIN/wp-content/uploads/seobetter-tests/results.json`. Lets Claude Code curl test results from Mac without SSH access.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.78 → 62.79 + extended `check_anchor_quality` regex
+- `seobetter/tests/test-anchor-unwrap.php` — v62.79 test cases
+- `seobetter/tests/run-all.php` — NEW cron-fed JSON test runner
+
+### Verify
+
+```
+grep -A 18 "check_anchor_quality = function" seobetter/seobetter.php | head -20
+php seobetter/tests/test-anchor-unwrap.php  # expect: PASSED: 27 | FAILED: 0
+```
+
+### Verified by user
+
+UNTESTED — pending VPS upload + curl-pipe re-run of test-anchor-unwrap.php.
 
 ---
 

@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.78
+ * Version: 1.5.216.62.79
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.78' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.79' );
 
 // v1.5.216.62.75 — Auto-extracted Product schema feature flag. Currently
 // FALSE because the AI-extracted `offers.price` field is unreliable
@@ -1996,15 +1996,18 @@ final class SEOBetter {
             $alphanum = preg_replace( '/[^a-z0-9]/i', '', $clean );
             $letters_only = preg_replace( '/[^a-z]/i', '', $clean );
             $unique_letters = count( array_unique( str_split( strtolower( $letters_only ) ) ) );
+            $trimmed = trim( $clean, ' .,;:!?' );
 
             // (a) Pure numeric — year, model number, dimension
             if ( preg_match( '/^[\d.,\s\'"\x{2018}-\x{201F}″"&#;]+$/u', $clean ) ) return false;
             // (b) Too-short alphanumeric (≤3 chars)
             if ( strlen( $alphanum ) <= 3 ) return false;
             // (c) Generic single-word anchors that don't identify the source
-            if ( preg_match( '/^(?:wikipedia|wiki|link|here|this|that|site|source|page|article|read|more|click|see|view|details|info)$/i', trim( $clean, ' .,;:!?' ) ) ) return false;
-            // (d) v62.77 — must have ≥4 unique LETTER chars (catches "M4, 2024" etc.)
-            if ( $unique_letters < 4 ) return false;
+            if ( preg_match( '/^(?:wikipedia|wiki|link|here|this|that|site|source|page|article|read|more|click|see|view|details|info)$/i', $trimmed ) ) return false;
+            // (c2) v62.79 — generic multi-word anchor phrases (click here, read more, view all, etc.)
+            if ( preg_match( '/^(?:click\s+here|read\s+more|see\s+more|view\s+(?:more|all|details)|learn\s+more|find\s+out\s+more|get\s+started|sign\s+up)$/i', $trimmed ) ) return false;
+            // (d) v62.79 — must have ≥5 unique LETTER chars (was <4; tightened to catch "10-core", "4K HDR" spec fragments)
+            if ( $unique_letters < 5 ) return false;
             return true;
         };
 
