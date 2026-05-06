@@ -19,7 +19,7 @@
 ## v1.5.216.62.75 — DISABLE auto Product schema until Phase 2 verified-data lands + comparison Speakable + currency space format + institution-attribution hallucination ban
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `c209117`
 
 ### Why
 
