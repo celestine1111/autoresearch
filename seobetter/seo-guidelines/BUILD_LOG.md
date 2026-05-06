@@ -7,12 +7,48 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.86)
+> **Last updated:** 2026-05-06 (v1.5.216.62.87)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.87 — Bulk_Generator schema regeneration after meta sync (close v62.86 timing race)
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+v62.86 audit on post 738: `<meta name="description">` and og/twitter description were CLEAN ✅ but JSON-LD `BlogPosting.description` was still trash ("The table below highlights it headphones..."). Why:
+
+`wp_insert_post` fires `save_post` → `analyze_on_save` → `Schema_Generator::generate()` builds schema with `build_clean_description()` fallback because `_seobetter_meta_description` post meta isn't stored YET. v62.86 added meta gen + sync AFTER `wp_insert_post` but never re-ran Schema_Generator, so the cached `_seobetter_schema` post meta still had the old content-extracted description.
+
+`rest_save_draft` (Single Generate) avoids this race because it explicitly regenerates schema at line 2454 AFTER `sync_seo_plugin_meta`. Bulk_Generator was missing that step.
+
+### What changed
+
+**Bulk_Generator.php** — after sync_seo_plugin_meta + storing `_seobetter_meta_description`, call `Schema_Generator::generate( get_post( $post_id ) )` and overwrite the `_seobetter_schema` post meta. Now JSON-LD reads the AI meta description via `Schema_Generator::get_post_description()` (v62.86 helper).
+
+### Files changed
+
+- `seobetter/includes/Bulk_Generator.php` — schema regeneration after meta sync
+- `seobetter/seobetter.php` — version 62.86 → 62.87
+
+### Verify
+
+```
+grep "62.87 — Re-run Schema_Generator" seobetter/includes/Bulk_Generator.php
+# Live test: Bulk-generate Comparison, expect JSON-LD BlogPosting.description
+# == AI-generated meta description (matches <meta name="description"> content)
+```
+
+### Verified by user
+
+UNTESTED — pending v62.87 deploy + Bulk regenerate + JSON-LD audit.
 
 ---
 
