@@ -184,8 +184,8 @@ $cases = [
         'Apple MacBook Pro 14" Liquid Retina XDR Display 24GB RAM 1TB SSD vs Dell XPS 15 - Pangoly',
         'macbook pro m4 vs dell xps 15',
         [],
-        'Apple MacBook Pro 14" Liquid Retina XDR Display',
-        'v62.82 — long title with publisher suffix gets stripped + 60-char cap',
+        'Apple MacBook Pro 14" Liquid Retina XDR Display 24GB RAM',
+        'v62.82 — long title: strip publisher suffix, then 60-char cap at last word boundary (RAM=56 chars)',
     ],
     [
         'Best Laptops 2026: Top 10 Picks for Pros and Creators - TechRadar',
