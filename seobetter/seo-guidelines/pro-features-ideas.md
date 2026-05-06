@@ -262,6 +262,46 @@ Legend: ✅ = unlocked at this tier · ❌ = not available · 🔓 = unlock badg
 
 **Companion check — currency in body prose:** related but separate fix (in v62.72 scope) — when country=UK, body text must use `£` not `$`. Currently the AI emits whatever currency symbol it learned from training data, regardless of country setting. Solution: add explicit currency-symbol enforcement in the LANGUAGE/COUNTRY clause of the system prompt: "All prices in this article MUST use [£|€|$|AUD|etc.] — the symbol matching the article's target country."
 
+#### Skill-derived feature integration sprint (Phase 3+)
+
+> **Status:** PLANNED. Multiple Claude Code skills installed at `.agents/skills/` contain pattern catalogues, audit rubrics, and rewrite logic that can be ported directly into SEOBetter PHP modules. The skills themselves are markdown prompt+process designs for Claude (not PHP libraries), but their *intelligence* — vocabulary lists, structural pattern detectors, scoring rubrics, AI rewrite prompts — is fully portable to PHP modules that call the user's BYOK AI provider.
+>
+> **Why deferred:** Phase 3+ work, AFTER Phase 2 verified-data pipeline ships and 21/21 English types are signed off. Each skill port adds a quality-gate or scoring layer to the article pipeline; cumulative effort is ~3 weeks across three batches.
+>
+> **Why this is wedge-relevant:** the existing in-prompt humanizer in `Async_Generator::get_system_prompt()` only bans ~10 AI words ("delve, leverage, pivotal, tapestry, landscape, multifaceted, comprehensive, utilizing, aforementioned"). The `humanize-writing` skill's `ai-tells.md` catalogue has 30+ Tier-1 banned words PLUS structural patterns PLUS em-dash rules PLUS formulaic-structure detection — 3-4× richer. Same multiplier applies for `content-quality-auditor` (80-item EEAT vs current ~20-item GEO_Analyzer) and `domain-authority-auditor` (40-item CITE rubric for citation pool URLs). Porting these closes the gap between "SEOBetter generates content that mostly avoids AI tells" and "SEOBetter content reliably passes GPTZero / Turnitin / Originality detection."
+
+##### Batch A — Quality gates (port humanize-writing + detect-ai + readability)
+
+| Sub-fix | Tier visibility | Effort | Build status |
+|---|---|---|---|
+| **A1. New `includes/Humanizer.php` module** porting `humanize-writing` skill's `references/ai-tells.md` (278 lines): vocabulary tables → PHP arrays + regex detectors, structural patterns → detection rules, em-dash rules → regex pass. Methods: `Humanizer::detect_ai_tells($text)` returns array of issues with severity + position; `Humanizer::scrub($text)` regex-replaces fixable items (banned words); `Humanizer::rewrite_via_ai($text, $issues, $byok_provider)` calls user's AI for non-fixable structural rewrites. Hooks into `Async_Generator::assemble_final()` after `validate_outbound_links` and before `Content_Formatter::format`. Source skill: [humanize-writing](https://github.com/) (Wikipedia-derived, MIT-licensed compatible variant). | Free: detection-only score in dashboard · Pro: regex scrub pass · Pro+: AI rewrite + score gate · Agency: bulk pass for refresh runs | 2-3 days | ⏳ Phase 3 |
+| **A2. AI-detection score gate via `detect-ai` skill port** — runs the article body through a server-side AI-detection scoring algorithm (port the skill's logic to PHP). Returns 0-100 score where higher = more AI-like. Block publish if Pro+ user has gate enabled and score >80. | Pro+: score visible · Agency: score + auto-block | 1-2 days | ⏳ Phase 3 |
+| **A3. Readability scoring** — extend existing partial Flesch-Kincaid check in GEO_Analyzer with Gunning Fog + SMOG + Coleman-Liau. Surfaces grade-level mismatch when AI overshoots target audience. | All tiers | 0.5 day | ⏳ Phase 3 |
+
+##### Batch B — Schema/SEO validation (port schema-markup-generator + meta-tags-optimizer + domain-authority-auditor)
+
+| Sub-fix | Tier visibility | Effort | Build status |
+|---|---|---|---|
+| **B1. JSON-LD validator pass** — port `schema-markup-generator` skill's validation logic. Runs after `Schema_Generator` builds the JSON-LD blob; validates required-fields-per-@type AGAINST `structured-data.md` §4 spec; flags missing fields and warns. Catches the kind of schema bugs we shipped today (missing reviewRating, wrong currency, etc.) before article saves. | All tiers | 1 day | ⏳ Phase 3 |
+| **B2. Meta-title scoring + variants** — extend `sanitize_meta_title()` (v62.68) into a full scoring pass per `meta-tags-optimizer` skill's CTR scoring rubric. Generate 3-5 variant titles, score each, present user's choice in editor sidebar. | Pro · Pro+ | 0.5 day | ⏳ Phase 3 |
+| **B3. Citation-pool authority scoring** — port `domain-authority-auditor` skill's CITE 40-item rubric to PHP. Score every URL in the citation pool 0-100 BEFORE it's used as a citation; reject low-score URLs. Would have prevented the Pangoly (2019 model link) / nanoreview (geo-mismatch) / tech.hindustantimes.com (wrong-country) mistakes by scoring those <40 vs which.co.uk / consumer.org.au / cbc.ca >70. | Pro+ · Agency | 2-3 days | ⏳ Phase 3 |
+
+##### Batch C — Deep content scoring (port content-quality-auditor + entity-optimizer)
+
+| Sub-fix | Tier visibility | Effort | Build status |
+|---|---|---|---|
+| **C1. CORE-EEAT 80-item audit** — port `content-quality-auditor` skill's 80-item rubric to PHP. Replaces / augments current GEO_Analyzer's ~20-item check with a deeper publish-readiness gate. Includes weighted scoring + veto checks + fix plan generated automatically per article. Surfaces in editor sidebar. | Free: top-10 issues · Pro: full 80-item · Pro+: 80-item + auto-fix suggestions · Agency: bulk audit + CSV export | 5-7 days | ⏳ Phase 3+ |
+| **C2. Entity Knowledge Graph audit** — port `entity-optimizer` skill. For each named entity in the article (institutions, people, products), check Knowledge Graph + Wikidata presence; flag entities the AI invokes that lack canonical Wikidata pages. Pairs with v62.75's institution-attribution-without-citation ban. Auto-suggest the canonical Wikipedia/Wikidata link to add as citation. | Pro+ · Agency | 2 days | ⏳ Phase 3+ |
+
+**Total porting effort:** ~3 weeks across all 3 batches. Each batch ships independently — Batch A (4 days) is the highest-leverage starting point because the humanizer + AI-detection gate close the most-visible quality gap and unlock the wedge claim "SEOBetter articles pass AI detectors."
+
+**Skills NOT being ported (and why):**
+- `humanize` (premium API) — calls external HumanizerAI API, paid + credit-based. Not portable cleanly without a vendor dependency for every customer article. If a customer wants this they can buy HumanizerAI directly and pipe SEOBetter output through it.
+- The 100+ marketing/SEO skills (`launch-strategy`, `cold-email`, `paid-ads`, etc.) — those help BUILD SEOBetter but don't belong INSIDE the plugin as customer-facing features.
+- The WordPress dev skills (`wp-plugin-development`, `wp-phpstan`, `wp-block-development`, etc.) — same. Development tools, not runtime features.
+
+**Schedule:** earliest start = after 21/21 English types signed off + Phase 2 verified-data pipeline + Phase 2 multilingual + Phase 2 country-localized sources. So realistically Phase 3+ post-launch. Add to roadmap explicitly so this isn't lost.
+
 #### AI Citation Tracker (THE wedge)
 
 | Feature | Free | Pro | Pro+ | Agency | Build status |
