@@ -13,18 +13,21 @@
  * elsewhere in the pipeline (OPcache / different code path / etc).
  */
 
-// ----- The check_anchor_quality closure from seobetter.php v62.78 -----
+// ----- The check_anchor_quality closure from seobetter.php v62.79 -----
+// (Mirror of the production closure — keep in sync when seobetter.php changes.)
 
 $check_anchor_quality = function ( string $anchor ) {
     $clean = trim( strip_tags( $anchor ) );
     $alphanum = preg_replace( '/[^a-z0-9]/i', '', $clean );
     $letters_only = preg_replace( '/[^a-z]/i', '', $clean );
     $unique_letters = count( array_unique( str_split( strtolower( $letters_only ) ) ) );
+    $trimmed = trim( $clean, ' .,;:!?' );
 
     if ( preg_match( '/^[\d.,\s\'"\x{2018}-\x{201F}″"&#;]+$/u', $clean ) ) return false;
     if ( strlen( $alphanum ) <= 3 ) return false;
-    if ( preg_match( '/^(?:wikipedia|wiki|link|here|this|that|site|source|page|article|read|more|click|see|view|details|info)$/i', trim( $clean, ' .,;:!?' ) ) ) return false;
-    if ( $unique_letters < 4 ) return false;
+    if ( preg_match( '/^(?:wikipedia|wiki|link|here|this|that|site|source|page|article|read|more|click|see|view|details|info)$/i', $trimmed ) ) return false;
+    if ( preg_match( '/^(?:click\s+here|read\s+more|see\s+more|view\s+(?:more|all|details)|learn\s+more|find\s+out\s+more|get\s+started|sign\s+up)$/i', $trimmed ) ) return false;
+    if ( $unique_letters < 5 ) return false;
     return true;
 };
 
