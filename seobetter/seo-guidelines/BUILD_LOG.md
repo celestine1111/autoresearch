@@ -7,12 +7,46 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.82)
+> **Last updated:** 2026-05-06 (v1.5.216.62.83)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.83 — Wire sanitize_headline into Bulk_Generator (was bypassing the cleaner)
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+Live debug via browse-cli login + DOM inspection of post 728 (the Comparison retest with the corrupt H1) revealed: **the post was created via Bulk Generate, not single Generate.** Bulk_Generator.php:316 was setting `$post_title = $result['headlines'][0] ?? ucwords($item['keyword']);` with NO sanitization. Every v62.79–82 cleaner shipped on `rest_save_draft()` only — Bulk Generate route never invoked any of them. That's why the citation echo / ellipsis / middle-dot issues kept resurfacing despite all the unit tests passing — wrong code path was being patched.
+
+### What changed
+
+**1. `sanitize_headline()`, `clean_title_universal()`, `brand_caps()`, `normalize_for_compare()` made `public static`** (seobetter/seobetter.php) so external callers can use them.
+
+**2. Bulk_Generator.php line ~316** — `post_title` is now built via `\SEOBetter::sanitize_headline()` with the keyword + citation_pool. Same pipeline as rest_save_draft. Both routes now share one code path.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.82 → 62.83, four helpers private→public
+- `seobetter/includes/Bulk_Generator.php` — wire sanitize_headline before wp_insert_post
+- `seobetter/tests/test-headline-sanitizer.php` — comment update noting v62.83 public-API change
+
+### Verify
+
+```
+grep -A 5 "62.83 — sanitize the headline" seobetter/includes/Bulk_Generator.php
+grep "public static function sanitize_headline" seobetter/seobetter.php
+```
+
+### Verified by user
+
+UNTESTED — pending v62.83 deploy + Bulk Generate Comparison test.
 
 ---
 

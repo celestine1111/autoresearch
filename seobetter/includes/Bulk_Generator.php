@@ -313,7 +313,19 @@ class Bulk_Generator {
                         ] );
                     }
 
-                    $post_title = $result['headlines'][0] ?? ucwords( $item['keyword'] );
+                    // v1.5.216.62.83 — sanitize the headline through the same
+                    // pipeline as rest_save_draft. Pre-fix raw $result['headlines'][0]
+                    // shipped straight into post_title, so every v62.79-82 fix
+                    // (citation-echo detection, ellipsis strip, middle-dot replace,
+                    // 60-char cap, brand_caps) was bypassed for Bulk Generate.
+                    $raw_title       = $result['headlines'][0] ?? $item['keyword'];
+                    $citation_pool   = $result['citation_pool'] ?? [];
+                    $sanitized_title = \SEOBetter::sanitize_headline(
+                        (string) $raw_title,
+                        (string) ( $item['keyword'] ?? '' ),
+                        is_array( $citation_pool ) ? $citation_pool : []
+                    );
+                    $post_title = sanitize_text_field( $sanitized_title );
 
                     // v1.5.216.28 — auto_publish toggle. Default false → draft.
                     $post_status = ! empty( $batch['auto_publish'] ) ? 'publish' : 'draft';

@@ -17,8 +17,12 @@
  * Run on VPS:  php /path/to/.../tests/test-headline-sanitizer.php
  */
 
-// ----- Mirror of the v62.81 production sanitizer logic -----
+// ----- Mirror of the v62.83 production sanitizer logic -----
 // Keep in sync with seobetter.php::sanitize_headline() helper.
+// As of v62.83, sanitize_headline is PUBLIC on the SEOBetter class so
+// Bulk_Generator and any other post-creation path can call it before
+// wp_insert_post(). Pre-fix: only rest_save_draft sanitized; Bulk_Generator
+// shipped raw `$result['headlines'][0]` straight into post_title.
 
 function brand_caps( string $title ): string {
     $tokens = [

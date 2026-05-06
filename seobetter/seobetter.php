@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.82
+ * Version: 1.5.216.62.83
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.82' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.83' );
 
 // v1.5.216.62.75 — Auto-extracted Product schema feature flag. Currently
 // FALSE because the AI-extracted `offers.price` field is unreliable
@@ -1920,7 +1920,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.62.82 — Sanitize headline before it becomes post_title.
+     * v1.5.216.62.83 — Sanitize headline before it becomes post_title.
      *
      * v62.80 introduced verbatim-equality citation-echo check. v62.81
      * upgrades that with normalize-then-compare so en-dash/hyphen/middle-dot
@@ -1930,7 +1930,7 @@ final class SEOBetter {
      *
      * Mirror in tests/test-headline-sanitizer.php — keep in sync.
      */
-    private static function brand_caps( string $title ): string {
+    public static function brand_caps( string $title ): string {
         $tokens = [
             'macbook' => 'MacBook', 'iphone' => 'iPhone', 'ipad' => 'iPad',
             'airpods' => 'AirPods', 'imac' => 'iMac', 'xps' => 'XPS',
@@ -1948,7 +1948,7 @@ final class SEOBetter {
         return $title;
     }
 
-    private static function normalize_for_compare( string $s ): string {
+    public static function normalize_for_compare( string $s ): string {
         $s = html_entity_decode( $s, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
         $s = preg_replace( '/\s*[·–—|‐\-]\s*/u', ' - ', $s );
         $s = preg_replace( '/\s*(?:\x{2026}|\.{3,})\s*$/u', '', $s );
@@ -1957,12 +1957,12 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.62.82 — Universal pre-emptive cleaner. Pool comparison alone
+     * v1.5.216.62.83 — Universal pre-emptive cleaner. Pool comparison alone
      * only catches echoes that are byte-equal to a pool entry. v62.82 strips
      * trailing publisher suffixes + enforces §7.1 60-char cap regardless of
      * pool, so AI-emitted variants we haven't seen are blocked too.
      */
-    private static function clean_title_universal( string $title ): string {
+    public static function clean_title_universal( string $title ): string {
         $title = trim( $title );
         $title = preg_replace( '/\s*(?:\x{2026}|\.{3,})\s*$/u', '', $title );
         $title = preg_replace( '/\s*·\s*/u', ' - ', $title );
@@ -1985,7 +1985,7 @@ final class SEOBetter {
         return $title;
     }
 
-    private static function sanitize_headline( string $title, string $fallback_keyword, array $pool = [] ): string {
+    public static function sanitize_headline( string $title, string $fallback_keyword, array $pool = [] ): string {
         $title = trim( $title );
         $normalized_title = self::normalize_for_compare( $title );
         $is_echo = false;
@@ -2015,7 +2015,7 @@ final class SEOBetter {
         $content  = $request->get_param( 'content' ) ?? '';
         $accent   = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
 
-        // v1.5.216.62.82 — sanitize headline AFTER citation_pool is parsed below
+        // v1.5.216.62.83 — sanitize headline AFTER citation_pool is parsed below
         // so we can detect citation echoes. Done at temp value here; finalized
         // after $combined_pool is built (see below).
         $title = sanitize_text_field( $raw_title );
@@ -2048,7 +2048,7 @@ final class SEOBetter {
             }
         }
 
-        // v1.5.216.62.82 — Now that the pool is assembled, sanitize the
+        // v1.5.216.62.83 — Now that the pool is assembled, sanitize the
         // headline. Catches citation-echo titles passed from frontend.
         $kw_for_fallback = (string) ( $request->get_param( 'keyword' ) ?? $raw_title );
         $title = sanitize_text_field( self::sanitize_headline( $raw_title, $kw_for_fallback, $combined_pool ) );
@@ -2331,7 +2331,7 @@ final class SEOBetter {
                     foreach ( $cited_entries as $entry ) {
                         $url   = esc_url( $entry['url'] ?? '' );
                         if ( $url === '' ) continue;
-                        // v1.5.216.62.82 — truthy fallback chain. Pre-fix used
+                        // v1.5.216.62.83 — truthy fallback chain. Pre-fix used
                         // `?? ?? ??` which only catches null/missing, not empty
                         // string. Pool entries with title=''/source_name=''
                         // bypassed every fallback → empty <a></a> rendered.
