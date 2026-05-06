@@ -19,7 +19,7 @@
 ## v1.5.216.62.77 — Bad-anchor unwrap stricter (≥4 unique letters required) + HTML form support + scraped-junk quote filter (image-caption echo / phrase repetition / mid-sentence cuts)
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `b250bd4`
 
 ### Why
 
