@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.75
+ * Version: 1.5.216.62.76
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.75' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.76' );
 
 // v1.5.216.62.75 — Auto-extracted Product schema feature flag. Currently
 // FALSE because the AI-extracted `offers.price` field is unreliable
@@ -1978,6 +1978,46 @@ final class SEOBetter {
             $markdown = $this->validate_outbound_links( $markdown, $combined_pool );
         }
 
+        // v1.5.216.62.76 — Bad-anchor unwrap pass. The AI sometimes writes
+        // markdown links with non-descriptive anchor text — wrapping just
+        // a year ("2023"), a model number ("9530"), a screen size ("14")
+        // or a generic word ("Wikipedia"). User-reported on T3 #7
+        // Comparison: anchors like `[2023](https://nanoreview.net/...)`
+        // and `[14"](https://versus.com/...)` and `[9530](https://...)`.
+        // These are useless for SEO + bad UX (user can't tell what they're
+        // clicking). Universal fix: unwrap markdown links whose anchor
+        // text is (a) pure-numeric, (b) ≤3 chars, or (c) a single generic
+        // word like "Wikipedia"/"link"/"here"/"this"/"source"/"site". The
+        // URL is preserved in the citation pool and surfaces in the
+        // auto-built References section at the end — just not as an
+        // inline body link with a meaningless anchor. Defense-in-depth
+        // alongside the system prompt's "use descriptive noun-phrase
+        // anchor text" guidance which AI ignores 30% of the time.
+        if ( ! empty( $markdown ) ) {
+            $markdown = preg_replace_callback(
+                '/(?<!!)\[([^\]]{1,40})\]\((https?:\/\/[^)]+)\)/',
+                function ( $m ) {
+                    $anchor = trim( $m[1] );
+                    $anchor_clean = strip_tags( $anchor );
+                    $anchor_alphanum = preg_replace( '/[^a-z0-9]/i', '', $anchor_clean );
+                    // (a) Pure numeric anchor (year, model number, dimension)
+                    if ( preg_match( '/^[\d.,\s\'"\x{2018}-\x{201F}″"&#;\d]+$/u', $anchor_clean ) ) {
+                        return $anchor;
+                    }
+                    // (b) Too-short anchor (≤3 alphanumeric chars)
+                    if ( strlen( $anchor_alphanum ) <= 3 ) {
+                        return $anchor;
+                    }
+                    // (c) Generic single-word anchors that don't identify the source
+                    if ( preg_match( '/^(?:wikipedia|wiki|link|here|this|that|site|source|page|article|read|more|click|see|view|details|info)$/i', trim( $anchor_clean, ' .,;:!?' ) ) ) {
+                        return $anchor;
+                    }
+                    return $m[0];
+                },
+                $markdown
+            ) ?? $markdown;
+        }
+
         // v1.5.216.62.73 — Server-side currency-symbol enforcement on non-US
         // articles. The v62.72 system-prompt CURRENCY HARD RULE wasn't strong
         // enough to override the AI's training-data US bias — UK retest
@@ -2096,6 +2136,64 @@ final class SEOBetter {
             $places_pool = is_array( $places_raw ) ? $places_raw : [];
             if ( ! empty( $places_pool ) && class_exists( 'SEOBetter\\Places_Link_Injector' ) ) {
                 $post_content = SEOBetter\Places_Link_Injector::inject( $post_content, $places_pool );
+            }
+
+            // v1.5.216.62.76 — Defensive References-section force-rebuild.
+            // Pre-fix on T3 #7 Comparison (MacBook vs Dell, country=CA), the
+            // article had 10+ outbound markdown links inline but ZERO
+            // References section at the end of the rendered HTML — even
+            // though `Citation_Pool::append_references_section()` and
+            // `$this->append_references_section()` both ran during the save
+            // path. Root cause unclear (possibly Content_Formatter stripped
+            // it, possibly the markdown References block didn't survive
+            // hybrid-formatter rendering for the comparison content type).
+            // Defensive fix: after all post-processing, check the rendered
+            // HTML for ANY References-style heading. If absent AND the
+            // citation pool has citable entries, force-build a References
+            // <h2> + <ol> from the pool and inject before the post-meta /
+            // template-part / closing content. Universal across all content
+            // types — never harms types that already have a References
+            // section (the <h2> regex check skips the rebuild).
+            if ( ! empty( $combined_pool )
+                && ! preg_match( '/<h[2-3][^>]*>\s*(?:references|sources|further\s+reading|bibliography|citations)\b/i', $post_content ) ) {
+                $cited_urls = [];
+                preg_match_all( '/<a\s[^>]*href="(https?:\/\/[^"]+)"[^>]*>/i', $post_content, $href_matches );
+                foreach ( $href_matches[1] ?? [] as $href ) {
+                    if ( ! in_array( $href, $cited_urls, true ) ) {
+                        $cited_urls[] = $href;
+                    }
+                }
+                $cited_entries = [];
+                foreach ( $cited_urls as $url ) {
+                    $entry = SEOBetter\Citation_Pool::get_entry( $combined_pool, $url );
+                    if ( $entry ) $cited_entries[] = $entry;
+                }
+                // Fallback: if no inline citations matched the pool, take first 8 pool entries
+                if ( empty( $cited_entries ) ) {
+                    foreach ( $combined_pool as $entry ) {
+                        if ( empty( $entry['url'] ) ) continue;
+                        if ( class_exists( '\\SEOBetter' ) && SEOBetter::is_low_quality_source( $entry['url'] ) ) continue;
+                        $cited_entries[] = $entry;
+                        if ( count( $cited_entries ) >= 8 ) break;
+                    }
+                }
+                if ( ! empty( $cited_entries ) ) {
+                    $references_html  = '<!-- wp:heading {"className":"has-text-color","style":{"color":{"text":"#764ba2"}}} -->';
+                    $references_html .= '<h2 class="wp-block-heading has-text-color" style="color:#764ba2">References</h2>';
+                    $references_html .= '<!-- /wp:heading -->';
+                    $references_html .= '<!-- wp:list {"ordered":true} --><ol class="wp-block-list">';
+                    $idx = 1;
+                    foreach ( $cited_entries as $entry ) {
+                        $url   = esc_url( $entry['url'] ?? '' );
+                        $title = esc_html( $entry['title'] ?? $entry['source_name'] ?? wp_parse_url( $entry['url'] ?? '', PHP_URL_HOST ) ?? $entry['url'] );
+                        if ( $url === '' ) continue;
+                        $references_html .= '<li><a href="' . $url . '" target="_blank" rel="noopener nofollow">' . $title . '</a></li>';
+                        if ( $idx++ >= 12 ) break;
+                    }
+                    $references_html .= '</ol><!-- /wp:list -->';
+                    // Append at end of post_content (WP theme handles post-meta + comments below this)
+                    $post_content .= "\n\n" . $references_html;
+                }
             }
         }
 

@@ -7,12 +7,61 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.75)
+> **Last updated:** 2026-05-06 (v1.5.216.62.76)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.76 — Bad-anchor unwrap pass (kills `[2023]` / `[14"]` / `[Wikipedia]` style useless links) + defensive References force-rebuild after Content_Formatter
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+T3 #7 Comparison v62.75 audit (MacBook vs Dell, country=CA): two separate inline-link bugs.
+
+**Bug 1 — useless anchor text on inline body links.** AI emitted markdown links with non-descriptive anchors:
+- `<a href="nanoreview.net/...">2023</a>` — wrapping just a year
+- `<a href="versus.com/...">14"</a>` — wrapping just a screen size
+- `<a href="nanoreview.net/...">9530</a>` — wrapping just a model number
+- `<a href="wikipedia.org/wiki/Thunderbolt_(interface)">Wikipedia</a>` — generic "Wikipedia" anchor on a Thunderbolt-specific page
+
+These are AI-emitted inline markdown links the AI itself wrote into the body — NOT from `linkify_bracketed_references()`. System prompt's "use descriptive noun-phrase anchor text" guidance is statistical (AI ignores ~30% of the time). Need server-side enforcement.
+
+**Bug 2 — References section missing entirely from rendered HTML.** Article had 10+ outbound markdown links inline (so citation pool was populated), and both `Citation_Pool::append_references_section()` AND `$this->append_references_section()` ran during the save path. Yet rendered HTML had ZERO `<h2>References</h2>` heading. Root cause unclear — likely Content_Formatter stripped or didn't render the markdown References block correctly for this content type. Universal defensive rebuild needed.
+
+### What changed
+
+**Fix 1 — bad-anchor unwrap pass** ([seobetter.php](seobetter/seobetter.php)) — runs after `validate_outbound_links()`. Walks every `[anchor](url)` markdown link and unwraps (drops the URL, keeps the anchor text as plain prose) when the anchor is:
+- (a) Pure-numeric (year, model number, dimension): "2023", "14", "9530"
+- (b) ≤3 alphanumeric chars
+- (c) A generic single word that doesn't identify the source: wikipedia, wiki, link, here, this, that, site, source, page, article, read, more, click, see, view, details, info
+
+The URL still surfaces in the auto-built References section at the end (citation pool is unchanged) — just not as an inline body link with a meaningless anchor. Defense-in-depth alongside the system prompt's existing descriptive-anchor guidance.
+
+**Fix 2 — defensive References force-rebuild** ([seobetter.php](seobetter/seobetter.php)) — runs after `Content_Formatter::format()` + `enforce_heading_language()` + `Places_Link_Injector::inject()`, before post insert. Checks rendered HTML for ANY References-style H2 heading (References / Sources / Further Reading / Bibliography / Citations). If absent AND citation pool has citable entries, force-builds `<h2>References</h2>` + `<ol>` from the pool's cited URLs (extracted from `<a href>` tags in the rendered HTML — entries the body actually cites) and appends to post_content. Universal across all content types. Skips rebuild when an existing References H2 is present (no double-section risk).
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.75 → 62.76 + bad-anchor unwrap pass after validate_outbound_links + defensive References force-rebuild after Places_Link_Injector
+
+### Verify
+
+```
+grep -B 1 -A 18 "v1.5.216.62.76 — Bad-anchor unwrap pass" seobetter/seobetter.php
+grep -B 1 -A 25 "v1.5.216.62.76 — Defensive References-section force-rebuild" seobetter/seobetter.php
+```
+
+After upload + retest T3 #7 Comparison or any commercial type:
+- ZERO `<a>` tags with anchor text matching pure-numeric / ≤3-char / generic-single-word patterns
+- References H2 + ordered list ALWAYS present at end of article (when citation pool has entries)
+
+**Verified by user:** UNTESTED
 
 ---
 
