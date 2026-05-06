@@ -50,7 +50,7 @@ grep -c "get_instance" seobetter/includes/Bulk_Generator.php   # expect 0
 
 ### Verified by user
 
-UNTESTED — pending live bulk-generate retest.
+✅ Verified end-to-end 2026-05-06 via Bulk Generate browse-cli test. Posts 735 (US, iPhone vs Samsung) + 736 (AU, Tesla vs Ford) both produced clean H1s ≤60 chars, no `…`/`·`/publisher-suffix, brand caps preserved, full §3.1 body structure, no raw markdown leakage, no empty references, no Product/SoftwareApplication schema. T3 #7 Comparison verified across 2 keywords / 2 countries.
 
 ---
 
