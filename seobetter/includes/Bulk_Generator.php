@@ -243,8 +243,11 @@ class Bulk_Generator {
             $secondary = array_filter( array_map( 'trim', explode( ',', $item['secondary_keywords'] ) ) );
 
             // Step 1: Start the job
+            // v1.5.216.62.84 — Async_Generator::start_job expects 'keyword',
+            // not 'primary_keyword'. Pre-fix field-name mismatch caused every
+            // bulk batch to fail with "Keyword is required." since April 21.
             $start = Async_Generator::start_job( [
-                'primary_keyword'    => $item['keyword'],
+                'keyword'            => $item['keyword'],
                 'secondary_keywords' => implode( ', ', $secondary ),
                 'word_count'         => $item['word_count'],
                 'tone'               => $item['tone'] ?? 'authoritative',

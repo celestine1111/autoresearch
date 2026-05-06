@@ -7,12 +7,45 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.83)
+> **Last updated:** 2026-05-06 (v1.5.216.62.84)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.84 — Fix pre-existing Bulk_Generator field-name bug (Async_Generator expects 'keyword' not 'primary_keyword')
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+Live test via browse-cli of v62.83 bulk batch failed with `"error":"Keyword is required."` — and Async_Generator returned this BEFORE my v62.83 sanitize_headline ever ran. Tracing the cause: Bulk_Generator.php line 247 was passing `'primary_keyword' => $item['keyword']`, but Async_Generator::start_job() line 69 reads `$params['keyword']`. Field-name mismatch since commit `7badcb4` (v1.5.181, April 21).
+
+This means Bulk Generate has been **completely broken since April 21** — every batch has failed silently with this error. The earlier headline-corruption articles (posts 717/721/725/728) were therefore NOT from Bulk path, they came from Single Generate followed by manual Publish in WP admin. v62.83's note about "post 728 was created via Bulk Generate" is incorrect — corrected here.
+
+### What changed
+
+**Bulk_Generator.php line ~247** — change `'primary_keyword'` key to `'keyword'` in the `Async_Generator::start_job()` parameter array. This unblocks the Bulk pipeline so the v62.83 sanitize_headline call (line ~316) can actually run on bulk-generated posts.
+
+### Files changed
+
+- `seobetter/includes/Bulk_Generator.php` — field name fix
+- `seobetter/seobetter.php` — version bump 62.83 → 62.84
+
+### Verify
+
+```
+grep -A 3 "62.84 — Async_Generator" seobetter/includes/Bulk_Generator.php
+# Live test: submit a bulk batch, expect status=completed (not failed with "Keyword is required.")
+```
+
+### Verified by user
+
+UNTESTED — pending live bulk-generate test via browse-cli.
 
 ---
 
