@@ -7,12 +7,50 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.84)
+> **Last updated:** 2026-05-06 (v1.5.216.62.85)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.85 — Remove dead SEOBetter::get_instance() call (third pre-existing Bulk_Generator bug)
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+After v62.84 unblocked the Bulk pipeline (field-name fix), live test failed with new error: `"Call to undefined method SEOBetter::get_instance()"`. Bulk_Generator.php line 300 calls `\SEOBetter::get_instance()` but no such method exists on the class. The variable `$plugin_instance` is never used afterward — pure dead code from an old refactor that fataled the moment generation actually completed.
+
+This is the THIRD pre-existing Bulk_Generator bug uncovered today:
+1. v62.83 — wired `sanitize_headline` (post_title was raw)
+2. v62.84 — fixed `primary_keyword` → `keyword` field name
+3. v62.85 — removed dead `get_instance()` call
+
+Bulk Generate has therefore been completely broken since April 21 — three separate bugs blocking the path, all hidden because the earliest one short-circuited before the others could surface.
+
+### What changed
+
+**Bulk_Generator.php line ~300** — deleted `$plugin_instance = \SEOBetter::get_instance();` line. Everything else in the save block uses static calls (`\SEOBetter::cleanup_ai_markdown`, `\SEOBetter::linkify_bracketed_references`, `\SEOBetter::sanitize_headline`).
+
+### Files changed
+
+- `seobetter/includes/Bulk_Generator.php` — dead code removal
+- `seobetter/seobetter.php` — version bump 62.84 → 62.85
+
+### Verify
+
+```
+grep -c "get_instance" seobetter/includes/Bulk_Generator.php   # expect 0
+# Live test: bulk batch should now reach the wp_insert_post + sanitize_headline path
+```
+
+### Verified by user
+
+UNTESTED — pending live bulk-generate retest.
 
 ---
 

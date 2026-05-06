@@ -297,7 +297,9 @@ class Bulk_Generator {
                     $batch['failed']++;
                 } else {
                     // Quality OK — save the draft (or publish if auto_publish toggle ON)
-                    $plugin_instance = \SEOBetter::get_instance();
+                    // v1.5.216.62.85 — removed dead $plugin_instance assignment that
+                    // referenced nonexistent SEOBetter::get_instance() method. The
+                    // variable was never used; everything below is static calls.
                     $markdown = $result['markdown'] ?? '';
                     $content_html = $result['content'] ?? '';
                     $accent = '#764ba2';
