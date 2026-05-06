@@ -19,7 +19,7 @@
 ## v1.5.216.62.76 — Bad-anchor unwrap pass (kills `[2023]` / `[14"]` / `[Wikipedia]` style useless links) + defensive References force-rebuild after Content_Formatter
 
 **Date:** 2026-05-06
-**Commit:** `[pending]`
+**Commit:** `371b6e0`
 
 ### Why
 
