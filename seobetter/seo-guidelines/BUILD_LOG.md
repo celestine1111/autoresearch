@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.79)
+> **Last updated:** 2026-05-06 (v1.5.216.62.80)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.80 — Headline citation-echo sanitizer + empty-reference fallback fix
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+Live audit of T3 #7 Comparison v62.79 retest at `/apple-macbook-pro-2024-14-%c2%b7-m4-...` exposed two unrelated bugs:
+
+1. **Bug A — headline echoed citation source name.** H1 + `<title>` + JSON-LD `headline` were all set to "Apple MacBook Pro (2024) 14" · M4 (10-core CPU) vs Dell XPS 15 …". This is the source page title from versus.com (a Reference URL), not a generated comparison headline. Trailing ellipsis `…` indicates truncation. Middle dot `·` (U+00B7) leaked into URL slug as `%c2%b7`. `rest_save_draft()` accepted whatever `title` param the frontend sent without sanitizing.
+
+2. **Bug B — 2 wired.com references rendered with empty `<a></a>` text.** The seobetter.php references-builder fallback at line 2233 used `??`-chain: `$entry['title'] ?? $entry['source_name'] ?? wp_parse_url(...)`. The `??` operator only catches null/missing, not empty string. Pool entries with `title => ''` (empty string) bypassed every fallback.
+
+Plus the v62.79 anchor-fixes were verified WORKING in the same audit (zero bracket anchors, zero multi-word generics, references section present, SoftwareApplication/Product schema absent).
+
+### What changed
+
+**1. New sanitize_headline() helper** (seobetter/seobetter.php — new private static method on class) — applied in `rest_save_draft()` after `$combined_pool` is assembled. Rules:
+   - Reject if exact match to any pool entry's title (citation echo) → `ucwords($keyword)` fallback
+   - Strip trailing ellipsis (`…` or `...`)
+   - Replace middle dot `·` with ` - ` (cleaner ASCII slug)
+   - Collapse whitespace
+   - Empty after sanitizing → keyword fallback
+
+**2. References-builder fallback chain rewritten** (seobetter/seobetter.php line ~2233) — replaced `??` chain with explicit truthy iteration: title → source_name → host → URL → "Source". Empty strings now correctly trigger fallback.
+
+**3. Two new test files** (TDD-driven):
+   - `tests/test-references-builder.php` — 6 cases covering empty/null/whitespace title fields, source_name fallback, host fallback, "Source" placeholder
+   - `tests/test-headline-sanitizer.php` — 8 cases covering citation echo rejection, ellipsis strip, middle dot replace, keyword fallback
+
+### Files changed
+
+- `seobetter/seobetter.php` — version bump 62.79 → 62.80, new `sanitize_headline()` static method, headline sanitizer call in `rest_save_draft()`, references-builder fallback rewrite at line ~2233
+- `seobetter/tests/test-references-builder.php` — NEW
+- `seobetter/tests/test-headline-sanitizer.php` — NEW
+
+### Verify
+
+```
+grep -A 18 "sanitize_headline" seobetter/seobetter.php | head -25
+curl -sL https://raw.githubusercontent.com/celestine1111/autoresearch/main/seobetter/tests/test-headline-sanitizer.php | php
+curl -sL https://raw.githubusercontent.com/celestine1111/autoresearch/main/seobetter/tests/test-references-builder.php | php
+```
+
+After upload + cron run: `https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json` summary must show `passed: 3, failed: 0`.
+
+### Verified by user
+
+UNTESTED — pending v62.80 zip upload + cron-run JSON audit + MacBook Comparison regenerate.
 
 ---
 
