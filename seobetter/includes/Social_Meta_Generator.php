@@ -31,6 +31,14 @@ class Social_Meta_Generator {
 
         $data = $this->get_meta_data( $post );
 
+        // v1.5.216.62.86 — Standard SEO meta description (Google reads this for
+        // SERP snippets). Pre-fix Social_Meta_Generator only emitted og:* and
+        // twitter:* — no plain `<meta name="description">` tag, so SEOBetter
+        // sites without Yoast/RankMath/AIOSEO had no meta description at all.
+        if ( ! empty( $data['description'] ) ) {
+            echo '<meta name="description" content="' . esc_attr( $data['description'] ) . '" />' . "\n";
+        }
+
         // Open Graph
         echo '<meta property="og:type" content="article" />' . "\n";
         echo '<meta property="og:title" content="' . esc_attr( $data['title'] ) . '" />' . "\n";
@@ -88,7 +96,7 @@ class Social_Meta_Generator {
         $title = get_post_meta( $post->ID, '_seobetter_og_title', true ) ?: $post->post_title;
         $description = get_post_meta( $post->ID, '_seobetter_og_description', true )
             ?: get_post_meta( $post->ID, '_seobetter_meta_description', true )
-            ?: wp_trim_words( wp_strip_all_tags( $post->post_content ), 25 );
+            ?: $this->extract_clean_fallback( $post->post_content );
 
         // Enforce OG title length (60-90 chars)
         if ( mb_strlen( $title ) > 90 ) {
@@ -158,6 +166,29 @@ class Social_Meta_Generator {
             'data'   => $data,
             'issues' => $issues,
         ];
+    }
+
+    /**
+     * v1.5.216.62.86 — Cleaner content extraction when no AI-generated meta
+     * description is available. Pre-fix `wp_trim_words(wp_strip_all_tags(...))`
+     * dumped the type-badge ("⇄ Comparison"), the H1 (with weird ucwords-mangled
+     * caps), "Last Updated: May 2026", and duplicated "Key Takeaways" into the
+     * og:description. This version strips structural chrome first.
+     */
+    private function extract_clean_fallback( string $content ): string {
+        // Strip wp:html blocks (type badges, opinion bars, callouts, tables).
+        $clean = preg_replace( '/<!-- wp:html -->.*?<!-- \/wp:html -->/s', '', (string) $content );
+        // Strip all heading text (H1-H6).
+        $clean = preg_replace( '/<h[1-6][^>]*>.*?<\/h[1-6]>/is', '', (string) $clean );
+        // Strip "Last Updated: Month YYYY" stamps.
+        $clean = preg_replace( '/Last Updated:?\s*[A-Za-z]+\s*\d{4}/i', '', (string) $clean );
+        // Strip Gutenberg block comments.
+        $clean = preg_replace( '/<!--\s*\/?wp:[^>]*-->/', '', (string) $clean );
+        // Strip remaining HTML and collapse whitespace.
+        $clean = wp_strip_all_tags( (string) $clean );
+        $clean = preg_replace( '/\s+/', ' ', trim( (string) $clean ) );
+        // Cap at 30 words for fallback (AI-generated description gets the full 160 chars).
+        return wp_trim_words( $clean, 30 );
     }
 
     /**

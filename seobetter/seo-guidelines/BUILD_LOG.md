@@ -7,12 +7,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.85)
+> **Last updated:** 2026-05-06 (v1.5.216.62.86)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.86 — Meta description pipeline overhaul: standard `<meta name="description">` + Bulk meta generation + Schema/Social fallback cleanup
+
+**Date:** 2026-05-06
+**Commit:** `[pending]`
+
+### Why
+
+After v62.83-85 unblocked Bulk Generate end-to-end and produced posts 735+736 with clean H1s, schema audit revealed THREE serious meta description bugs:
+
+1. **No `<meta name="description">` HTML tag.** Social_Meta_Generator emits `og:description` and `twitter:description` but never the standard `name="description"` Google reads for SERP snippets. SEOBetter sites without Yoast/RankMath/AIOSEO had no meta description at all.
+
+2. **og/twitter description content is garbage.** Post 735 og:description was `"⇄ Comparison IPhone 16 Pro Vs Samsung Galaxy S25 Ultra Last Updated: May 2026 Key Takeaways Key TakeawaysiPhone 16 Pro vs Samsung Galaxy S25 Ultra…"` because Bulk_Generator skipped meta-tag generation entirely → fell back to crude `wp_trim_words(post_content, 25)` that included the type badge, H1, "Last Updated:", and duplicated "Key Takeaways" headings.
+
+3. **JSON-LD `description` is irrelevant.** Pulled via `Schema_Generator::build_clean_description($post->post_content)` which extracts the first prose paragraph (often the table-intro line "This table highlights the most important differences between **it**...") instead of using the AI-generated meta description. References "it" without antecedent, no keyword.
+
+Per SEO-GEO-AI-GUIDELINES.md §8: meta description must be 150-160 chars, contain the exact keyword phrase, include a CTA, read like an ad. None of the above met any criterion.
+
+### What changed
+
+**1. `Bulk_Generator.php` — generate AI meta tags + sync to SEO plugins.** After `wp_insert_post`, calls `AI_Content_Generator::generate_meta_tags()` and pushes via `\SEOBetter::instance()->sync_seo_plugin_meta()`. Stores `_seobetter_meta_description` post meta + `_seobetter_og_title` for Social_Meta_Generator to read.
+
+**2. `seobetter.php` — `sync_seo_plugin_meta()` made `public`** (was private) so Bulk_Generator can call it. Same pipeline now runs on Single + Bulk paths.
+
+**3. `Schema_Generator.php` — new `get_post_description()` helper** that prefers `_seobetter_meta_description` post meta over `build_clean_description()` content extraction. Two callers (lines 710 + 1430) updated.
+
+**4. `Social_Meta_Generator.php` — emit `<meta name="description">`** (the standard SEO meta) in `output_meta()` whenever `$data['description']` is non-empty. Plus new `extract_clean_fallback()` method that strips wp:html blocks, all heading text, "Last Updated:" stamps, and Gutenberg block comments before `wp_trim_words` — replaces the raw `wp_trim_words(wp_strip_all_tags(...))` call that pulled badge text + H1 into descriptions.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.85 → 62.86, `sync_seo_plugin_meta` private → public
+- `seobetter/includes/Bulk_Generator.php` — meta gen + sync after wp_insert_post
+- `seobetter/includes/Schema_Generator.php` — `get_post_description()` helper, both callers updated
+- `seobetter/includes/Social_Meta_Generator.php` — `<meta name="description">` emission + `extract_clean_fallback()`
+
+### Verify
+
+```
+grep -A 3 "62.86 — Generate AI meta tags" seobetter/includes/Bulk_Generator.php
+grep "<meta name=\"description\"" seobetter/includes/Social_Meta_Generator.php
+grep "function get_post_description" seobetter/includes/Schema_Generator.php
+# Live test: regenerate Comparison via Bulk, expect:
+#   - <meta name="description"> present in HTML
+#   - og/twitter description = AI-generated 150-160 chars with keyword
+#   - JSON-LD BlogPosting.description = same AI-generated text (not "This table highlights...")
+```
+
+### Verified by user
+
+UNTESTED — pending v62.86 deploy + Bulk regenerate + meta audit.
 
 ---
 

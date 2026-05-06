@@ -352,6 +352,38 @@ class Bulk_Generator {
                         if ( ! empty( $item['language'] ) ) {
                             update_post_meta( $post_id, '_seobetter_language', sanitize_text_field( $item['language'] ) );
                         }
+
+                        // v1.5.216.62.86 — Generate AI meta tags + sync to SEO plugins.
+                        // Pre-fix Bulk Generate skipped meta entirely; Social_Meta_Generator
+                        // and Schema_Generator both fell back to crude content extraction
+                        // that included type-badges, "Last Updated:", and duplicated
+                        // "Key Takeaways" headings, producing garbage og:description /
+                        // twitter:description and an irrelevant JSON-LD description
+                        // ("This table highlights the most important differences between it...").
+                        try {
+                            $ai_gen = new AI_Content_Generator();
+                            $meta = $ai_gen->generate_meta_tags(
+                                (string) $item['keyword'],
+                                wp_strip_all_tags( (string) ( $result['markdown'] ?? $content_html ) ),
+                                (string) ( $item['language'] ?? 'en' )
+                            );
+                            $meta_title = (string) ( $meta['title'] ?? $post_title );
+                            $meta_desc  = (string) ( $meta['description'] ?? '' );
+                            $og_title   = (string) ( $meta['og_title'] ?? $meta_title );
+
+                            if ( $meta_desc !== '' ) {
+                                update_post_meta( $post_id, '_seobetter_og_title', $og_title );
+                                \SEOBetter::instance()->sync_seo_plugin_meta(
+                                    $post_id,
+                                    $meta_title,
+                                    $meta_desc,
+                                    (string) $item['keyword'],
+                                    (string) ( $item['content_type'] ?? 'blog_post' )
+                                );
+                            }
+                        } catch ( \Throwable $e ) {
+                            error_log( "SEOBetter Bulk_Generator meta gen failed: " . $e->getMessage() );
+                        }
                     }
 
                     $batch['items'][ $next_index ]['status']     = 'completed';

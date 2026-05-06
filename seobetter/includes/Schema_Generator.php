@@ -707,7 +707,7 @@ class Schema_Generator {
             // Australia Last Updated: April 2026 Key Takeaways ...". The
             // helper returns a clean 30-word summary from the actual article
             // prose only.
-            'description'   => $this->build_clean_description( $post->post_content ),
+            'description'   => $this->get_post_description( $post ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
             // v1.5.213 — @id refs to the top-level Person + Organization nodes
@@ -1075,6 +1075,22 @@ class Schema_Generator {
      * by build_article(), so this single fix cleans descriptions across
      * all 21 content types.
      */
+    /**
+     * v1.5.216.62.86 — Get description, preferring AI-generated meta description
+     * stored as post meta over the build_clean_description content extraction.
+     * Pre-fix every Schema_Generator caller used build_clean_description directly,
+     * which extracted the first prose paragraph (often the table-intro line
+     * "This table highlights..." with no antecedent for "it") instead of using
+     * the AI-curated meta description.
+     */
+    private function get_post_description( \WP_Post $post ): string {
+        $meta_desc = (string) get_post_meta( $post->ID, '_seobetter_meta_description', true );
+        if ( $meta_desc !== '' ) {
+            return $meta_desc;
+        }
+        return $this->build_clean_description( $post->post_content );
+    }
+
     private function build_clean_description( string $content ): string {
         // 1. Strip every wp:html block (where badges, callouts, tables,
         //    author bio, Opinion disclosure bar live). Greedy across newlines.
@@ -1427,7 +1443,7 @@ class Schema_Generator {
             '@type'         => 'Article',
             '@id'           => $permalink . '#article',
             'headline'      => $post->post_title,
-            'description'   => $this->build_clean_description( $post->post_content ),
+            'description'   => $this->get_post_description( $post ),
             'datePublished' => get_the_date( 'c', $post ),
             'dateModified'  => get_the_modified_date( 'c', $post ),
             'author'        => $this->author_id_ref( $post ),
