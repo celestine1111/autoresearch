@@ -48,7 +48,7 @@ grep "62.87 — Re-run Schema_Generator" seobetter/includes/Bulk_Generator.php
 
 ### Verified by user
 
-UNTESTED — pending v62.87 deploy + Bulk regenerate + JSON-LD audit.
+✅ Verified end-to-end 2026-05-06. Post 740 (Notion vs Obsidian, US, Comparison) — `<meta name="description">` + og:description + twitter:description + JSON-LD Article.description all match the AI-generated meta description ("Notion vs Obsidian for note taking—discover which tool fits your workflow in 2026..."). Single source of truth across three surfaces.
 
 ---
 
@@ -100,7 +100,7 @@ grep "function get_post_description" seobetter/includes/Schema_Generator.php
 
 ### Verified by user
 
-UNTESTED — pending v62.86 deploy + Bulk regenerate + meta audit.
+✅ Verified end-to-end 2026-05-06 (`<meta name="description">` + og/twitter pass on post 738; JSON-LD path completed by follow-up v62.87 schema-regen race fix). Posts 738 + 740 confirm meta pipeline overhaul.
 
 ---
 
