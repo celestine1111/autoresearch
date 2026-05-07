@@ -1,0 +1,20 @@
+Post 767 — validator.schema.org pass
+URL: https://srv1608940.hstgr.cloud/7-best-automatic-cat-feeders-2026-for-stress-free-mealtimes-4/
+Plugin: 1.5.216.62.96
+Date: 2026-05-07
+
+JSON-LD: 9 graph nodes — Article, FAQPage, ItemList, ImageObject x3, Organization, Person, BreadcrumbList
+Validator: clean (validator.schema.org parsed all triples without errors block)
+ImageObject nodes use contentUrl (Schema.org-valid alternative to url)
+
+v62.96 fix verification — original bug pattern occurrences:
+  (Cats.com)        → 0 (was 1 on post 762)
+  (cats.com)        → 0 (was 1 on post 762)
+  (palnests.com)    → 0 (was 2 on post 762)
+  (technomeow.com)  → 0
+  (wired.com)       → 0
+Total unlinked source-host parentheticals: 0 (was 5 on post 762)
+
+AUDIT: 17 pass / 6 fail (5 of those = post-762 carryover bugs unrelated to v62.96, 1 = audit script false positive)
+
+Source-citation linkify FIXED on Bulk path. v62.96 SIGNED OFF.

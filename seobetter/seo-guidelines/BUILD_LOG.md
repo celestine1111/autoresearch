@@ -73,7 +73,15 @@ sed -n '326,355p' seobetter/includes/Bulk_Generator.php
 # Test result on VPS: bulk-pipeline-order pass=true (4/4)
 ```
 
-### Verified by user: UNTESTED
+### Verified by user: ✅ Verified 2026-05-07 (post 767, AUDIT 17 pass / 6 fail-of-which-5-unrelated-and-1-false-positive, validator: clean — see tests/.validator-pass-767)
+
+Post 767 audit confirms all 5 unlinked source parentheticals from post 762 are now wrapped:
+- `(Cats.com)`, `(cats.com)`, `(palnests.com)` — 0 occurrences (were 5 total)
+- 0 unlinked source-host parentheticals
+- validator.schema.org parsed JSON-LD cleanly (9 graph nodes)
+- TDD test `tests/test-bulk-pipeline-order.php` passes both the fix and broken-order canary
+
+Other audit failures on post 767 (2 H1, no meta description, no SpeakableSpec, 1 inline bold) are post-762 carry-over bugs unrelated to v62.96 — separate fixes queued for v62.97+.
 
 ---
 
