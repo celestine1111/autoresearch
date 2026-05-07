@@ -7,12 +7,54 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.92)
+> **Last updated:** 2026-05-07 (v1.5.216.62.93)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.93 — Dedupe ImageObject schema by contentUrl + audit template additions
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+T3 #8 audit on post 753 (the v62.92 sign-off post) revealed two new schema issues that weren't covered by the existing audit template:
+
+1. **Duplicate ImageObject nodes.** Schema had 3 `ImageObject` entries, two with IDENTICAL `name`/`description` ("Best Automatic Cat Feeders 2026 comparison chart showing key features and differ..."). Cause: `Schema_Generator::detect_image_schemas()` walked every `<img>` tag in body content and emitted one ImageObject per tag without dedup. When the same comparison-chart image was inserted twice (or a near-duplicate alt text image), schema duplicated. Google may downweight pages with duplicate node `name` values.
+
+2. **Audit template gap.** Pro-features-ideas.md "Article test audit template" had checks for missing schema types but NO check for DUPLICATE schema types. Same for unlinked `[text]` patterns in body content (vs. CSS-selector brackets in style attributes). Both audit gaps now closed.
+
+### What changed
+
+**`Schema_Generator.php::detect_image_schemas()`** — added `$seen_srcs` array tracker. Each `<img>` tag's `src` is checked before adding to schema; if already added, skip. Same caps still apply (≤5 ImageObjects per post; alt-length ≥5 chars; skip author-bio/featured-image/icon classes).
+
+**`pro-features-ideas.md` audit template** — two new checklist items:
+- Schema: "No duplicate ImageObject nodes (v62.93 — dedupe by contentUrl)"
+- Schema: "No duplicate top-level @types except ListItem/Question/Answer"
+- Anchor hygiene: "0 unlinked `[text]` patterns inside `<p>` or `<li>` body elements (excluding CSS selectors like `[aria-expanded]` and Speakable cssSelector array)"
+
+### Files changed
+
+- `seobetter/includes/Schema_Generator.php` — `detect_image_schemas()` dedupe by src
+- `seobetter/seobetter.php` — version 62.92 → 62.93
+- `seobetter/seo-guidelines/pro-features-ideas.md` — audit template additions
+
+### Verify
+
+```
+grep "62.93 — Dedupe by src URL" seobetter/includes/Schema_Generator.php   # expect 1
+grep "duplicate ImageObject" seobetter/seo-guidelines/pro-features-ideas.md   # expect ≥1
+# Live test: regenerate Buying Guide, expect ≤1 ImageObject node per unique image src in JSON-LD
+```
+
+### Verified by user
+
+UNTESTED — pending v62.93 deploy + Bulk regenerate + schema dedup audit.
 
 ---
 

@@ -306,6 +306,8 @@ After each article generation test, the audit checklist is communicated explicit
 - [ ] SpeakableSpecification with cssSelector chain
 - [ ] No bogus Product/SoftwareApplication (Phase 2 disable in effect)
 - [ ] Person + Organization graph nodes present
+- [ ] **No duplicate ImageObject nodes** (v62.93 — dedupe by contentUrl. T3 #8 audit on post 753 had 3 ImageObjects, two with identical name/description. Same `<img>` referenced twice in body produced duplicate schema nodes.)
+- [ ] **No duplicate top-level @types except ListItem/Question/Answer** (Article, FAQPage, BreadcrumbList, Organization, Person, ItemList all expected ONCE. ImageObject/Question/Answer/ListItem can repeat by design.)
 
 **Body structure (§3.1 or §3.1A as applicable):**
 - [ ] Last Updated stamp at top
@@ -333,6 +335,7 @@ After each article generation test, the audit checklist is communicated explicit
 - [ ] 0 multi-word generic anchors `[click here]` / `[read more]`
 - [ ] 0 raw `[text](url)` markdown leakage in rendered HTML
 - [ ] 0 raw `${currency_symbol}` markers
+- [ ] **0 unlinked `[text]` patterns inside `<p>` or `<li>` body elements** (excluding CSS selectors like `[aria-expanded]` and Speakable cssSelector array). Pre-fix some article types left bracketed citation markers (`[Source: X]` / `[1]`) as plain text instead of converting to anchors. Audit method: strip all `<a>` regions first, then grep `[text]` patterns within `<p>` and `<li>` content only.
 
 **Word count:**
 - [ ] Within or above per-type minimum from `Async_Generator::WORD_COUNT_FLOORS`

@@ -2534,6 +2534,15 @@ class Schema_Generator {
         $settings = get_option( 'seobetter_settings', [] );
         $author_image_url = isset( $settings['author_image'] ) ? (string) $settings['author_image'] : '';
 
+        // v1.5.216.62.93 — Dedupe by src URL. Pre-fix the loop emitted one
+        // ImageObject per <img> tag without checking for duplicates, so the
+        // same image referenced twice (e.g. comparison-table image inserted
+        // both inline and at section-end) produced duplicate ImageObject
+        // schema nodes with identical name/description. T3 #8 audit on
+        // post 753 had 3 ImageObjects, two with identical name "comparison
+        // chart showing key features and differ...".
+        $seen_srcs = [];
+
         $count = 0;
         foreach ( $img_tags[0] as $tag ) {
             if ( $count >= 5 ) break;
@@ -2545,6 +2554,10 @@ class Schema_Generator {
                 $alt = $alt_m[1];
             }
             if ( strlen( $alt ) < 5 ) continue;
+
+            // v62.93 — skip if this src was already emitted as an ImageObject.
+            if ( in_array( $src, $seen_srcs, true ) ) continue;
+            $seen_srcs[] = $src;
 
             // v1.5.213.2 — Skip non-content images:
             //   1. Author bio photo (matched by URL or author-bio container class)
