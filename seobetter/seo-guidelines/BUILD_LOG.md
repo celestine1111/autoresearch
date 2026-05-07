@@ -27,7 +27,7 @@
 ## v1.5.216.62.98 — Recipe schema GREEN: extended nutrition skip + Servings Per Recipe yield
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `de72175`
 
 ### Why
 
