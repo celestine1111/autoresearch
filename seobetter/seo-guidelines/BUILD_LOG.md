@@ -27,7 +27,7 @@
 ## v1.5.216.62.107 — Test-only fix: drop over-strict `A$` AU currency assertion
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `d6984c1`
 
 ### Why
 
