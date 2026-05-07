@@ -15,12 +15,55 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.101)
+> **Last updated:** 2026-05-07 (v1.5.216.62.102)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.102 — Callout span styling GREEN (TDD gate ENFORCED this ship)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+v62.101 RED phase confirmed on VPS: `content-formatter-callout-bold: pass=False exit=1`, 6/6 assertions failing (3 `<strong>` count + 3 missing span emphasis). v62.102 ships the GREEN fix in test mirror + production.
+
+### Process win
+
+This ship is the FIRST to actually exercise the harness-level TDD gate. After the user fixed the malformed `.claude/settings.json` (two glued JSON objects → one valid object), the `tdd-gate.sh` PreToolUse hook fired correctly: my first attempt to Edit `Content_Formatter.php` was DENIED with "no real test content changes in seobetter/tests/ since HEAD". I then updated the test mirror first (real diff lines), and the next prod-edit was allowed. The wall is real and working.
+
+### What changed
+
+`includes/Content_Formatter.php` — three callout box templates updated:
+- Tip (line ~997): `<strong>{$tip_label}:</strong>` → `<span style=\"font-weight:700\">{$tip_label}:</span>`
+- Note (line ~1004): same swap
+- Warning (line ~1011): same swap
+
+Test mirror `tests/test-content-formatter-callout-bold.php` updated to match (GREEN MIRROR comment + span syntax).
+
+PHP escaping: outer string is `"..."` so inner attribute quotes use `\"font-weight:700\"`. The bug from earlier in this session (where I used un-escaped `"` and would have broken PHP parse) is avoided.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.101 → 62.102
+- `seobetter/includes/Content_Formatter.php` — Tip / Note / Warning callout templates
+- `seobetter/tests/test-content-formatter-callout-bold.php` — mirror updated (GREEN)
+- `seobetter/seo-guidelines/BUILD_LOG.md` — entry
+- `seobetter/seo-guidelines/article_design.md` — §5 callout note about v62.102 span styling
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='content-formatter-callout-bold'); print('pass=', t['pass'])"
+# Expected: pass=True (was False under v62.101 RED ship)
+```
+
+### Verified by user: UNTESTED
 
 ---
 

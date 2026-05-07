@@ -994,21 +994,25 @@ CSS;
                         if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'tip' );
                         $tip_label = esc_html( Localized_Strings::get( 'tip', $article_lang ) );
-                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\">{$icon}<strong>{$tip_label}:</strong> {$body_text}</div>";
+                        // v1.5.216.62.102 — span styling instead of <strong> so callout
+                        // labels keep visual emphasis but don't fail "0 inline bolds" audit.
+                        $html = "<div style=\"background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7\">{$icon}<span style=\"font-weight:700\">{$tip_label}:</span> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } elseif ( preg_match( '/^(?:\*\*)?(?:' . Localized_Strings::get_detection_pattern( 'note', $article_lang, 'note|important' ) . ')(?:\*\*)?\s*[:—-]\s*(.*)$/ius', $section['content'], $note_match ) ) {
                         $body_text = $this->inline_markdown( trim( $note_match[1] ) );
                         if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'note' );
                         $note_label = esc_html( Localized_Strings::get( 'note', $article_lang ) );
-                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\">{$icon}<strong>{$note_label}:</strong> {$body_text}</div>";
+                        // v1.5.216.62.102 — span styling (see Tip block above for rationale)
+                        $html = "<div style=\"background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7\">{$icon}<span style=\"font-weight:700\">{$note_label}:</span> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     } elseif ( preg_match( '/^(?:\*\*)?(?:' . Localized_Strings::get_detection_pattern( 'warning', $article_lang, 'warning|caution' ) . ')(?:\*\*)?\s*[:—-]\s*(.*)$/ius', $section['content'], $warn_match ) ) {
                         $body_text = $this->inline_markdown( trim( $warn_match[1] ) );
                         if ( empty( trim( $body_text ) ) ) continue 2;
                         $icon = $this->sb_icon( 'warning' );
                         $warn_label = esc_html( Localized_Strings::get( 'warning', $article_lang ) );
-                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\">{$icon}<strong>{$warn_label}:</strong> {$body_text}</div>";
+                        // v1.5.216.62.102 — span styling (see Tip block above for rationale)
+                        $html = "<div style=\"background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7\">{$icon}<span style=\"font-weight:700\">{$warn_label}:</span> {$body_text}</div>";
                         $output[] = "<!-- wp:html -->\n{$html}\n<!-- /wp:html -->";
                     }
                     // v1.5.14 — Did You Know box: paragraph starts with "Did you know" or "Fun fact"

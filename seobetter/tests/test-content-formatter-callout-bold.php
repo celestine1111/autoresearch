@@ -27,17 +27,18 @@
 // ----- Render the callout HTML using the SAME template format as production.
 //       v62.100 RED state: still uses <strong>. v62.101 GREEN state: span.
 
+// GREEN MIRROR (v62.102) — matches Content_Formatter.php line ~997+ post-fix.
+// Replaces <strong>{label}</strong> with <span style="font-weight:700">{label}</span>.
 function render_tip_callout( string $label, string $body_text ): string {
-    // RED MIRROR — matches v62.100 Content_Formatter.php line ~997.
-    return '<div style="background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7"><svg></svg><strong>' . htmlspecialchars( $label ) . ':</strong> ' . $body_text . '</div>';
+    return '<div style="background:#eff6ff !important;border-left:4px solid #3b82f6;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#1e3a5f !important;line-height:1.7"><svg></svg><span style="font-weight:700">' . htmlspecialchars( $label ) . ':</span> ' . $body_text . '</div>';
 }
 
 function render_note_callout( string $label, string $body_text ): string {
-    return '<div style="background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7"><svg></svg><strong>' . htmlspecialchars( $label ) . ':</strong> ' . $body_text . '</div>';
+    return '<div style="background:#fffbeb !important;border-left:4px solid #f59e0b;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#78350f !important;line-height:1.7"><svg></svg><span style="font-weight:700">' . htmlspecialchars( $label ) . ':</span> ' . $body_text . '</div>';
 }
 
 function render_warning_callout( string $label, string $body_text ): string {
-    return '<div style="background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7"><svg></svg><strong>' . htmlspecialchars( $label ) . ':</strong> ' . $body_text . '</div>';
+    return '<div style="background:#fef2f2 !important;border-left:4px solid #ef4444;padding:0.75em 1em;border-radius:0 6px 6px 0;margin:1em 0;color:#991b1b !important;line-height:1.7"><svg></svg><span style="font-weight:700">' . htmlspecialchars( $label ) . ':</span> ' . $body_text . '</div>';
 }
 
 // ----- v62.101 contract: NO <strong> tags should appear in any callout output.
