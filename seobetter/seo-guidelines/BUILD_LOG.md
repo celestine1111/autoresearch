@@ -27,7 +27,7 @@
 ## v1.5.216.62.102 — Callout span styling GREEN (TDD gate ENFORCED this ship)
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `c6bbade`
 
 ### Why
 
