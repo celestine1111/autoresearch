@@ -307,6 +307,23 @@ class Bulk_Generator {
                     if ( ! empty( $markdown ) ) {
                         $markdown = \SEOBetter::cleanup_ai_markdown( $markdown );
                         $combined_pool = $result['citation_pool'] ?? [];
+                        // v1.5.216.62.91 — Mirror rest_save_draft (seobetter.php:2005-2015):
+                        // extend the pool with every URL the AI inserted in markdown so the
+                        // References list isn't capped at "research-pool URLs only" — AI
+                        // commonly inserts allow-listed URLs (amazon, wikipedia, etc.) that
+                        // weren't in the original research pool. Pre-fix Bulk path skipped
+                        // this so References list dropped to 1 entry on post 748 even though
+                        // body had 5 valid outbound URLs.
+                        if ( is_array( $combined_pool ) && preg_match_all( '/(?<!!)\[[^\]]+\]\((https?:\/\/[^)]+)\)/', $markdown, $url_matches ) ) {
+                            foreach ( $url_matches[1] as $found_url ) {
+                                $combined_pool[] = [
+                                    'url'         => $found_url,
+                                    'title'       => '',
+                                    'source_name' => wp_parse_url( $found_url, PHP_URL_HOST ) ?? '',
+                                    'verified_at' => time(),
+                                ];
+                            }
+                        }
                         if ( ! empty( $combined_pool ) ) {
                             $markdown = \SEOBetter::linkify_bracketed_references( $markdown, $combined_pool );
                         }
@@ -349,6 +366,16 @@ class Bulk_Generator {
                     ] );
 
                     if ( $post_id && ! is_wp_error( $post_id ) ) {
+                        // v1.5.216.62.91 — Bulk path was missing the featured-image
+                        // step. rest_save_draft calls $this->set_featured_image on
+                        // every post but Bulk_Generator never did, so Bulk-generated
+                        // articles shipped with no og:image and no wp-post-image.
+                        try {
+                            \SEOBetter::instance()->set_featured_image( $post_id, (string) $item['keyword'] );
+                        } catch ( \Throwable $e ) {
+                            error_log( "SEOBetter Bulk_Generator featured image failed: " . $e->getMessage() );
+                        }
+
                         update_post_meta( $post_id, '_seobetter_focus_keyword', $item['keyword'] );
                         update_post_meta( $post_id, '_seobetter_geo_score', $result['geo_score'] ?? 0 );
                         update_post_meta( $post_id, '_seobetter_content_type', $item['content_type'] ?? 'blog_post' );

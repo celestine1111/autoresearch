@@ -7,12 +7,94 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.89)
+> **Last updated:** 2026-05-07 (v1.5.216.62.91)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.90 — Strengthen buying_guide prose template for word count + per-product H2 enforcement
+
+**Date:** 2026-05-07
+**Commit:** `b045581`
+
+### Why
+
+Post 748 audit (Buying Guide US, 2000w request): word count came in at 1244 (62% of target), section count 5 instead of 6, and "Individual Product Mini-Reviews" was consolidated under ONE H2 instead of one H2 per product. Trend across 3 retests (744 → 746 → 748): 1544 → 1649 → **1244** words, getting worse.
+
+Compared the buying_guide prose template guidance to listicle (which works at 2500w consistently):
+
+- Listicle: `EACH item gets its own H2... 100-200 words per item... TOP 10 LIST FORMAT: You MUST create exactly 10`
+- Buying Guide (broken): `Individual Product Mini-Reviews (each with H2)... Each product gets pros/cons/verdict.` — no count, no word target, AI consolidates everything under one H2.
+
+### What changed
+
+`Async_Generator.php::PROSE_TEMPLATES['buying_guide']` rewritten:
+
+- `sections` now mandates "**5-7 Individual Product Mini-Reviews (EACH product gets its OWN H2 heading numbered like '1. Product Name', '2. Product Name' etc with 250-350 words covering hands-on impressions + key features + pros + cons + recommended buyer + verdict)**"
+- `guidance` now reads: "BUYING GUIDE FORMAT: You MUST create EXACTLY 5-7 products in the lineup. Each product gets its OWN H2 heading formatted as '1. Product Name', '2. Product Name' etc. — NEVER collapse multiple products under a single 'Individual Reviews' H2. Write 250-350 words per product mini-review covering: hands-on impressions, key features, 3 pros, 2 cons, who it is best for, and a one-line verdict. The 'What to Look For When Buying' section needs 250-350 words on buying criteria. Total target: 2000-3000 words."
+
+Mirrors the listicle template's working format that consistently hits 2500w.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.89 → 62.90
+- `seobetter/includes/Async_Generator.php::PROSE_TEMPLATES` line 997 — buying_guide template strengthened
+
+### Verify
+
+```
+grep -A 1 "buying_guide.*5-7 Individual Product" seobetter/includes/Async_Generator.php
+# Live test: Bulk-regenerate a Buying Guide, expect ≥2000 words, 5-7 numbered product H2s
+```
+
+### Verified by user
+
+UNTESTED — pending v62.90 deploy + Bulk regenerate + word-count + section-count audit.
+
+---
+
+## v1.5.216.62.91 — Bulk_Generator: featured image + extended pool for References list
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+Post 748 audit (Buying Guide v62.89): two more pre-existing Bulk path bugs surfaced:
+
+1. **Featured image missing.** og:image meta = MISSING, wp-post-image not present, no Picsum/etc. featured image attached. `rest_save_draft` calls `$this->set_featured_image($post_id, $keyword)` at line 2385 right after `wp_insert_post`, but Bulk_Generator never did. Every Bulk-generated post since April 21 shipped without a featured image.
+
+2. **References list capped at research-pool URLs only.** Body had 5 outbound URLs (cats.com, palnests, technomeow, amazon bestsellers, nytimes wirecutter) but the rendered References list showed only ONE entry (the wirecutter one — the only URL in the original `$result['citation_pool']`). The other 4 URLs were AI-inserted: they survived `validate_outbound_links` because they hit the whitelist (amazon, etc.) or AI-inserted patterns, but `Citation_Pool::append_references_section` only adds entries that match against the pool via `get_entry()`. `rest_save_draft` mitigates this at line 2005-2015 by extending `$combined_pool` with every URL the AI inserted in markdown — Bulk_Generator skipped that step.
+
+### What changed
+
+**`seobetter.php`** — `set_featured_image()` private → public so Bulk_Generator can invoke it (`SEOBetter::set_featured_image()` line ~5370).
+
+**`Bulk_Generator.php::process_next()`** —
+- After `wp_insert_post` succeeds, call `\SEOBetter::instance()->set_featured_image( $post_id, $item['keyword'] )` (parity with rest_save_draft line 2385).
+- Before `linkify_bracketed_references`, extend `$combined_pool` with every markdown-found URL (parity with rest_save_draft line 2005-2015 pool extension).
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.90 → 62.91; `set_featured_image` private → public
+- `seobetter/includes/Bulk_Generator.php` — `set_featured_image` call after insert; pool extension before linkify
+
+### Verify
+
+```
+grep "set_featured_image" seobetter/includes/Bulk_Generator.php   # expect ≥1 hit
+grep "v1.5.216.62.91 — Mirror rest_save_draft" seobetter/includes/Bulk_Generator.php   # expect 1
+grep "public function set_featured_image" seobetter/seobetter.php   # expect 1
+# Live test: Bulk-regenerate a post, expect og:image meta + wp-post-image present + References list with all body URLs (≥3 entries)
+```
+
+### Verified by user
+
+UNTESTED — pending v62.91 deploy + Bulk regenerate + featured-image + References-list audit.
 
 ---
 
