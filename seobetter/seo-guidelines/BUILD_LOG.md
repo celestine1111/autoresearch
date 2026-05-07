@@ -25,7 +25,7 @@
 ## v1.5.216.62.94 — Linkify parenthetical citations: raise length cap 150→250 (first ship under TESTING_PROTOCOL.md TDD discipline)
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `80b80c4`
 
 ### Why
 
