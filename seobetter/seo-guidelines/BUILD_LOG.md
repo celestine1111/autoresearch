@@ -13,12 +13,42 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.94)
+> **Last updated:** 2026-05-07 (v1.5.216.62.95)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.95 — TDD: production-mirror linkify test (RED expected)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+User audit on post 762 (generated under v62.94) showed the v62.94 fix did NOT eliminate `(Cats.com)`, `(palnests.com)`, `(cats.com)` in body prose — all still unlinked. The simplified-mirror test in `tests/test-linkify-parens.php` (5/5 PASS on VPS) gave a false signal: it tested a SIMPLIFIED reimplementation, not real production behaviour. This is the exact failure mode TESTING_PROTOCOL.md was created to prevent.
+
+### What changed
+
+`tests/test-linkify-production.php` — NEW. Extracts the REAL `linkify_bracketed_references` + helper functions from `seobetter.php` via regex, evals them, runs them on a realistic post-762 markdown sample + pool. RED expected (matches user-observed production failure). Once a fix lands in v62.96+, this test must turn GREEN.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.94 → 62.95 (test-only ship; no production logic change)
+- `seobetter/tests/test-linkify-production.php` — NEW
+
+### Verify
+
+```
+grep -n 'class SEOBetter ' seobetter/tests/test-linkify-production.php
+# Expected output: a `class SEOBetter` line built via eval inside the test runner
+# Test result on VPS cron: name=linkify-production, expected pass=false (RED), turns GREEN once root cause is fixed
+```
+
+### Verified by user: UNTESTED
 
 ---
 
