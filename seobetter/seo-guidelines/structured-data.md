@@ -150,7 +150,7 @@ Every top-level schema emitted by `Schema_Generator::generate()` and the legacy 
 | `cookTime` | Regex: "Cook Time: X minutes" | "PT20M" |
 | `totalTime` | Regex: "Total Time: X minutes" | "PT30M" |
 | `recipeYield` | Regex: "Yields: X treats/servings" / "Serves N" / v62.98 NEW "Servings Per Recipe: N" | "24 treats" / "6 servings" |
-| `recipeIngredient` | `<ul>` list items in recipe section, with v62.98 nutrition-pollution filter | ["2 cups flour", "1 egg"] |
+| `recipeIngredient` | `<ul>` list items in recipe section, with v62.98+99 nutrition-pollution filter (covers singular AND plural macros — Total Sugar / Total Sugars / Total Carb / Total Carbs / Total Fat / Total Fats) | ["2 cups flour", "1 egg"] |
 | `recipeInstructions` | `<ol>` items with `name` + `text` + `url` per step | HowToStep array |
 
 **Multi-recipe support:** Articles with 3+ recipe H2 sections generate SEPARATE Recipe schemas per recipe, plus an ItemList carousel schema. Google shows each recipe as a swipeable card.

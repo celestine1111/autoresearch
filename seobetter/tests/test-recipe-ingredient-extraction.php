@@ -61,9 +61,10 @@ function is_nutrition_or_yield_line( string $item ): bool {
     // (b) "Servings Per Recipe: N" — yield indicator
     if ( preg_match( '/^servings?\s+per\s+recipe\b/i', $item ) ) return true;
     // (c) Macro-first colon form: "Calories: 558", "Total Carbohydrate: 51g (19%)", etc.
+    // v62.99 — added trailing s? to plural-able alternatives (Total Sugars, Total Carbs)
     if ( preg_match(
         '/^(calories?|kcal|cholesterol|sodium|potassium|iron|calcium|vitamin\s+\w+|protein|' .
-        'total\s+(?:carbohydrate|carbs?|fat|sugar|fiber|fibre)|dietary\s+(?:fiber|fibre)|' .
+        'total\s+(?:carbohydrates?|carbs?|fats?|sugars?|fibers?|fibres?)|dietary\s+(?:fibers?|fibres?)|' .
         'saturated\s+fat|trans\s+fat|monounsaturated\s+fat|polyunsaturated\s+fat|' .
         'sugars?|carbohydrates?|fats?)\s*[:.]/i',
         $item

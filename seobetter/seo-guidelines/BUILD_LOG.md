@@ -15,12 +15,45 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.98)
+> **Last updated:** 2026-05-07 (v1.5.216.62.99)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.99 — Recipe schema patch: plural-form coverage (Total Sugars / Total Carbs)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+v62.98 deployed and turned 33/34 GREEN. Single failure: `Total Sugars: 3g` slipped through because the regex alternation `total\s+(?:carbohydrate|carbs?|fat|sugar|fiber|fibre)` had `sugar` (singular) but the AI emits the plural form. Without `s?` the regex matched `Total Sugar` (5 chars) and then expected `\s*[:.]` but got `s` (the plural suffix).
+
+This is exactly the failure mode the verification-before-completion skill prevents — without running the test on VPS GREEN, I'd have shipped this with one nutrition string still leaking.
+
+### What changed
+
+`includes/Schema_Generator.php` line 1305-1313 (pattern (c)) — pluralize the alternation: `total\s+(?:carbohydrates?|carbs?|fats?|sugars?|fibers?|fibres?)` and same for `dietary\s+(?:fibers?|fibres?)`. Test mirror updated identically.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.98 → 62.99
+- `seobetter/includes/Schema_Generator.php` — plural-form alternation
+- `seobetter/tests/test-recipe-ingredient-extraction.php` — mirror updated
+- `seobetter/seo-guidelines/BUILD_LOG.md`
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='recipe-ingredient-extraction'); print('pass=', t['pass'])"
+# Expected: pass=True
+```
+
+### Verified by user: UNTESTED
 
 ---
 

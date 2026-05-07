@@ -747,7 +747,7 @@ The plugin supports 21 content types. Each uses a different schema.org @type and
 | Case Study | Article | Summary → Challenge → Solution → Results → Quote | 800-2000 |
 | Interview | Article | Intro → Bio → Q&A → Closing | 1000-3000 |
 | FAQ Page | FAQPage | Intro → 10-15 Q&A Pairs | 500-2000 |
-| Recipe | Recipe + HowTo (v62.98 — recipeIngredient now strips Nutrition Facts pollution; recipeYield extracted from "Servings Per Recipe: N" pattern) | Story → Tips → Ingredients → Instructions → Notes | 500-1500 |
+| Recipe | Recipe + HowTo (v62.98+99 — recipeIngredient strips Nutrition Facts pollution including plural macros; recipeYield extracted from "Servings Per Recipe: N" pattern) | Story → Tips → Ingredients → Instructions → Notes | 500-1500 |
 | Technical Article | TechArticle | What to Build → Prerequisites → Setup → Walkthrough → Testing | 1000-3500 |
 | White Paper | Report | Executive Summary → Problem → Methodology → Findings → Recommendations | 2500-8000 |
 | Scholarly Article | ScholarlyArticle | Abstract → Intro → Lit Review → Methods → Results → Discussion | 3000-8000 |

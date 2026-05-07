@@ -1320,9 +1320,14 @@ class Schema_Generator {
                             if ( preg_match( '/^servings?\s+per\s+recipe\b/i', $item ) ) continue;
 
                             // (c) Macro-first colon form
+                            // v62.99 — added trailing s? to plural-able alternatives
+                            // ("Total Sugars: 3g", "Total Carbs: 51g") — without it the regex
+                            // matched "Total Sugar" (5 chars) then expected `\s*[:.]` but
+                            // got "s" (the plural). Caught by VPS GREEN test failing on
+                            // 'Total Sugars: 3g'.
                             if ( preg_match(
                                 '/^(calories?|kcal|cholesterol|sodium|potassium|iron|calcium|vitamin\s+\w+|protein|' .
-                                'total\s+(?:carbohydrate|carbs?|fat|sugar|fiber|fibre)|dietary\s+(?:fiber|fibre)|' .
+                                'total\s+(?:carbohydrates?|carbs?|fats?|sugars?|fibers?|fibres?)|dietary\s+(?:fibers?|fibres?)|' .
                                 'saturated\s+fat|trans\s+fat|monounsaturated\s+fat|polyunsaturated\s+fat|' .
                                 'sugars?|carbohydrates?|fats?)\s*[:.]/i',
                                 $item
