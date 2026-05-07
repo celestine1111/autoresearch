@@ -15,12 +15,57 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-08 (v1.5.216.62.110)
+> **Last updated:** 2026-05-08 (v1.5.216.62.111)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.111 — Recipe research diagnostic logger (no behavior change)
+
+**Date:** 2026-05-08
+**Commit:** `[pending]`
+
+### Why
+
+Posts 800 (Victoria sponge / GB) + 806 (Anzac biscuits / AU) shipped with 0 recipe sections under v62.110 — fell to informational template. My DIRECT curl to Tavily returned 5 results with 3419-13570 char raw_content for both keywords. The plugin's `Async_Generator::process_step()` recipe-research path silently returns `$usable_recipe_count = 0`. Without VPS shell access we can't read WP `debug.log`. Need a file-based logger that writes to `wp-content/uploads/seobetter-tests/recipe-research.json` (already exposed via HTTP for the test runner) so I can curl the log via HTTP and pinpoint the actual failure point.
+
+### What changed
+
+NEW class `includes/Recipe_Research_Logger.php`:
+- Static `append( string $stage, array $payload )` writes a rotating JSON log entry (max 50 entries, drops oldest)
+- File path: `wp-upload-dir/seobetter-tests/recipe-research.json`
+- Try/catch wrapped — never throws (diagnostic only, must not break the pipeline)
+
+`includes/Async_Generator.php::process_step()` recipe-research path — added 5 logging call sites:
+- `tavily_call` (before request) — keyword, country, key length, recipe domains
+- `tavily_response` (success) — http_code, body length, result count, parse_ok, tavily_error, first_url
+- `tavily_response_error` (WP_Error) — error code + message
+- `tavily_fallback` / `tavily_fallback_error` — same shape, no-domain-filter retry path
+- `recipe_extract_final` — usable_recipe_count + extracted_count + sample titles
+
+NO behavior change to the recipe research logic itself. Pure instrumentation.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.110 → 62.111
+- `seobetter/includes/Recipe_Research_Logger.php` — NEW
+- `seobetter/includes/Async_Generator.php` — 5 logging call sites added
+- `seobetter/tests/test-recipe-research-logger.php` — NEW (8 cases)
+- `seobetter/seo-guidelines/BUILD_LOG.md`
+
+### Verify
+
+```
+# After deploy + 1 recipe regen:
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/recipe-research.json | python3 -m json.tool
+# Should show 5+ stage entries; the failure point is whichever stage returns 0/empty/error
+```
+
+### Verified by user: UNTESTED
 
 ---
 

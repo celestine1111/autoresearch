@@ -459,6 +459,14 @@ class Async_Generator {
                     $tavily_key = $settings['tavily_api_key'] ?? '';
                     $tavily_recipes = [ 'results' => [] ];
 
+                    // v1.5.216.62.111 — diagnostic log to wp-content/uploads/seobetter-tests/recipe-research.json
+                    Recipe_Research_Logger::append( 'tavily_call', [
+                        'keyword'        => $keyword,
+                        'country'        => $options['country'] ?? '',
+                        'tavily_key_len' => strlen( (string) $tavily_key ),
+                        'recipe_domains' => $recipe_domains,
+                    ] );
+
                     if ( ! empty( $tavily_key ) ) {
                         $tavily_body = [
                             'api_key'             => $tavily_key,
@@ -475,8 +483,24 @@ class Async_Generator {
                             'headers' => [ 'Content-Type' => 'application/json' ],
                             'body'    => wp_json_encode( $tavily_body ),
                         ] );
-                        if ( ! is_wp_error( $resp ) ) {
-                            $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+                        if ( is_wp_error( $resp ) ) {
+                            Recipe_Research_Logger::append( 'tavily_response_error', [
+                                'wp_error_code'    => $resp->get_error_code(),
+                                'wp_error_message' => $resp->get_error_message(),
+                            ] );
+                        } else {
+                            $http_code = wp_remote_retrieve_response_code( $resp );
+                            $body_raw  = wp_remote_retrieve_body( $resp );
+                            $body      = json_decode( $body_raw, true );
+                            $result_count = ( is_array( $body ) && isset( $body['results'] ) && is_array( $body['results'] ) ) ? count( $body['results'] ) : 0;
+                            Recipe_Research_Logger::append( 'tavily_response', [
+                                'http_code'    => $http_code,
+                                'body_len'     => strlen( (string) $body_raw ),
+                                'result_count' => $result_count,
+                                'parse_ok'     => is_array( $body ),
+                                'tavily_error' => is_array( $body ) ? ( $body['error'] ?? null ) : null,
+                                'first_url'    => ( is_array( $body ) && ! empty( $body['results'][0]['url'] ) ) ? $body['results'][0]['url'] : null,
+                            ] );
                             if ( ! empty( $body['results'] ) ) {
                                 $tavily_recipes['results'] = $body['results'];
                             }
@@ -488,8 +512,19 @@ class Async_Generator {
                                     'headers' => [ 'Content-Type' => 'application/json' ],
                                     'body'    => wp_json_encode( $tavily_body ),
                                 ] );
-                                if ( ! is_wp_error( $resp2 ) ) {
+                                if ( is_wp_error( $resp2 ) ) {
+                                    Recipe_Research_Logger::append( 'tavily_fallback_error', [
+                                        'wp_error_code'    => $resp2->get_error_code(),
+                                        'wp_error_message' => $resp2->get_error_message(),
+                                    ] );
+                                } else {
                                     $body2 = json_decode( wp_remote_retrieve_body( $resp2 ), true );
+                                    $result_count2 = ( is_array( $body2 ) && isset( $body2['results'] ) && is_array( $body2['results'] ) ) ? count( $body2['results'] ) : 0;
+                                    Recipe_Research_Logger::append( 'tavily_fallback', [
+                                        'http_code'    => wp_remote_retrieve_response_code( $resp2 ),
+                                        'result_count' => $result_count2,
+                                        'first_url'    => ( is_array( $body2 ) && ! empty( $body2['results'][0]['url'] ) ) ? $body2['results'][0]['url'] : null,
+                                    ] );
                                     if ( ! empty( $body2['results'] ) ) {
                                         $tavily_recipes['results'] = $body2['results'];
                                     }
@@ -554,6 +589,13 @@ class Async_Generator {
                             $recipe_sources[] = $source;
                         }
                         $usable_recipe_count = count( $recipe_sources );
+
+                        // v1.5.216.62.111 — final-count diagnostic log
+                        Recipe_Research_Logger::append( 'recipe_extract_final', [
+                            'usable_recipe_count' => $usable_recipe_count,
+                            'extracted_count'     => count( $extracted_recipes ),
+                            'sample_titles'       => array_map( function( $s ) { return mb_substr( $s['title'] ?? '', 0, 60 ); }, array_slice( $recipe_sources, 0, 3 ) ),
+                        ] );
 
                         if ( $usable_recipe_count > 0 ) {
                             $recipe_data_block .= "\n\n=== REAL RECIPE DATA (from verified sources — use these as your base) ===\n";
