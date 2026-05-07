@@ -27,7 +27,7 @@
 ## v1.5.216.62.99 — Recipe schema patch: plural-form coverage (Total Sugars / Total Carbs)
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `476b8a7`
 
 ### Why
 
