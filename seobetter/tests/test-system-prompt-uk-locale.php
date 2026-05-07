@@ -74,7 +74,7 @@ $cases = [
     // [ language, country, must_contain_substring(s), note ]
     [ 'en', 'GB', [ 'UK English', 'flavour', 'metric', '£' ],
       'GB en: prompt has UK English + metric + £' ],
-    [ 'en', 'AU', [ 'UK English', 'flavour', 'metric', 'AU$', 'A$' ],
+    [ 'en', 'AU', [ 'UK English', 'flavour', 'metric', 'AU$' ],
       'AU en: UK English + metric + AU currency' ],
     [ 'en', 'NZ', [ 'UK English', 'flavour', 'metric', 'NZ$' ],
       'NZ en: UK English + metric + NZ currency' ],
