@@ -7,12 +7,44 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-06 (v1.5.216.62.87)
+> **Last updated:** 2026-05-07 (v1.5.216.62.88)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.88 — Add buying_guide to SPEAKABLE_TYPES
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+T3 #8 audit on post 744 (Melbourne dog food delivery, AU, Buying Guide, 1500w request) revealed Speakable cssSelector was MISSING from the Article schema. Pre-fix `SPEAKABLE_TYPES` in Schema_Generator.php contained `pillar_guide`, `how_to`, `review`, `comparison` — but `buying_guide` was missing from the list. Schema for the post was emitted without `speakable` field, breaking the audit checklist's Speakable requirement.
+
+### What changed
+
+`Schema_Generator.php::SPEAKABLE_TYPES` constant now includes `'buying_guide'` (added at end of array, alongside the existing 13 types).
+
+### Files changed
+
+- `seobetter/includes/Schema_Generator.php` — SPEAKABLE_TYPES array
+- `seobetter/seobetter.php` — version 62.87 → 62.88
+
+### Verify
+
+```
+grep "SPEAKABLE_TYPES" seobetter/includes/Schema_Generator.php
+# expect array containing 'buying_guide'
+# Live test: regenerate Buying Guide, expect Speakable cssSelector in schema
+```
+
+### Verified by user
+
+UNTESTED — pending v62.88 deploy + Buying Guide regenerate + schema audit.
 
 ---
 

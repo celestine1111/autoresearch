@@ -356,7 +356,10 @@ class Schema_Generator {
     // v1.5.216.62.75 — `comparison` added (now 13). Voice search "MacBook Pro
     // M4 vs Dell XPS 15, which is better?" is a primary use case for
     // comparison content — same voice-readout value as review.
-    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release', 'listicle', 'review', 'comparison' ];
+    // v1.5.216.62.88 — added buying_guide. Pre-fix every other "guide" type
+    // (pillar_guide, how_to) had Speakable but buying_guide was missing,
+    // exposed by T3 #8 audit on post 744 (no Speakable cssSelector emitted).
+    private const SPEAKABLE_TYPES = [ 'blog_post', 'news_article', 'opinion', 'pillar_guide', 'how_to', 'faq_page', 'interview', 'recipe', 'personal_essay', 'press_release', 'listicle', 'review', 'comparison', 'buying_guide' ];
 
     // Content types that get universal `citation[]` injection (v1.5.210).
     // Implements the "biggest LLM-citation lever" rollout flagged in v1.5.209
