@@ -19,7 +19,7 @@
 ## v1.5.216.62.89 — Wire validate_outbound_links into Bulk Generator (filter inline body bsky/HN/Quora links)
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `2576c44`
 
 ### Why
 
