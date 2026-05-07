@@ -3,7 +3,7 @@
  * Plugin Name: SEOBetter
  * Plugin URI: https://seobetter.com
  * Description: AI-powered content generation optimized for Google AI Overviews, ChatGPT, Perplexity, Gemini & more. Generate articles that AI models cite. Works alongside Yoast, RankMath, or AIOSEO.
- * Version: 1.5.216.62.96
+ * Version: 1.5.216.62.97
  * Author: SEOBetter
  * Author URI: https://seobetter.com
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SEOBETTER_VERSION', '1.5.216.62.96' );
+define( 'SEOBETTER_VERSION', '1.5.216.62.97' );
 
 // v1.5.216.62.75 — Auto-extracted Product schema feature flag. Currently
 // FALSE because the AI-extracted `offers.price` field is unreliable
@@ -1920,7 +1920,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.62.96 — Sanitize headline before it becomes post_title.
+     * v1.5.216.62.97 — Sanitize headline before it becomes post_title.
      *
      * v62.80 introduced verbatim-equality citation-echo check. v62.81
      * upgrades that with normalize-then-compare so en-dash/hyphen/middle-dot
@@ -1957,7 +1957,7 @@ final class SEOBetter {
     }
 
     /**
-     * v1.5.216.62.96 — Universal pre-emptive cleaner. Pool comparison alone
+     * v1.5.216.62.97 — Universal pre-emptive cleaner. Pool comparison alone
      * only catches echoes that are byte-equal to a pool entry. v62.82 strips
      * trailing publisher suffixes + enforces §7.1 60-char cap regardless of
      * pool, so AI-emitted variants we haven't seen are blocked too.
@@ -2015,7 +2015,7 @@ final class SEOBetter {
         $content  = $request->get_param( 'content' ) ?? '';
         $accent   = sanitize_text_field( $request->get_param( 'accent_color' ) ?? '#764ba2' );
 
-        // v1.5.216.62.96 — sanitize headline AFTER citation_pool is parsed below
+        // v1.5.216.62.97 — sanitize headline AFTER citation_pool is parsed below
         // so we can detect citation echoes. Done at temp value here; finalized
         // after $combined_pool is built (see below).
         $title = sanitize_text_field( $raw_title );
@@ -2048,7 +2048,7 @@ final class SEOBetter {
             }
         }
 
-        // v1.5.216.62.96 — Now that the pool is assembled, sanitize the
+        // v1.5.216.62.97 — Now that the pool is assembled, sanitize the
         // headline. Catches citation-echo titles passed from frontend.
         $kw_for_fallback = (string) ( $request->get_param( 'keyword' ) ?? $raw_title );
         $title = sanitize_text_field( self::sanitize_headline( $raw_title, $kw_for_fallback, $combined_pool ) );
@@ -2331,7 +2331,7 @@ final class SEOBetter {
                     foreach ( $cited_entries as $entry ) {
                         $url   = esc_url( $entry['url'] ?? '' );
                         if ( $url === '' ) continue;
-                        // v1.5.216.62.96 — truthy fallback chain. Pre-fix used
+                        // v1.5.216.62.97 — truthy fallback chain. Pre-fix used
                         // `?? ?? ??` which only catches null/missing, not empty
                         // string. Pool entries with title=''/source_name=''
                         // bypassed every fallback → empty <a></a> rendered.
@@ -4236,7 +4236,7 @@ final class SEOBetter {
         // v1.5.216.62.15 — Lowered min length 4 → 2 so short acronym parentheticals
         // like (AKC), (NIH), (FDA), (WHO) get evaluated. The stop-list inside the
         // callback (e.g. (e.g.|i.e.|see) already protects against false positives.
-        // v1.5.216.62.96 — Length cap raised 150 → 250 to catch long parenthetical
+        // v1.5.216.62.97 — Length cap raised 150 → 250 to catch long parenthetical
         // citations like "(Top 5 Best Automatic Cat Feeders of 2026: Why PalNests
         // Wins)" which exceeded the prior cap and stayed as plain text in body.
         // Found by user audit on T3 #8 post 757 (cat feeders Buying Guide). Test

@@ -15,12 +15,49 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.96)
+> **Last updated:** 2026-05-07 (v1.5.216.62.97)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.97 — TDD: Recipe ingredient extraction (RED phase ship)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+Post 769 audit (cornish pasty Recipe / GB / 1500w under v62.96) showed `Schema_Generator::build_recipe()` returning `recipeIngredient` containing nutrition strings like `(Nutrition for one serving)`, `Servings Per Recipe: 6`, `Calories: 558`, `Total Carbohydrate: 51g (19%)` instead of real ingredients. The v1.5.145 nutrition-skip filter at `Schema_Generator.php:1287-1293` only catches lines starting with a digit (e.g. `27g Fat`); misses `Calories: 558` (colon form), `(Nutrition...)` (paren wrap), `Servings Per Recipe: N` (yield indicator), `Total Carbohydrate` (full-word — regex only matches `carbs?`).
+
+**Process note:** This is a TDD RED-phase ship per WORKFLOW.md §2.A. The test mirrors v62.96 production logic exactly. The test ASSERTIONS describe the desired behavior (v62.97). On VPS cron, the test is expected to FAIL — that's the proof the bug exists. v62.98 will add the patterns to BOTH the test mirror and `Schema_Generator.php`, turning GREEN.
+
+### What changed
+
+- `seobetter/seobetter.php` — version 62.96 → 62.97
+- `seobetter/tests/test-recipe-ingredient-extraction.php` — NEW (RED test)
+- `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+NO production logic change in this ship. Pure test ship.
+
+### Files changed
+
+- `seobetter/seobetter.php` (version bump only)
+- `seobetter/tests/test-recipe-ingredient-extraction.php` (new test, expected RED on cron)
+- `seobetter/seo-guidelines/BUILD_LOG.md`
+
+### Verify
+
+```
+# On VPS cron — read results.json:
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); print([t for t in d['tests'] if t['name']=='recipe-ingredient-extraction'])"
+# Expected: pass=false, exit_code=1 (RED). v62.98 flips it to true (GREEN).
+```
+
+### Verified by user: UNTESTED
 
 ---
 
