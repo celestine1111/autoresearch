@@ -25,7 +25,7 @@
 ## v1.5.216.62.96 — Bulk pipeline ORDER fix: validate before linkify (TDD GREEN)
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `e7a1e27`
 
 ### Why
 
