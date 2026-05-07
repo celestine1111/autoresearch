@@ -44,21 +44,32 @@
 // strings. In GREEN phase Schema_Generator.php gets the patterns added below
 // AND this mirror is updated to match — both must be in sync.
 
-// RED-PHASE MIRROR — exactly v62.96 production logic from Schema_Generator.php
-// line ~1287-1293. NO v62.97 patterns added yet. This MIRROR is what production
-// currently does, so the test demonstrates the post-769 bug.
-//
-// GREEN PHASE: when Schema_Generator.php gets the v62.97 patterns added, this
-// mirror gets the SAME patterns added in the same commit so test passes.
+// GREEN-PHASE MIRROR — v62.98 production logic. Mirrors the extended
+// nutrition-pollution filter from Schema_Generator::build_recipe() lines
+// ~1287-1310. Keep this in lock-step with production.
 function is_nutrition_or_yield_line( string $item ): bool {
     // v1.5.145 — Skip nutritional data (line starts with digit + unit + macro)
     if ( preg_match( '/^\d+\s*(g|mg|mcg|kcal|cal|%)?\s*(fat|carbs?|protein|calories?|cal|kcal|sodium|fiber|fibre|sugar|cholesterol|saturated|iron|calcium|potassium|vitamin|total\s+fat|total\s+sugar|trans\s+fat|dietary\s+fiber)/i', $item ) ) return true;
     if ( preg_match( '/\b(calories?|kcal)\s*(\(|per\s)/i', $item ) ) return true;
     if ( preg_match( '/^(total\s+)?(fat|carbs?|protein|sodium|sugar|fiber)\b/i', $item ) ) return true;
-    // Skip "Nutrition Facts", "Per Serving", "Servings:" headers
     if ( preg_match( '/^(nutrition|per\s+serving|serving\s+size|daily\s+value)/i', $item ) ) return true;
-    // Skip pure numbers or very short items like "N/A"
     if ( preg_match( '/^[\d\s.,%]+$/', $item ) ) return true;
+
+    // v1.5.216.62.98 — extended filter (post 769 bug fix)
+    // (a) Wrap-paren nutrition header
+    if ( preg_match( '/^\s*\(\s*(nutrition|per\s+serving|serving\s+size|daily\s+value|nutritional\s+info)/i', $item ) ) return true;
+    // (b) "Servings Per Recipe: N" — yield indicator
+    if ( preg_match( '/^servings?\s+per\s+recipe\b/i', $item ) ) return true;
+    // (c) Macro-first colon form: "Calories: 558", "Total Carbohydrate: 51g (19%)", etc.
+    if ( preg_match(
+        '/^(calories?|kcal|cholesterol|sodium|potassium|iron|calcium|vitamin\s+\w+|protein|' .
+        'total\s+(?:carbohydrate|carbs?|fat|sugar|fiber|fibre)|dietary\s+(?:fiber|fibre)|' .
+        'saturated\s+fat|trans\s+fat|monounsaturated\s+fat|polyunsaturated\s+fat|' .
+        'sugars?|carbohydrates?|fats?)\s*[:.]/i',
+        $item
+    ) ) return true;
+    // (d) "Daily Value" / "(DV)" reference
+    if ( preg_match( '/^daily\s+value\b|\(\s*dv\s*\)/i', $item ) ) return true;
 
     return false;
 }
@@ -67,13 +78,17 @@ function is_nutrition_or_yield_line( string $item ): bool {
 // Tests the recipeYield-fallback path. Production already has two yield
 // regexes (yield/serve/serving/makes/portion + serves/makes/yields N).
 // Neither catches "Servings Per Recipe: 6" exactly — must add a third.
-// RED-PHASE MIRROR — only v62.96 patterns. Will FAIL on "Servings Per Recipe: N".
+// GREEN MIRROR — v62.98. Adds "Servings Per Recipe: N" pattern (post 769 case).
 function extract_yield_from_body( string $body_text ): string {
     if ( preg_match( '/(?:yield|serve|serving|makes|portion)[\s:]*(\d+\s*(?:serving|piece|treat|cookie|batch|portion|loaf|loaves|slice|roll)[s]?)/i', $body_text, $y1 ) ) {
         return $y1[1];
     }
     if ( preg_match( '/(?:serves|makes|yields?)\s*[\s:]*(\d+)/i', $body_text, $y2 ) ) {
         return $y2[1] . ' servings';
+    }
+    // v1.5.216.62.98 — "Servings Per Recipe: N" pattern (post 769)
+    if ( preg_match( '/servings?\s+per\s+recipe[\s:]*(\d+)/i', $body_text, $y3 ) ) {
+        return $y3[1] . ' servings';
     }
     return '';
 }

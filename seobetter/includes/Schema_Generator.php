@@ -1291,6 +1291,46 @@ class Schema_Generator {
                             if ( preg_match( '/^(nutrition|per\s+serving|serving\s+size|daily\s+value)/i', $item ) ) continue;
                             // Skip pure numbers or very short items like "N/A"
                             if ( preg_match( '/^[\d\s.,%]+$/', $item ) ) continue;
+
+                            // v1.5.216.62.98 — extended nutrition-pollution filter found via
+                            // post 769 audit (cornish pasty Recipe / GB / 1500w under v62.96).
+                            // The above v62.96 patterns catch only digit-first lines (27g Fat)
+                            // and a few label headers. The AI also generates these forms which
+                            // slipped through into recipeIngredient[]:
+                            //
+                            //   '(Nutrition for one serving)'   ← (a) wrap-paren header
+                            //   'Servings Per Recipe: 6'         ← (b) yield indicator
+                            //   'Calories: 558'                   ← (c) macro-first colon
+                            //   'Total Carbohydrate: 51g (19%)'  ← (c) full-word "Carbohydrate"
+                            //   'Dietary Fiber: 4g'              ← (c) colon form
+                            //   'Total Sugars: 3g'                ← (c) word-boundary plural
+                            //   'Saturated Fat: 12g'             ← (c) leading word "Saturated"
+                            //   'Trans Fat: 0g'                   ← (c) leading word "Trans"
+                            //   'Cholesterol: 100mg'             ← (c) leading word
+                            //   'Iron: 4mg' / 'Calcium: 50mg'    ← (c) standalone minerals
+                            //
+                            // Test: tests/test-recipe-ingredient-extraction.php asserts each
+                            // pattern returns NUTRITION (not INGREDIENT). Cron VPS run shows
+                            // RED for v62.97 (mirror = v62.96), GREEN for v62.98 (mirror updated).
+
+                            // (a) Wrap-paren nutrition header
+                            if ( preg_match( '/^\s*\(\s*(nutrition|per\s+serving|serving\s+size|daily\s+value|nutritional\s+info)/i', $item ) ) continue;
+
+                            // (b) "Servings Per Recipe: N" — yield indicator (also extracted to recipeYield below)
+                            if ( preg_match( '/^servings?\s+per\s+recipe\b/i', $item ) ) continue;
+
+                            // (c) Macro-first colon form
+                            if ( preg_match(
+                                '/^(calories?|kcal|cholesterol|sodium|potassium|iron|calcium|vitamin\s+\w+|protein|' .
+                                'total\s+(?:carbohydrate|carbs?|fat|sugar|fiber|fibre)|dietary\s+(?:fiber|fibre)|' .
+                                'saturated\s+fat|trans\s+fat|monounsaturated\s+fat|polyunsaturated\s+fat|' .
+                                'sugars?|carbohydrates?|fats?)\s*[:.]/i',
+                                $item
+                            ) ) continue;
+
+                            // (d) "Daily Value" / "(DV)" reference
+                            if ( preg_match( '/^daily\s+value\b|\(\s*dv\s*\)/i', $item ) ) continue;
+
                             $ingredients[] = $item;
                         }
                     }
@@ -1363,6 +1403,16 @@ class Schema_Generator {
                 // Also try "serves X" or "makes X"
                 if ( empty( $recipe['recipeYield'] ) && preg_match( '/(?:serves|makes|yields?)\s*[\s:]*(\d+)/i', $body_text, $yield2 ) ) {
                     $recipe['recipeYield'] = $yield2[1] . ' servings';
+                }
+                // v1.5.216.62.98 — "Servings Per Recipe: N" pattern (post 769 audit).
+                // AI emits this as a nutrition-table header in body markdown; the v62.96
+                // regexes above don't catch it because they require "yield"/"serve"/
+                // "makes" prefix. This pattern flows from the same nutrition-block the
+                // v62.98 ingredient-skip filter (above) now correctly drops, so the yield
+                // value is preserved here while the line itself is excluded from
+                // recipeIngredient[].
+                if ( empty( $recipe['recipeYield'] ) && preg_match( '/servings?\s+per\s+recipe[\s:]*(\d+)/i', $body_text, $yield3 ) ) {
+                    $recipe['recipeYield'] = $yield3[1] . ' servings';
                 }
 
                 // v1.5.172 — Broadened category detection + broth/stock/stew
