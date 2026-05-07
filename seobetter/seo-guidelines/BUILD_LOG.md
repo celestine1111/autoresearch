@@ -27,7 +27,7 @@
 ## v1.5.216.62.104 — Recipe prompt GREEN: time markers + UK locale (GB/AU/NZ/IE)
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `08c40c3`
 
 ### Why
 
