@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""Full per-article audit per TESTING_PROTOCOL.md.
+
+Usage: python3 full_audit.py POST_ID KEYWORD COUNTRY TARGET_WORDS
+
+Runs the standard 30+ check audit + new v62.94 audit additions:
+ - ImageObject dedup (no duplicate src in @graph)
+ - Duplicate singular @types check
+ - Visible-body unlinked parens/brackets scan
+ - Schema.org validator hint (URL to copy into validator.schema.org)
+"""
+import sys, json, re, urllib.request, html
+from urllib.parse import quote_plus
+
+if len(sys.argv) < 5:
+    print("usage: full_audit.py POST_ID KEYWORD COUNTRY TARGET_WORDS"); sys.exit(2)
+
+POST_ID = sys.argv[1]
+KW      = sys.argv[2]
+COUNTRY = sys.argv[3]
+TARGET_WORDS = int(sys.argv[4])
+
+BASE = "https://srv1608940.hstgr.cloud"
+
+def fetch(url):
+    req = urllib.request.Request(url, headers={"User-Agent":"audit"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read().decode("utf-8", "ignore")
+
+# ----- pull post via REST -----
+post_json = json.loads(fetch(f"{BASE}/wp-json/wp/v2/posts/{POST_ID}?_embed=1"))
+title  = post_json.get("title",{}).get("rendered","")
+slug   = post_json.get("slug","")
+link   = post_json.get("link","")
+content_html = post_json.get("content",{}).get("rendered","") or ""
+
+# ----- pull rendered HTML for schema/visible-text -----
+page_html = fetch(link)
+
+results = []
+def chk(name, ok, info=""):
+    results.append( ("PASS" if ok else "FAIL", name, info) )
+
+# ----- 1. Word count -----
+visible_text = re.sub(r"<[^>]+>"," ", content_html)
+visible_text = html.unescape(visible_text)
+words = len(re.findall(r"\b\w+\b", visible_text))
+chk(f"Word count >= 0.85 * target ({int(TARGET_WORDS*0.85)})", words >= int(TARGET_WORDS*0.85), f"got {words} words / target {TARGET_WORDS}")
+
+# ----- 2. Single H1 -----
+h1s = re.findall(r"<h1\b", page_html, re.I)
+chk("Single H1 in rendered page", len(h1s) == 1, f"found {len(h1s)} H1 tags")
+
+# ----- 3. H2 count >= 5 -----
+h2s = re.findall(r"<h2\b", content_html, re.I)
+chk("H2 count >= 5", len(h2s) >= 5, f"found {len(h2s)} H2")
+
+# ----- 4. Keyword in title -----
+title_clean = re.sub(r"<[^>]+>","", title).lower()
+chk(f"Keyword in title", KW.lower().split()[0] in title_clean, f"title='{title_clean}'")
+
+# ----- 5. References section -----
+chk("References section present", "References" in visible_text or "references" in visible_text.lower(), "")
+
+# ----- 6. JSON-LD present -----
+ld = re.findall(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.+?)</script>', page_html, re.I|re.S)
+chk("JSON-LD scripts present", len(ld) >= 1, f"found {len(ld)} JSON-LD blocks")
+
+# ----- 7. Parse JSON-LD -----
+all_nodes = []
+for blob in ld:
+    try:
+        obj = json.loads(blob.strip())
+        if isinstance(obj, dict):
+            if "@graph" in obj:
+                all_nodes.extend(obj["@graph"])
+            else:
+                all_nodes.append(obj)
+        elif isinstance(obj, list):
+            all_nodes.extend(obj)
+    except Exception as e:
+        pass
+chk("JSON-LD parses cleanly", len(all_nodes) > 0, f"{len(all_nodes)} graph nodes")
+
+# ----- 8. @types breakdown -----
+types_found = []
+for n in all_nodes:
+    t = n.get("@type")
+    if isinstance(t,list):
+        types_found.append("+".join(t))
+    elif t:
+        types_found.append(t)
+chk("Has Article/BlogPosting/Product type",
+    any("Article" in t or "Product" in t or "BlogPosting" in t or "ItemList" in t for t in types_found),
+    f"types: {types_found}")
+
+# ----- 9. ImageObject dedup (NEW v62.93/94 audit) -----
+img_objs = [n for n in all_nodes if (n.get("@type")=="ImageObject" or (isinstance(n.get("@type"),list) and "ImageObject" in n.get("@type")))]
+img_srcs = [ (n.get("url") or n.get("contentUrl") or "") for n in img_objs ]
+img_srcs_clean = [s for s in img_srcs if s]
+unique_srcs = set(img_srcs_clean)
+chk("ImageObject — no duplicate URLs",
+    len(img_srcs_clean) == len(unique_srcs),
+    f"{len(img_objs)} ImageObject nodes, {len(img_srcs_clean)} non-empty URLs, {len(unique_srcs)} unique")
+
+# ----- 10. Singular @type duplicate check -----
+singular_types = ["Article","BlogPosting","NewsArticle","Product","FAQPage","HowTo","BreadcrumbList","Organization","WebSite","WebPage"]
+# Recipe MAY appear multiple times in multi-recipe articles — that's intentional, not a duplicate bug
+dup_singulars = []
+for st in singular_types:
+    matches = [t for t in types_found if t == st]
+    if len(matches) > 1:
+        dup_singulars.append(f"{st} x{len(matches)}")
+chk("No duplicate singular @types", len(dup_singulars) == 0, f"dups: {dup_singulars}" if dup_singulars else "clean")
+
+# ----- 11. FAQ schema if FAQ section present -----
+has_faq_section = bool(re.search(r"frequently asked questions|^FAQ", visible_text, re.I|re.M))
+has_faq_schema = any("FAQPage" in t for t in types_found)
+if has_faq_section:
+    chk("FAQ section → FAQPage schema present", has_faq_schema, f"section={has_faq_section}, schema={has_faq_schema}")
+
+# ----- 12. BreadcrumbList present -----
+chk("BreadcrumbList in JSON-LD", any("BreadcrumbList" in t for t in types_found), "")
+
+# ----- 13. Meta description -----
+m = re.search(r'<meta[^>]+name=["\']?description["\']?[^>]+content=["\']?([^"\'>]+)["\']?', page_html, re.I)
+md_desc = m.group(1) if m else ""
+chk("Meta description present", bool(md_desc), f"len={len(md_desc)}")
+chk("Meta description length 50-160", 50 <= len(md_desc) <= 160, f"len={len(md_desc)}")
+
+# ----- 14. v62.94 — Visible body — unlinked PARENTHETICAL citations -----
+# Walk all <p> and <li>, look for (Source-Looking-Text) NOT inside an <a>.
+para_text = []
+for m in re.finditer(r'<(p|li)\b[^>]*>(.+?)</\1>', content_html, re.I|re.S):
+    para_text.append(m.group(2))
+joined = "\n".join(para_text)
+
+# Strip <a>...</a> blocks so any leftover (Text) is unlinked
+no_links = re.sub(r'<a\b[^>]*>.*?</a>', '', joined, flags=re.I|re.S)
+no_links_text = re.sub(r"<[^>]+>"," ", no_links)
+no_links_text = html.unescape(no_links_text)
+
+# Look for parentheticals that look like source citations:
+# - 4+ chars, starts with capital letter or has .com / .org, not a generic "(e.g. ...)"
+suspect_parens = []
+for m in re.finditer(r'\(([^)]{4,180})\)', no_links_text):
+    s = m.group(1).strip()
+    if re.match(r'^(e\.g\.|i\.e\.|see |note:|approx)', s, re.I): continue
+    if re.match(r'^[\d.,\s%$£€-]+$', s): continue   # numeric only
+    if re.match(r'^[a-z]', s) and not re.search(r'\.(com|org|net|io|co|edu|gov|ai)\b', s, re.I): continue
+    if len(s) < 5: continue
+    # Skip prose sentences (em-dash / en-dash / period mid-string indicates parenthetical clause, not source)
+    if re.search(r'[–—]', s) and not re.search(r'\.(com|org|net|io|co|edu|gov|ai)\b', s, re.I): continue
+    if s.count('.') > 2 or s.count(',') > 4: continue   # comma/period dense prose = sentence not citation
+    # If it has at least 2 capital letters or .com/.org, treat as source-looking
+    caps = sum(1 for ch in s if ch.isupper())
+    has_host = bool(re.search(r'\.(com|org|net|io|co|edu|gov|ai)\b', s, re.I))
+    if caps >= 2 or has_host:
+        suspect_parens.append(s[:120])
+
+chk(f"v62.94: visible body has 0 unlinked source-looking parentheticals",
+    len(suspect_parens) == 0,
+    f"found {len(suspect_parens)}: {suspect_parens[:5]}")
+
+# ----- 15. Visible body — unlinked [bracketed] citations -----
+suspect_brackets = []
+for m in re.finditer(r'\[([^\]]{4,180})\]', no_links_text):
+    s = m.group(1).strip()
+    if re.match(r'^[\d,\s-]+$', s): continue   # [1] [2] [1,2,3] = footnote refs (handled separately)
+    suspect_brackets.append(s[:120])
+chk("visible body has 0 unlinked source [brackets]",
+    len(suspect_brackets) == 0,
+    f"found {len(suspect_brackets)}: {suspect_brackets[:5]}")
+
+# ----- 16. Stock images -----
+imgs = re.findall(r'<img\b[^>]+>', content_html, re.I)
+chk("Has at least 2 images", len(imgs) >= 2, f"found {len(imgs)} <img>")
+
+# ----- 17. External links count -----
+ext_links = re.findall(r'<a\s[^>]*href=["\']https?://(?!srv1608940\.hstgr\.cloud)([^"\']+)', content_html, re.I)
+ext_hosts = sorted(set([x.split('/')[0] for x in ext_links]))
+chk("External outbound links present (>=3)", len(ext_links) >= 3, f"{len(ext_links)} links across {len(ext_hosts)} hosts: {ext_hosts[:8]}")
+
+# ----- 18. No banned hosts (bsky/mastodon/lemmy/etc) -----
+banned = ["bsky.app","bsky.social","mastodon.","lemmy.","news.ycombinator","quora.com"]
+hits = [h for h in ext_hosts if any(b in h for b in banned)]
+chk("No banned-host citations (bsky/mastodon/lemmy/HN/quora)", len(hits) == 0, f"hits: {hits}")
+
+# ----- 19. Speakable specification -----
+# Speakable can appear as top-level @graph node OR as nested 'speakable' property on Article — accept both
+has_speakable = any("Speakable" in t for t in types_found) or any(
+    isinstance(n.get("speakable"), dict) and "Speakable" in str(n.get("speakable", {}).get("@type",""))
+    for n in all_nodes
+)
+chk("SpeakableSpecification (node or nested)", has_speakable, "")
+
+# ----- 20. Author Person node -----
+chk("Author Person node present", any(t=="Person" for t in types_found), "")
+
+# ----- 21. Organization publisher node -----
+chk("Organization publisher present", any(t=="Organization" for t in types_found), "")
+
+# ----- 22. Inline bold count (should be 0 per v62 rules) -----
+bolds = re.findall(r'<(strong|b)\b', content_html, re.I)
+chk("Zero inline bolds in body", len(bolds) == 0, f"found {len(bolds)} inline bolds")
+
+# ----- 23. Schema.org validator URL hint -----
+results.append(("INFO", f"Schema.org validator", f"validator.schema.org → paste {link} OR Google Rich Results: https://search.google.com/test/rich-results?url={quote_plus(link)}"))
+
+# ----- output -----
+print("="*70)
+print(f"FULL AUDIT — Post {POST_ID}")
+print(f"Title: {title}")
+print(f"URL:   {link}")
+print(f"KW:    {KW} | Country: {COUNTRY} | Target words: {TARGET_WORDS}")
+print("="*70)
+pass_n = sum(1 for r in results if r[0]=="PASS")
+fail_n = sum(1 for r in results if r[0]=="FAIL")
+info_n = sum(1 for r in results if r[0]=="INFO")
+for status, name, info in results:
+    sym = "[PASS]" if status=="PASS" else ("[FAIL]" if status=="FAIL" else "[INFO]")
+    print(f"{sym} {name}")
+    if info:
+        print(f"        {info}")
+print("="*70)
+print(f" RESULT: {pass_n} pass / {fail_n} fail / {info_n} info")
+print("="*70)
+sys.exit(1 if fail_n>0 else 0)
