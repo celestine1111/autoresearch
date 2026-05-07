@@ -27,7 +27,7 @@
 ## v1.5.216.62.105 — TDD RED: global UK English locale (all 21 content types)
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `4dbd658`
 
 ### Why
 
