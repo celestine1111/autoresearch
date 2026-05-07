@@ -7,12 +7,46 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.91)
+> **Last updated:** 2026-05-07 (v1.5.216.62.92)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.92 — Bulk_Generator: rebuild References list with extended pool (timing fix)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+v62.91 audit on post 750: word count + featured image + per-product H2s ALL fixed ✅, but References list still showed 1 entry instead of 5. Cause:
+
+- `Async_Generator` line 2871 calls `Citation_Pool::append_references_section( $markdown, $citation_pool )` during the GENERATION phase, using only the original research pool.
+- v62.91's pool extension (Bulk_Generator adds markdown-found URLs to `$combined_pool`) runs in the SAVE phase — too late. The References section in markdown was already finalized by Async_Generator with the original (smaller) pool.
+
+### What changed
+
+`Bulk_Generator.php::process_next()` — after `validate_outbound_links` runs (so blocked URLs don't survive), call `Citation_Pool::append_references_section( $markdown, $combined_pool )` AGAIN with the extended pool. The function strips any existing References section (`preg_replace` at line ~295) and rebuilds with the extended pool, so all 5 body URLs end up in the References list.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.91 → 62.92
+- `seobetter/includes/Bulk_Generator.php` — extra `Citation_Pool::append_references_section` call after validate_outbound_links
+
+### Verify
+
+```
+grep "62.92 — Rebuild References" seobetter/includes/Bulk_Generator.php
+# Live test: regenerate Buying Guide, expect References list with ≥3 LINKED entries (was 1 unlinked)
+```
+
+### Verified by user
+
+UNTESTED — pending v62.92 deploy + Bulk regenerate + References list audit.
 
 ---
 

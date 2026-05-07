@@ -333,6 +333,17 @@ class Bulk_Generator {
                         // URLs as inline citations. References list was clean (Citation_Pool
                         // filters there) but body prose still cited blocked sources.
                         $markdown = \SEOBetter::instance()->validate_outbound_links( $markdown, is_array( $combined_pool ) ? $combined_pool : [] );
+
+                        // v1.5.216.62.92 — Rebuild References section with the extended pool.
+                        // Async_Generator already ran Citation_Pool::append_references_section
+                        // with the original $citation_pool only (not the markdown-extended pool),
+                        // so References capped at research-pool URLs. Post 750 audit: body had
+                        // 5 valid outbound URLs but References showed 1 (the only research-pool
+                        // entry). Re-running with the extended pool strips the existing
+                        // References section and rebuilds with all body URLs included.
+                        if ( is_array( $combined_pool ) && ! empty( $combined_pool ) ) {
+                            $markdown = \SEOBetter\Citation_Pool::append_references_section( $markdown, $combined_pool );
+                        }
                         $formatter = new Content_Formatter();
                         $content_html = $formatter->format( $markdown, 'hybrid', [
                             'accent_color' => $accent,
