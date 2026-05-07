@@ -19,7 +19,7 @@
 ## v1.5.216.62.93 — Dedupe ImageObject schema by contentUrl + audit template additions
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `efef4e7`
 
 ### Why
 
