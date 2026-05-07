@@ -27,7 +27,7 @@
 ## v1.5.216.62.109 — Quote sanity: reject orphan `]` + mid-sentence opening + acronym-paren fragment
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `1aae792`
 
 ### Why
 
