@@ -46,7 +46,7 @@ grep "62.92 — Rebuild References" seobetter/includes/Bulk_Generator.php
 
 ### Verified by user
 
-UNTESTED — pending v62.92 deploy + Bulk regenerate + References list audit.
+✅ Verified end-to-end 2026-05-07 on post 753 — References list now 5 entries all linked. Closes the v62.91 timing-race fail.
 
 ---
 
@@ -87,7 +87,7 @@ grep -A 1 "buying_guide.*5-7 Individual Product" seobetter/includes/Async_Genera
 
 ### Verified by user
 
-UNTESTED — pending v62.90 deploy + Bulk regenerate + word-count + section-count audit.
+✅ Verified end-to-end 2026-05-07 on post 750 + 753 — word count 2222 + 2213 (was 1244 on 748). 5 numbered product H2s as required. Buying Guide template strengthening worked.
 
 ---
 
@@ -128,7 +128,7 @@ grep "public function set_featured_image" seobetter/seobetter.php   # expect 1
 
 ### Verified by user
 
-UNTESTED — pending v62.91 deploy + Bulk regenerate + featured-image + References-list audit.
+✅ Verified end-to-end 2026-05-07 on post 750 — og:image PRESENT + wp-post-image PRESENT. References list bug surfaced separately, fixed in v62.92.
 
 ---
 
@@ -166,7 +166,7 @@ grep -c "public function validate_outbound_links" seobetter/seobetter.php   # ex
 
 ### Verified by user
 
-UNTESTED — pending v62.89 deploy + Bulk regenerate + body URL audit.
+✅ Verified end-to-end 2026-05-07 on post 748 — 0 bsky.app + 0 HN + 0 Quora + 0 non-allowlisted-Reddit URLs in body (was 2 bsky + 1 r/CatAdvice on 746). validate_outbound_links now runs on Bulk path.
 
 ---
 
