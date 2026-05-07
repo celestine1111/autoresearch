@@ -19,7 +19,7 @@
 ## v1.5.216.62.88 — Add buying_guide to SPEAKABLE_TYPES
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `f09392a`
 
 ### Why
 
