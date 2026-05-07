@@ -27,7 +27,7 @@
 ## v1.5.216.62.97 — TDD: Recipe ingredient extraction (RED phase ship)
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `8e59516`
 
 ### Why
 
