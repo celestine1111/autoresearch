@@ -15,12 +15,46 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.104)
+> **Last updated:** 2026-05-08 (v1.5.216.62.105)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.105 — TDD RED: global UK English locale (all 21 content types)
+
+**Date:** 2026-05-08
+**Commit:** `[pending]`
+
+### Why
+
+Per user direction (2026-05-08): UK English spelling rule should apply to ALL 21 content types when country in [GB, AU, NZ, IE], not just recipes. v62.104 added it inside `build_recipe_template` only. A how_to / listicle / buying_guide / news_article generated for country=GB still ships with US spelling because the rule isn't in the GLOBAL system prompt.
+
+### What ships (RED)
+
+`tests/test-system-prompt-uk-locale.php` — NEW. Mirror of the country-locale slice of `Async_Generator::get_system_prompt`. Currently returns empty string (matches v62.104 behavior — no global UK locale block). Asserts:
+- For [GB, AU, NZ, IE] with language='en': prompt contains "UK English", "flavour", "metric", country-currency symbol
+- For US / empty country: prompt does NOT contain UK English
+
+All assertions FAIL on RED mirror as expected. v62.106 ships GREEN.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.104 → 62.105 (test-only)
+- `seobetter/tests/test-system-prompt-uk-locale.php` — NEW
+- `seobetter/seo-guidelines/BUILD_LOG.md`
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='system-prompt-uk-locale'); print('pass=', t['pass'])"
+# Expected: pass=False (RED). v62.106 flips to True.
+```
+
+### Verified by user: UNTESTED
 
 ---
 
