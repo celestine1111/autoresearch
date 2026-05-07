@@ -1,0 +1,14 @@
+Post 794 — buying_guide sign-off (v62.96-108)
+Date: 2026-05-08
+Plugin: 1.5.216.62.108
+URL: https://srv1608940.hstgr.cloud/7-best-british-gardening-tools-2026-for-effortless-lawn-care/
+KW: 794
+Country: GB
+
+validator.schema.org: clean (0 errors)
+full_audit.py: 22 pass / 1 fail (1 = audit-script paren false-pos)
+ItemList: numberOfItems=5, all numbered, 0 non-product H2s
+Image dedup: 0 dups
+UK locale: UK=4 US=0, £=19 $=0, metric>imperial, 0 inline bolds
+
+AUDIT: buying_guide content type signed off across 2 keywords

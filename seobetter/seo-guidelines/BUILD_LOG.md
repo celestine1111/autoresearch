@@ -68,7 +68,25 @@ curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/result
 # Expected: all 14 tests pass=True (3 new added: strip-empty-recipes, image-dedup-basename, itemlist-filter)
 ```
 
-### Verified by user: UNTESTED
+### Verified by user: ✅ Verified 2026-05-08 — buying_guide content type (post 802 + post 794)
+
+**Buying_guide signed off** for the v62.96-108 ship train. Verified across two keywords:
+- Post 794: `best british gardening tools 2026` / GB / 1500w → 22 pass / 1 fail (1 fail = audit script paren false-pos)
+- Post 802: `best british bbq grills 2026` / GB / 1500w → 22 pass / 1 fail (same false-pos)
+
+All three v62.108 contract fixes verified on buying_guide:
+- ItemList numbered-only: 5/5 numbered "N. Foo" items, 0 non-product H2s leaked, numberOfItems=5 set ✅
+- Image dedup: 0 featured-overlap dups, 0 inter-ImageObject dups ✅
+- Strip-empty-recipes: n/a (buying_guide doesn't generate recipe sections) ✅
+
+Plus v62.106 global UK locale: UK English 4 vs US 0, £=19, $=0, 0 imperial, 0 inline bolds.
+Plus validator.schema.org: clean (0 errors) on both posts.
+
+**Recipe content type — NOT signed off.** Still in flight:
+- v62.109 — quote hallucination (orphan citation `]` + mid-sentence opening on post 800)
+- v62.110 — recipe-research silent-zero diagnostic (Tavily returns 0 sources for some keywords; post 800 victoria sponge example)
+
+AUDIT: 22 pass / 1 fail (false-pos) on each of post 794 + post 802. validator: clean. browse-cli scan: 0 unlinked source citations.
 
 ---
 

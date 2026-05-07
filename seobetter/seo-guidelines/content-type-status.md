@@ -42,7 +42,7 @@
 | 5 | `listicle` | baseline (+ deep Places work v1.5.23-v1.5.33) | — | Default §3.1 | ✅ | ✅ | ✅ | ✅ | ✅ (oversized item numbers) | ❌ | — |
 | 6 | `review` | v1.5.136 (smart itemReviewed) | — | Default §3.1 | ✅ | ✅ | ✅ | ✅ (rich per-type itemReviewed @types) | ✅ (score badge + pros/cons columns) | ❌ | Prose template still default; schema heavily iterated |
 | 7 | `comparison` | baseline | — | Default §3.1 | ✅ | ✅ | ✅ | ✅ | ✅ (VS badge + two-column grid) | ❌ | — |
-| 8 | `buying_guide` | baseline | — | Default §3.1 | ✅ | ✅ | ✅ | ✅ | ✅ (Our Pick pills + product cards) | ❌ | — |
+| 8 | `buying_guide` | v1.5.216.62.108 | **2026-05-08** | Default §3.1 | ✅ | ✅ | ✅ | ✅ | ✅ (Our Pick pills + product cards) | ❌ | Signed off across 2 GB keywords (gardening tools post 794, BBQ grills post 802); ItemList numbered-only, image dedup, UK locale, validator clean |
 | 9 | `recipe` | v1.5.172 (extensively iterated) | — | §3.1A Override (Recipe card structure) | ✅ | ✅ | ✅ | ✅ (full Recipe + multi-recipe + HowToStep url per step) | ✅ (yellow recipe card + ingredient/step boxes) | ⚠️ (40-country cuisine + recipe domains) | Deep prior work; re-verify after v1.5.199 table-enforcer gate |
 | 10 | `faq_page` | v1.5.171 (AI-citation FAQ) | — | Default §3.1 | ✅ | ✅ | ✅ | ✅ | ✅ (accordion Q&A) | ❌ | Prose tightened for AI citation in v1.5.171 |
 | 11 | `news_article` | baseline | — | (duplicate of #2 — see above) | — | — | — | — | — | — | See #2 |
