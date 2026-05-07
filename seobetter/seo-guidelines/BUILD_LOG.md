@@ -60,7 +60,7 @@ UNTESTED — pending v62.90 deploy + Bulk regenerate + word-count + section-coun
 ## v1.5.216.62.91 — Bulk_Generator: featured image + extended pool for References list
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `9f466ec`
 
 ### Why
 
