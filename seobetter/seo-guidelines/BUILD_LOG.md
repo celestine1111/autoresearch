@@ -15,12 +15,60 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-08 (v1.5.216.62.107)
+> **Last updated:** 2026-05-08 (v1.5.216.62.108)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.108 — Three schema fixes: empty recipes, image dedup, ItemList filter
+
+**Date:** 2026-05-08
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on post 788 + 790 audit:
+
+1. **Post 788 (recipe):** "all recipes are not there and it goes 1, 2, 4 and 5 are empty". Recipe 3 missing entirely. Recipes 4 + 5 are 50-70w stubs with no `<ul>` ingredients, no `<ol>` instructions, no Inspired-by attribution. Empty stubs polluted the rendered article.
+2. **Post 790 (buying_guide):** validator.schema.org showed "repeated images". Investigation: the featured image (local-uploaded `.webp`) and a body inline `<img>` (remote `.jpeg`) referenced the SAME pexels asset (`pexels-photo-18566999`). Strict URL-equality dedup (v62.93 logic) missed this and emitted both as separate ImageObject + Article.image, creating visible image redundancy.
+3. **Post 790 (buying_guide):** ItemList @graph node had 7 itemListElement entries — but positions 1 + 7 were the article-title H2 + buying-criteria H2 instead of products. Only positions 2-6 were real numbered products.
+
+### What changed
+
+**`includes/Async_Generator.php::strip_unsourced_recipes()`** — broadened regex from `^recipe\s*\d|^recipe:` to `\brecipe\s*\d|\brecipe\s*:`. Now matches "Recipe N:" anywhere in heading, not only at line start. Catches `Homemade Cornish Pasty Recipe 4: Olive Magazine's Flaky Delight` etc. Empty recipe stubs (no `<ul>`+`<ol>`+Inspired-by) now stripped from the markdown before Content_Formatter renders.
+
+**`includes/Schema_Generator.php::detect_image_schemas()`** — added `image_source_id()` helper that extracts a stable identifier (Pexels photo ID OR basename without extension/WP-size-suffix) from a URL. Two URLs that resolve to the SAME source asset (e.g. `https://images.pexels.com/photos/18566999/pexels-photo-18566999.jpeg` and `/wp-content/uploads/2026/05/pexels-photo-18566999.webp`) now compare equal. Featured-image dedup AND in-loop dedup both use this. Result: same source asset → 1 ImageObject node, not 2.
+
+**`includes/Schema_Generator.php::generate_itemlist_schema()`** — content-type-aware filter:
+- `listicle` / `buying_guide` → ONLY include H2s matching numbered "N. Foo" pattern (`^\d+[.)\s]+\w`). Article title, intro, criteria, and other H2s excluded.
+- `pillar_guide` → keep current generic-skip filter (chapters aren't numbered).
+- `numberOfItems` field added to ItemList output (was missing — Schema.org Recommended).
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.107 → 62.108
+- `seobetter/includes/Async_Generator.php` — strip_unsourced_recipes regex
+- `seobetter/includes/Schema_Generator.php` — detect_image_schemas + generate_itemlist_schema
+- `seobetter/tests/test-strip-empty-recipes.php` — NEW
+- `seobetter/tests/test-image-dedup-basename.php` — NEW
+- `seobetter/tests/test-itemlist-filter.php` — NEW
+- `seobetter/seo-guidelines/BUILD_LOG.md`
+- `seobetter/seo-guidelines/structured-data.md` — ItemList numberOfItems + content-type filter notes
+- `seobetter/seo-guidelines/article_design.md` — image dedup note
+- `seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §10.1 row updates
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); print({t['name']: t['pass'] for t in d['tests']})"
+# Expected: all 14 tests pass=True (3 new added: strip-empty-recipes, image-dedup-basename, itemlist-filter)
+```
+
+### Verified by user: UNTESTED
 
 ---
 

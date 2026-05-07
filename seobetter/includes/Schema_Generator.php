@@ -2244,13 +2244,34 @@ class Schema_Generator {
             return null;
         }
 
+        // v1.5.216.62.108 — content-type-aware filter. Listicle and buying_guide
+        // templates require numbered "1. Product Name" / "2. Product Name" H2
+        // headings (per Async_Generator::get_prose_template). The ItemList
+        // schema for these types should ONLY contain those numbered items —
+        // not the article title, intro, or "What to Look For When Buying"
+        // criteria H2. Pre-fix v62.107 emitted EVERY H2 minus a small generic-
+        // skip list, so post 790's ItemList included 7 items where positions
+        // 1 + 7 were the article-title H2 + buying-criteria H2 instead of
+        // products. Pillar_guide uses chapter sections (NOT numbered) so keeps
+        // the generic-skip filter. Test: tests/test-itemlist-filter.php
+        $content_type = (string) ( get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: 'blog_post' );
+        $is_numbered_list_type = in_array( $content_type, [ 'listicle', 'buying_guide' ], true );
+
         $items = [];
         $position = 1;
         foreach ( $h2_matches[1] as $heading ) {
-            $name = wp_strip_all_tags( $heading );
-            // Skip generic non-list headings
-            if ( preg_match( '/^(introduction|conclusion|faq|frequently asked|summary|final thoughts|key takeaway|pros|cons|reference|quick comparison)/i', $name ) ) {
-                continue;
+            $name = trim( wp_strip_all_tags( $heading ) );
+            if ( $is_numbered_list_type ) {
+                // v62.108 — strict: must start with digit + dot/paren/space + word
+                if ( ! preg_match( '/^\d+[.)\s]+\w/', $name ) ) {
+                    continue;
+                }
+            } else {
+                // pillar_guide and any other type that opts into ItemList — keep
+                // generic-skip behaviour (chapters don't use numbered prefix)
+                if ( preg_match( '/^(introduction|conclusion|faq|frequently asked|summary|final thoughts|key takeaway|pros|cons|reference|quick comparison)/i', $name ) ) {
+                    continue;
+                }
             }
             $items[] = [
                 '@type'    => 'ListItem',
@@ -2266,9 +2287,12 @@ class Schema_Generator {
             return null;
         }
 
+        // v62.108 — numberOfItems is a Recommended ItemList field per Schema.org.
+        // Set explicitly so consumers don't need to count itemListElement.
         return [
             '@context'        => 'https://schema.org',
             '@type'           => 'ItemList',
+            'numberOfItems'   => count( $items ),
             'itemListElement' => $items,
         ];
     }
@@ -2626,14 +2650,37 @@ class Schema_Generator {
         $settings = get_option( 'seobetter_settings', [] );
         $author_image_url = isset( $settings['author_image'] ) ? (string) $settings['author_image'] : '';
 
+        // v1.5.216.62.108 — Source-image identifier extraction for deduplication.
+        // Pre-fix v62.93 only deduped by exact URL match. But the same source
+        // image often appears with TWO different URLs in a single article: the
+        // remote pexels JPG (`https://images.pexels.com/photos/18566999/pexels-photo-18566999.jpeg?auto=compress`)
+        // and the WP-uploaded local re-encoded WebP (`/wp-content/uploads/2026/05/pexels-photo-18566999.webp`).
+        // Strict equality misses this and emits a redundant ImageObject for the body
+        // image that already represents the featured-image asset. Post 790 audit
+        // showed 3 ImageObject nodes where one was the featured-image dup.
+        // Solution: extract a "source identifier" from each URL — Pexels photo ID
+        // when present, otherwise the basename without extension and WP size suffix.
+        // Test: tests/test-image-dedup-basename.php
+        $image_source_id = static function ( string $url ): string {
+            if ( $url === '' ) return '';
+            if ( preg_match( '#/photos/(\d+)/(pexels-photo-\d+)#', $url, $m ) ) {
+                return $m[2];
+            }
+            $path = wp_parse_url( $url, PHP_URL_PATH );
+            if ( ! $path ) return '';
+            $base = basename( (string) $path );
+            $base = preg_replace( '/\.(jpe?g|png|gif|webp|avif|svg|bmp|tiff?)$/i', '', $base );
+            $base = preg_replace( '/-\d+x\d+$/', '', $base );
+            return (string) $base;
+        };
+        $featured_source_id = $image_source_id( $featured_url );
+
         // v1.5.216.62.93 — Dedupe by src URL. Pre-fix the loop emitted one
-        // ImageObject per <img> tag without checking for duplicates, so the
-        // same image referenced twice (e.g. comparison-table image inserted
-        // both inline and at section-end) produced duplicate ImageObject
-        // schema nodes with identical name/description. T3 #8 audit on
-        // post 753 had 3 ImageObjects, two with identical name "comparison
-        // chart showing key features and differ...".
+        // ImageObject per <img> tag without checking for duplicates.
+        // v62.108 — Also dedupe by source ID (basename) so featured-image dup
+        // and same-asset multi-URL cases are caught.
         $seen_srcs = [];
+        $seen_source_ids = [];
 
         $count = 0;
         foreach ( $img_tags[0] as $tag ) {
@@ -2647,9 +2694,15 @@ class Schema_Generator {
             }
             if ( strlen( $alt ) < 5 ) continue;
 
-            // v62.93 — skip if this src was already emitted as an ImageObject.
+            // v62.93 — skip if this src URL was already emitted.
             if ( in_array( $src, $seen_srcs, true ) ) continue;
             $seen_srcs[] = $src;
+
+            // v62.108 — also skip if the source identifier (basename) was already
+            // emitted, even if the URL form differs (pexels remote vs local upload).
+            $src_id = $image_source_id( $src );
+            if ( $src_id !== '' && in_array( $src_id, $seen_source_ids, true ) ) continue;
+            if ( $src_id !== '' ) $seen_source_ids[] = $src_id;
 
             // v1.5.213.2 — Skip non-content images:
             //   1. Author bio photo (matched by URL or author-bio container class)
@@ -2657,6 +2710,8 @@ class Schema_Generator {
             //   3. Tiny/icon images (avatars, logos, sprite icons) by class hint
             if ( $author_image_url && strpos( $src, $author_image_url ) === 0 ) continue;
             if ( $featured_url && $src === $featured_url ) continue;
+            // v62.108 — also skip when src is a different URL form of the same featured asset
+            if ( $featured_source_id !== '' && $src_id === $featured_source_id ) continue;
             if ( preg_match( '/class=["\'][^"\']*(?:author-bio|seobetter-author|avatar|wp-post-image|gravatar|icon|emoji|logo)[^"\']*["\']/i', $tag ) ) continue;
 
             // v1.5.213 — Populate `name` + `description` + `caption` from alt text.

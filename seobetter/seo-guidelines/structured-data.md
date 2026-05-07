@@ -153,6 +153,10 @@ Every top-level schema emitted by `Schema_Generator::generate()` and the legacy 
 | `recipeIngredient` | `<ul>` list items in recipe section, with v62.98+99 nutrition-pollution filter (covers singular AND plural macros — Total Sugar / Total Sugars / Total Carb / Total Carbs / Total Fat / Total Fats) | ["2 cups flour", "1 egg"] |
 | `recipeCuisine` | Country code → cuisine map (existing) PLUS v62.100 body-keyword fallback (Cornish/British/Italian/French/etc.) when country-meta race causes empty cuisine | "British" |
 | `recipeCategory` | v62.96 regex (treat/snack/meal/etc.) PLUS v62.100 specific match `pasty/pasties/pancake/scone/muffin/cookie/brownie/cupcake/cheesecake/crumble` → "Pastry" | "Pastry" |
+
+**v62.108 — ItemList content-type-aware filter:** `Schema_Generator::generate_itemlist_schema()` now uses different H2 filters per content_type. For `listicle` / `buying_guide`, ONLY H2s matching the numbered `^\d+[.)\s]+\w` pattern are included (the AI prompt template requires "1. Product Name" / "2. Product Name" headings — anything else is intro/criteria/title and shouldn't be a list item). For `pillar_guide`, the generic-skip filter is kept (chapters aren't numbered). `numberOfItems` field is now explicitly set on ItemList output (was missing).
+
+**v62.108 — ImageObject source-asset dedup:** `detect_image_schemas()` adds basename/Pexels-photo-ID extraction so the same source image stored at two different URLs (e.g. remote pexels JPG + local WP-uploaded WebP) is recognised as ONE asset and not double-emitted. Same-asset featured-image dup is also caught.
 | `recipeInstructions` | `<ol>` items with `name` + `text` + `url` per step | HowToStep array |
 
 **Multi-recipe support:** Articles with 3+ recipe H2 sections generate SEPARATE Recipe schemas per recipe, plus an ItemList carousel schema. Google shows each recipe as a swipeable card.

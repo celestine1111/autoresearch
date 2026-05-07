@@ -2199,8 +2199,16 @@ class Async_Generator {
                 $heading = $heading_match[1];
                 $body = $parts[ $i + 1 ] ?? '';
 
-                // Is this a recipe section? (has "Recipe" in name, or has Ingredients + Instructions)
-                $is_recipe = preg_match( '/^recipe\s*\d|^recipe:/i', trim( $heading ) )
+                // v1.5.216.62.108 — Broadened recipe-heading detection. Pre-fix
+                // regex `^recipe\s*\d` only matched headings STARTING with "Recipe"
+                // (e.g. "Recipe 1: Foo"). The AI follows the v62.104 prompt template
+                // exactly but adds the keyword phrase as prefix ("Homemade Cornish
+                // Pasty Recipe 4: Olive Magazine's Flaky Delight"). The original
+                // regex missed these so empty stub recipe sections (no <ul>, no <ol>,
+                // no Inspired-by attribution) survived into post 788's body. Now
+                // matches "Recipe N" / "Recipe:" anywhere in heading via word
+                // boundary anchor. Test: tests/test-strip-empty-recipes.php
+                $is_recipe = preg_match( '/\brecipe\s*\d|\brecipe\s*:/i', trim( $heading ) )
                     || ( preg_match( '/###\s*ingredients/i', $body ) && preg_match( '/###\s*instructions/i', $body ) );
 
                 if ( $is_recipe ) {
