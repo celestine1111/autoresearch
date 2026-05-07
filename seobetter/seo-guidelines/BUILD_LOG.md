@@ -15,12 +15,48 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.102)
+> **Last updated:** 2026-05-07 (v1.5.216.62.103)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.103 — TDD RED: Async_Generator recipe prompt template gaps
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+Post 774 + 777 audits showed Recipe nodes missing `prepTime`/`cookTime`/`totalTime`/`recipeYield` fields (Schema_Generator can't extract what the AI didn't write) and post 777 shipped with US English spelling on a country=GB article (Recipe[1] used "ounces", "all-purpose flour", "Idaho potato"). User confirmed: GB / AU / NZ all use UK English.
+
+### What this ship adds (RED only)
+
+`tests/test-recipe-prompt-template.php` — NEW. Mirror reflects current v62.102 `Async_Generator::build_recipe_template` (no time markers, no country-locale handling). Asserts:
+- Guidance string contains "Prep Time" / "Cook Time" / "Total Time" / "Servings"
+- GB / AU / NZ guidance contains "UK English" + metric units
+- GB guidance mentions BBC Good Food / Mary Berry / Jamie Oliver / etc.
+- US guidance does NOT push UK English
+
+All 12 cases FAIL on RED mirror as expected. v62.104 ships the GREEN production fix in `Async_Generator::build_recipe_template` + `get_prose_template` (adds `$country` parameter).
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.102 → 62.103 (test-only)
+- `seobetter/tests/test-recipe-prompt-template.php` — NEW (RED expected)
+- `seobetter/seo-guidelines/BUILD_LOG.md`
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='recipe-prompt-template'); print('pass=', t['pass'])"
+# Expected: pass=False (RED). v62.104 flips to True.
+```
+
+### Verified by user: UNTESTED
 
 ---
 
