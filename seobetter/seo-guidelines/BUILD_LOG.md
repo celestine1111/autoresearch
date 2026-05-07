@@ -27,7 +27,7 @@
 ## v1.5.216.62.100 — Body-h1 demote + cuisine body-fallback + category pasty extension
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `2d4bd49`
 
 ### Why
 
