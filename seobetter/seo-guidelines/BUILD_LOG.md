@@ -27,7 +27,7 @@
 ## v1.5.216.62.108 — Three schema fixes: empty recipes, image dedup, ItemList filter
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `6240dac`
 
 ### Why
 
