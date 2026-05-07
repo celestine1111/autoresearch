@@ -15,12 +15,64 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-08 (v1.5.216.62.108)
+> **Last updated:** 2026-05-08 (v1.5.216.62.109)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.109 — Quote sanity: reject orphan `]` + mid-sentence opening + acronym-paren fragment
+
+**Date:** 2026-05-08
+**Commit:** `[pending]`
+
+### Why
+
+User-reported on post 800 (Victoria sponge / GB / recipe — under v62.108):
+Two quotes shipped with hallucinated/truncated text from pmc.ncbi.nlm.nih.gov scientific paper:
+
+```
+"Traditional cupcakes without any topping, neither frosted nor iced, were
+ used in this study as a typical baked food of relatively high consumption
+ ]." — pmc.ncbi.nlm.nih.gov
+
+"TGD), remained unchanged, which supported the results found in sponge
+ cakes by other authors ]." — pmc.ncbi.nlm.nih.gov
+```
+
+Both have an orphan `]` before the terminal `.` (leftover from `[N]` inline citation strip on the source paper). Quote 2 also opens mid-sentence with a closing-paren acronym fragment `TGD),`.
+
+Existing v62.62 filters in `Content_Injector::inject_quotes` (line ~395-435) check image-caption echo, 3-word phrase repetition, mid-sentence cut at END (last char must be terminal punctuation), and trailing function-words. They do NOT check orphan `]` or mid-sentence opening — so both bad quotes passed through.
+
+### What changed
+
+`includes/Content_Injector.php::inject_quotes()` — three new validator checks added inline alongside the existing closure (line ~440-460):
+
+(a) Orphan `]` before terminal punctuation: `/[\s\w]\s*\]\s*[.!?\'"”’]\s*$/`. Catches `consumption ].`, `authors ].`, etc.
+
+(b) Mid-sentence opening: must start with a capital letter (Unicode-aware via `\p{Lu}`), allowing leading quote chars / dashes to be stripped first. Rejects lowercase, closing parens, brackets, commas at start.
+
+(c) Acronym-paren fragment: rejects quotes opening with `^[A-Z]{2,8}\s*[)\]\}]` — the "TGD)," / "EWS]," pattern from scraped scientific papers where the leading "(Term Definition / TGD" was lost.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.108 → 62.109
+- `seobetter/includes/Content_Injector.php` — 3 new validator checks
+- `seobetter/tests/test-quote-sanity.php` — NEW (RED test mirror + GREEN target, 11 cases)
+- `seobetter/seo-guidelines/BUILD_LOG.md` — entry
+- `seobetter/seo-guidelines/external-links-policy.md` — quote validator section update (per check-buildlog hook §1d Citation_Pool/quote helper rule)
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='quote-sanity'); print('pass=', t['pass'])"
+# Expected: pass=True (11/11)
+```
+
+### Verified by user: UNTESTED
 
 ---
 

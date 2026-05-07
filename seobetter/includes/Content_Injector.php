@@ -432,6 +432,36 @@ class Content_Injector {
                 return null;
             }
 
+            // v1.5.216.62.109 — Reject orphan citation closing bracket. Pattern
+            // ` ]` / `]` immediately before terminal punctuation is a tell-tale
+            // sign the source paper had inline `[N]` citations, the digit got
+            // stripped during scrape but the closing `]` remained. Found via
+            // post 800 audit — Victoria sponge article shipped with two such
+            // quotes from pmc.ncbi.nlm.nih.gov: "...consumption ]." and
+            // "...other authors ]." both had this artifact.
+            if ( preg_match( '/[\s\w]\s*\]\s*[.!?\'"”’]\s*$/', $text ) ) {
+                return null;
+            }
+            // v1.5.216.62.109 — Reject mid-sentence opening. A coherent quote
+            // starts with a capital letter or an opening quote/dash. Lowercase
+            // / closing-paren / closing-bracket / comma / period at start
+            // means the AI grabbed a sentence fragment, not the start of a
+            // sentence. Strip leading quote-style chars and dashes first.
+            $opener_strip = "\u{201C}\u{201D}\u{2018}\u{2019}\u{2013}\u{2014}\"' -";
+            $stripped_text = ltrim( $text, $opener_strip );
+            if ( $stripped_text === '' ) return null;
+            if ( ! preg_match( '/^\p{Lu}/u', $stripped_text ) ) {
+                return null;
+            }
+            // v1.5.216.62.109 — Reject quotes opening with all-caps acronym +
+            // closing paren — the "TGD)," fragment pattern from post 800. The
+            // AI scraped text continuing from a previous parenthetical, e.g.
+            // "(Total Glycerolipid Depletion / TGD), remained unchanged, ..."
+            // and the leading "(Total..." was lost.
+            if ( preg_match( '/^[A-Z]{2,8}\s*[)\]\}]/', $stripped_text ) ) {
+                return null;
+            }
+
             return [ 'text' => $text, 'url' => $url, 'source' => $source ];
         };
 
