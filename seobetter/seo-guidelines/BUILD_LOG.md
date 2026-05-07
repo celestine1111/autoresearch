@@ -27,7 +27,7 @@
 ## v1.5.216.62.106 — Global UK locale GREEN (all 21 content types)
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `2d0f093`
 
 ### Why
 
