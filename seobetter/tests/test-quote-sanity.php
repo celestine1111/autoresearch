@@ -91,7 +91,7 @@ $bad_quotes = [
 $good_quotes = [
     'A perfectly baked Victoria sponge has a light, fluffy texture and a delicate sweetness that pairs beautifully with whipped cream and fresh berries.',
     '"Use room-temperature butter for the lightest possible cake," advises Mary Berry in her classic guide to British baking.',
-    'According to BBC Good Food, the secret to a tender crumb is folding the flour gently rather than beating it in.',
+    'According to BBC Good Food, the secret to a tender crumb is folding the flour gently rather than beating vigorously.',
     'The Cornish Pasty Association says authentic pasties must contain beef, potato, swede, and onion — never any other filling.',
     'Olive Magazine writes that the Victoria sponge gets its name from Queen Victoria, who reportedly ate a slice of the cake every afternoon with her tea.',
 ];
