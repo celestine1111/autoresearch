@@ -3551,13 +3551,46 @@ class Async_Generator {
         // vous/Sie for French/German).
         $regional_block = Regional_Context::get_block( $country );
 
+        // v1.5.216.62.106 — UK English locale block. Per user direction
+        // (2026-05-08): GB / AU / NZ / IE all use UK English spelling. Pre-fix:
+        // a how_to / listicle / buying_guide / news_article generated for
+        // country=GB shipped with US spelling (flavor / color / organize)
+        // because the rule lived ONLY inside build_recipe_template. Now the
+        // rule applies to ALL 21 content types via the global system prompt.
+        // No-op for non-English language (Localized_Strings handles those).
+        // No-op for US / CA / other (preserves byte-identical prompt for them).
+        // Test: tests/test-system-prompt-uk-locale.php
+        $uk_locale_block = '';
+        if ( strtolower( $language ) === 'en' ) {
+            $uk_locale_countries = [
+                'GB' => [ 'currency_symbol' => '£',   'currency_name' => 'GBP', 'demonym' => 'British'    ],
+                'AU' => [ 'currency_symbol' => 'AU$', 'currency_name' => 'AUD', 'demonym' => 'Australian' ],
+                'NZ' => [ 'currency_symbol' => 'NZ$', 'currency_name' => 'NZD', 'demonym' => 'New Zealand' ],
+                'IE' => [ 'currency_symbol' => '€',   'currency_name' => 'EUR', 'demonym' => 'Irish'      ],
+            ];
+            $cc = strtoupper( $country );
+            if ( isset( $uk_locale_countries[ $cc ] ) ) {
+                $info = $uk_locale_countries[ $cc ];
+                $sym = $info['currency_symbol'];
+                $code = $info['currency_name'];
+                $demonym = $info['demonym'];
+                $uk_locale_block = "\n\nLOCALE ({$cc} — {$demonym}): Use UK English spelling throughout the entire article — "
+                    . "flavour / colour / organise / recognise / centre / metre / programme / favourite / behaviour. "
+                    . "NEVER use American spellings (flavor / color / organize / recognize / center / meter / program / favorite / behavior). "
+                    . "Use metric units in body prose: grams / kilograms / millilitres / litres / centimetres / metres / celsius. "
+                    . "NEVER convert prices to USD; use {$sym} ({$code}) for all monetary references. "
+                    . "When citing real publications, prefer {$demonym} sources (national broadcasters, ministries, statistical agencies, "
+                    . "trade bodies, regional newspapers) over US sources where the source data permits.";
+            }
+        }
+
         // v1.5.216.25 — Phase 1 item 6: Brand Voice injection. Empty when no
         // voice_id passed (default behavior preserved); when present, injects
         // sample text + tone directives + banned-phrase list so the AI mimics
         // the user's established style.
         $brand_voice_block = Brand_Voice_Manager::get_prompt_fragment( $brand_voice_id );
 
-        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).{$lang_rule}{$regional_block}{$brand_voice_block}
+        return "You are an expert SEO and GEO (Generative Engine Optimization) content writer. Your content must rank on Google AND get cited by AI platforms (ChatGPT, Perplexity, Gemini, Claude, Copilot).{$lang_rule}{$regional_block}{$uk_locale_block}{$brand_voice_block}
 
 CURRENT DATE: {$month_year}. The current year is {$year}. ALWAYS use {$year} when writing 'in [year]', 'best X in [year]', or any year reference. NEVER use 2024 or 2025 — those are outdated.
 

@@ -15,12 +15,54 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-08 (v1.5.216.62.105)
+> **Last updated:** 2026-05-08 (v1.5.216.62.106)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.106 — Global UK locale GREEN (all 21 content types)
+
+**Date:** 2026-05-08
+**Commit:** `[pending]`
+
+### Why
+
+v62.105 RED VERIFIED: `system-prompt-uk-locale: pass=False exit=1`. All assertions failed because v62.104's UK locale rule lived only inside `build_recipe_template`, leaving the other 20 content types unaware of UK English.
+
+### What changed
+
+`includes/Async_Generator.php::get_system_prompt()` — added a UK locale block that fires for [GB, AU, NZ, IE] when language='en'. Block instructs the AI to:
+- Use UK English spelling throughout (flavour / colour / organise / recognise / centre / metre / programme / favourite / behaviour)
+- NEVER use American spellings (flavor / color / organize / recognize / center / meter / program / favorite / behavior)
+- Use metric units (grams / ml / litres / centimetres / metres / celsius)
+- Use country-specific currency for prices: £ / AU$ / NZ$ / €
+- Prefer country-domain sources for citations
+
+The block is no-op for non-English language, US, and other countries (preserves byte-identical prompt for them). It's appended to the system prompt alongside the existing `$lang_rule` / `$regional_block` / `$brand_voice_block`.
+
+Test mirror `tests/test-system-prompt-uk-locale.php` updated to match. 11 assertions on the prompt slice now pass.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.105 → 62.106
+- `seobetter/includes/Async_Generator.php` — `get_system_prompt` adds UK locale block
+- `seobetter/tests/test-system-prompt-uk-locale.php` — GREEN mirror
+- `seobetter/seo-guidelines/BUILD_LOG.md`
+- `seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — note the global locale rule
+- `seobetter/seo-guidelines/plugin_functionality_wordpress.md` — system prompt section updated
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='system-prompt-uk-locale'); print('pass=', t['pass'])"
+# Expected: pass=True
+```
+
+### Verified by user: UNTESTED
 
 ---
 

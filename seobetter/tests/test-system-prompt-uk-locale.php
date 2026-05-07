@@ -31,9 +31,34 @@
 // ----- Mirror of the country-locale slice of get_system_prompt -----
 // v62.104 RED state: no UK locale block. Returns empty string for that slice.
 
+// GREEN MIRROR (v62.106) — matches Async_Generator::get_system_prompt post-fix.
+// Returns the LOCALE block appended to the system prompt for English-language
+// articles in countries that use UK English (GB, AU, NZ, IE). Empty for US /
+// other / non-English articles (Localized_Strings handles non-English locales).
 function uk_locale_block( string $language, string $country ): string {
-    // RED: this function returns empty string in v62.104. v62.106 fills it.
-    return '';
+    if ( strtolower( $language ) !== 'en' ) return '';
+
+    $uk_locale_countries = [
+        'GB' => [ 'currency_symbol' => '£',   'currency_name' => 'GBP', 'demonym' => 'British'    ],
+        'AU' => [ 'currency_symbol' => 'AU$', 'currency_name' => 'AUD', 'demonym' => 'Australian' ],
+        'NZ' => [ 'currency_symbol' => 'NZ$', 'currency_name' => 'NZD', 'demonym' => 'New Zealand' ],
+        'IE' => [ 'currency_symbol' => '€',   'currency_name' => 'EUR', 'demonym' => 'Irish'      ],
+    ];
+    $cc = strtoupper( $country );
+    if ( ! isset( $uk_locale_countries[ $cc ] ) ) return '';
+
+    $info = $uk_locale_countries[ $cc ];
+    $sym = $info['currency_symbol'];
+    $code = $info['currency_name'];
+    $demonym = $info['demonym'];
+
+    return "\n\nLOCALE ({$cc} — {$demonym}): Use UK English spelling throughout the entire article — "
+        . "flavour / colour / organise / recognise / centre / metre / programme / favourite / behaviour. "
+        . "NEVER use American spellings (flavor / color / organize / recognize / center / meter / program / favorite / behavior). "
+        . "Use metric units in body prose: grams / kilograms / millilitres / litres / centimetres / metres / celsius. "
+        . "NEVER convert prices to USD; use {$sym} ({$code}) for all monetary references. "
+        . "When citing real publications, prefer {$demonym} sources (national broadcasters, ministries, statistical agencies, "
+        . "trade bodies, regional newspapers) over US sources where the source data permits.";
 }
 
 // Composes the system prompt with the locale slice (test target).
