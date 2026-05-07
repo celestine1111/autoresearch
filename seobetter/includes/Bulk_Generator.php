@@ -310,6 +310,12 @@ class Bulk_Generator {
                         if ( ! empty( $combined_pool ) ) {
                             $markdown = \SEOBetter::linkify_bracketed_references( $markdown, $combined_pool );
                         }
+                        // v1.5.216.62.89 — strip low-quality inline body links (bsky/HN/Quora/
+                        // unmoderated Reddit/etc.) on Bulk path. Pre-fix only rest_save_draft
+                        // ran validate_outbound_links — Bulk Generate left bsky.app/r/CatAdvice
+                        // URLs as inline citations. References list was clean (Citation_Pool
+                        // filters there) but body prose still cited blocked sources.
+                        $markdown = \SEOBetter::instance()->validate_outbound_links( $markdown, is_array( $combined_pool ) ? $combined_pool : [] );
                         $formatter = new Content_Formatter();
                         $content_html = $formatter->format( $markdown, 'hybrid', [
                             'accent_color' => $accent,

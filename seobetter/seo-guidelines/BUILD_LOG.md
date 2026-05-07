@@ -7,12 +7,50 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.88)
+> **Last updated:** 2026-05-07 (v1.5.216.62.89)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.89 — Wire validate_outbound_links into Bulk Generator (filter inline body bsky/HN/Quora links)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+T3 #8 audit on post 746 (cat feeders Buying Guide, US): References list CLEAN (Citation_Pool filters via `is_low_quality_source()`) but inline BODY prose still contained `bsky.app/profile/...` and `reddit.com/r/CatAdvice/...` (non-allowlisted) URLs. Tracing the cause:
+
+- `validate_outbound_links()` in `seobetter.php` strips low-quality inline body links via `filter_link()` + `is_low_quality_source()`.
+- It's called by `rest_save_draft` (Single Generate) at line 2078.
+- **Bulk Generator never calls it.** So bsky/HN/Quora/non-allowlisted-Reddit links survive in the body for any post created via Bulk Generate.
+
+### What changed
+
+`seobetter.php::validate_outbound_links()` made `public` (was private).
+
+`Bulk_Generator.php::process_next()` now calls `\SEOBetter::instance()->validate_outbound_links( $markdown, $combined_pool )` after `linkify_bracketed_references()` — same pipeline order as `rest_save_draft`. Single + Bulk paths now share one inline-link filter.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.88 → 62.89, `validate_outbound_links` private → public
+- `seobetter/includes/Bulk_Generator.php` — wire validate_outbound_links call
+
+### Verify
+
+```
+grep "validate_outbound_links" seobetter/includes/Bulk_Generator.php   # expect 1 hit
+grep -c "public function validate_outbound_links" seobetter/seobetter.php   # expect 1
+# Live test: regenerate a Buying Guide via Bulk, expect 0 bsky.app + 0 unmod-reddit URLs in body
+```
+
+### Verified by user
+
+UNTESTED — pending v62.89 deploy + Bulk regenerate + body URL audit.
 
 ---
 
