@@ -27,7 +27,7 @@
 ## v1.5.216.62.110 — Test fix: drop "beating it in." good-quote case (caught by v62.62 trailing-function-word filter)
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `92a0681`
 
 ### Why
 
