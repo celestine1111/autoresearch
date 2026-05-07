@@ -27,7 +27,7 @@
 ## v1.5.216.62.111 — Recipe research diagnostic logger (no behavior change)
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `7abfa20`
 
 ### Why
 
