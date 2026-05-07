@@ -1,8 +1,10 @@
 # SEOBetter Build Log
 
-> **🛑 BEFORE TESTING ANYTHING, READ [`TESTING_PROTOCOL.md`](TESTING_PROTOCOL.md).**
+> **🛑 BEFORE TESTING ANYTHING, READ [`WORKFLOW.md`](WORKFLOW.md).**
 >
-> Mandatory from v62.94 onward: TDD red-green-refactor for every code fix, retroactive unit tests for v62.83-93 gaps, plus Schema.org validator pass + browse-cli visible-text scan + show-the-user-the-output-before-claiming-pass on every article audit.
+> WORKFLOW.md is the single source of truth. It contains §1 Iron Law, §2 The Loop (RED→GREEN→DEPLOY→AUDIT→VERIFY→REVIEW), §3 Skill invocation order, §4 universal article checks, §5 per-content-type checks, §6 country-localisation checks, §7 LIVE current-iteration state (the user reads this to approve sign-off), §8 past iterations log.
+>
+> `TESTING_PROTOCOL.md` is now a cross-reference doc; everything in it has been consolidated into WORKFLOW.md.
 >
 > ---
 >

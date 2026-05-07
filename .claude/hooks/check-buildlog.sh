@@ -83,13 +83,11 @@ prod_changed=$(printf '%s\n' "$staged" | grep -E '^seobetter/(seobetter\.php|inc
 if [ -n "$prod_changed" ]; then
   test_staged=$(printf '%s\n' "$staged" | grep -E '^seobetter/tests/test-.+\.php$' | head -1)
   if [ -z "$test_staged" ]; then
-    # Look for skip-tdd token in commit message — passed via -m or -F.
-    msg=$(printf '%s' "$cmd" | sed -nE "s/.*-m[ ]+['\"]([^'\"]+)['\"].*/\1/p" | head -1)
-    if printf '%s' "$msg" | grep -q '\[skip-tdd\]'; then
-      : # skip allowed
-    else
-      block "BLOCKED by TDD enforcement (TESTING_PROTOCOL.md §1): seobetter production code is staged but no seobetter/tests/test-*.php is staged in the same commit. Every code fix from v62.94+ requires a corresponding unit test under seobetter/tests/. Workflow: write test FIRST, run on VPS to confirm RED, fix code, run again to confirm GREEN, then commit BOTH files together. Override for trivial edits (version bump, comment): add [skip-tdd] to your commit message with a reason."
-    fi
+    # v62.97 — [skip-tdd] override REMOVED. No more escape valves. Per
+    # WORKFLOW.md §2.A: every prod-code change requires a real test in the
+    # same commit. If you're tempted to add a "trivial edit" exception, you
+    # are about to ship something untested. Don't.
+    block "BLOCKED by TDD enforcement (WORKFLOW.md §1 + §2.A): seobetter production code is staged but no seobetter/tests/test-*.php is staged in the same commit. The [skip-tdd] override has been removed (v62.97). Workflow: RED — write test FIRST. RED-VERIFY — run on VPS, confirm pass=false. GREEN — fix code. GREEN-VERIFY — run on VPS, confirm pass=true. THEN commit BOTH files together. No exceptions."
   fi
 fi
 
