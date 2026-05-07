@@ -506,11 +506,16 @@ CSS;
                     $level = $section['level'];
                     $text = $section['content'];
 
+                    // v1.5.216.62.100 — Demote any body H1 to H2. The theme already
+                    // renders the post title as <h1>; a second <h1> in body content
+                    // (the AI's auto-generated "title block") creates a duplicate
+                    // h1 which fails SEO accessibility guidance + audit. Found via
+                    // post 774 audit (2 h1 tags). Test: tests/test-recipe-misc-extraction.php
                     if ( $level === 1 ) {
-                        $output[] = '<!-- wp:heading {"level":1} -->';
-                        $output[] = "<h1 class=\"wp-block-heading\">{$text}</h1>";
-                        $output[] = '<!-- /wp:heading -->';
-                    } elseif ( $level === 2 ) {
+                        $level = 2;
+                    }
+
+                    if ( $level === 2 ) {
                         $output[] = '<!-- wp:heading -->';
                         $output[] = "<h2 class=\"wp-block-heading\">{$text}</h2>";
                         $output[] = '<!-- /wp:heading -->';
@@ -903,8 +908,9 @@ CSS;
                             $output[] = '<!-- /wp:heading -->';
                         }
                     } elseif ( $level === 1 ) {
-                        $output[] = '<!-- wp:heading {"level":1} -->';
-                        $output[] = "<h1 class=\"wp-block-heading\">{$text}</h1>";
+                        // v1.5.216.62.100 — Demote body H1 to H2 (theme already renders post title as h1).
+                        $output[] = '<!-- wp:heading -->';
+                        $output[] = "<h2 class=\"wp-block-heading\">{$text}</h2>";
                         $output[] = '<!-- /wp:heading -->';
                     } elseif ( $is_interview && $level === 3 && preg_match( '/\?\s*$/', $text ) ) {
                         // v1.5.166 — Interview Q&A: H3 questions get a styled Q card

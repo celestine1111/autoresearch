@@ -1273,6 +1273,35 @@ class Schema_Generator {
                     $recipe['recipeCuisine'] = $cuisine;
                 }
 
+                // v1.5.216.62.100 — Body-keyword cuisine fallback (post 774 audit).
+                // When `_seobetter_country` post-meta is empty (race condition: schema
+                // can render before Bulk_Generator's update_post_meta finalizes on
+                // first page load after publish), the country-based $cuisine map
+                // produces nothing. Scan body prose for explicit cuisine markers as
+                // a defense-in-depth fallback. Test: tests/test-recipe-misc-extraction.php.
+                if ( empty( $recipe['recipeCuisine'] ) ) {
+                    $cuisine_body_keywords = [
+                        'British'    => '/\b(British|Cornish|English|Welsh|Scottish|Britain|UK)\b/i',
+                        'Italian'    => '/\bItalian\b/i',
+                        'French'     => '/\bFrench\b/i',
+                        'Mexican'    => '/\bMexican\b/i',
+                        'Japanese'   => '/\bJapanese\b/i',
+                        'Chinese'    => '/\bChinese\b/i',
+                        'Indian'     => '/\bIndian\b/i',
+                        'Thai'       => '/\bThai\b/i',
+                        'Korean'     => '/\bKorean\b/i',
+                        'Spanish'    => '/\bSpanish\b/i',
+                        'Greek'      => '/\bGreek\b/i',
+                        'Australian' => '/\b(Australian|Aussie)\b/i',
+                    ];
+                    foreach ( $cuisine_body_keywords as $cuisine_name => $rx ) {
+                        if ( preg_match( $rx, $body_text ) ) {
+                            $recipe['recipeCuisine'] = $cuisine_name;
+                            break;
+                        }
+                    }
+                }
+
                 // Extract ingredients from <ul> lists in this section
                 $ingredients = [];
                 preg_match_all( '/<ul[^>]*>(.*?)<\/ul>/is', $body, $ul_matches );
@@ -1421,7 +1450,15 @@ class Schema_Generator {
                 }
 
                 // v1.5.172 — Broadened category detection + broth/stock/stew
-                if ( preg_match( '/\b(treat|snack|meal|drink|dessert|breakfast|dinner|lunch|side dish|appetizer|main course|biscuit|bread|cake|pastry|pie|soup|broth|stock|stew|salad|sauce|dip|smoothie|cocktail)\b/i', $body_text, $cat ) ) {
+                // v1.5.216.62.100 — added "pasty"/"pasties" before generic match because the
+                // existing regex matches "pastry" but not "pasty". Cornish pasty / hand pie
+                // articles use "pasty"/"pasties" as the primary noun. Same shape applies to
+                // other UK-specific savory dishes that don't fall under "pastry" naturally.
+                // Tests: tests/test-recipe-misc-extraction.php
+                if ( preg_match( '/\b(pasty|pasties|pancake|scone|muffin|cookie|brownie|cupcake|cheesecake|crumble)\b/i', $body_text, $cat_specific ) ) {
+                    $recipe['recipeCategory'] = 'Pastry';
+                }
+                if ( empty( $recipe['recipeCategory'] ) && preg_match( '/\b(treat|snack|meal|drink|dessert|breakfast|dinner|lunch|side dish|appetizer|main course|biscuit|bread|cake|pastry|pie|soup|broth|stock|stew|salad|sauce|dip|smoothie|cocktail)\b/i', $body_text, $cat ) ) {
                     $recipe['recipeCategory'] = ucfirst( strtolower( $cat[1] ) );
                 }
                 // v1.5.172 — Fallback: try heading for category

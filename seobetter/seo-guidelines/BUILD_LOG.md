@@ -15,12 +15,60 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.99)
+> **Last updated:** 2026-05-07 (v1.5.216.62.100)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.100 — Body-h1 demote + cuisine body-fallback + category pasty extension
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+Post 774 audit (under v62.99) had 3 remaining bugs after the audit-script false positives were ruled out:
+
+1. **2 H1 tags in rendered page** — body content `<h1>Homemade Cornish Pasty Recipe</h1>` duplicates the theme's post-title h1
+2. **recipeCuisine missing on Recipe[0]** — was 'British' on post 769 (v62.96) but empty on post 774 (v62.99). Indicates intermittent post-meta race on Bulk-Generator schema rendering. Need defense-in-depth body-keyword fallback
+3. **recipeCategory missing on Recipe[0]** — v62.96 regex matches `pastry` (with R) but the AI body uses `pasty`/`pasties` (cornish pasty terminology)
+
+### What changed
+
+**`includes/Content_Formatter.php` line 509-512 + 910-914** — body H1 → H2 demotion in BOTH `format_gutenberg()` and `format_hybrid()`. The theme renders the post title as h1; a second h1 in body content fails accessibility + audit. Demote-to-h2 is server-side defense even if AI emits h1 in markdown.
+
+**`includes/Schema_Generator.php` line 1276-1300 (post-cuisine block)** — body-keyword cuisine fallback. When the country-meta-derived `$cuisine` is empty, scan body prose for explicit cuisine markers (Cornish/British/Italian/French/etc.) and set recipeCuisine accordingly. 13 cuisines covered.
+
+**`includes/Schema_Generator.php` line 1453+ (recipeCategory block)** — added `pasty|pasties|pancake|scone|muffin|cookie|brownie|cupcake|cheesecake|crumble` as a specific match BEFORE the generic regex. Specific match → 'Pastry'. Generic fallback unchanged.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.99 → 62.100
+- `seobetter/includes/Content_Formatter.php` — h1 demote (gutenberg + hybrid)
+- `seobetter/includes/Schema_Generator.php` — cuisine body fallback + category pasty/etc
+- `seobetter/tests/test-recipe-misc-extraction.php` — NEW (test all 3 fixes; 6+6+6=18 cases)
+- `seobetter/seo-guidelines/article_design.md` — Recipe + cuisine notes
+- `seobetter/seo-guidelines/structured-data.md` — Recipe row update
+- `seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §10.1 Recipe row
+
+### Verify
+
+```
+# On VPS:
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='recipe-misc-extraction'); print('pass=', t['pass'])"
+# Expected: pass=True
+
+# After regen — full_audit.py + recipe_audit.py on new post:
+# - 0 body h1 tags (now demoted to h2)
+# - recipeCuisine == 'British' (via body fallback if country meta race)
+# - recipeCategory == 'Pastry' (via pasty match)
+```
+
+### Verified by user: UNTESTED
 
 ---
 
