@@ -13,12 +13,58 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.93)
+> **Last updated:** 2026-05-07 (v1.5.216.62.94)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.94 — Linkify parenthetical citations: raise length cap 150→250 (first ship under TESTING_PROTOCOL.md TDD discipline)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+User audit on T3 #8 post 757 revealed unlinked parenthetical citations in body prose:
+- `(Cats.com)` — short host-style (4 occurrences, all unlinked)
+- `(Top 5 Best Automatic Cat Feeders of 2026: Why PalNests Wins)` — long structured citation (60+ chars)
+- `(We Tested Them All)` — substring matching cats.com title
+- `(US Census Bureau)` — title-cased acronym candidate
+
+The 60-char `(Top 5 Best...)` exceeded the existing parenthetical regex cap of `{2,150}` in `linkify_bracketed_references()` at line ~4240, so it was never even matched by the linkify regex. Long structured pool titles can run 100-200 chars; the cap was undersized.
+
+**Process note (first ship under TESTING_PROTOCOL.md):** unit test `tests/test-linkify-parens.php` written FIRST with the failing cases (RED phase), then production regex cap raised, then verified GREEN. Test ships in same commit per check-buildlog hook §1b.
+
+### What changed
+
+`seobetter.php::linkify_bracketed_references()` line 4240 — regex cap raised from `{2,150}` to `{2,250}` so longer pool-titled parentheticals are caught.
+
+`tests/test-linkify-parens.php` — NEW test file with 5 cases:
+- Host-style parenthetical (Cats.com) → linkified
+- Long parenthetical (60+ chars) → matches pool title via str_contains
+- Substring match (We Tested Them All) → links to cats.com
+- Skip-list parenthetical (e.g. ...) → preserved unlinked
+- Unrelated parenthetical (no pool match) → preserved unlinked
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.93 → 62.94, regex cap 150 → 250
+- `seobetter/tests/test-linkify-parens.php` — NEW (TDD discipline first-ship)
+
+### Verify
+
+```
+grep "{2,250}" seobetter/seobetter.php   # expect 1
+curl -sL https://raw.githubusercontent.com/celestine1111/autoresearch/main/seobetter/tests/test-linkify-parens.php | php   # expect 5/5 PASS
+```
+
+### Verified by user
+
+UNTESTED — pending v62.94 deploy + Bulk regenerate + visible-text scan for unlinked parentheticals.
 
 ---
 
