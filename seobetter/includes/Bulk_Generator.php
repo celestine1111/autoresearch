@@ -324,15 +324,29 @@ class Bulk_Generator {
                                 ];
                             }
                         }
+                        // v1.5.216.62.96 — ORDER FIX. validate_outbound_links MUST
+                        // run BEFORE linkify_bracketed_references. Pass 4 in
+                        // validate (seobetter.php:4720) is a URL-dedup walker that
+                        // strips the wrapper from any [text](url) whose URL was
+                        // seen earlier in the document. When linkify ran first
+                        // (v62.89-95 order), it created NEW [Cats.com](url)
+                        // wrappers for parenthetical mentions whose URLs had
+                        // already been used by AI-emitted full-title links →
+                        // dedup unwrapped them all → all (Cats.com)/(palnests.com)
+                        // mentions remained plain text in the body. Single path
+                        // (rest_save_draft) had this correctly ordered all along
+                        // (validate at line 2078 → linkify at line 2176, with the
+                        // documented intent at seobetter.php:4170-4174 — "Linkify
+                        // plain-text source references AFTER validation. Runs after
+                        // Pass 4 dedup so it can add links every source mention").
+                        // v62.89 ported validate to Bulk but inverted the order;
+                        // post 762 audit (5 unlinked parens) is the smoking gun.
+                        // Test: tests/test-bulk-pipeline-order.php asserts both
+                        // orders explicitly so future re-orderings can't regress.
+                        $markdown = \SEOBetter::instance()->validate_outbound_links( $markdown, is_array( $combined_pool ) ? $combined_pool : [] );
                         if ( ! empty( $combined_pool ) ) {
                             $markdown = \SEOBetter::linkify_bracketed_references( $markdown, $combined_pool );
                         }
-                        // v1.5.216.62.89 — strip low-quality inline body links (bsky/HN/Quora/
-                        // unmoderated Reddit/etc.) on Bulk path. Pre-fix only rest_save_draft
-                        // ran validate_outbound_links — Bulk Generate left bsky.app/r/CatAdvice
-                        // URLs as inline citations. References list was clean (Citation_Pool
-                        // filters there) but body prose still cited blocked sources.
-                        $markdown = \SEOBetter::instance()->validate_outbound_links( $markdown, is_array( $combined_pool ) ? $combined_pool : [] );
 
                         // v1.5.216.62.92 — Rebuild References section with the extended pool.
                         // Async_Generator already ran Citation_Pool::append_references_section

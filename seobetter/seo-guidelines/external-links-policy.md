@@ -288,6 +288,28 @@ linkify_bracketed_references  ← adds links to plain-text (Source) mentions (af
 append_references_section  ← builds ## References from pool URLs the body cited
 ```
 
+### v1.5.216.62.96 — Bulk path now mirrors Single (validate-then-linkify)
+
+The Bulk Generate path (`includes/Bulk_Generator.php` line 327–348) had this order INVERTED from v62.89 (when `validate_outbound_links` was first ported to the Bulk path) through v62.95. The inversion silently broke the v1.5.191 contract for Bulk-generated articles: linkify ran first, created `([Cats.com](https://cats.com/X))` for parenthetical mentions, then Pass 4 dedup unwrapped them because the URL was already used by an earlier full-title `[The 13 Best...](https://cats.com/X)` AI-emitted link. Net effect on Bulk articles: zero linkified parentheticals from any URL the AI also linked at full-title length.
+
+v62.96 swapped the order so Bulk now mirrors Single:
+
+```
+cleanup_ai_markdown
+  ↓
+extend pool with markdown URLs (v62.91)
+  ↓
+validate_outbound_links  ← runs FIRST (Pass 4 dedup only sees AI links)
+  ↓
+linkify_bracketed_references  ← runs SECOND (creates link wrappers safe from dedup)
+  ↓
+Citation_Pool::append_references_section
+  ↓
+Content_Formatter::format
+```
+
+Test: `seobetter/tests/test-bulk-pipeline-order.php` simulates BOTH orders and asserts the post-fix order produces wrapped parentheticals. The pre-fix order is asserted as a canary — if a future change removes Pass 4 dedup, the canary turns red and signals the test contract has changed.
+
 ---
 
 ## 7. Phase 3: Save-time validation

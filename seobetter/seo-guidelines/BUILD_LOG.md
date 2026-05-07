@@ -13,12 +13,67 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.95)
+> **Last updated:** 2026-05-07 (v1.5.216.62.96)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.96 — Bulk pipeline ORDER fix: validate before linkify (TDD GREEN)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+Post 762 audit (generated under v62.95) had FIVE unlinked parenthetical citations: `(Cats.com)`, `(palnests.com)`, `(cats.com)`, `(palnests.com)`. The v62.95 production-mirror test (`test-linkify-production.php`) PASSED 4/4 because it ran linkify in isolation. But production failed.
+
+Root cause (found by reading code path end-to-end): `validate_outbound_links()` Pass 4 at `seobetter.php` line ~4720 is a URL-dedup walker — for every `[text](url)`, if the URL was seen earlier in the document, it strips the wrapper and keeps just the anchor text. On Bulk path (Bulk_Generator.php line 327-335), the order was:
+
+```
+linkify    → wraps (Cats.com) into ([Cats.com](https://cats.com/X))
+validate   → Pass 4 sees the URL was already used by an earlier AI-emitted
+             [The 13 Best...](https://cats.com/X) link → strips the new wrapper
+             → output reverts to bare (Cats.com)
+```
+
+The Single path (rest_save_draft) had this CORRECTLY ordered all along — validate at line 2078, linkify at line 2176. The design intent is documented at `seobetter.php:4170-4174`:
+
+> "v1.5.191 — Linkify plain-text source references AFTER validation. Runs after Pass 4 dedup so it can add links every source mention (not just the first occurrence per URL)."
+
+v62.89 ported `validate_outbound_links` to the Bulk path but inverted the order — silent contract break. v62.94's regex-cap raise was correct but invisible because v62.89's order bug masked it.
+
+### What changed
+
+**`seobetter/includes/Bulk_Generator.php` line 327-348** — swapped order:
+- BEFORE: linkify (line 327-329) → validate (line 335) → references_section (line 344)
+- AFTER:  validate (now first) → linkify (now second) → references_section (unchanged)
+
+**`seobetter/tests/test-bulk-pipeline-order.php`** — NEW. Simulates BOTH orders end-to-end with realistic post-762 markdown + pool. Asserts:
+1. The fixed order produces `([Cats.com](url))` (would FAIL before the swap)
+2. The broken order strips the wrapper (canary — turns red if Pass 4 dedup is removed in the future, alerting that the test contract changed)
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.95 → 62.96
+- `seobetter/includes/Bulk_Generator.php` — order swap
+- `seobetter/tests/test-bulk-pipeline-order.php` — NEW (TDD canary, both orders)
+- `seobetter/seo-guidelines/external-links-policy.md` — document Bulk pipeline order alongside Single
+- `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verify
+
+```
+grep -n 'v1.5.216.62.96 — ORDER FIX' seobetter/includes/Bulk_Generator.php
+# Expected: comment block + validate_outbound_links call BEFORE linkify_bracketed_references
+sed -n '326,355p' seobetter/includes/Bulk_Generator.php
+# Test result on VPS: bulk-pipeline-order pass=true (4/4)
+```
+
+### Verified by user: UNTESTED
 
 ---
 
