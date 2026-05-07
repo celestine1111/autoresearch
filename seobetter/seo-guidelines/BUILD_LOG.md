@@ -25,7 +25,7 @@
 ## v1.5.216.62.95 — TDD: production-mirror linkify test (RED expected)
 
 **Date:** 2026-05-07
-**Commit:** `[pending]`
+**Commit:** `348721f`
 
 ### Why
 
