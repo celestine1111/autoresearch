@@ -32,10 +32,8 @@
  * Exit 0 = pass. Non-zero = fail.
  */
 
-// RED-PHASE MIRROR — matches v62.102 Async_Generator::build_recipe_template.
-// NO Prep/Cook/Total/Servings markers, NO country-locale handling.
-// This reflects current production. The assertions FAIL here. v62.104 will
-// add the v62.103 logic to BOTH this mirror and production.
+// GREEN MIRROR (v62.104) — matches Async_Generator::build_recipe_template post-fix.
+// Adds Prep/Cook/Total/Servings markers + UK locale enforcement for GB/AU/NZ/IE.
 function build_recipe_template_mirror( int $source_count, string $country = '' ): array {
     $count = max( 0, min( 5, $source_count ) );
 
@@ -55,11 +53,34 @@ function build_recipe_template_mirror( int $source_count, string $country = '' )
         . implode( ', ', $recipe_sections )
         . ', What Ingredients to Avoid, Pros and Cons, FAQ, References';
 
+    // v62.104 — Mandatory time + yield markers in EACH recipe section so
+    // Schema_Generator can extract prepTime/cookTime/totalTime/recipeYield.
     $guidance = "Write EXACTLY {$count} recipe(s) — one per real source. "
         . "ABSOLUTE RULE: Every recipe MUST come from REAL RECIPE DATA. Do NOT invent. "
-        . "Each recipe MUST have: H2 name, Ingredients (### Ingredients bullet list), "
-        . "Instructions (### Instructions numbered list), Storage Notes. "
-        . 'Attribution: "Inspired by [Source Name](source_url)" at end of each recipe.';
+        . "Each recipe MUST start with these EXACT markers on separate lines (so the schema "
+        . "generator can extract them): \"Prep Time: X minutes\", \"Cook Time: Y minutes\", "
+        . "\"Total Time: Z minutes\", \"Servings: N\". Use the times stated in the source recipe; "
+        . "if unstated, estimate sensibly. "
+        . "Each recipe MUST have: H2 name, then the four markers above, then "
+        . "Ingredients (### Ingredients bullet list), Instructions (### Instructions numbered list), "
+        . "Storage Notes. Attribution: \"Inspired by [Source Name](source_url)\" at end of each recipe.";
+
+    // v62.104 — Country-locale enforcement (GB / AU / NZ / IE all use UK English).
+    $uk_locale_countries = [ 'GB', 'AU', 'NZ', 'IE' ];
+    $uk_recipe_sites = [
+        'GB' => 'BBC Good Food, Mary Berry, Jamie Oliver, Olive Magazine, Delicious Magazine, Great British Chefs',
+        'AU' => 'taste.com.au, ABC Everyday, Good Food (SMH/Age), recipes.com.au',
+        'NZ' => 'recipes.co.nz, Stuff Food, Edmonds, Chelsea Sugar',
+        'IE' => 'rte.ie/lifestyle, Bord Bia, Donal Skehan',
+    ];
+    $country_upper = strtoupper( $country );
+    if ( in_array( $country_upper, $uk_locale_countries, true ) ) {
+        $sites = $uk_recipe_sites[ $country_upper ] ?? $uk_recipe_sites['GB'];
+        $guidance .= " LOCALE ({$country_upper}): use UK English spelling throughout (flavour, colour, "
+            . "organise, recognise, centre — NOT flavor / color / organize / center). Use metric "
+            . "measurements: grams, millilitres, celsius (NOT cups, tablespoons, ounces, fahrenheit). "
+            . "Prefer recipe sources from {$sites} over US sites where the source data permits.";
+    }
 
     return [
         'sections' => $sections,

@@ -15,12 +15,52 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-07 (v1.5.216.62.103)
+> **Last updated:** 2026-05-07 (v1.5.216.62.104)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.104 — Recipe prompt GREEN: time markers + UK locale (GB/AU/NZ/IE)
+
+**Date:** 2026-05-07
+**Commit:** `[pending]`
+
+### Why
+
+v62.103 RED VERIFIED: `recipe-prompt-template: pass=False exit=1`. Mirror reflects v62.102 production with no time markers and no country handling.
+
+### What changed
+
+`includes/Async_Generator.php`:
+1. `build_recipe_template( int $source_count, string $country = '' )` — added `$country` parameter.
+2. Guidance string updated to require AI to emit four exact markers per recipe section: `Prep Time: X minutes`, `Cook Time: Y minutes`, `Total Time: Z minutes`, `Servings: N`. Schema_Generator already extracts these patterns; AI just needs to write them.
+3. For country in `[GB, AU, NZ, IE]`: append UK locale guidance — UK English spelling (flavour/colour/organise/recognise), metric units (grams/ml/celsius), prefer UK/AU/NZ/IE recipe sources (BBC Good Food, Mary Berry, Jamie Oliver, taste.com.au, ABC Everyday, recipes.co.nz, etc.).
+4. `get_prose_template( …, string $country = '' )` — added `$country` parameter, passes through to `build_recipe_template`.
+5. Three caller sites updated to thread `$country` from `$params['country']` / `$options['country']`.
+
+`tests/test-recipe-prompt-template.php` — mirror updated to GREEN, tests pass 12/12.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.103 → 62.104
+- `seobetter/includes/Async_Generator.php` — recipe template + threading
+- `seobetter/tests/test-recipe-prompt-template.php` — mirror updated
+- `seobetter/seo-guidelines/BUILD_LOG.md`
+- `seobetter/seo-guidelines/SEO-GEO-AI-GUIDELINES.md` — §3.1A Recipe row + Recipe schema row updated
+- `seobetter/seo-guidelines/plugin_functionality_wordpress.md` — recipe prompt template section updated (per check-buildlog hook §1 mapping)
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='recipe-prompt-template'); print('pass=', t['pass'])"
+# Expected: pass=True (was False under v62.103 RED)
+```
+
+### Verified by user: UNTESTED
 
 ---
 

@@ -146,7 +146,8 @@ class Async_Generator {
         // queue enough section steps to cover the template's full list.
         // Default-profile types (blog_post, listicle, etc.) hit max() with
         // formula since their template lists don't exceed the formula.
-        $prose_for_count = self::get_prose_template( $content_type, (int) ( $params['recipe_source_count'] ?? 3 ) );
+        // v1.5.216.62.104 — pass $country so recipe template emits UK locale guidance for GB/AU/NZ/IE
+        $prose_for_count = self::get_prose_template( $content_type, (int) ( $params['recipe_source_count'] ?? 3 ), (string) ( $params['country'] ?? '' ) );
         $template_section_count = max( 3, count( array_filter( array_map( 'trim',
             explode( ',', (string) ( $prose_for_count['sections'] ?? '' ) ) ) ) ) );
         // v1.5.216.62.71 — Expand "N Items / N Products / N Picks /
@@ -933,7 +934,7 @@ class Async_Generator {
      * The number of recipes matches the number of real sources from Tavily.
      * If 0 sources found, the article becomes informational (no recipe cards).
      */
-    private static function build_recipe_template( int $source_count ): array {
+    private static function build_recipe_template( int $source_count, string $country = '' ): array {
         // Clamp to 1-5 recipes
         $count = max( 0, min( 5, $source_count ) );
 
@@ -955,12 +956,48 @@ class Async_Generator {
             . implode( ', ', $recipe_sections )
             . ', What Ingredients to Avoid (Safety), Pros and Cons, FAQ, References';
 
+        // v1.5.216.62.104 — Mandatory time + yield markers in EACH recipe section.
+        // Pre-fix: AI didn't always emit explicit "Prep Time: X" markers, so
+        // Schema_Generator could not extract prepTime/cookTime/totalTime/
+        // recipeYield. Post 774 + 777 audits showed these fields MISSING on
+        // 4-5 of 5 Recipe nodes per article. Now the prose template REQUIRES
+        // the AI to emit the four markers verbatim at the top of each recipe
+        // section. Test: tests/test-recipe-prompt-template.php asserts the
+        // guidance string contains these markers.
         $guidance = "RECIPE CARD FORMAT. Write EXACTLY {$count} recipe(s) — one per real source provided in the research data above. "
             . "ABSOLUTE RULE: Every recipe MUST come from the REAL RECIPE DATA sources. Do NOT invent any recipe. "
             . "Copy the EXACT ingredients and quantities listed under each source's INGREDIENTS section. Do NOT change, add, or remove any ingredient. "
-            . "Each recipe MUST have: a creative unique name as the H2, then subsections: Ingredients (as a bullet list under ### Ingredients), Instructions (as a numbered list under ### Instructions), and Storage Notes. "
+            . "Each recipe MUST start with these EXACT markers on separate lines (so the schema generator can extract them): "
+            . "\"Prep Time: X minutes\", \"Cook Time: Y minutes\", \"Total Time: Z minutes\", \"Servings: N\". "
+            . "Use the times stated in the source recipe; if unstated, estimate sensibly from the instructions. "
+            . "Each recipe MUST have: a creative unique name as the H2, then the four markers above, then subsections: "
+            . "Ingredients (as a bullet list under ### Ingredients), Instructions (as a numbered list under ### Instructions), and Storage Notes. "
             . "Put ALL statistics, expert quotes, and context in the intro section BEFORE the recipes - NEVER inside a recipe card. "
             . 'At the end of EACH recipe write: "Inspired by [Source Name](source_url)" citing the original source. Every recipe MUST have this attribution line.';
+
+        // v1.5.216.62.104 — Country-locale enforcement. GB / AU / NZ / IE all
+        // use UK English spelling per user direction (2026-05-07). Pre-fix:
+        // country=GB articles shipped with US measurements (cups, ounces,
+        // fahrenheit) and US spelling (flavor, color) because the AI sourced
+        // from US recipe sites (allrecipes, foodnetwork) without locale
+        // instructions. Post 777 Recipe[1] used "all-purpose flour", "Idaho
+        // potato", "ounces". Now the prompt explicitly requests UK English +
+        // metric units + UK/AU/NZ/IE-preferred recipe sources.
+        $uk_locale_countries = [ 'GB', 'AU', 'NZ', 'IE' ];
+        $uk_recipe_sites = [
+            'GB' => 'BBC Good Food, Mary Berry, Jamie Oliver, Olive Magazine, Delicious Magazine, Great British Chefs',
+            'AU' => 'taste.com.au, ABC Everyday, Good Food (SMH/Age), recipes.com.au',
+            'NZ' => 'recipes.co.nz, Stuff Food, Edmonds, Chelsea Sugar',
+            'IE' => 'rte.ie/lifestyle, Bord Bia, Donal Skehan',
+        ];
+        $country_upper = strtoupper( $country );
+        if ( in_array( $country_upper, $uk_locale_countries, true ) ) {
+            $sites = $uk_recipe_sites[ $country_upper ] ?? $uk_recipe_sites['GB'];
+            $guidance .= " LOCALE ({$country_upper}): use UK English spelling throughout (flavour, colour, "
+                . "organise, recognise, centre — NOT flavor / color / organize / center). Use metric "
+                . "measurements: grams, millilitres, celsius (NOT cups, tablespoons, ounces, fahrenheit). "
+                . "Prefer recipe sources from {$sites} over US sites where the source data permits.";
+        }
 
         return [
             'sections' => $sections,
@@ -969,7 +1006,7 @@ class Async_Generator {
         ];
     }
 
-    private static function get_prose_template( string $content_type, int $recipe_source_count = 3 ): array {
+    private static function get_prose_template( string $content_type, int $recipe_source_count = 3, string $country = '' ): array {
         $templates = [
             'blog_post' => ['sections' => 'Key Takeaways, 3-5 topic sections with H2 headings, Pros and Cons, FAQ, References', 'guidance' => 'Conversational blog entry. Grab attention with an opening hook. Personal voice allowed. Include a Pros and Cons section. End with a call to action.', 'schema' => 'BlogPosting'],
             // v1.5.216.62.47 — §3.1A genre-override compliance fix.
@@ -1005,7 +1042,7 @@ class Async_Generator {
             // belong in interview-genre articles. References stays.
             'interview' => ['sections' => 'Introduction (why this person), Short Bio, Q&A Pairs (5-10 questions), Closing Thoughts, References', 'guidance' => 'Q&A interview format. Questions are bold H3 headings, answers feel natural and conversational. Include follow-up questions for depth. Do NOT add a separate FAQ section — the entire article IS the Q&A. No Key Takeaways box (the bio + first Q frame the piece).', 'schema' => 'Article'],
             'faq_page' => ['sections' => 'Topic Introduction, 10-15 Question and Answer Pairs, References', 'guidance' => 'Collection of Q&A pairs. Questions phrased exactly as users search. Direct answers in the first sentence. Vary answer lengths.', 'schema' => 'FAQPage'],
-            'recipe' => self::build_recipe_template( $recipe_source_count ),
+            'recipe' => self::build_recipe_template( $recipe_source_count, $country ),
             'tech_article' => ['sections' => 'Key Takeaways, What You Will Build, Prerequisites, Setup, Code Walkthrough (with code blocks), Testing and Verification, Recap and Further Reading, FAQ, References', 'guidance' => 'Developer tutorial. Include code blocks. Explain each step. List prerequisites clearly. Test everything you recommend.', 'schema' => 'TechArticle'],
             'white_paper' => ['sections' => 'Executive Summary, Introduction and Problem Statement, Methodology, Findings, Analysis, Recommendations, Conclusion, FAQ, References', 'guidance' => 'Authoritative research report. Data-driven. Formal tone. Every claim backed by evidence. Include charts/tables for data visualization. Do NOT include a Pros and Cons section — white papers present Findings and Recommendations instead. Do NOT use informal structures like Pros/Cons lists.', 'schema' => 'Report'],
             'scholarly_article' => ['sections' => 'Abstract, Introduction, Literature Review, Methods, Results, Discussion, Conclusion, FAQ, References', 'guidance' => 'Academic paper format. Formal academic tone. Cite all claims. Include methodology details. Discuss limitations.', 'schema' => 'ScholarlyArticle'],
@@ -1171,7 +1208,8 @@ class Async_Generator {
                 . "\n\nCURRENCY (HARD RULE): Every price you mention in the article body MUST use the {$currency_symbol} symbol (ISO code: {$currency_code}) — the currency of {$country_name}. Examples: write \"{$currency_symbol}199\" or \"{$currency_symbol}1,200\". NEVER use a different currency symbol. NEVER write USD prices unless the article is about the US specifically. If you don't know the price in {$currency_code}, do NOT convert from another currency — instead, omit the price entirely.";
         }
         $recipe_count = $options['recipe_source_count'] ?? 3;
-        $prose = self::get_prose_template( $content_type, $recipe_count );
+        // v1.5.216.62.104 — pass country for UK-locale recipe guidance (GB/AU/NZ/IE)
+        $prose = self::get_prose_template( $content_type, $recipe_count, (string) ( $options['country'] ?? $country_code ?? '' ) );
 
         $year = wp_date( 'Y' );
         $min_kw_headings = max( 2, round( $content_sections * 0.5 ) );
@@ -1462,7 +1500,8 @@ class Async_Generator {
         $tone_guidance = self::get_tone_guidance( $tone );
         $content_type = $options['content_type'] ?? 'blog_post';
         $recipe_count = $options['recipe_source_count'] ?? 3;
-        $prose = self::get_prose_template( $content_type, $recipe_count );
+        // v1.5.216.62.104 — pass country for UK-locale recipe guidance
+        $prose = self::get_prose_template( $content_type, $recipe_count, (string) ( $options['country'] ?? '' ) );
         $kw_context = "\nCONTENT TYPE: {$content_type}. {$prose['guidance']}";
         $kw_context .= "\n{$intent_guidance}";
         $kw_context .= "\n{$tone_guidance}";
