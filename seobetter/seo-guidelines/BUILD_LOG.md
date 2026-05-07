@@ -1,5 +1,11 @@
 # SEOBetter Build Log
 
+> **🛑 BEFORE TESTING ANYTHING, READ [`TESTING_PROTOCOL.md`](TESTING_PROTOCOL.md).**
+>
+> Mandatory from v62.94 onward: TDD red-green-refactor for every code fix, retroactive unit tests for v62.83-93 gaps, plus Schema.org validator pass + browse-cli visible-text scan + show-the-user-the-output-before-claiming-pass on every article audit.
+>
+> ---
+>
 > **Source of truth for what has actually shipped in the code.**
 >
 > Every entry anchors to an exact file:line. Claims without anchors are banned.
