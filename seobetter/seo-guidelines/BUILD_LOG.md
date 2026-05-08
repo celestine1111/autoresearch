@@ -27,7 +27,7 @@
 ## v1.5.216.62.113 — Strip body inline `<strong>` from `<p>` paragraphs
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `bf8aab3`
 
 ### Why
 
