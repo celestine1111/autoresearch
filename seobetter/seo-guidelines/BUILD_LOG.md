@@ -65,7 +65,34 @@ curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/recipe
 # Should show 5+ stage entries; the failure point is whichever stage returns 0/empty/error
 ```
 
-### Verified by user: UNTESTED
+### Verified by user: ✅ Verified 2026-05-08 — recipe content type signed off across 2 GB + 2 AU keywords
+
+**Recipe content type signed off** for the v62.96-111 ship train. Verified across four posts spanning two countries:
+
+| Post | Country | Keyword | Recipe count | Hallucinated quotes | validator |
+|---|---|---|---|---|---|
+| 816 | GB | traditional victoria sponge cake recipe | 1 (9 ing + 11 ins, cuisine=British, category=Cake) | 0 ✅ | clean ✅ |
+| 814 | AU | traditional anzac biscuits recipe | 2 (8+8 ing, 7+9 ins, cuisine=Australian) | 0 ✅ | clean ✅ |
+| 812 | AU | traditional anzac biscuits recipe | 1 (8 ing + 7 ins, cuisine=Australian) | 0 ✅ | clean ✅ |
+| 808 | GB | traditional eccles cakes recipe | 2 (3+16 ing, 6+8 ins, cuisine=British) | 0 ✅ | clean ✅ |
+
+All v62 contracts verified working on recipe:
+- v62.99 — recipeIngredient nutrition pollution out (0 nutrition strings in any recipe)
+- v62.100 — recipeCuisine + recipeCategory body-keyword fallback (British/Australian, Cake/Bread/Treat/Pastry)
+- v62.104 — Recipe template Prep/Cook/Total/Servings markers in prompt
+- v62.106 — Global UK locale block (UK English > US on all 4 GB/AU posts)
+- v62.108 — strip-empty-recipes broadened regex (0 empty stubs across all 4)
+- v62.108 — image dedup by basename (no featured-overlap dups)
+- v62.108 — ItemList numbered-only (n/a for recipe — no ItemList emitted)
+- v62.109/110 — quote sanity (0 orphan `]`, 0 mid-sentence, 0 sci-paper across all 4)
+- v62.111 — recipe research diagnostic logger live (Tavily extracts captured per-run)
+
+**Backlog (separate ships, not blocking sign-off):**
+- v62.112 — AI compliance: AI emits 1-2 recipes when 5 sources are provided
+- v62.113 — body inline `<strong>` from `**word**` markdown (variable per article)
+- v62.114 — AU recipe metric enforcement when source uses cups (Aussie home recipes use cups despite being metric country)
+
+AUDIT: full_audit.py 20-22 pass / 1-2 fail per post (all fails are audit-script paren false-pos OR carry-overs above). validator: clean on all 4. recipe-research-log: 5/5 sources on each.
 
 ---
 

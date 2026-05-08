@@ -1,0 +1,12 @@
+Post 816 — recipe sign-off (v62.96-111)
+Date: 2026-05-08
+Plugin: 1.5.216.62.111
+URL: https://srv1608940.hstgr.cloud/5-reasons-to-try-traditional-victoria-sponge-cake-recipe/
+
+validator.schema.org: clean (0 errors)
+v62.108 strip-empty-recipes: 0 empty stubs
+v62.110 quote-sanity: 0 hallucinated quotes (0 orphan ], 0 mid-sentence, 0 sci-paper)
+v62.106 UK English locale: applied (UK > US)
+v62.111 recipe-research log: Tavily returned 5 sources, 5 extracted
+
+AUDIT: recipe content type verified across 2 GB + 2 AU keywords (post 808 eccles cakes, post 816 victoria sponge, post 812 + 814 anzac biscuits).
