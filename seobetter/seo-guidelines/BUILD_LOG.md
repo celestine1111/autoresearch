@@ -15,12 +15,50 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-08 (v1.5.216.62.111)
+> **Last updated:** 2026-05-08 (v1.5.216.62.113)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.113 — Strip body inline `<strong>` from `<p>` paragraphs
+
+**Date:** 2026-05-08
+**Commit:** `[pending]`
+
+### Why
+
+Post 816 (Victoria sponge / GB) audit shipped with 7 inline `<strong>` tags in body. Source: AI emits `**word**` markdown for mid-paragraph emphasis, `Content_Formatter::inline_markdown()` line 1648 converts to `<strong>word</strong>`, and unless that paragraph matches the v62.14 definition (`^<strong>Term</strong>:`) or highlight (`^<strong>...</strong>$`) patterns, the `<strong>` survives in body output. Per article_design.md "no inline bolds in body".
+
+### What changed
+
+`includes/Content_Formatter.php::format_hybrid()` line ~1500 — final post-processing pass walks every `<p>...</p>` block and strips `<strong>`/`<b>` tags from inside (keeping the inner text). Preserves:
+- `<strong>` inside `<div>` callouts (Tip/Note/Warning — already converted to span in v62.102)
+- `<strong>` inside definition / highlight `<div>` boxes (matched at line 1048+1060 BEFORE emit, never enter `<p>`)
+- `<strong>` inside `<footer>` (quote attribution at line 1074)
+- `<strong>` inside `<li>` bullets, `<th>` table headers, etc.
+
+Only mid-paragraph body bolds are stripped.
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.111 → 62.113 (skipped 62.112 — that slot is the AI-compliance prompt strengthening backlog item)
+- `seobetter/includes/Content_Formatter.php` — final-pass strip in format_hybrid
+- `seobetter/tests/test-strip-paragraph-bold.php` — NEW (9 cases)
+- `seobetter/seo-guidelines/BUILD_LOG.md` — entry
+- `seobetter/seo-guidelines/article_design.md` — strip-paragraph-bolds note
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); t=next(x for x in d['tests'] if x['name']=='strip-paragraph-bold'); print('pass=', t['pass'])"
+# Expected: pass=True (9/9)
+```
+
+### Verified by user: UNTESTED
 
 ---
 

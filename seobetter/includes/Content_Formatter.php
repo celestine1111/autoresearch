@@ -1497,7 +1497,28 @@ CSS;
             // Non-fatal — don't crash article formatting
         }
 
-        return implode( "\n\n", $output );
+        // v1.5.216.62.113 — Strip inline `<strong>` / `<b>` from `<p>` body
+        // paragraphs only. Preserves `<strong>` inside styled `<div>` callouts
+        // (Tip / Note / Warning — already converted to span in v62.102),
+        // definition / highlight blocks (line ~1048+1060 detect these BEFORE
+        // emit), `<footer>` quote attributions, `<li>` bullets, etc. Mid-
+        // paragraph emphasis from AI-emitted `**word**` markdown was creating
+        // body-prose bolds (post 816 had 7). Per article_design.md "no inline
+        // bolds in body". Test: tests/test-strip-paragraph-bold.php
+        $body = implode( "\n\n", $output );
+        $body = preg_replace_callback(
+            '/<p\b([^>]*)>(.+?)<\/p>/is',
+            function ( $m ) {
+                $attrs = $m[1];
+                $inner = $m[2];
+                $inner = preg_replace( '/<strong\b[^>]*>(.+?)<\/strong>/is', '$1', $inner );
+                $inner = preg_replace( '/<b\b[^>]*>(.+?)<\/b>/is', '$1', $inner );
+                return '<p' . $attrs . '>' . $inner . '</p>';
+            },
+            $body
+        );
+
+        return $body;
     }
 
     /**
