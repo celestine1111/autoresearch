@@ -99,8 +99,11 @@ for n in all_nodes:
         types_found.append("+".join(t))
     elif t:
         types_found.append(t)
-chk("Has Article/BlogPosting/Product type",
-    any("Article" in t or "Product" in t or "BlogPosting" in t or "ItemList" in t for t in types_found),
+PRIMARY_OK = ("Article","BlogPosting","NewsArticle","OpinionNewsArticle","TechArticle",
+              "ScholarlyArticle","Product","ItemList","Recipe","FAQPage","QAPage",
+              "DefinedTerm","Review","HowTo","LiveBlogPosting","BlogPosting")
+chk("Has primary @type (Article/Recipe/FAQPage/Review/etc.)",
+    any(any(p in t for p in PRIMARY_OK) for t in types_found),
     f"types: {types_found}")
 
 # ----- 9. ImageObject dedup (NEW v62.93/94 audit) -----
