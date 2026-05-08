@@ -27,8 +27,17 @@ def fetch(url):
     with urllib.request.urlopen(req, timeout=30) as r:
         return r.read().decode("utf-8", "ignore")
 
+def fetch_json(url):
+    """Strip PHP deprecation/warning prefix Yoast emits before JSON."""
+    raw = fetch(url)
+    for marker in ('{"id":', '[{"id":', '{"', '[{'):
+        idx = raw.find(marker)
+        if idx > -1:
+            return json.loads(raw[idx:])
+    return json.loads(raw)
+
 # ----- pull post via REST -----
-post_json = json.loads(fetch(f"{BASE}/wp-json/wp/v2/posts/{POST_ID}?_embed=1"))
+post_json = fetch_json(f"{BASE}/wp-json/wp/v2/posts/{POST_ID}?_embed=1")
 title  = post_json.get("title",{}).get("rendered","")
 slug   = post_json.get("slug","")
 link   = post_json.get("link","")
@@ -204,7 +213,73 @@ chk("Organization publisher present", any(t=="Organization" for t in types_found
 bolds = re.findall(r'<(strong|b)\b', content_html, re.I)
 chk("Zero inline bolds in body", len(bolds) == 0, f"found {len(bolds)} inline bolds")
 
-# ----- 23. Schema.org validator URL hint -----
+# ----- 23. Flesch Reading Ease — target 60-70+ -----
+def _syllables(word):
+    word = word.lower()
+    word = re.sub(r'[^a-z]', '', word)
+    if not word: return 0
+    # Drop trailing silent e (but not for "le" pattern like "table")
+    if word.endswith('e') and not word.endswith('le') and len(word) > 2:
+        word = word[:-1]
+    groups = re.findall(r'[aeiouy]+', word)
+    return max(1, len(groups))
+
+# Build clean prose: drop wp:html callouts, References list, schema scripts, code blocks
+prose_html = re.sub(r'<!--\s*wp:html\s*-->.*?<!--\s*/wp:html\s*-->', '', content_html, flags=re.S)
+prose_html = re.sub(r'<script\b[^>]*>.*?</script>', '', prose_html, flags=re.I|re.S)
+prose_html = re.sub(r'<pre\b[^>]*>.*?</pre>', '', prose_html, flags=re.I|re.S)
+prose_html = re.sub(r'<code\b[^>]*>.*?</code>', '', prose_html, flags=re.I|re.S)
+# Drop the References section (anchor-heavy, distorts readability)
+prose_html = re.sub(r'<h2\b[^>]*>\s*References\s*</h2>.*$', '', prose_html, flags=re.I|re.S)
+prose_text = re.sub(r"<[^>]+>", " ", prose_html)
+prose_text = html.unescape(prose_text)
+prose_text = re.sub(r'\s+', ' ', prose_text).strip()
+
+words_list = re.findall(r"[A-Za-z][A-Za-z\-']*", prose_text)
+sentences_split = [s for s in re.split(r'[.!?]+', prose_text) if s.strip()]
+n_words     = len(words_list)
+n_sentences = max(1, len(sentences_split))
+n_syllables = sum(_syllables(w) for w in words_list)
+flesch = 206.835 - 1.015 * (n_words / n_sentences) - 84.6 * (n_syllables / max(1, n_words))
+chk("Flesch Reading Ease >= 60",
+    flesch >= 60,
+    f"score={flesch:.1f} (words={n_words}, sentences={n_sentences}, syllables={n_syllables}; target 60-70+)")
+
+# ----- 24. Island Test — no pronoun starts on H2/H3 section openers -----
+PRONOUN_RE = re.compile(r'^\s*(He|She|It|They|We|You|This|That|These|Those|There|It\'s|They\'re|These|Those|Such)\b', re.I)
+section_paras = []  # (heading_text, opener_para_text)
+# Walk content; for every H2/H3, capture the first <p>...</p> after it (before next H2/H3)
+for m in re.finditer(r'<(h[2-3])\b[^>]*>(.*?)</\1>(.*?)(?=<h[2-3]\b|$)', content_html, re.I|re.S):
+    head = re.sub(r'<[^>]+>', '', m.group(2)).strip()
+    body = m.group(3)
+    p = re.search(r'<p\b[^>]*>(.*?)</p>', body, re.I|re.S)
+    if p:
+        opener = re.sub(r'<[^>]+>', '', p.group(1)).strip()
+        opener = html.unescape(opener)
+        section_paras.append((head, opener))
+
+# Skip the References section + the type-badge wrappers (no opener prose there)
+def _section_has_pronoun_start(opener):
+    return bool(PRONOUN_RE.match(opener))
+pronoun_violations = [(h[:60], o[:80]) for h, o in section_paras if _section_has_pronoun_start(o)]
+chk("Island Test: no pronoun-starts on section openers",
+    len(pronoun_violations) == 0,
+    f"{len(pronoun_violations)} violations: {pronoun_violations[:5]}")
+
+# ----- 25. Section openings 40-60 words (extractability chunk) -----
+opener_word_counts = []
+for h, o in section_paras:
+    wc = len(re.findall(r'\b\w+\b', o))
+    opener_word_counts.append((h, wc))
+out_of_band = [(h[:60], wc) for h, wc in opener_word_counts if not (40 <= wc <= 60)]
+within = sum(1 for _, wc in opener_word_counts if 40 <= wc <= 60)
+total_sections = len(opener_word_counts)
+# Allow up to 2 sections out of band (intro + references + closing summary)
+chk("Section openings 40-60 words (≥75% of sections)",
+    total_sections > 0 and within / total_sections >= 0.75,
+    f"{within}/{total_sections} within 40-60w; out: {out_of_band[:5]}")
+
+# ----- 26. Schema.org validator URL hint -----
 results.append(("INFO", f"Schema.org validator", f"validator.schema.org → paste {link} OR Google Rich Results: https://search.google.com/test/rich-results?url={quote_plus(link)}"))
 
 # ----- output -----
