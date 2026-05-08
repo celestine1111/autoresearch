@@ -27,7 +27,7 @@
 ## v1.5.216.62.114 — faq_page Layer 5 accordion + AI prompt enforcement
 
 **Date:** 2026-05-08
-**Commit:** `[pending]`
+**Commit:** `030eee4`
 
 ### Why
 
