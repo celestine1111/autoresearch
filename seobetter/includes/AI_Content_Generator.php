@@ -71,6 +71,12 @@ class AI_Content_Generator {
         $formatter = new Content_Formatter();
         $html = $formatter->format( $content, $editor_mode, [
             'accent_color' => $options['accent_color'] ?? '#764ba2',
+            // v1.5.216.62.114 — pass content_type so format_hybrid can apply
+            // per-type design (faq_page accordion, etc.). Bulk_Generator path
+            // already passes this; single-article rest_save_draft uses this
+            // class.
+            'content_type' => $options['content_type'] ?? 'blog_post',
+            'language'     => $options['language'] ?? 'en',
         ] );
 
         // Run GEO analysis on the generated content

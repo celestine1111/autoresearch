@@ -60,9 +60,18 @@ chk(f"Word count >= 0.85 * target ({int(TARGET_WORDS*0.85)})", words >= int(TARG
 h1s = re.findall(r"<h1\b", page_html, re.I)
 chk("Single H1 in rendered page", len(h1s) == 1, f"found {len(h1s)} H1 tags")
 
-# ----- 3. H2 count >= 5 -----
+# ----- 3. H2 count (content-type-aware) -----
+# faq_page uses H3 for questions (Q&A pairs ARE the article — H2 is just
+# Topic Intro + FAQ wrapper + References = 3). Recipe uses H2 per recipe
+# section + intro + ingredients + steps + tips. Default minimum is 5.
+# Detect content-type from JSON-LD primary @type since the audit doesn't
+# get content_type passed explicitly.
 h2s = re.findall(r"<h2\b", content_html, re.I)
-chk("H2 count >= 5", len(h2s) >= 5, f"found {len(h2s)} H2")
+# `types_found` is built from JSON-LD below — we need the H2 check to use it,
+# so move this check until after JSON-LD parses, or do a quick pre-scan.
+_pretypes = re.findall(r'"@type"\s*:\s*"([^"]+)"', page_html)
+H2_MIN = 3 if 'FAQPage' in _pretypes else (4 if 'Recipe' in _pretypes else 5)
+chk(f"H2 count >= {H2_MIN}", len(h2s) >= H2_MIN, f"found {len(h2s)} H2 (type-aware floor: {H2_MIN})")
 
 # ----- 4. Keyword in title -----
 title_clean = re.sub(r"<[^>]+>","", title).lower()
@@ -167,6 +176,11 @@ for m in re.finditer(r'\(([^)]{4,180})\)', no_links_text):
     # If it has at least 2 capital letters or .com/.org, treat as source-looking
     caps = sum(1 for ch in s if ch.isupper())
     has_host = bool(re.search(r'\.(com|org|net|io|co|edu|gov|ai)\b', s, re.I))
+    # Suppress CTA / imperative-prose false-positives: "Compare X", "See Y",
+    # "Get Z" etc are advertising copy or instructions, not source citations.
+    cta_lead = re.match(r'^(Compare|See|Get|Find|Buy|Visit|Read|Watch|Click|Browse|Explore|Discover|Learn|Try|Save|Order|Shop|Check|Download|Install|Sign|Subscribe|Apply|Request)\b', s)
+    if cta_lead:
+        continue
     if caps >= 2 or has_host:
         suspect_parens.append(s[:120])
 

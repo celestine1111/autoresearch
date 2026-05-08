@@ -1518,7 +1518,79 @@ CSS;
             $body
         );
 
+        // v1.5.216.62.114 — faq_page Layer 5: wrap each H3 question + answer
+        // in `<details>` accordion so Q&A pairs render as expandable tiles per
+        // article_design.md row 10 spec. Only fires when content_type ===
+        // 'faq_page' so other content types' inline FAQ sections (blog_post,
+        // how_to, etc.) keep classic H3+P layout. Pre-fix Layer 5 was missing
+        // entirely — content-type-status.md row 10 claimed "✅ accordion Q&A"
+        // but no code existed. Test: tests/test-faq-accordion.php
+        $content_type = $options['content_type'] ?? '';
+        if ( $content_type === 'faq_page' ) {
+            $body = self::wrap_faq_accordion( $body );
+            // Prepend a tiny CSS block so the accordion has visual styling.
+            $body = self::faq_accordion_css() . "\n\n" . $body;
+        }
+
         return $body;
+    }
+
+    /**
+     * v1.5.216.62.114 — Wrap H3 Q&A pairs in `<details>` accordion for faq_page.
+     *
+     * Walks the rendered HTML and wraps every `<h3>Question?</h3>` followed by
+     * its answer block(s) (`<p>`, `<ul>`, `<ol>`, `<blockquote>`) inside a
+     * `<details class="sb-faq-item" open>` accordion. Only matches H3 headings
+     * ending in `?` (regular subheadings stay as-is). Stops at the next
+     * `<h2>` or `<h3>`.
+     *
+     * Idempotent: running twice produces the same output.
+     *
+     * @param string $html The rendered article HTML.
+     * @return string HTML with FAQ Q&A pairs wrapped in <details>.
+     */
+    public static function wrap_faq_accordion( string $html ): string {
+        return preg_replace_callback(
+            '#<h3\b[^>]*>([^<]*\?\s*)</h3>(.*?)(?=<h[23]\b|$)#is',
+            function ( $m ) {
+                $question = trim( $m[1] );
+                $answer   = trim( $m[2] );
+                // Skip if already wrapped (idempotence).
+                if ( strpos( $answer, '</details>' ) !== false ) {
+                    return $m[0];
+                }
+                return '<!-- wp:html -->' . "\n"
+                     . '<details class="sb-faq-item" open>'
+                     . '<summary>' . $question . '</summary>'
+                     . '<div class="sb-faq-answer">' . $answer . '</div>'
+                     . '</details>' . "\n"
+                     . '<!-- /wp:html -->';
+            },
+            $html
+        );
+    }
+
+    /**
+     * v1.5.216.62.114 — CSS for the faq_page accordion. Green theme to match
+     * `Content_Formatter::TYPE_BADGE_CONFIG['faq_page']` (line ~255).
+     */
+    private static function faq_accordion_css(): string {
+        return <<<CSS
+<!-- wp:html -->
+<style>
+.sb-faq-item{border:1px solid #16a34a;border-radius:8px;background:#f0fdf4;margin:0 0 12px 0;padding:0;overflow:hidden}
+.sb-faq-item summary{cursor:pointer;padding:14px 18px;font-weight:600;color:#166534;font-size:1.05em;list-style:none;outline:none;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sb-faq-item summary::-webkit-details-marker{display:none}
+.sb-faq-item summary::after{content:"+";font-size:1.4em;font-weight:400;color:#16a34a;transition:transform 0.15s ease}
+.sb-faq-item[open] summary::after{content:"−"}
+.sb-faq-item summary:hover{background:#dcfce7}
+.sb-faq-answer{padding:0 18px 16px 18px;color:#15803d;line-height:1.65}
+.sb-faq-answer>p:first-child{margin-top:6px}
+.sb-faq-answer>p:last-child{margin-bottom:0}
+.sb-faq-answer ul,.sb-faq-answer ol{margin:8px 0 8px 20px}
+</style>
+<!-- /wp:html -->
+CSS;
     }
 
     /**

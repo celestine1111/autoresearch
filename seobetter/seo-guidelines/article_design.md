@@ -885,7 +885,7 @@ Every content type gets a **type badge** — a colored pill at the top of the ar
 | glossary_definition | &#128214; Definition | Teal (#f0fdfa) | Definition highlight box, "See Also" links |
 | sponsored | &#9888; Sponsored Content | Yellow (#fffbeb) | Disclosure bar, sponsor area |
 | live_blog | &#128308; Live | Red (#fef2f2) | Timestamped entries, key moments |
-| faq_page | &#10068; FAQ | Green (#f0fdf4) | Accordion Q&A pairs |
+| faq_page | &#10068; FAQ | Green (#f0fdf4) | Accordion Q&A pairs — `<details class="sb-faq-item" open>` with green theme (border #16a34a, bg #f0fdf4, text #166534), default-open so answers are visible without click; user can collapse for navigation. v1.5.216.62.114a — `Content_Formatter::wrap_faq_accordion()`. |
 | listicle | &#128203; Top List | Orange (#fff7ed) | Oversized item numbers, card separators |
 | pillar_guide | &#128218; Ultimate Guide | Blue (#eff6ff) | Chapter numbers, TOC progress |
 | how_to | &#128295; How-To Guide | Green (#ecfdf5) | Numbered step circles, materials box |
@@ -919,7 +919,8 @@ Every generated article MUST have:
 - [ ] `*Last Updated: Month Year*` small italic paragraph immediately after H1
 - [ ] `## Key Takeaways` section with 3–5 bullets, rendered as styled `wp:html` block (purple left-border gradient)
 - [ ] `## Frequently Asked Questions` section with 5 Q&A pairs (H3 questions + `<p>` answers, 60-80 words each, data point in every answer, direct answer in first sentence — optimized for AI citation extraction v1.5.171)
-- [ ] FAQ answers are ALWAYS visible — never in `<details>`, accordion, or JS-toggled containers
+- [ ] **Inline FAQ section (any content type EXCEPT `faq_page`):** FAQ answers must always be visible — plain `<h3>` + `<p>` markup, never `<details>`, `<summary>`, accordion, or JS-toggled containers. Crawlers + readers see the answer with no click required.
+- [ ] **`faq_page` content type only (v1.5.216.62.114a):** Q&A pairs are wrapped in `<details class="sb-faq-item" open>` accordion. The `open` attribute means the answer is visible by default (no click required); user can collapse if they want, but Google + readers see the full content on first load. Per per-type table at row `faq_page` ("Accordion Q&A pairs"). Rule: `<details>` is fine for `faq_page` because the entire article IS the Q&A — accordion gives visual affordance — but the `open` attribute is mandatory so the "always visible" rule is preserved in spirit.
 - [ ] FAQ JSON-LD text matches visible HTML text exactly
 - [ ] Semantic HTML throughout (article, headings, p, ul, ol, table, figure)
 

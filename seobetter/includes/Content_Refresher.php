@@ -96,7 +96,10 @@ Return the FULL refreshed article in GitHub Flavored Markdown.";
         // Format as HTML
         $formatter = new Content_Formatter();
         $html = $formatter->format( $result['content'], 'gutenberg', [
-            'accent_color' => '#764ba2',
+            'accent_color'  => '#764ba2',
+            // v1.5.216.62.114 — preserve content_type on refresh so per-type
+            // design (faq_page accordion, etc.) re-applies on regenerate.
+            'content_type'  => get_post_meta( $post->ID, '_seobetter_content_type', true ) ?: 'blog_post',
         ] );
 
         // Score the refreshed content

@@ -15,12 +15,67 @@
 > **Before citing this log as "done", ALWAYS grep the file:line to verify the code still matches.**
 > Line numbers drift as files are edited — the method name is the stable anchor, the line number is a hint.
 >
-> **Last updated:** 2026-05-08 (v1.5.216.62.113)
+> **Last updated:** 2026-05-08 (v1.5.216.62.114)
 >
 > **How to read this log:**
 > - `✅ Verified by user` means the user has run the feature and confirmed it works in production
 > - `UNTESTED` means the code exists but hasn't been tested by the user yet
 > - `❌ Broken` means the user reported it broken and it's awaiting fix
+
+---
+
+## v1.5.216.62.114 — faq_page Layer 5 accordion + AI prompt enforcement
+
+**Date:** 2026-05-08
+**Commit:** `[pending]`
+
+### Why
+
+Post 821 audit (home solar panel installation uk / GB / faq_page) surfaced two real bugs:
+
+1. **No accordion design.** content-type-status.md row 10 claimed Layer 5 was "✅ accordion Q&A" but `Content_Formatter.php` had ZERO accordion / `<details>` / `<summary>` / `faq-` matches. Doc/code drift — Layer 5 was never built.
+2. **AI emitted only 5 Q&A pairs** against a template asking for "10-15". Word count came out 775/2000, driven entirely by short Q&A count. The pre-fix template guidance was soft prose ("Collection of Q&A pairs. Direct answers in the first sentence. Vary answer lengths.") — nothing enforced the 10-pair minimum or per-answer word range.
+
+### What changed
+
+**v62.114a — Layer 5 accordion (Content_Formatter):**
+- New `Content_Formatter::wrap_faq_accordion()` static helper — walks rendered HTML, wraps every `<h3>Q?</h3>` + answer block in `<details class="sb-faq-item" open><summary>…</summary><div class="sb-faq-answer">…</div></details>`. Idempotent. Only fires when `$options['content_type'] === 'faq_page'`.
+- New `Content_Formatter::faq_accordion_css()` — green theme matching `TYPE_BADGE_CONFIG['faq_page']` (#16a34a border, #f0fdf4 bg, #166534 text).
+- `format_hybrid()` calls `wrap_faq_accordion()` at the end of the pipeline, AFTER strip-paragraph-bold (v62.113), only when content_type is `faq_page`.
+- `AI_Content_Generator::generate()` and `Content_Refresher::refresh_post()` now pass `content_type` in the options array (Bulk_Generator already did).
+
+**v62.114b — AI prompt enforcement (Async_Generator):**
+- `get_prose_template('faq_page', …)` guidance hardened from soft prose to:
+  > "FAQ Page format — the Q&A pairs ARE the article (most of word count). MANDATORY: emit MINIMUM 10 Q&A pairs (target 12-15). Anything below 10 questions is a non-compliant article. Each question is a separate H3 heading ending in '?' — NEVER bundle two questions in one heading. Each answer is 50-100 words (1-2 short paragraphs). Direct answer in the FIRST sentence (snippet-friendly), then 1-2 supporting sentences. Questions phrased exactly as users would type them in search ('How much does X cost?' not 'Cost considerations for X'). Cover the TOP 12-15 search queries for the keyword (mix beginner + intermediate + comparison + cost + maintenance + safety + UK/US locale-specific where relevant). Vary answer lengths within the 50-100w window. Topic Introduction is short (60-100 words) — just enough to frame the topic. References is the standard inline-link section. NO Key Takeaways box (the FAQ pairs are the takeaways). NO inline body bolds (the formatter strips them)."
+
+**v62.114c — audit fixes (full_audit.py):**
+- H2-count floor is now content-type-aware: `faq_page=3, recipe=4, default=5`. Detected from JSON-LD primary `@type`. Pre-fix the audit failed faq_page on H2 because faq_page uses H3 for questions (Topic Intro + FAQ + References = exactly 3 H2s by design).
+- Unlinked-paren regex now suppresses CTA-imperative leads (`Compare`, `See`, `Get`, `Find`, `Buy`, `Visit`, `Read`, `Watch`, `Click`, `Browse`, `Explore`, `Discover`, `Learn`, `Try`, `Save`, `Order`, `Shop`, `Check`, `Download`, `Install`, `Sign`, `Subscribe`, `Apply`, `Request`). Pre-fix flagged "Compare solar panel quotes from trusted UK installers" as a source citation — false positive, it's affiliate CTA prose.
+
+**v62.114d — content-type-status.md row 10:** flipped "✅ (accordion Q&A)" claim from aspirational to honest — now says "✅ accordion `<details>/<summary>`, green theme — v62.114a; pre-v62.114 the doc claimed ✅ but no code existed".
+
+### Files changed
+
+- `seobetter/seobetter.php` — version 62.113 → 62.114
+- `seobetter/includes/Content_Formatter.php` — `wrap_faq_accordion()` + `faq_accordion_css()` + format_hybrid wiring
+- `seobetter/includes/AI_Content_Generator.php` — pass content_type in format() options
+- `seobetter/includes/Content_Refresher.php` — same
+- `seobetter/includes/Async_Generator.php` — strengthened faq_page prose template guidance
+- `seobetter/tests/test-faq-accordion.php` — NEW (8 cases — wrap, non-faq untouched, non-? untouched, multiple Q&As, ul answer, h2 untouched, idempotence, real-world post-821 sample)
+- `seobetter/tests/test-faq-prompt-template.php` — NEW (10 contract assertions on the strengthened guidance string)
+- `seobetter/tests/full_audit.py` — content-type-aware H2 floor + CTA paren suppression
+- `seobetter/seo-guidelines/content-type-status.md` — row 10 honest sync
+- `seobetter/seo-guidelines/article_design.md` — row 10 accordion note
+- `seobetter/seo-guidelines/BUILD_LOG.md` — this entry
+
+### Verify
+
+```
+curl -s https://srv1608940.hstgr.cloud/wp-content/uploads/seobetter-tests/results.json | python3 -c "import sys,json; d=json.load(sys.stdin); names=['faq-accordion','faq-prompt-template']; print({n:next((t['pass'] for t in d['tests'] if t['name']==n), 'MISSING') for n in names})"
+# Expected: {'faq-accordion': True, 'faq-prompt-template': True}
+```
+
+### Verified by user: UNTESTED
 
 ---
 
